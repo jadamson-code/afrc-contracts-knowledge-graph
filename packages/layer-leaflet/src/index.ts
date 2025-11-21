@@ -29,8 +29,8 @@ export default function bindLeafletLayer(
   const mapLayerName = "layer-leaflet";
   const mapContainer = sigma.createLayer(mapLayerName, "div", {
     style: { position: "absolute", inset: "0", zIndex: "0" },
-    // 'edges' is the first sigma layer
-    beforeLayer: "edges",
+    // 'stage' is the first sigma layer
+    beforeLayer: "stage",
   });
   sigma.getContainer().prepend(mapContainer);
 

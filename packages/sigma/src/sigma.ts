@@ -130,10 +130,9 @@ export default class Sigma<
   private container: HTMLElement;
   private elements: PlainObject<HTMLElement> = {};
   private canvasContexts: PlainObject<CanvasRenderingContext2D> = {};
-  private webGLContexts: PlainObject<WebGL2RenderingContext> = {};
-  private pickingLayers: Set<string> = new Set();
-  private textures: PlainObject<WebGLTexture> = {};
-  private frameBuffers: PlainObject<WebGLFramebuffer> = {};
+  private webGLContext: WebGL2RenderingContext | null = null;
+  private pickingTexture: WebGLTexture | null = null;
+  private pickingFrameBuffer: WebGLFramebuffer | null = null;
   private activeListeners: PlainObject<Listener> = {};
   private labelGrid: LabelGrid = new LabelGrid();
   private nodeDataCache: Record<string, NodeDisplayData> = {};
@@ -205,12 +204,10 @@ export default class Sigma<
     this.container = container;
 
     // Initializing contexts
-    this.createWebGLContext("edges", { picking: settings.enableEdgeEvents });
+    this.createWebGLContext("stage", { picking: true });
     this.createCanvasContext("edgeLabels");
-    this.createWebGLContext("nodes", { picking: true });
     this.createCanvasContext("labels");
     this.createCanvasContext("hovers");
-    this.createWebGLContext("hoverNodes");
     this.createCanvasContext("mouse", { style: { touchAction: "none", userSelect: "none" } });
 
     // Initial resize
@@ -274,8 +271,8 @@ export default class Sigma<
   ): this {
     if (this.nodePrograms[key]) this.nodePrograms[key].kill();
     if (this.nodeHoverPrograms[key]) this.nodeHoverPrograms[key].kill();
-    this.nodePrograms[key] = new NodeProgramClass(this.webGLContexts.nodes, this.frameBuffers.nodes, this);
-    this.nodeHoverPrograms[key] = new (NodeHoverProgram || NodeProgramClass)(this.webGLContexts.hoverNodes, null, this);
+    this.nodePrograms[key] = new NodeProgramClass(this.webGLContext!, this.pickingFrameBuffer, this);
+    this.nodeHoverPrograms[key] = new (NodeHoverProgram || NodeProgramClass)(this.webGLContext!, null, this);
     return this;
   }
 
@@ -288,7 +285,7 @@ export default class Sigma<
    */
   private registerEdgeProgram(key: string, EdgeProgramClass: EdgeProgramType<N, E, G>): this {
     if (this.edgePrograms[key]) this.edgePrograms[key].kill();
-    this.edgePrograms[key] = new EdgeProgramClass(this.webGLContexts.edges, this.frameBuffers.edges, this);
+    this.edgePrograms[key] = new EdgeProgramClass(this.webGLContext!, this.pickingFrameBuffer, this);
     return this;
   }
 
@@ -332,20 +329,18 @@ export default class Sigma<
    *
    * @return {Sigma}
    */
-  private resetWebGLTexture(id: string): this {
-    const gl = this.webGLContexts[id] as WebGL2RenderingContext;
+  private resetWebGLTexture(): this {
+    const gl = this.webGLContext!;
 
-    const frameBuffer = this.frameBuffers[id];
-    const currentTexture = this.textures[id];
-    if (currentTexture) gl.deleteTexture(currentTexture);
+    if (this.pickingTexture) gl.deleteTexture(this.pickingTexture);
 
     const pickingTexture = gl.createTexture();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.pickingFrameBuffer);
     gl.bindTexture(gl.TEXTURE_2D, pickingTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.width, this.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pickingTexture, 0);
 
-    this.textures[id] = pickingTexture as WebGLTexture;
+    this.pickingTexture = pickingTexture;
 
     return this;
   }
@@ -381,8 +376,8 @@ export default class Sigma<
   private getNodeAtPosition(position: Coordinates): string | null {
     const { x, y } = position;
     const color = getPixelColor(
-      this.webGLContexts.nodes,
-      this.frameBuffers.nodes,
+      this.webGLContext!,
+      this.pickingFrameBuffer,
       x,
       y,
       this.pixelRatio,
@@ -702,8 +697,8 @@ export default class Sigma<
    */
   private getEdgeAtPoint(x: number, y: number): string | null {
     const color = getPixelColor(
-      this.webGLContexts.edges,
-      this.frameBuffers.edges,
+      this.webGLContext!,
+      this.pickingFrameBuffer,
       x,
       y,
       this.pixelRatio,
@@ -1222,9 +1217,7 @@ export default class Sigma<
       const data = this.nodeDataCache[node];
       this.nodeHoverPrograms[data.type].process(0, nodesPerPrograms[data.type]++, data);
     });
-    // 4. Clear hovered nodes layer:
-    this.webGLContexts.hoverNodes.clear(this.webGLContexts.hoverNodes.COLOR_BUFFER_BIT);
-    // 5. Render:
+    // 4. Render:
     const renderParams = this.getRenderParams();
     for (const type in this.nodeHoverPrograms) {
       const program = this.nodeHoverPrograms[type];
@@ -1234,19 +1227,10 @@ export default class Sigma<
 
   /**
    * Method used to schedule a hover render.
-   *
+   * With unified WebGL context, this triggers a full render.
    */
   private scheduleHighlightedNodesRender(): void {
-    if (this.renderHighlightedNodesFrame || this.renderFrame) return;
-
-    this.renderHighlightedNodesFrame = requestAnimationFrame(() => {
-      // Resetting state
-      this.renderHighlightedNodesFrame = null;
-
-      // Rendering
-      this.renderHighlightedNodes();
-      this.renderEdgeLabels();
-    });
+    this.scheduleRender();
   }
 
   /**
@@ -1278,8 +1262,8 @@ export default class Sigma<
     // Clearing the canvases
     this.clear();
 
-    // Prepare the textures
-    this.pickingLayers.forEach((layer) => this.resetWebGLTexture(layer));
+    // Prepare the picking texture
+    this.resetWebGLTexture();
 
     // If we have no nodes we can stop right there
     if (!this.graph.order) return exitRender();
@@ -1315,18 +1299,18 @@ export default class Sigma<
 
     const params: RenderParams = this.getRenderParams();
 
-    // Drawing nodes
-    for (const type in this.nodePrograms) {
-      const program = this.nodePrograms[type];
-      program.render(params);
-    }
-
-    // Drawing edges
+    // Drawing edges first (so nodes render on top for picking priority)
     if (!this.settings.hideEdgesOnMove || !moving) {
       for (const type in this.edgePrograms) {
         const program = this.edgePrograms[type];
         program.render(params);
       }
+    }
+
+    // Drawing nodes
+    for (const type in this.nodePrograms) {
+      const program = this.nodePrograms[type];
+      program.render(params);
     }
 
     // Do not display labels on move per setting
@@ -1710,17 +1694,20 @@ export default class Sigma<
     }
 
     const gl = context as WebGL2RenderingContext;
-    this.webGLContexts[id] = gl;
+
+    // Store as main WebGL context if this is the stage
+    if (id === "stage") {
+      this.webGLContext = gl;
+    }
 
     // Blending:
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-    // Prepare frame buffer for picking layers:
+    // Prepare frame buffer for picking:
     if (options.picking) {
-      this.pickingLayers.add(id);
       const newFrameBuffer = gl.createFramebuffer();
       if (!newFrameBuffer) throw new Error(`Sigma: cannot create a new frame buffer for layer ${id}`);
-      this.frameBuffers[id] = newFrameBuffer;
+      this.pickingFrameBuffer = newFrameBuffer;
     }
 
     return gl;
@@ -1737,10 +1724,9 @@ export default class Sigma<
 
     if (!element) throw new Error(`Sigma: cannot kill layer ${id}, which does not exist`);
 
-    if (this.webGLContexts[id]) {
-      const gl = this.webGLContexts[id];
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
-      delete this.webGLContexts[id];
+    if (id === "stage" && this.webGLContext) {
+      this.webGLContext.getExtension("WEBGL_lose_context")?.loseContext();
+      this.webGLContext = null;
     } else if (this.canvasContexts[id]) {
       delete this.canvasContexts[id];
     }
@@ -2021,19 +2007,15 @@ export default class Sigma<
       if (this.pixelRatio !== 1) this.canvasContexts[id].scale(this.pixelRatio, this.pixelRatio);
     }
 
-    // Sizing WebGL contexts
-    for (const id in this.webGLContexts) {
-      this.elements[id].setAttribute("width", this.width * this.pixelRatio + "px");
-      this.elements[id].setAttribute("height", this.height * this.pixelRatio + "px");
+    // Sizing WebGL context
+    if (this.webGLContext) {
+      this.elements.stage.setAttribute("width", this.width * this.pixelRatio + "px");
+      this.elements.stage.setAttribute("height", this.height * this.pixelRatio + "px");
 
-      const gl = this.webGLContexts[id];
-      gl.viewport(0, 0, this.width * this.pixelRatio, this.height * this.pixelRatio);
+      this.webGLContext.viewport(0, 0, this.width * this.pixelRatio, this.height * this.pixelRatio);
 
       // Clear picking texture if needed
-      if (this.pickingLayers.has(id)) {
-        const currentTexture = this.textures[id];
-        if (currentTexture) gl.deleteTexture(currentTexture);
-      }
+      if (this.pickingTexture) this.webGLContext.deleteTexture(this.pickingTexture);
     }
 
     this.emit("resize");
@@ -2049,11 +2031,8 @@ export default class Sigma<
   clear(): this {
     this.emit("beforeClear");
 
-    this.webGLContexts.nodes.bindFramebuffer(WebGLRenderingContext.FRAMEBUFFER, null);
-    this.webGLContexts.nodes.clear(WebGLRenderingContext.COLOR_BUFFER_BIT);
-    this.webGLContexts.edges.bindFramebuffer(WebGLRenderingContext.FRAMEBUFFER, null);
-    this.webGLContexts.edges.clear(WebGLRenderingContext.COLOR_BUFFER_BIT);
-    this.webGLContexts.hoverNodes.clear(WebGLRenderingContext.COLOR_BUFFER_BIT);
+    this.webGLContext!.bindFramebuffer(WebGLRenderingContext.FRAMEBUFFER, null);
+    this.webGLContext!.clear(WebGLRenderingContext.COLOR_BUFFER_BIT);
     this.canvasContexts.labels.clearRect(0, 0, this.width, this.height);
     this.canvasContexts.hovers.clearRect(0, 0, this.width, this.height);
     this.canvasContexts.edgeLabels.clearRect(0, 0, this.width, this.height);
@@ -2414,7 +2393,7 @@ export default class Sigma<
 
     // Destroying remaining collections
     this.canvasContexts = {};
-    this.webGLContexts = {};
+    this.webGLContext = null;
     this.elements = {};
   }
 
@@ -2437,12 +2416,10 @@ export default class Sigma<
    * Method that returns the collection of all used canvases.
    * At the moment, the instantiated canvases are the following, and in the
    * following order in the DOM:
-   * - `edges`
-   * - `nodes`
+   * - `stage` (WebGL)
    * - `edgeLabels`
    * - `labels`
    * - `hovers`
-   * - `hoverNodes`
    * - `mouse`
    *
    * @return {PlainObject<HTMLCanvasElement>} - The collection of canvases.

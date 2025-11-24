@@ -16,7 +16,6 @@ export default () => {
     allowInvalidContainer: true,
     enableEdgeEvents: true,
     defaultEdgeType: "curve",
-    zIndex: true,
     edgeProgramClasses: {
       curve: EdgeCurveProgram,
     },

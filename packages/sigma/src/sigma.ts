@@ -49,7 +49,6 @@ import {
   matrixFromCamera,
   multiplyVec2,
   validateGraph,
-  zIndexOrdering,
 } from "./utils";
 
 /**
@@ -150,8 +149,6 @@ export default class Sigma<
   private nodesWithForcedLabels: Set<string> = new Set<string>();
   private edgesWithForcedLabels: Set<string> = new Set<string>();
   private nodeExtent: { x: Extent; y: Extent } = { x: [0, 1], y: [0, 1] };
-  private nodeZExtent: [number, number] = [Infinity, -Infinity];
-  private edgeZExtent: [number, number] = [Infinity, -Infinity];
 
   private matrix: Float32Array = identity();
   private invMatrix: Float32Array = identity();
@@ -785,7 +782,7 @@ export default class Sigma<
     const itemIDsIndex: typeof this.itemIDsIndex = {};
     let incrID = 1;
 
-    let nodes = graph.nodes();
+    const nodes = graph.nodes();
 
     // Do some indexation on the whole graph
     for (let i = 0, l = nodes.length; i < l; i++) {
@@ -817,32 +814,24 @@ export default class Sigma<
       nodesPerPrograms[type] = 0;
     }
 
-    // Order nodes by zIndex before to add them to program
-    if (this.settings.zIndex && this.nodeZExtent[0] !== this.nodeZExtent[1])
-      nodes = zIndexOrdering<string>(
-        this.nodeZExtent,
-        (node: string): number => this.nodeDataCache[node].zIndex,
-        nodes,
-      );
+    // Add data to programs using buckets (preserves zIndex ordering)
+    this.itemBuckets.nodes.forEachBucketByZIndex((programType, _zIndex, bucket) => {
+      const items = bucket.getItems();
+      for (const node of items) {
+        nodeIndices[node] = incrID;
+        itemIDsIndex[nodeIndices[node]] = { type: "node", id: node };
+        incrID++;
 
-    // Add data to programs
-    for (let i = 0, l = nodes.length; i < l; i++) {
-      const node = nodes[i];
-
-      nodeIndices[node] = incrID;
-      itemIDsIndex[nodeIndices[node]] = { type: "node", id: node };
-      incrID++;
-
-      const data = this.nodeDataCache[node];
-      this.addNodeToProgram(node, nodeIndices[node], nodesPerPrograms[data.type]++);
-    }
+        this.addNodeToProgram(node, nodeIndices[node], nodesPerPrograms[programType]++);
+      }
+    });
 
     //
     // EDGES
     //
 
     const edgesPerPrograms: Record<string, number> = {};
-    let edges = graph.edges();
+    const edges = graph.edges();
 
     // Allocate memory to programs
     for (let i = 0, l = edges.length; i < l; i++) {
@@ -851,14 +840,7 @@ export default class Sigma<
       edgesPerPrograms[data.type] = (edgesPerPrograms[data.type] || 0) + 1;
     }
 
-    // Order edges by zIndex before to add them to program
-    if (this.settings.zIndex && this.edgeZExtent[0] !== this.edgeZExtent[1])
-      edges = zIndexOrdering<string>(
-        this.edgeZExtent,
-        (edge: string): number => this.edgeDataCache[edge].zIndex,
-        edges,
-      );
-
+    // Allocate memory to edge programs
     for (const type in this.edgePrograms) {
       if (!hasOwnProperty.call(this.edgePrograms, type)) {
         throw new Error(`Sigma: could not find a suitable program for edge type "${type}"!`);
@@ -868,17 +850,17 @@ export default class Sigma<
       edgesPerPrograms[type] = 0;
     }
 
-    // Add data to programs
-    for (let i = 0, l = edges.length; i < l; i++) {
-      const edge = edges[i];
+    // Add data to programs using buckets (preserves zIndex ordering)
+    this.itemBuckets.edges.forEachBucketByZIndex((programType, _zIndex, bucket) => {
+      const items = bucket.getItems();
+      for (const edge of items) {
+        edgeIndices[edge] = incrID;
+        itemIDsIndex[edgeIndices[edge]] = { type: "edge", id: edge };
+        incrID++;
 
-      edgeIndices[edge] = incrID;
-      itemIDsIndex[edgeIndices[edge]] = { type: "edge", id: edge };
-      incrID++;
-
-      const data = this.edgeDataCache[edge];
-      this.addEdgeToProgram(edge, edgeIndices[edge], edgesPerPrograms[data.type]++);
-    }
+        this.addEdgeToProgram(edge, edgeIndices[edge], edgesPerPrograms[programType]++);
+      }
+    });
 
     this.itemIDsIndex = itemIDsIndex;
     this.nodeIndices = nodeIndices;
@@ -1385,12 +1367,6 @@ export default class Sigma<
     this.highlightedNodes.delete(key);
     if (data.highlighted && !data.hidden) this.highlightedNodes.add(key);
 
-    // zIndex
-    if (this.settings.zIndex) {
-      if (data.zIndex < this.nodeZExtent[0]) this.nodeZExtent[0] = data.zIndex;
-      if (data.zIndex > this.nodeZExtent[1]) this.nodeZExtent[1] = data.zIndex;
-    }
-
     // Bucket management for depth ordering
     const maxDepth = this.itemBuckets.nodes.getMaxDepthLevels();
     const newZIndex = Math.max(0, Math.min(maxDepth - 1, Math.floor(data.zIndex)));
@@ -1473,12 +1449,6 @@ export default class Sigma<
     this.edgesWithForcedLabels.delete(key);
     if (data.forceLabel && !data.hidden) this.edgesWithForcedLabels.add(key);
 
-    // Check zIndex
-    if (this.settings.zIndex) {
-      if (data.zIndex < this.edgeZExtent[0]) this.edgeZExtent[0] = data.zIndex;
-      if (data.zIndex > this.edgeZExtent[1]) this.edgeZExtent[1] = data.zIndex;
-    }
-
     // Bucket management for depth ordering
     const maxDepth = this.itemBuckets.edges.getMaxDepthLevels();
     const newZIndex = Math.max(0, Math.min(maxDepth - 1, Math.floor(data.zIndex)));
@@ -1543,7 +1513,6 @@ export default class Sigma<
     this.nodeDataCache = {};
     this.edgeProgramIndex = {};
     this.nodesWithForcedLabels = new Set<string>();
-    this.nodeZExtent = [Infinity, -Infinity];
     this.highlightedNodes = new Set();
     // Clear bucket data
     this.itemBuckets.nodes.clearAll();
@@ -1558,7 +1527,6 @@ export default class Sigma<
     this.edgeDataCache = {};
     this.edgeProgramIndex = {};
     this.edgesWithForcedLabels = new Set<string>();
-    this.edgeZExtent = [Infinity, -Infinity];
     // Clear bucket data
     this.itemBuckets.edges.clearAll();
     this.zIndexCache.edges = {};

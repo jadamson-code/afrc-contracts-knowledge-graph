@@ -87,7 +87,6 @@ export interface Settings<
   edgeReducer: null | ((edge: string, data: E) => Partial<EdgeDisplayData>);
 
   // Features
-  zIndex: boolean;
   maxDepthLevels: number;
   minCameraRatio: null | number;
   maxCameraRatio: null | number;
@@ -164,7 +163,6 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
   edgeReducer: null,
 
   // Features
-  zIndex: false,
   maxDepthLevels: 20,
   minCameraRatio: null,
   maxCameraRatio: null,

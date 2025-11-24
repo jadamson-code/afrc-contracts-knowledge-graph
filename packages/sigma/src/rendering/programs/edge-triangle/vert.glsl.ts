@@ -14,6 +14,7 @@ uniform float u_sizeRatio;
 uniform float u_correctionRatio;
 
 out vec4 v_color;
+out vec4 v_id;
 
 const float minThickness = 1.7;
 const float bias = 255.0 / 254.0;
@@ -33,13 +34,10 @@ void main() {
 
   gl_Position = vec4((u_matrix * vec3(position + unitNormal * webGLThickness, 1)).xy, 0, 1);
 
-  #ifdef PICKING_MODE
-  // For picking mode, we use the ID as the color:
-  v_color = a_id;
-  #else
   // For normal mode, we use the color:
   v_color = a_color;
-  #endif
+  // For picking mode, we use the ID:
+  v_id = a_id;
 
   v_color.a *= bias;
 }

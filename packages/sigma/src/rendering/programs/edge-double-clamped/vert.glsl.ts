@@ -23,6 +23,7 @@ uniform float u_lengthToThicknessRatio;
 uniform float u_feather;
 
 out vec4 v_color;
+out vec4 v_id;
 out vec2 v_normal;
 out float v_thickness;
 out float v_feather;
@@ -52,7 +53,7 @@ void main() {
   vec2 sourceCompensationVector =
     vec2(-sourceDirection * unitNormal.y, sourceDirection * unitNormal.x)
     * (webGLSourceRadius + webGLSourceArrowHeadLength);
-    
+
   // Target arrow head
   float targetRadius = a_targetRadius * a_targetRadiusCoef;
   float targetDirection = sign(targetRadius);
@@ -71,13 +72,10 @@ void main() {
 
   v_feather = u_feather * u_correctionRatio / u_zoomRatio / u_pixelRatio * 2.0;
 
-  #ifdef PICKING_MODE
-  // For picking mode, we use the ID as the color:
-  v_color = a_id;
-  #else
   // For normal mode, we use the color:
   v_color = a_color;
-  #endif
+  // For picking mode, we use the ID:
+  v_id = a_id;
 
   v_color.a *= bias;
 }

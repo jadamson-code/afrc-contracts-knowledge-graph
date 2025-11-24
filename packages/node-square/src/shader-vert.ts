@@ -13,13 +13,14 @@ uniform float u_cameraAngle;
 uniform float u_correctionRatio;
 
 out vec4 v_color;
+out vec4 v_id;
 
 const float bias = 255.0 / 254.0;
 const float sqrt_8 = sqrt(8.0);
 
 void main() {
   float size = a_size * u_correctionRatio / u_sizeRatio * sqrt_8;
-  float angle = a_angle + u_cameraAngle; 
+  float angle = a_angle + u_cameraAngle;
   vec2 diffVector = size * vec2(cos(angle), sin(angle));
   vec2 position = a_position + diffVector;
   gl_Position = vec4(
@@ -28,11 +29,8 @@ void main() {
     1
   );
 
-  #ifdef PICKING_MODE
-  v_color = a_id;
-  #else
   v_color = a_color;
-  #endif
+  v_id = a_id;
 
   v_color.a *= bias;
 }

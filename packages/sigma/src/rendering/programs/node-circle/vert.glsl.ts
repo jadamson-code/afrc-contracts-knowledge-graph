@@ -12,6 +12,7 @@ uniform float u_sizeRatio;
 uniform float u_correctionRatio;
 
 out vec4 v_color;
+out vec4 v_id;
 out vec2 v_diffVector;
 out float v_radius;
 out float v_border;
@@ -31,13 +32,10 @@ void main() {
   v_diffVector = diffVector;
   v_radius = size / 2.0;
 
-  #ifdef PICKING_MODE
-  // For picking mode, we use the ID as the color:
-  v_color = a_id;
-  #else
   // For normal mode, we use the color:
   v_color = a_color;
-  #endif
+  // For picking mode, we use the ID:
+  v_id = a_id;
 
   v_color.a *= bias;
 }

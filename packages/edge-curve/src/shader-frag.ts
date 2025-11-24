@@ -9,6 +9,7 @@ export default function getFragmentShader({ arrowHead }: CreateEdgeCurveProgramO
 precision highp float;
 
 in vec4 v_color;
+in vec4 v_id;
 in float v_thickness;
 in float v_feather;
 in vec2 v_cpA;
@@ -36,7 +37,8 @@ uniform float u_widenessToThicknessRatio;`
     : ""
 }
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out vec4 fragPicking;
 
 float det(vec2 a, vec2 b) {
   return a.x * b.y - b.x * a.y;
@@ -59,6 +61,7 @@ float distToQuadraticBezierCurve(vec2 p, vec2 b0, vec2 b1, vec2 b2) {
   return length(getDistanceVector(b0 - p, b1 - p, b2 - p));
 }
 
+const float bias = 255.0 / 254.0;
 const vec4 transparent = vec4(0.0, 0.0, 0.0, 0.0);
 
 void main(void) {
@@ -87,9 +90,6 @@ ${
 
   float halfThickness = thickness / 2.0;
   if (dist < halfThickness) {
-    #ifdef PICKING_MODE
-    fragColor = v_color;
-    #else
     float t = smoothstep(
       halfThickness - v_feather,
       halfThickness,
@@ -97,9 +97,11 @@ ${
     );
 
     fragColor = mix(v_color, transparent, t);
-    #endif
+    fragPicking = v_id;
+    fragPicking.a *= bias;
   } else {
     fragColor = transparent;
+    fragPicking = transparent;
   }
 }
 `;

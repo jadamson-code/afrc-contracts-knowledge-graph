@@ -11,10 +11,9 @@ precision highp float;
 
 in vec2 v_diffVector;
 in float v_radius;
-
-#ifdef PICKING_MODE
 in vec4 v_color;
-#else
+in vec4 v_id;
+
 // For normal mode, we use the border colors defined in the program:
 ${borders.flatMap(({ size }, i) => ("attribute" in size ? [`in float v_borderSize_${i + 1};`] : [])).join("\n")}
 ${borders
@@ -26,11 +25,11 @@ ${borders
         : [],
   )
   .join("\n")}
-#endif
 
 uniform float u_correctionRatio;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out vec4 fragPicking;
 
 const float bias = 255.0 / 254.0;
 const vec4 transparent = vec4(0.0, 0.0, 0.0, 0.0);
@@ -41,15 +40,15 @@ void main(void) {
   float v_borderSize_0 = v_radius;
   vec4 v_borderColor_0 = transparent;
 
-  // No antialiasing for picking mode:
-  #ifdef PICKING_MODE
-  if (dist > v_radius)
-    fragColor = transparent;
-  else {
-    fragColor = v_color;
-    fragColor.a *= bias;
+  // Picking output (no antialiasing)
+  if (dist > v_radius) {
+    fragPicking = transparent;
+  } else {
+    fragPicking = v_id;
+    fragPicking.a *= bias;
   }
-  #else
+
+  // Visual output with antialiasing:
   // Sizes:
 ${borders
   .flatMap(({ size }, i) => {
@@ -101,7 +100,6 @@ ${borders
   } else `,
     )
     .join("")} { /* Nothing to add here */ }
-  #endif
 }
 `;
 

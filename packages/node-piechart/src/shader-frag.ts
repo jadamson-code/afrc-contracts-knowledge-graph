@@ -9,20 +9,19 @@ precision highp float;
 
 in vec2 v_diffVector;
 in float v_radius;
-
-#ifdef PICKING_MODE
 in vec4 v_color;
-#else
+in vec4 v_id;
+
 // For normal mode, we use the border colors defined in the program:
 ${slices.flatMap(({ value }, i) => ("attribute" in value ? [`in float v_sliceValue_${i + 1};`] : [])).join("\n")}
 ${slices.map(({ color }, i) => ("attribute" in color ? `in vec4 v_sliceColor_${i + 1};` : `uniform vec4 u_sliceColor_${i + 1};`)).join("\n")}
-#endif
 
 uniform vec4 u_defaultColor;
 uniform float u_cameraAngle;
 uniform float u_correctionRatio;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out vec4 fragPicking;
 
 ${"attribute" in offset ? "in float v_offset;\n" : ""}
 ${"value" in offset ? "uniform float u_offset;\n" : ""}
@@ -41,15 +40,15 @@ void main(void) {
   angle = angle - u_cameraAngle + offset;
   angle = mod(angle, ${2 * Math.PI});
 
-  // No antialiasing for picking mode:
-  #ifdef PICKING_MODE
-  if (dist > v_radius)
-    fragColor = transparent;
-  else {
-    fragColor = v_color;
-    fragColor.a *= bias;
+  // Picking output (no antialiasing)
+  if (dist > v_radius) {
+    fragPicking = transparent;
+  } else {
+    fragPicking = v_id;
+    fragPicking.a *= bias;
   }
-  #else
+
+  // Visual output with antialiasing:
   // Colors:
 ${slices
   .map(({ color }, i) => {
@@ -91,7 +90,6 @@ ${slices.map((_, i) => `    float angle_${i + 1} = angle_${i} + sliceValue_${i +
   } else if (dist < v_radius) {
     fragColor = mix(transparent, color, (v_radius - dist) / aaBorder);
   }
-  #endif
 }
 `;
 

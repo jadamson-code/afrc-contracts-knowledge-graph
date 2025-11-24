@@ -5,12 +5,8 @@ in vec2 a_position;
 in vec2 a_normal;
 in float a_radius;
 in vec3 a_barycentric;
-
-#ifdef PICKING_MODE
 in vec4 a_id;
-#else
 in vec4 a_color;
-#endif
 
 uniform mat3 u_matrix;
 uniform float u_sizeRatio;
@@ -20,6 +16,7 @@ uniform float u_lengthToThicknessRatio;
 uniform float u_widenessToThicknessRatio;
 
 out vec4 v_color;
+out vec4 v_id;
 
 const float bias = 255.0 / 254.0;
 
@@ -56,13 +53,10 @@ void main() {
 
   gl_Position = vec4(position, 0, 1);
 
-  #ifdef PICKING_MODE
-  // For picking mode, we use the ID as the color:
-  v_color = a_id;
-  #else
   // For normal mode, we use the color:
   v_color = a_color;
-  #endif
+  // For picking mode, we use the ID:
+  v_id = a_id;
 
   v_color.a *= bias;
 }

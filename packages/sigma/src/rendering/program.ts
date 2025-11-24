@@ -21,10 +21,6 @@ import {
   loadVertexShader,
 } from "./utils";
 
-function pickifyShader(shader: string): string {
-  return shader.replace(/\n/, `\n#define PICKING_MODE\n`);
-}
-
 const SIZE_FACTOR_PER_ATTRIBUTE_TYPE: Record<number, number> = {
   [WebGL2RenderingContext.BOOL]: 1,
   [WebGL2RenderingContext.BYTE]: 1,
@@ -74,7 +70,6 @@ export abstract class Program<
   verticesCount = 0;
 
   normalProgram: ProgramInfo;
-  pickProgram: ProgramInfo | null;
 
   isInstanced: boolean;
 
@@ -101,15 +96,6 @@ export abstract class Program<
     // Members
     this.renderer = renderer;
     this.normalProgram = this.getProgramInfo("normal", gl, def.VERTEX_SHADER_SOURCE, def.FRAGMENT_SHADER_SOURCE, null);
-    this.pickProgram = pickingBuffer
-      ? this.getProgramInfo(
-          "pick",
-          gl,
-          pickifyShader(def.VERTEX_SHADER_SOURCE),
-          pickifyShader(def.FRAGMENT_SHADER_SOURCE),
-          pickingBuffer,
-        )
-      : null;
 
     // For instanced programs:
     if (this.isInstanced) {
@@ -138,11 +124,6 @@ export abstract class Program<
 
   kill() {
     killProgram(this.normalProgram);
-
-    if (this.pickProgram) {
-      killProgram(this.pickProgram);
-      this.pickProgram = null;
-    }
   }
 
   protected getProgramInfo(
@@ -322,27 +303,15 @@ export abstract class Program<
   render(params: RenderParams): void {
     if (this.hasNothingToRender()) return;
 
-    if (this.pickProgram) {
-      this.pickProgram.gl.viewport(
-        0,
-        0,
-        (params.width * params.pixelRatio) / params.downSizingRatio,
-        (params.height * params.pixelRatio) / params.downSizingRatio,
-      );
-      this.bindProgram(this.pickProgram);
-      this.renderProgram({ ...params, pixelRatio: params.pixelRatio / params.downSizingRatio }, this.pickProgram);
-      this.unbindProgram(this.pickProgram);
-    }
-
     this.normalProgram.gl.viewport(0, 0, params.width * params.pixelRatio, params.height * params.pixelRatio);
     this.bindProgram(this.normalProgram);
     this.renderProgram(params, this.normalProgram);
     this.unbindProgram(this.normalProgram);
   }
 
-  drawWebGL(method: number /* GLenum */, { gl, frameBuffer }: ProgramInfo): void {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
-
+  drawWebGL(method: number /* GLenum */, { gl }: ProgramInfo): void {
+    // Framebuffer is already bound by the caller (sigma.ts render loop)
+    // Do not rebind here - it would override the MRT framebuffer binding
     if (!this.isInstanced) {
       gl.drawArrays(method, 0, this.verticesCount);
     } else {

@@ -11,6 +11,7 @@ uniform float u_pixelRatio;
 uniform mat3 u_matrix;
 
 out vec4 v_color;
+out vec4 v_id;
 out float v_border;
 
 const float bias = 255.0 / 254.0;
@@ -29,13 +30,10 @@ void main() {
 
   v_border = (0.5 / a_size) * u_sizeRatio;
 
-  #ifdef PICKING_MODE
-  // For picking mode, we use the ID as the color:
-  v_color = a_id;
-  #else
   // For normal mode, we use the color:
   v_color = a_color;
-  #endif
+  // For picking mode, we use the ID:
+  v_id = a_id;
 
   v_color.a *= bias;
 }

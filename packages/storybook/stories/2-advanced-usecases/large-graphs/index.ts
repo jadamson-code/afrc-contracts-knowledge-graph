@@ -25,7 +25,8 @@ export default () => {
   for (const [key, value] of query) {
     const domList = document.getElementsByName(key);
     if (domList.length === 1) {
-      (domList[0] as HTMLInputElement).value = value;
+      if (value === "on") (domList[0] as HTMLInputElement).checked = true;
+      else (domList[0] as HTMLInputElement).value = value;
     } else if (domList.length > 1) {
       domList.forEach((dom: HTMLElement) => {
         const input = dom as HTMLInputElement;
@@ -40,6 +41,7 @@ export default () => {
     order: +document.querySelector<HTMLInputElement>("#order")!.value,
     size: +document.querySelector<HTMLInputElement>("#size")!.value,
     clusters: +document.querySelector<HTMLInputElement>("#clusters")!.value,
+    debugPicking: document.querySelector<HTMLInputElement>("[name=debug-picking]")!.checked,
     edgesRenderer: document.querySelector<HTMLInputElement>('[name="edges-renderer"]:checked')!.value,
   };
 
@@ -66,6 +68,7 @@ export default () => {
   const renderer = new Sigma(graph, container, {
     defaultEdgeColor: "#e6e6e6",
     defaultEdgeType: state.edgesRenderer,
+    DEBUG_displayPickingLayer: state.debugPicking,
     edgeProgramClasses: {
       "edges-default": EdgeRectangleProgram,
       "edges-fast": EdgeLineProgram,

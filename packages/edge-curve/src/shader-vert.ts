@@ -26,6 +26,7 @@ uniform float u_minEdgeThickness;
 uniform float u_feather;
 
 out vec4 v_color;
+out vec4 v_id;
 out float v_thickness;
 out float v_feather;
 out vec2 v_cpA;
@@ -124,15 +125,13 @@ ${
     : ""
 }
 
-  #ifdef PICKING_MODE
-  // For picking mode, we use the ID as the color:
-  v_color = a_id;
-  #else
   // For normal mode, we use the color:
   v_color = a_color;
-  #endif
+  // For picking mode, we use the ID:
+  v_id = a_id;
 
   v_color.a *= bias;
+  v_id.a *= bias;
 }
 `;
 

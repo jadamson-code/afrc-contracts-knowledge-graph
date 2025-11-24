@@ -136,8 +136,10 @@ export default class Sigma<
   private elements: PlainObject<HTMLElement> = {};
   private canvasContexts: PlainObject<CanvasRenderingContext2D> = {};
   private webGLContext: WebGL2RenderingContext | null = null;
-  private pickingTexture: WebGLTexture | null = null;
-  private pickingFrameBuffer: WebGLFramebuffer | null = null;
+  private mrtFrameBuffer: WebGLFramebuffer | null = null;
+  private mrtColorTexture: WebGLTexture | null = null;
+  private mrtPickingTexture: WebGLTexture | null = null;
+  private mrtDepthBuffer: WebGLRenderbuffer | null = null;
   private activeListeners: PlainObject<Listener> = {};
   private labelGrid: LabelGrid = new LabelGrid();
   private nodeDataCache: Record<string, NodeDisplayData> = {};
@@ -169,7 +171,6 @@ export default class Sigma<
   private width = 0;
   private height = 0;
   private pixelRatio = getPixelRatio();
-  private pickingDownSizingRatio = 2 * this.pixelRatio;
 
   // Graph State
   private displayedNodeLabels: Set<string> = new Set();
@@ -288,7 +289,7 @@ export default class Sigma<
   ): this {
     if (this.nodePrograms[key]) this.nodePrograms[key].kill();
     if (this.nodeHoverPrograms[key]) this.nodeHoverPrograms[key].kill();
-    this.nodePrograms[key] = new NodeProgramClass(this.webGLContext!, this.pickingFrameBuffer, this);
+    this.nodePrograms[key] = new NodeProgramClass(this.webGLContext!, null, this);
     this.nodeHoverPrograms[key] = new (NodeHoverProgram || NodeProgramClass)(this.webGLContext!, null, this);
     // Register program type with bucket collection (stride will be set properly when used)
     this.itemBuckets.nodes.registerProgram(key, 1);
@@ -304,7 +305,7 @@ export default class Sigma<
    */
   private registerEdgeProgram(key: string, EdgeProgramClass: EdgeProgramType<N, E, G>): this {
     if (this.edgePrograms[key]) this.edgePrograms[key].kill();
-    this.edgePrograms[key] = new EdgeProgramClass(this.webGLContext!, this.pickingFrameBuffer, this);
+    this.edgePrograms[key] = new EdgeProgramClass(this.webGLContext!, null, this);
     // Register program type with bucket collection (stride will be set properly when used)
     this.itemBuckets.edges.registerProgram(key, 1);
     return this;
@@ -346,22 +347,78 @@ export default class Sigma<
   }
 
   /**
-   * Method (re)binding WebGL texture (for picking).
+   * Method (re)binding WebGL textures and buffers for MRT (picking + visual).
    *
    * @return {Sigma}
    */
   private resetWebGLTexture(): this {
     const gl = this.webGLContext!;
 
-    if (this.pickingTexture) gl.deleteTexture(this.pickingTexture);
+    if (!this.mrtFrameBuffer) return this;
 
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.mrtFrameBuffer);
+
+    // Update color texture (visual output)
+    if (this.mrtColorTexture) gl.deleteTexture(this.mrtColorTexture);
+    const colorTexture = gl.createTexture();
+    if (colorTexture) {
+      gl.bindTexture(gl.TEXTURE_2D, colorTexture);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        this.width * this.pixelRatio,
+        this.height * this.pixelRatio,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        null,
+      );
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, colorTexture, 0);
+      this.mrtColorTexture = colorTexture;
+    }
+
+    // Update picking texture (IDs)
+    if (this.mrtPickingTexture) gl.deleteTexture(this.mrtPickingTexture);
     const pickingTexture = gl.createTexture();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.pickingFrameBuffer);
-    gl.bindTexture(gl.TEXTURE_2D, pickingTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.width, this.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pickingTexture, 0);
+    if (pickingTexture) {
+      gl.bindTexture(gl.TEXTURE_2D, pickingTexture);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        this.width * this.pixelRatio,
+        this.height * this.pixelRatio,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        null,
+      );
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, pickingTexture, 0);
+      this.mrtPickingTexture = pickingTexture;
+    }
 
-    this.pickingTexture = pickingTexture;
+    // Update depth buffer
+    if (this.mrtDepthBuffer) gl.deleteRenderbuffer(this.mrtDepthBuffer);
+    const depthBuffer = gl.createRenderbuffer();
+    if (depthBuffer) {
+      gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
+      gl.renderbufferStorage(
+        gl.RENDERBUFFER,
+        gl.DEPTH_COMPONENT16,
+        this.width * this.pixelRatio,
+        this.height * this.pixelRatio,
+      );
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuffer);
+      this.mrtDepthBuffer = depthBuffer;
+    }
+
+    // Re-enable MRT
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
 
     return this;
   }
@@ -396,14 +453,13 @@ export default class Sigma<
    */
   private getNodeAtPosition(position: Coordinates): string | null {
     const { x, y } = position;
-    const color = getPixelColor(
-      this.webGLContext!,
-      this.pickingFrameBuffer,
-      x,
-      y,
-      this.pixelRatio,
-      this.pickingDownSizingRatio,
-    );
+    const gl = this.webGLContext!;
+
+    // Read from picking attachment (COLOR_ATTACHMENT1)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.mrtFrameBuffer);
+    gl.readBuffer(gl.COLOR_ATTACHMENT1);
+
+    const color = getPixelColor(gl, this.mrtFrameBuffer, x, y, this.pixelRatio, 1);
     const index = colorToIndex(...color);
     const itemAt = this.itemIDsIndex[index];
 
@@ -717,14 +773,13 @@ export default class Sigma<
    * the key of the edge if any, or null else.
    */
   private getEdgeAtPoint(x: number, y: number): string | null {
-    const color = getPixelColor(
-      this.webGLContext!,
-      this.pickingFrameBuffer,
-      x,
-      y,
-      this.pixelRatio,
-      this.pickingDownSizingRatio,
-    );
+    const gl = this.webGLContext!;
+
+    // Read from picking attachment (COLOR_ATTACHMENT1)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.mrtFrameBuffer);
+    gl.readBuffer(gl.COLOR_ATTACHMENT1);
+
+    const color = getPixelColor(gl, this.mrtFrameBuffer, x, y, this.pixelRatio, 1);
     const index = colorToIndex(...color);
     const itemAt = this.itemIDsIndex[index];
 
@@ -1313,6 +1368,14 @@ export default class Sigma<
 
     const params: RenderParams = this.getRenderParams();
 
+    // Bind MRT framebuffer for rendering
+    const gl = this.webGLContext!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.mrtFrameBuffer);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // Ensure MRT draw buffers are enabled (may be reset by clear)
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+
     // Drawing edges first (so nodes render on top for picking priority)
     if (!this.settings.hideEdgesOnMove || !moving) {
       for (const type in this.edgePrograms) {
@@ -1326,6 +1389,24 @@ export default class Sigma<
       const program = this.nodePrograms[type];
       program.render(params);
     }
+
+    // Blit visual output (COLOR_ATTACHMENT0) or picking layer (COLOR_ATTACHMENT1) to screen
+    const attachmentToBlit = this.settings.DEBUG_displayPickingLayer ? gl.COLOR_ATTACHMENT1 : gl.COLOR_ATTACHMENT0;
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.mrtFrameBuffer);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+    gl.readBuffer(attachmentToBlit);
+    gl.blitFramebuffer(
+      0,
+      0,
+      this.width * this.pixelRatio,
+      this.height * this.pixelRatio,
+      0,
+      0,
+      this.width * this.pixelRatio,
+      this.height * this.pixelRatio,
+      gl.COLOR_BUFFER_BIT,
+      gl.NEAREST,
+    );
 
     // Do not display labels on move per setting
     if (this.settings.hideLabelsOnMove && moving) return exitRender();
@@ -1626,7 +1707,7 @@ export default class Sigma<
       cameraAngle: this.camera.angle,
       sizeRatio: 1 / this.scaleSize(),
       correctionRatio: this.correctionRatio,
-      downSizingRatio: this.pickingDownSizingRatio,
+      downSizingRatio: 1,
       minEdgeThickness: this.settings.minEdgeThickness,
       antiAliasingFeather: this.settings.antiAliasingFeather,
     };
@@ -1763,11 +1844,54 @@ export default class Sigma<
     // Blending:
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-    // Prepare frame buffer for picking:
+    // Prepare MRT frame buffer for rendering + picking:
     if (options.picking) {
-      const newFrameBuffer = gl.createFramebuffer();
-      if (!newFrameBuffer) throw new Error(`Sigma: cannot create a new frame buffer for layer ${id}`);
-      this.pickingFrameBuffer = newFrameBuffer;
+      const frameBuffer = gl.createFramebuffer();
+      if (!frameBuffer) throw new Error(`Sigma: cannot create a new frame buffer for layer ${id}`);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+
+      // Create color texture for visual output (COLOR_ATTACHMENT0)
+      const colorTexture = gl.createTexture();
+      if (!colorTexture) throw new Error(`Sigma: cannot create color texture`);
+      gl.bindTexture(gl.TEXTURE_2D, colorTexture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, colorTexture, 0);
+
+      // Create picking texture for IDs (COLOR_ATTACHMENT1)
+      const pickingTexture = gl.createTexture();
+      if (!pickingTexture) throw new Error(`Sigma: cannot create picking texture`);
+      gl.bindTexture(gl.TEXTURE_2D, pickingTexture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, pickingTexture, 0);
+
+      // Create depth buffer
+      const depthBuffer = gl.createRenderbuffer();
+      if (!depthBuffer) throw new Error(`Sigma: cannot create depth buffer`);
+      gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 1, 1);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuffer);
+
+      // Enable MRT
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+
+      // Verify framebuffer is complete
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        throw new Error(`Sigma: MRT framebuffer is not complete`);
+      }
+
+      this.mrtFrameBuffer = frameBuffer;
+      this.mrtColorTexture = colorTexture;
+      this.mrtPickingTexture = pickingTexture;
+      this.mrtDepthBuffer = depthBuffer;
     }
 
     return gl;
@@ -2073,9 +2197,6 @@ export default class Sigma<
       this.elements.stage.setAttribute("height", this.height * this.pixelRatio + "px");
 
       this.webGLContext.viewport(0, 0, this.width * this.pixelRatio, this.height * this.pixelRatio);
-
-      // Clear picking texture if needed
-      if (this.pickingTexture) this.webGLContext.deleteTexture(this.pickingTexture);
     }
 
     this.emit("resize");

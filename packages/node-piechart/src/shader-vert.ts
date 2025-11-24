@@ -15,13 +15,12 @@ uniform float u_correctionRatio;
 
 out vec2 v_diffVector;
 out float v_radius;
+out vec4 v_color;
+out vec4 v_id;
 
 ${"attribute" in offset ? "in float a_offset;\n" : ""}
 ${"attribute" in offset ? "out float v_offset;\n" : ""}
 
-#ifdef PICKING_MODE
-out vec4 v_color;
-#else
 ${slices
   .flatMap(({ value }, i) =>
     "attribute" in value ? [`in float a_sliceValue_${i + 1};`, `out float v_sliceValue_${i + 1};`] : [],
@@ -32,7 +31,6 @@ ${slices
     "attribute" in color ? [`in vec4 a_sliceColor_${i + 1};`, `out vec4 v_sliceColor_${i + 1};`] : [],
   )
   .join("\n")}
-#endif
 
 const vec4 transparent = vec4(0.0, 0.0, 0.0, 0.0);
 
@@ -50,16 +48,14 @@ void main() {
   v_diffVector = diffVector;
   ${"attribute" in offset ? "v_offset = a_offset;\n" : ""}
 
-  #ifdef PICKING_MODE
-  v_color = a_id;
-  #else
+  v_color = vec4(0.0);
+  v_id = a_id;
 ${slices
   .flatMap(({ value }, i) => ("attribute" in value ? [`  v_sliceValue_${i + 1} = a_sliceValue_${i + 1};`] : []))
   .join("\n")}
 ${slices
   .flatMap(({ color }, i) => ("attribute" in color ? [`  v_sliceColor_${i + 1} = a_sliceColor_${i + 1};`] : []))
   .join("\n")}
-  #endif
 }
 `;
 

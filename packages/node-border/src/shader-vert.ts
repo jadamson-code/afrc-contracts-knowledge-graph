@@ -14,11 +14,10 @@ uniform float u_correctionRatio;
 
 out vec2 v_diffVector;
 out float v_radius;
-
-#ifdef PICKING_MODE
-in vec4 a_id;
 out vec4 v_color;
-#else
+out vec4 v_id;
+
+in vec4 a_id;
 ${borders
   .flatMap(({ size }, i) =>
     "attribute" in size ? [`in float a_borderSize_${i + 1};`, `out float v_borderSize_${i + 1};`] : [],
@@ -29,7 +28,6 @@ ${borders
     "attribute" in color ? [`in vec4 a_borderColor_${i + 1};`, `out vec4 v_borderColor_${i + 1};`] : [],
   )
   .join("\n")}
-#endif
 
 const float bias = 255.0 / 254.0;
 const vec4 transparent = vec4(0.0, 0.0, 0.0, 0.0);
@@ -47,16 +45,14 @@ void main() {
   v_radius = size / 2.0;
   v_diffVector = diffVector;
 
-  #ifdef PICKING_MODE
-  v_color = a_id;
-  #else
+  v_color = vec4(0.0);
+  v_id = a_id;
 ${borders
   .flatMap(({ size }, i) => ("attribute" in size ? [`  v_borderSize_${i + 1} = a_borderSize_${i + 1};`] : []))
   .join("\n")}
 ${borders
   .flatMap(({ color }, i) => ("attribute" in color ? [`  v_borderColor_${i + 1} = a_borderColor_${i + 1};`] : []))
   .join("\n")}
-  #endif
 }
 `;
 

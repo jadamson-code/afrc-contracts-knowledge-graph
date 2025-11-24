@@ -4,6 +4,7 @@ export default function getFragmentShader({ texturesCount }: { texturesCount: nu
 precision highp float;
 
 in vec4 v_color;
+in vec4 v_id;
 in vec2 v_diffVector;
 in float v_radius;
 in vec4 v_texture;
@@ -16,8 +17,10 @@ uniform float u_percentagePadding;
 uniform bool u_colorizeImages;
 uniform bool u_keepWithinCircle;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out vec4 fragPicking;
 
+const float bias = 255.0 / 254.0;
 const vec4 transparent = vec4(0.0, 0.0, 0.0, 0.0);
 
 const float radius = 0.5;
@@ -31,12 +34,11 @@ void main(void) {
   float s = sin(-u_cameraAngle);
   vec2 diffVector = mat2(c, s, -s, c) * (v_diffVector);
 
-  // No antialiasing for picking mode:
-  #ifdef PICKING_MODE
-  border = 0.0;
-  color = v_color;
+  // Picking output (no antialiasing)
+  fragPicking = v_id;
+  fragPicking.a *= bias;
 
-  #else
+  // Visual output with antialiasing:
   // First case: No image to display
   if (v_texture.w <= 0.0) {
     if (!u_colorizeImages) {
@@ -85,7 +87,6 @@ void main(void) {
       }
     }
   }
-  #endif
 
   // Crop in a circle when u_keepWithinCircle is truthy:
   if (u_keepWithinCircle) {

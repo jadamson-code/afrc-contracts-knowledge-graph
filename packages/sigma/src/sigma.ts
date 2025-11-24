@@ -10,7 +10,13 @@ import { cleanMouseCoords } from "./core/captors/captor";
 import MouseCaptor from "./core/captors/mouse";
 import TouchCaptor from "./core/captors/touch";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
-import { AbstractEdgeProgram, AbstractNodeProgram, EdgeProgramType, NodeProgramType } from "./rendering";
+import {
+  AbstractEdgeProgram,
+  AbstractNodeProgram,
+  BucketCollection,
+  EdgeProgramType,
+  NodeProgramType,
+} from "./rendering";
 import { Settings, resolveSettings, validateSettings } from "./settings";
 import {
   CameraState,
@@ -186,6 +192,14 @@ export default class Sigma<
   private nodeHoverPrograms: { [key: string]: AbstractNodeProgram<N, E, G> } = {};
   private edgePrograms: { [key: string]: AbstractEdgeProgram<N, E, G> } = {};
 
+  // Bucket collections for depth management (supports future item types like labels)
+  private itemBuckets: Record<"nodes" | "edges", BucketCollection>;
+  // Track previous zIndex to detect changes
+  private zIndexCache: Record<"nodes" | "edges", Record<string, number>> = {
+    nodes: {},
+    edges: {},
+  };
+
   private camera: Camera;
 
   constructor(graph: Graph<N, E, G>, container: HTMLElement, settings: Partial<Settings<N, E, G>> = {}) {
@@ -202,6 +216,12 @@ export default class Sigma<
     // Properties
     this.graph = graph;
     this.container = container;
+
+    // Initialize bucket collections with maxDepthLevels setting
+    this.itemBuckets = {
+      nodes: new BucketCollection(this.settings.maxDepthLevels),
+      edges: new BucketCollection(this.settings.maxDepthLevels),
+    };
 
     // Initializing contexts
     this.createWebGLContext("stage", { picking: true });
@@ -273,6 +293,8 @@ export default class Sigma<
     if (this.nodeHoverPrograms[key]) this.nodeHoverPrograms[key].kill();
     this.nodePrograms[key] = new NodeProgramClass(this.webGLContext!, this.pickingFrameBuffer, this);
     this.nodeHoverPrograms[key] = new (NodeHoverProgram || NodeProgramClass)(this.webGLContext!, null, this);
+    // Register program type with bucket collection (stride will be set properly when used)
+    this.itemBuckets.nodes.registerProgram(key, 1);
     return this;
   }
 
@@ -286,6 +308,8 @@ export default class Sigma<
   private registerEdgeProgram(key: string, EdgeProgramClass: EdgeProgramType<N, E, G>): this {
     if (this.edgePrograms[key]) this.edgePrograms[key].kill();
     this.edgePrograms[key] = new EdgeProgramClass(this.webGLContext!, this.pickingFrameBuffer, this);
+    // Register program type with bucket collection (stride will be set properly when used)
+    this.itemBuckets.edges.registerProgram(key, 1);
     return this;
   }
 
@@ -919,6 +943,14 @@ export default class Sigma<
           if (!settings.nodeProgramClasses[type]) this.unregisterNodeProgram(type);
         }
       }
+
+      // Check maxDepthLevels:
+      if (oldSettings.maxDepthLevels !== settings.maxDepthLevels) {
+        this.itemBuckets.nodes.setMaxDepthLevels(settings.maxDepthLevels);
+        this.itemBuckets.edges.setMaxDepthLevels(settings.maxDepthLevels);
+        // Mark need to reprocess since bucket structure changed
+        this.needToProcess = true;
+      }
     }
 
     // Update captors settings:
@@ -1358,6 +1390,24 @@ export default class Sigma<
       if (data.zIndex < this.nodeZExtent[0]) this.nodeZExtent[0] = data.zIndex;
       if (data.zIndex > this.nodeZExtent[1]) this.nodeZExtent[1] = data.zIndex;
     }
+
+    // Bucket management for depth ordering
+    const maxDepth = this.itemBuckets.nodes.getMaxDepthLevels();
+    const newZIndex = Math.max(0, Math.min(maxDepth - 1, Math.floor(data.zIndex)));
+    const oldZIndex = this.zIndexCache.nodes[key];
+
+    if (oldZIndex !== undefined && oldZIndex !== newZIndex) {
+      // zIndex changed - move between buckets
+      // Note: program type changes require full reprocess, so we use data.type for both
+      this.itemBuckets.nodes.moveItem(data.type, oldZIndex, data.type, newZIndex, key);
+    } else if (oldZIndex === undefined) {
+      // New node - add to bucket
+      this.itemBuckets.nodes.addItem(data.type, newZIndex, key);
+    } else {
+      // Same zIndex - mark for update
+      this.itemBuckets.nodes.updateItem(data.type, newZIndex, key);
+    }
+    this.zIndexCache.nodes[key] = newZIndex;
   }
 
   /**
@@ -1379,6 +1429,15 @@ export default class Sigma<
    * @param key The node's graphology ID
    */
   private removeNode(key: string): void {
+    // Remove from bucket
+    const data = this.nodeDataCache[key];
+    if (data) {
+      const zIndex = this.zIndexCache.nodes[key];
+      if (zIndex !== undefined) {
+        this.itemBuckets.nodes.removeItem(data.type, zIndex, key);
+        delete this.zIndexCache.nodes[key];
+      }
+    }
     // Remove from node cache
     delete this.nodeDataCache[key];
     // Remove from node program index
@@ -1419,6 +1478,24 @@ export default class Sigma<
       if (data.zIndex < this.edgeZExtent[0]) this.edgeZExtent[0] = data.zIndex;
       if (data.zIndex > this.edgeZExtent[1]) this.edgeZExtent[1] = data.zIndex;
     }
+
+    // Bucket management for depth ordering
+    const maxDepth = this.itemBuckets.edges.getMaxDepthLevels();
+    const newZIndex = Math.max(0, Math.min(maxDepth - 1, Math.floor(data.zIndex)));
+    const oldZIndex = this.zIndexCache.edges[key];
+
+    if (oldZIndex !== undefined && oldZIndex !== newZIndex) {
+      // zIndex changed - move between buckets
+      // Note: program type changes require full reprocess, so we use data.type for both
+      this.itemBuckets.edges.moveItem(data.type, oldZIndex, data.type, newZIndex, key);
+    } else if (oldZIndex === undefined) {
+      // New edge - add to bucket
+      this.itemBuckets.edges.addItem(data.type, newZIndex, key);
+    } else {
+      // Same zIndex - mark for update
+      this.itemBuckets.edges.updateItem(data.type, newZIndex, key);
+    }
+    this.zIndexCache.edges[key] = newZIndex;
   }
 
   /**
@@ -1436,6 +1513,15 @@ export default class Sigma<
    * @param key The edge's graphology ID
    */
   private removeEdge(key: string): void {
+    // Remove from bucket
+    const data = this.edgeDataCache[key];
+    if (data) {
+      const zIndex = this.zIndexCache.edges[key];
+      if (zIndex !== undefined) {
+        this.itemBuckets.edges.removeItem(data.type, zIndex, key);
+        delete this.zIndexCache.edges[key];
+      }
+    }
     // Remove from edge cache
     delete this.edgeDataCache[key];
     // Remove from programId index
@@ -1459,6 +1545,9 @@ export default class Sigma<
     this.nodesWithForcedLabels = new Set<string>();
     this.nodeZExtent = [Infinity, -Infinity];
     this.highlightedNodes = new Set();
+    // Clear bucket data
+    this.itemBuckets.nodes.clearAll();
+    this.zIndexCache.nodes = {};
   }
 
   /**
@@ -1470,6 +1559,9 @@ export default class Sigma<
     this.edgeProgramIndex = {};
     this.edgesWithForcedLabels = new Set<string>();
     this.edgeZExtent = [Infinity, -Infinity];
+    // Clear bucket data
+    this.itemBuckets.edges.clearAll();
+    this.zIndexCache.edges = {};
   }
 
   /**
@@ -1689,7 +1781,7 @@ export default class Sigma<
     if (!context) {
       throw new Error(
         "Sigma: WebGL 2 is not supported by your browser. " +
-        "Please use a modern browser (Chrome 56+, Firefox 51+, Safari 15+, Edge 79+)."
+          "Please use a modern browser (Chrome 56+, Firefox 51+, Safari 15+, Edge 79+).",
       );
     }
 

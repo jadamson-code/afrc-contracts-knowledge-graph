@@ -8,6 +8,8 @@ export { EdgeProgram, AbstractEdgeProgram, createEdgeCompoundProgram } from "./e
 export type { EdgeProgramType } from "./edge";
 export { Program, AbstractProgram } from "./program";
 export type { ProgramType } from "./program";
+export { Bucket, BucketCollection, clampZIndex } from "./bucket";
+export type { ProcessItemFunction } from "./bucket";
 
 // Canvas helpers
 export type { EdgeLabelDrawingFunction } from "./edge-labels";

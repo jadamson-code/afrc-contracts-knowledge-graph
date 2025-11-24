@@ -88,6 +88,7 @@ export interface Settings<
 
   // Features
   zIndex: boolean;
+  maxDepthLevels: number;
   minCameraRatio: null | number;
   maxCameraRatio: null | number;
   enableCameraZooming: boolean;
@@ -164,6 +165,7 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
 
   // Features
   zIndex: false,
+  maxDepthLevels: 20,
   minCameraRatio: null,
   maxCameraRatio: null,
   enableCameraZooming: true,

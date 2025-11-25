@@ -1,6 +1,63 @@
 import { Coordinates } from "sigma/types";
 import { expect } from "vitest";
 
+/**
+ * Creates a WebGL2 context for testing shader compilation.
+ */
+export function createTestGL(): WebGL2RenderingContext {
+  const canvas = document.createElement("canvas");
+  const gl = canvas.getContext("webgl2");
+  if (!gl) {
+    throw new Error("WebGL2 not supported");
+  }
+  return gl;
+}
+
+/**
+ * Attempts to compile a shader and returns any errors.
+ */
+export function compileShader(gl: WebGL2RenderingContext, type: number, source: string): string | null {
+  const shader = gl.createShader(type);
+  if (!shader) return "Failed to create shader";
+
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const error = gl.getShaderInfoLog(shader);
+    gl.deleteShader(shader);
+    return error;
+  }
+
+  gl.deleteShader(shader);
+  return null;
+}
+
+/**
+ * Tests that vertex and fragment shaders compile successfully.
+ */
+export function expectShadersToCompile(vertexShader: string, fragmentShader: string) {
+  const gl = createTestGL();
+
+  const vertexError = compileShader(gl, gl.VERTEX_SHADER, vertexShader);
+  if (vertexError) {
+    throw new Error(`Vertex shader compilation failed:
+${vertexError}
+
+Shader source:
+${vertexShader}`);
+  }
+
+  const fragmentError = compileShader(gl, gl.FRAGMENT_SHADER, fragmentShader);
+  if (fragmentError) {
+    throw new Error(`Fragment shader compilation failed:
+${fragmentError}
+
+Shader source:
+${fragmentShader}`);
+  }
+}
+
 export function wait(timeout: number): Promise<void> {
   return new Promise<void>((resolve) => setTimeout(resolve, timeout));
 }

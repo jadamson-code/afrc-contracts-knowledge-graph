@@ -22,6 +22,9 @@ export { drawDiscNodeHover } from "./node-hover";
 // Other various program helpers
 export * from "./utils";
 
+// Composable node programs (new SDF-based system)
+export * from "./composed";
+
 // Built-in node programs
 export { default as NodeCircleProgram } from "./programs/node-circle";
 export { default as NodePointProgram } from "./programs/node-point";

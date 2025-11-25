@@ -75,7 +75,7 @@ export abstract class Program<
 
   abstract getDefinition(): ProgramDefinition<Uniform> | InstancedProgramDefinition<Uniform>;
 
-  constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
+  constructor(gl: WebGL2RenderingContext, _pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
     // Reading and caching program definition
     const def = this.getDefinition();
     this.VERTICES = def.VERTICES;

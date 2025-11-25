@@ -1,0 +1,292 @@
+/**
+ * Sigma.js Composable Node Programs - Type Definitions
+ * =====================================================
+ *
+ * Types and interfaces for the composable node program architecture.
+ * This system separates shape definition (using Signed Distance Fields)
+ * from fragment coloring layers, enabling single-pass rendering of
+ * complex node appearances.
+ *
+ * @module
+ */
+
+export type Vec2 = [number, number];
+export type Vec3 = [number, number, number];
+export type Vec4 = [number, number, number, number];
+export type Mat2 = [...Vec2, ...Vec2];
+export type Mat3 = [...Vec3, ...Vec3, ...Vec3];
+export type Mat4 = [...Vec4, ...Vec4, ...Vec4, ...Vec4];
+
+/**
+ * Specification for a shader uniform with type-safe value.
+ */
+export type UniformSpecification =
+  | {
+      name: string;
+      type: "float" | "int" | "bool";
+      value: number;
+    }
+  | {
+      name: string;
+      type: "vec2";
+      value: Vec2;
+    }
+  | {
+      name: string;
+      type: "vec3";
+      value: Vec3;
+    }
+  | {
+      name: string;
+      type: "vec4";
+      value: Vec4;
+    }
+  | {
+      name: string;
+      type: "mat3";
+      value: Mat3;
+    }
+  | {
+      name: string;
+      type: "mat4";
+      value: Mat4;
+    }
+  | {
+      name: string;
+      type: "sampler2D";
+      value?: never;
+    };
+
+/**
+ * Specification for a vertex attribute.
+ */
+export interface AttributeSpecification {
+  /**
+   * Name of the attribute in the shader (e.g., "a_borderSize").
+   */
+  name: string;
+
+  /**
+   * Number of components (e.g., 1 for float, 2 for vec2, 3 for vec3, 4 for vec4).
+   */
+  size: 1 | 2 | 3 | 4;
+
+  /**
+   * WebGL data type (e.g., FLOAT, UNSIGNED_BYTE).
+   */
+  type: number;
+
+  /**
+   * Whether the attribute should be normalized when passed to the shader.
+   */
+  normalized?: boolean;
+
+  /**
+   * Name of the node attribute to read from in NodeDisplayData.
+   * If not specified, defaults to the shader attribute name without 'a_' prefix.
+   * For example, if source is "borderColor", the value is read from data.borderColor.
+   */
+  source?: string;
+
+  /**
+   * Default value to use when the source attribute is missing from node data.
+   * For size=1: a number
+   * For size=4 with normalized: a CSS color string (e.g., "#ff0000")
+   */
+  defaultValue?: number | string;
+}
+
+/**
+ * Definition of a Signed Distance Field shape.
+ * Shapes provide GLSL code that computes the signed distance from a point
+ * to the shape's boundary (negative inside, 0 on boundary, positive outside).
+ */
+export interface SDFShape {
+  /**
+   * Unique identifier for this shape (e.g., "circle", "square").
+   * Used to generate the GLSL function name: sdf_{name}
+   */
+  name: string;
+
+  /**
+   * GLSL function code that computes the signed distance field.
+   * Function signature: float sdf_{name}(vec2 uv, ...)
+   * where ... represents the shape-specific uniforms as additional parameters.
+   *
+   * @param uv - Normalized coordinates in [-1, 1] range, (0, 0) at center
+   * @returns Signed distance (negative inside, 0 on boundary, positive outside)
+   */
+  glsl: string;
+
+  /**
+   * Additional uniforms required by this shape (e.g., u_cornerRadius, u_rotation).
+   * Each uniform's value is already set when the shape is created.
+   */
+  uniforms: UniformSpecification[];
+
+  /**
+   * Ratio of inradius to circumradius for this shape.
+   * This indicates how "deep" the shape goes relative to the bounding circle.
+   * - Circle: 1.0 (inradius equals circumradius)
+   * - Square: 1.0 (inscribed circle touches all sides)
+   * - Triangle: 0.5 (inradius is half the circumradius for equilateral)
+   * - Diamond: ~0.707 (√2/2 for a square rotated 45°)
+   *
+   * Used by layers like border to correctly calculate fill sizes.
+   * Defaults to 1.0 if not specified.
+   */
+  inradiusFactor?: number;
+}
+
+/**
+ * Context provided to a fragment layer's GLSL code via the global `context` struct.
+ * This struct is populated by the generator before calling any layer functions.
+ *
+ * GLSL definition:
+ * ```glsl
+ * struct LayerContext {
+ *   float sdf;             // Signed distance from shape boundary
+ *   vec2 uv;               // UV coordinates [-1, 1]
+ *   float shapeSize;       // Effective shape radius in UV space
+ *   float aaWidth;         // Anti-aliasing width
+ *   float pixelSize;       // Node diameter in screen pixels
+ *   float correctionRatio; // Scaling factor for consistent rendering
+ *   float pixelToUV;       // Conversion: pixels * pixelToUV = UV units
+ * };
+ * LayerContext context;  // Global instance
+ * ```
+ */
+export interface LayerContext {
+  /**
+   * The signed distance field value at this fragment.
+   * Negative inside the shape, zero at boundary, positive outside.
+   */
+  sdf: "float";
+
+  /**
+   * Normalized UV coordinates in [-1, 1] range, with (0,0) at center.
+   */
+  uv: "vec2";
+
+  /**
+   * The effective shape size in UV space (1.0 - aaWidth).
+   * This is the radius where the solid shape ends, before the AA band.
+   */
+  shapeSize: "float";
+
+  /**
+   * The antialiasing width in UV space.
+   * Use this for smooth transitions between internal borders/regions.
+   */
+  aaWidth: "float";
+
+  /**
+   * The node diameter in screen pixels.
+   * Useful for pixel-mode border calculations.
+   */
+  pixelSize: "float";
+
+  /**
+   * Scaling factor for consistent rendering across zoom levels.
+   * Useful for advanced effects that need to compensate for camera zoom.
+   */
+  correctionRatio: "float";
+
+  /**
+   * Conversion factor from screen pixels to UV units.
+   * Multiply a pixel value by this to get the equivalent size in UV space.
+   * Use this for pixel-mode border sizes or any pixel-based measurements.
+   */
+  pixelToUV: "float";
+}
+
+/**
+ * Specification for how to provide a value to a layer.
+ * Can be either a constant value or read from a node attribute.
+ */
+export type ValueSource<T> =
+  | T
+  | {
+      /**
+       * Name of the node attribute to read from (e.g., "borderSize").
+       */
+      attribute: string;
+    };
+
+/**
+ * Definition of a fragment layer that can be composed with a shape.
+ * Layers output a color that is blended with previous layers by the generator.
+ */
+export interface FragmentLayer {
+  /**
+   * Unique identifier for this layer (e.g., "fill", "border").
+   */
+  name: string;
+
+  /**
+   * Additional uniforms required by this layer beyond standard node uniforms.
+   */
+  uniforms: UniformSpecification[];
+
+  /**
+   * Additional per-node attributes required by this layer beyond standard attributes
+   * (position, size, color, id, zIndex).
+   */
+  attributes: AttributeSpecification[];
+
+  /**
+   * GLSL function code that applies this layer's effect.
+   *
+   * Function signature:
+   *   vec4 layer_{name}(...layerParams)
+   *
+   * where layerParams are: attributes (as v_* varyings), then uniforms.
+   *
+   * Available globals:
+   * - context.sdf: Signed distance field value (negative inside, 0 at boundary, positive outside)
+   * - context.uv: Normalized coordinates in [-1, 1] range
+   * - context.shapeSize: Effective shape radius in UV space (1.0 - context.aaWidth)
+   * - context.aaWidth: Antialiasing width in UV space for smooth internal transitions
+   * - context.pixelSize: Node diameter in screen pixels (for pixel-mode calculations)
+   * - context.correctionRatio: Scaling factor for consistent rendering across zoom levels
+   * - context.pixelToUV: Conversion factor from screen pixels to UV units
+   * - v_color: Node's base color (standard varying)
+   *
+   * The function should return a vec4 color for this layer's contribution.
+   * Transparent areas (alpha < 1) let previous layers show through.
+   * The generator handles blending via "over" compositing.
+   */
+  glsl: string;
+}
+
+/**
+ * Options for creating a composed node program.
+ */
+export interface ComposedProgramOptions {
+  /**
+   * The SDF shape definition to use for this program.
+   * Shape configuration (uniforms) is already set when the shape is created.
+   */
+  shape: SDFShape;
+
+  /**
+   * Array of fragment layers to apply, in order.
+   * Layers are applied sequentially, each receiving the output of the previous layer.
+   */
+  layers: FragmentLayer[];
+}
+
+/**
+ * Configuration for a specific layer instance, including its options.
+ */
+export interface LayerConfig<Options = Record<string, unknown>> {
+  /**
+   * The layer definition.
+   */
+  layer: FragmentLayer;
+
+  /**
+   * Options/parameters for this layer instance.
+   */
+  options: Options;
+}

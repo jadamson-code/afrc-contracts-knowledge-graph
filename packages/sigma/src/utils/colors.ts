@@ -307,3 +307,32 @@ export function getPixelColor(
   const [r, g, b, a] = pixel;
   return [r, g, b, a];
 }
+
+/**
+ * Converts a color string to a GLSL vec4 string representation.
+ * The output can be used directly in GLSL shaders.
+ *
+ * @param val - Color string (hex, rgb, rgba, or HTML color name)
+ * @returns GLSL vec4 string, e.g. "vec4(1.0, 0.0, 0.0, 1.0)" for red
+ *
+ * @example
+ * colorToGLSLString("#ff0000")     // "vec4(1.0, 0.0, 0.0, 1.0)"
+ * colorToGLSLString("red")          // "vec4(1.0, 0.0, 0.0, 1.0)"
+ * colorToGLSLString("rgb(255, 0, 0)") // "vec4(1.0, 0.0, 0.0, 1.0)"
+ * colorToGLSLString("rgba(255, 0, 0, 0.5)") // "vec4(1.0, 0.0, 0.0, 0.5)"
+ */
+export function colorToGLSLString(val: string): string {
+  // Handle HTML color names by looking them up first
+  const normalizedVal = val.toLowerCase();
+  const hexVal = HTML_COLORS[normalizedVal] || val;
+
+  const { r, g, b, a } = parseColor(hexVal);
+
+  // Convert 0-255 range to 0.0-1.0 and format as GLSL floats
+  const rFloat = (r / 255).toFixed(6);
+  const gFloat = (g / 255).toFixed(6);
+  const bFloat = (b / 255).toFixed(6);
+  const aFloat = a.toFixed(6);
+
+  return `vec4(${rFloat}, ${gFloat}, ${bFloat}, ${aFloat})`;
+}

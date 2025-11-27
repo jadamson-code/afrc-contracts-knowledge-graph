@@ -214,6 +214,71 @@ export type ValueSource<T> =
     };
 
 /**
+ * Context provided to layer lifecycle hooks.
+ * Gives access to WebGL, renderer, and program capabilities.
+ */
+export interface LayerLifecycleContext {
+  /** WebGL2 rendering context */
+  gl: WebGL2RenderingContext;
+
+  /** Sigma renderer instance (for refresh(), etc.) */
+  renderer: {
+    refresh: () => void;
+  };
+
+  /** Get uniform location from the current program */
+  getUniformLocation: (name: string) => WebGLUniformLocation | null;
+
+  /** Request shader regeneration for this layer */
+  requestShaderRegeneration: () => void;
+
+  /** Request a re-render (calls renderer.refresh()) */
+  requestRefresh: () => void;
+}
+
+/**
+ * Lifecycle hooks for layers that need async resources.
+ * Returned by the lifecycle factory function.
+ */
+export interface LayerLifecycleHooks {
+  /**
+   * Called after the program is initialized and ready.
+   * Use for setting up event listeners, initializing resources, etc.
+   */
+  init?: () => void;
+
+  /**
+   * Called before each render.
+   * Use for binding textures, updating dynamic uniforms, etc.
+   */
+  beforeRender?: () => void;
+
+  /**
+   * Called when the layer's shader portion needs regeneration.
+   * Should return a new FragmentLayer definition with updated GLSL.
+   * If not provided, the original layer definition is reused.
+   */
+  regenerate?: () => FragmentLayer;
+
+  /**
+   * Called when the program is destroyed.
+   * Use for cleanup: removing listeners, releasing resources, etc.
+   */
+  kill?: () => void;
+
+  /**
+   * Returns data for special attribute sources.
+   * Used by layers that need to inject per-node data from external sources
+   * (like texture coordinates from an atlas).
+   *
+   * @param data - The node's display data
+   * @param attributeSource - The source name from the attribute specification
+   * @returns The value(s) for the attribute, or null to fall back to node data
+   */
+  getAttributeData?: (data: Record<string, unknown>, attributeSource: string) => number | number[] | null;
+}
+
+/**
  * Definition of a fragment layer that can be composed with a shape.
  * Layers output a color that is blended with previous layers by the generator.
  */
@@ -257,6 +322,15 @@ export interface FragmentLayer {
    * The generator handles blending via "over" compositing.
    */
   glsl: string;
+
+  /**
+   * Optional lifecycle factory for layers that need async resources (like textures).
+   * Called once per program instance with the lifecycle context.
+   * Returns lifecycle hooks for this layer instance.
+   *
+   * Layers without this property work as before (purely declarative).
+   */
+  lifecycle?: (context: LayerLifecycleContext) => LayerLifecycleHooks;
 }
 
 /**

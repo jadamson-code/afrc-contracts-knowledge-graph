@@ -20,6 +20,8 @@ export type {
   ValueSource,
   LayerContext,
   LayerConfig,
+  LayerLifecycleContext,
+  LayerLifecycleHooks,
   Vec2,
   Vec3,
   Vec4,

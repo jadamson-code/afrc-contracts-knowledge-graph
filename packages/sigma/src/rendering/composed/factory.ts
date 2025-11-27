@@ -8,13 +8,20 @@
  */
 import { Attributes } from "graphology-types";
 
+import Sigma from "../../sigma";
 import { NodeDisplayData, RenderParams } from "../../types";
 import { floatColor } from "../../utils";
 import { NodeProgram } from "../node";
 import type { NodeProgramType } from "../node";
 import { ProgramInfo } from "../utils";
 import { generateShaders } from "./generator";
-import { ComposedProgramOptions, UniformSpecification } from "./types";
+import {
+  ComposedProgramOptions,
+  FragmentLayer,
+  LayerLifecycleContext,
+  LayerLifecycleHooks,
+  UniformSpecification,
+} from "./types";
 
 /**
  * Creates a composed node program from an SDF shape and fragment layers.
@@ -55,14 +62,56 @@ export function createComposedNodeProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: ComposedProgramOptions): NodeProgramType<N, E, G> {
-  const { shape, layers } = options;
+  const { shape } = options;
+
+  // Mutable layers array - can be regenerated
+  let layers = [...options.layers];
 
   // Generate shaders and collect metadata
-  const generated = generateShaders(options);
+  let generated = generateShaders({ shape, layers });
 
   return class ComposedNodeProgram extends NodeProgram<string, N, E, G> {
     static readonly programOptions = options;
-    static readonly generatedShaders = generated;
+    // Note: generatedShaders is now a getter to always return current shaders
+    static get generatedShaders() {
+      return generated;
+    }
+
+    // Lifecycle hooks storage (keyed by layer index for uniqueness)
+    private layerLifecycles: Map<number, LayerLifecycleHooks> = new Map();
+    private layersNeedingRegeneration: Set<number> = new Set();
+    private _pickingBuffer: WebGLFramebuffer | null;
+
+    constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
+      super(gl, pickingBuffer, renderer);
+      this._pickingBuffer = pickingBuffer;
+
+      // Initialize lifecycle hooks for each layer that has them
+      layers.forEach((layer, index) => {
+        if (layer.lifecycle) {
+          const context: LayerLifecycleContext = {
+            gl,
+            renderer: { refresh: () => renderer.refresh() },
+            getUniformLocation: (name: string) => {
+              return gl.getUniformLocation(this.normalProgram.program, name);
+            },
+            requestShaderRegeneration: () => {
+              this.layersNeedingRegeneration.add(index);
+            },
+            requestRefresh: () => {
+              renderer.refresh();
+            },
+          };
+          const hooks = layer.lifecycle(context);
+          this.layerLifecycles.set(index, hooks);
+        }
+      });
+
+      // Call init hooks after everything is set up
+      this.layerLifecycles.forEach((hooks) => {
+        hooks.init?.();
+      });
+    }
 
     getDefinition() {
       const { FLOAT, TRIANGLE_STRIP } = WebGL2RenderingContext;
@@ -86,6 +135,50 @@ export function createComposedNodeProgram<
       };
     }
 
+    /**
+     * Regenerate shaders if any layers requested it.
+     * This handles dynamic changes like texture count updates.
+     */
+    private maybeRegenerateShaders(): void {
+      if (this.layersNeedingRegeneration.size === 0) return;
+
+      // Regenerate layers that requested it
+      layers = layers.map((layer, index): FragmentLayer => {
+        if (this.layersNeedingRegeneration.has(index)) {
+          const hooks = this.layerLifecycles.get(index);
+          if (hooks?.regenerate) {
+            const newLayer = hooks.regenerate();
+            // Preserve the lifecycle from the original layer
+            return { ...newLayer, lifecycle: layer.lifecycle };
+          }
+        }
+        return layer;
+      });
+
+      this.layersNeedingRegeneration.clear();
+
+      // Regenerate shaders with updated layers
+      generated = generateShaders({ shape, layers });
+
+      // Rebuild WebGL program
+      const gl = this.normalProgram.gl;
+      const { program, buffer, vertexShader, fragmentShader } = this.normalProgram;
+
+      gl.deleteProgram(program);
+      gl.deleteBuffer(buffer);
+      gl.deleteShader(vertexShader);
+      gl.deleteShader(fragmentShader);
+
+      // Recreate program with new shaders
+      this.normalProgram = this.getProgramInfo(
+        "normal",
+        gl,
+        generated.vertexShader,
+        generated.fragmentShader,
+        this._pickingBuffer,
+      );
+    }
+
     processVisibleItem(nodeIndex: number, startIndex: number, data: NodeDisplayData) {
       const array = this.array;
       const color = floatColor(data.color);
@@ -100,11 +193,23 @@ export function createComposedNodeProgram<
       // Layer-specific attributes:
       // Each layer can define additional attributes to read from NodeDisplayData.
       // The 'source' field on the attribute specifies which node property to read from.
-      layers.forEach((layer) => {
+      layers.forEach((layer, layerIndex) => {
+        const hooks = this.layerLifecycles.get(layerIndex);
+
         layer.attributes.forEach((attr) => {
           // Get the source property name (defaults to attribute name without 'a_' prefix)
           const sourceName = attr.source || attr.name.replace(/^a_/, "");
-          const value = (data as Record<string, unknown>)[sourceName];
+
+          // First, check if lifecycle provides data for this source
+          let value: unknown = null;
+          if (hooks?.getAttributeData) {
+            value = hooks.getAttributeData(data as unknown as Record<string, unknown>, sourceName);
+          }
+
+          // Fall back to node data if lifecycle didn't provide a value
+          if (value === null) {
+            value = (data as unknown as Record<string, unknown>)[sourceName];
+          }
 
           if (attr.size === 4 && attr.normalized) {
             // Color attribute - convert from CSS color string to packed float
@@ -187,6 +292,28 @@ export function createComposedNodeProgram<
           this.setUniform(uniform, programInfo);
         });
       });
+    }
+
+    protected renderProgram(params: RenderParams, programInfo: ProgramInfo): void {
+      // Check for shader regeneration before rendering
+      this.maybeRegenerateShaders();
+
+      // Call beforeRender hooks (for texture binding, etc.)
+      this.layerLifecycles.forEach((hooks) => {
+        hooks.beforeRender?.();
+      });
+
+      super.renderProgram(params, programInfo);
+    }
+
+    kill(): void {
+      // Call kill hooks for cleanup
+      this.layerLifecycles.forEach((hooks) => {
+        hooks.kill?.();
+      });
+      this.layerLifecycles.clear();
+
+      super.kill();
     }
   };
 }

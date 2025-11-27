@@ -27,6 +27,7 @@ export * from "./composed";
 
 // Built-in node programs
 export { default as NodeCircleProgram } from "./programs/node-circle";
+export { default as NodeSquareProgram } from "./programs/node-square";
 export { default as NodePointProgram } from "./programs/node-point";
 
 // Built-in edge programs

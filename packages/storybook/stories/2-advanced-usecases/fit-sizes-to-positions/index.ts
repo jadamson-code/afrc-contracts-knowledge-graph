@@ -14,10 +14,10 @@
  *
  * This example shows how to disable these three features.
  */
-import { NodeSquareProgram } from "@sigma/node-square";
 import chroma from "chroma-js";
 import Graph from "graphology";
 import Sigma from "sigma";
+import { NodeSquareProgram } from "sigma/rendering";
 import { DEFAULT_SETTINGS } from "sigma/settings";
 
 export default () => {

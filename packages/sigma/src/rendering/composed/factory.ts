@@ -62,13 +62,13 @@ export function createComposedNodeProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: ComposedProgramOptions): NodeProgramType<N, E, G> {
-  const { shape } = options;
+  const { shape, rotateWithCamera = false } = options;
 
   // Mutable layers array - can be regenerated
   let layers = [...options.layers];
 
   // Generate shaders and collect metadata
-  let generated = generateShaders({ shape, layers });
+  let generated = generateShaders({ shape, layers, rotateWithCamera });
 
   return class ComposedNodeProgram extends NodeProgram<string, N, E, G> {
     static readonly programOptions = options;
@@ -158,7 +158,7 @@ export function createComposedNodeProgram<
       this.layersNeedingRegeneration.clear();
 
       // Regenerate shaders with updated layers
-      generated = generateShaders({ shape, layers });
+      generated = generateShaders({ shape, layers, rotateWithCamera });
 
       // Rebuild WebGL program
       const gl = this.normalProgram.gl;
@@ -279,6 +279,9 @@ export function createComposedNodeProgram<
       }
       if (uniformLocations.u_correctionRatio) {
         gl.uniform1f(uniformLocations.u_correctionRatio, params.correctionRatio);
+      }
+      if (uniformLocations.u_cameraAngle) {
+        gl.uniform1f(uniformLocations.u_cameraAngle, params.cameraAngle);
       }
 
       // Set shape-specific uniforms

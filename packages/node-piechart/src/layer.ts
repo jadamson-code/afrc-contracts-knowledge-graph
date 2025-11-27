@@ -36,7 +36,6 @@ function generatePiechartGLSL(slices: LayerPiechartOptions["slices"], offset: Pi
   ];
 
   const uniformParams = [
-    "float u_cameraAngle",
     ...("value" in offset ? ["float u_offset"] : []),
     "vec4 u_defaultColor",
     ...slices.flatMap(({ color }, i) => ("value" in color ? [`vec4 u_sliceColor_${i + 1}`] : [])),
@@ -92,11 +91,12 @@ vec4 layer_piechart(${allParams}) {
 
   // Calculate angle from UV coordinates
   // atan2(y, x) gives angle in [-PI, PI], we convert to [0, 2*PI]
+  // Note: Camera rotation is handled at the program level (vertex shader)
   float angle = atan(context.uv.y, context.uv.x);
   if (angle < 0.0) angle += ${numberToGLSLFloat(TWO_PI)};
 
-  // Apply camera angle rotation and offset
-  angle = angle - u_cameraAngle + offsetValue;
+  // Apply offset
+  angle = angle + offsetValue;
   angle = mod(angle, ${numberToGLSLFloat(TWO_PI)});
 
   // Set up colors
@@ -155,8 +155,6 @@ export function layerPiechart(options: LayerPiechartOptions): FragmentLayer {
 
   // Generate uniforms
   const uniforms: UniformSpecification[] = [
-    // Camera angle for rotation (standard uniform passed to layer)
-    { name: "u_cameraAngle", type: "float" as const, value: 0 },
     // Offset uniform (if value-based)
     ...("value" in offset ? [{ name: "u_offset", type: "float" as const, value: offset.value }] : []),
     // Default color uniform

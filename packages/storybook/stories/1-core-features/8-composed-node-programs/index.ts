@@ -8,6 +8,8 @@
  *   - Row 3: Image (using createNodeImageProgram)
  *   - Row 4: Image with blackish 10px border outside
  *   - Row 5: Piechart with three slices
+ *
+ * Use the checkbox to toggle whether nodes rotate with the camera.
  */
 import { layerBorder } from "@sigma/node-border";
 import { layerImage } from "@sigma/node-image";
@@ -82,9 +84,6 @@ export default () => {
       });
     }
   }
-
-  // Create node programs for each combination
-  const nodeProgramClasses: Record<string, NodeProgramType> = {};
 
   // Helper to get shape SDF
   const getShape = (shapeName: string) => {
@@ -163,21 +162,27 @@ export default () => {
     }
   };
 
-  // Create all program combinations
-  for (const shape of SHAPES) {
-    for (const rowType of ROW_LABELS) {
-      const nodeType = `${shape}-${rowType}`;
+  // Function to create all program combinations with a given rotateWithCamera setting
+  const createNodePrograms = (rotateWithCamera: boolean): Record<string, NodeProgramType> => {
+    const programs: Record<string, NodeProgramType> = {};
 
-      // Use composed node program for fill and border rows
-      nodeProgramClasses[nodeType] = createComposedNodeProgram({
-        shape: getShape(shape),
-        layers: getLayers(rowType),
-      });
+    for (const shape of SHAPES) {
+      for (const rowType of ROW_LABELS) {
+        const nodeType = `${shape}-${rowType}`;
+        programs[nodeType] = createComposedNodeProgram({
+          shape: getShape(shape),
+          layers: getLayers(rowType),
+          rotateWithCamera,
+        });
+      }
     }
-  }
 
+    return programs;
+  };
+
+  // Initial state: nodes stay upright (rotateWithCamera: false)
   const renderer = new Sigma(graph, container, {
-    nodeProgramClasses,
+    nodeProgramClasses: createNodePrograms(false),
     defaultNodeType: "circle-fill",
     // Use positions-based sizing for a clean grid appearance
     itemSizesReference: "positions",
@@ -185,7 +190,15 @@ export default () => {
     autoRescale: true,
   });
 
+  // Set a slight camera rotation to demonstrate the feature
   renderer.getCamera().setState({ angle: 0.1 });
+
+  // Handle checkbox change
+  const checkbox = document.getElementById("rotate-with-camera") as HTMLInputElement;
+  checkbox.addEventListener("change", () => {
+    const rotateWithCamera = checkbox.checked;
+    renderer.setSetting("nodeProgramClasses", createNodePrograms(rotateWithCamera));
+  });
 
   return () => {
     renderer.kill();

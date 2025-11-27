@@ -19,13 +19,31 @@ export interface GeneratedShaders {
 /**
  * Generates vertex shader for a quad with UV coordinates.
  * Always renders a single quad (4 vertices) per node using instanced rendering.
+ *
+ * @param shape - The SDF shape definition
+ * @param layers - Array of fragment layers
+ * @param rotateWithCamera - Whether nodes should rotate with the camera (default: false)
  */
-export function generateVertexShader(shape: SDFShape, layers: FragmentLayer[]): string {
-  // Collect all uniforms from shape and layers
-  const shapeUniforms = shape.uniforms.map((u) => `uniform ${u.type} ${u.name};`).join("\n");
+export function generateVertexShader(shape: SDFShape, layers: FragmentLayer[], rotateWithCamera = false): string {
+  // Standard uniforms that are always declared (to avoid redefinition)
+  const standardUniforms = new Set(["u_matrix", "u_sizeRatio", "u_correctionRatio", "u_cameraAngle"]);
+
+  // Collect all uniforms from shape and layers, excluding standard ones and with deduplication
+  const seenUniforms = new Set<string>();
+  const shapeUniforms = shape.uniforms
+    .filter((u) => !standardUniforms.has(u.name) && !seenUniforms.has(u.name))
+    .map((u) => {
+      seenUniforms.add(u.name);
+      return `uniform ${u.type} ${u.name};`;
+    })
+    .join("\n");
   const layerUniforms = layers
     .flatMap((layer) => layer.uniforms)
-    .map((u) => `uniform ${u.type} ${u.name};`)
+    .filter((u) => !standardUniforms.has(u.name) && !seenUniforms.has(u.name))
+    .map((u) => {
+      seenUniforms.add(u.name);
+      return `uniform ${u.type} ${u.name};`;
+    })
     .join("\n");
 
   // Collect all layer attributes as inputs
@@ -75,6 +93,7 @@ ${layerAttributes}
 uniform mat3 u_matrix;
 uniform float u_sizeRatio;
 uniform float u_correctionRatio;
+uniform float u_cameraAngle;
 
 ${shapeUniforms}
 ${layerUniforms}
@@ -98,7 +117,15 @@ void main() {
 
   // Calculate vertex position (center + offset for quad corner)
   vec2 offset = a_quadCorner * size;
-  vec2 position = a_position + offset;
+${
+  rotateWithCamera
+    ? ""
+    : `  // Counter-rotate the quad offset so nodes stay upright when camera rotates
+  float c = cos(u_cameraAngle);
+  float s = sin(u_cameraAngle);
+  offset = mat2(c, s, -s, c) * offset;
+`
+}  vec2 position = a_position + offset;
 
   gl_Position = vec4(
     (u_matrix * vec3(position, 1)).xy,
@@ -157,11 +184,25 @@ export function generateFragmentShader(shape: SDFShape, layers: FragmentLayer[])
     })
     .join("\n\n");
 
-  // Collect all uniforms from shape and layers
-  const shapeUniforms = shape.uniforms.map((u) => `uniform ${u.type} ${u.name};`).join("\n");
+  // Standard uniforms that are already declared in the fragment shader
+  const standardFragmentUniforms = new Set(["u_correctionRatio"]);
+
+  // Collect all uniforms from shape and layers, with deduplication
+  const seenUniforms = new Set<string>();
+  const shapeUniforms = shape.uniforms
+    .filter((u) => !standardFragmentUniforms.has(u.name) && !seenUniforms.has(u.name))
+    .map((u) => {
+      seenUniforms.add(u.name);
+      return `uniform ${u.type} ${u.name};`;
+    })
+    .join("\n");
   const layerUniforms = layers
     .flatMap((layer) => layer.uniforms)
-    .map((u) => `uniform ${u.type} ${u.name};`)
+    .filter((u) => !standardFragmentUniforms.has(u.name) && !seenUniforms.has(u.name))
+    .map((u) => {
+      seenUniforms.add(u.name);
+      return `uniform ${u.type} ${u.name};`;
+    })
     .join("\n");
 
   // Collect all varyings from layers
@@ -286,6 +327,7 @@ export function collectUniforms(shape: SDFShape, layers: FragmentLayer[]): strin
   uniformNames.add("u_matrix");
   uniformNames.add("u_sizeRatio");
   uniformNames.add("u_correctionRatio");
+  uniformNames.add("u_cameraAngle");
 
   // Shape uniforms
   shape.uniforms.forEach((u) => uniformNames.add(u.name));
@@ -330,10 +372,10 @@ export function collectAttributes(layers: FragmentLayer[]): AttributeSpecificati
  * Main generator function that produces complete shader code and metadata.
  */
 export function generateShaders(options: ComposedProgramOptions): GeneratedShaders {
-  const { shape, layers } = options;
+  const { shape, layers, rotateWithCamera = false } = options;
 
   return {
-    vertexShader: generateVertexShader(shape, layers),
+    vertexShader: generateVertexShader(shape, layers, rotateWithCamera),
     fragmentShader: generateFragmentShader(shape, layers),
     uniforms: collectUniforms(shape, layers),
     attributes: collectAttributes(layers),

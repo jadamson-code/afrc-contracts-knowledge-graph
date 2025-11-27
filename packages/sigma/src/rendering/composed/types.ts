@@ -348,6 +348,13 @@ export interface ComposedProgramOptions {
    * Layers are applied sequentially, each receiving the output of the previous layer.
    */
   layers: FragmentLayer[];
+
+  /**
+   * Whether nodes should rotate with the camera.
+   * - false (default): Nodes stay upright regardless of camera rotation
+   * - true: Nodes rotate along with the camera
+   */
+  rotateWithCamera?: boolean;
 }
 
 /**

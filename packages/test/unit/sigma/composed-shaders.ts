@@ -171,4 +171,79 @@ describe("Composed node program shader generation", () => {
       expectShadersToCompile(generated.vertexShader, generated.fragmentShader);
     });
   });
+
+  describe("rotateWithCamera option", () => {
+    test("generates compilable shaders with rotateWithCamera: false (default)", () => {
+      const generated = generateShaders({
+        shape: sdfCircle(),
+        layers: [layerFill()],
+        rotateWithCamera: false,
+      });
+
+      expectShadersToCompile(generated.vertexShader, generated.fragmentShader);
+      // Should include counter-rotation code
+      expect(generated.vertexShader).toContain("cos(u_cameraAngle)");
+      expect(generated.vertexShader).toContain("sin(u_cameraAngle)");
+    });
+
+    test("generates compilable shaders with rotateWithCamera: true", () => {
+      const generated = generateShaders({
+        shape: sdfCircle(),
+        layers: [layerFill()],
+        rotateWithCamera: true,
+      });
+
+      expectShadersToCompile(generated.vertexShader, generated.fragmentShader);
+      // Should NOT include counter-rotation code in main shader body
+      expect(generated.vertexShader).not.toContain("mat2(c, s, -s, c)");
+    });
+
+    test("defaults to rotateWithCamera: false when not specified", () => {
+      const generated = generateShaders({
+        shape: sdfCircle(),
+        layers: [layerFill()],
+      });
+
+      // Should include counter-rotation code by default
+      expect(generated.vertexShader).toContain("cos(u_cameraAngle)");
+      expect(generated.vertexShader).toContain("Counter-rotate");
+    });
+
+    test("includes u_cameraAngle uniform", () => {
+      const generated = generateShaders({
+        shape: sdfCircle(),
+        layers: [layerFill()],
+      });
+
+      expect(generated.uniforms).toContain("u_cameraAngle");
+    });
+
+    test("works with all shapes and rotateWithCamera: false", () => {
+      const shapes = [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()];
+
+      for (const shape of shapes) {
+        const generated = generateShaders({
+          shape,
+          layers: [layerFill()],
+          rotateWithCamera: false,
+        });
+
+        expectShadersToCompile(generated.vertexShader, generated.fragmentShader);
+      }
+    });
+
+    test("works with all shapes and rotateWithCamera: true", () => {
+      const shapes = [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()];
+
+      for (const shape of shapes) {
+        const generated = generateShaders({
+          shape,
+          layers: [layerFill()],
+          rotateWithCamera: true,
+        });
+
+        expectShadersToCompile(generated.vertexShader, generated.fragmentShader);
+      }
+    });
+  });
 });

@@ -15,8 +15,8 @@ import {
   FragmentLayer,
   LayerLifecycleContext,
   LayerLifecycleHooks,
-  numberToGLSLFloat,
   UniformSpecification,
+  numberToGLSLFloat,
 } from "sigma/rendering";
 
 import { Atlas, DEFAULT_TEXTURE_MANAGER_OPTIONS, TextureManager } from "./texture";
@@ -29,18 +29,19 @@ import { DEFAULT_LAYER_IMAGE_OPTIONS, LayerImageOptions } from "./types";
  * Note: The u_atlas uniform is declared directly in the GLSL code because
  * the shader generator doesn't support sampler2D array uniforms properly.
  */
-function generateImageGLSL(options: Omit<LayerImageOptions, "textureManager" | "textureManagerOptions">, texturesCount: number): string {
+function generateImageGLSL(
+  options: Omit<LayerImageOptions, "textureManager" | "textureManagerOptions">,
+  texturesCount: number,
+): string {
   const { drawingMode, padding } = options;
   const paddingRatio = numberToGLSLFloat(1.0 + 2.0 * padding);
   const effectiveTexturesCount = Math.max(1, texturesCount);
 
   // Generate texture sampling code
-  const textureSampling = [...new Array(effectiveTexturesCount)]
-    .map(
-      (_, i) =>
-        `if (index == ${i}) texel = texture(u_atlas_image[${i}], (v_texture.xy + coordinateInTexture * v_texture.zw), -1.0);`,
-    )
-    .join(`
+  const textureSampling = [...new Array(effectiveTexturesCount)].map(
+    (_, i) =>
+      `if (index == ${i}) texel = texture(u_atlas_image[${i}], (v_texture.xy + coordinateInTexture * v_texture.zw), -1.0);`,
+  ).join(`
     else `);
 
   const fallbackSampling = `else {
@@ -53,20 +54,16 @@ function generateImageGLSL(options: Omit<LayerImageOptions, "textureManager" | "
 // Texture atlas uniform - declared here because generator doesn't support sampler2D arrays
 uniform sampler2D u_atlas_image[${effectiveTexturesCount}];
 
-vec4 layer_image(vec4 v_texture, float v_textureIndex, float u_cameraAngle) {
+vec4 layer_image(vec4 v_texture, float v_textureIndex) {
   const float bias = 255.0 / 254.0;
   const float paddingRatio = ${paddingRatio};
 
   vec4 color = vec4(0.0);
 
-  // Rotate UV coordinates by camera angle
-  float c = cos(-u_cameraAngle);
-  float s = sin(-u_cameraAngle);
-  vec2 rotatedUV = mat2(c, s, -s, c) * context.uv;
-
   // Calculate coordinate within the texture
   // The UV is in [-1, 1] range, convert to [0, 1] for texture sampling
-  vec2 coordinateInTexture = rotatedUV * vec2(paddingRatio, -paddingRatio) * 0.5 + vec2(0.5, 0.5);
+  // Note: Camera rotation is handled at the program level (vertex shader)
+  vec2 coordinateInTexture = context.uv * vec2(paddingRatio, -paddingRatio) * 0.5 + vec2(0.5, 0.5);
   int index = int(v_textureIndex + 0.5); // +0.5 to avoid rounding errors
 
   bool noTextureFound = false;
@@ -91,9 +88,9 @@ vec4 layer_image(vec4 v_texture, float v_textureIndex, float u_cameraAngle) {
       }
 
       // Erase pixels "in the padding"
-      // rotatedUV is in [-1, 1], so we check against 1.0 / paddingRatio
+      // context.uv is in [-1, 1], so we check against 1.0 / paddingRatio
       float maxUV = 1.0 / paddingRatio;
-      if (abs(rotatedUV.x) > maxUV || abs(rotatedUV.y) > maxUV) {
+      if (abs(context.uv.x) > maxUV || abs(context.uv.y) > maxUV) {
         color = vec4(0.0);
       }
     }
@@ -123,10 +120,7 @@ function createLayerDefinition(
   // Note: We don't declare u_atlas here as it requires special handling
   // (array syntax that the generator doesn't support). The lifecycle
   // handles this uniform manually.
-  const uniforms: UniformSpecification[] = [
-    // Camera angle for UV rotation
-    { name: "u_cameraAngle", type: "float" as const, value: 0 },
-  ];
+  const uniforms: UniformSpecification[] = [];
 
   // Attributes for the image layer
   const attributes: AttributeSpecification[] = [
@@ -238,7 +232,13 @@ export function layerImage(inputOptions?: Partial<LayerImageOptions>): FragmentL
       /**
        * Handler for when new textures are available.
        */
-      const onNewTexture = ({ atlas: newAtlas, textures: newTextureImages }: { atlas: Atlas; textures: ImageData[] }) => {
+      const onNewTexture = ({
+        atlas: newAtlas,
+        textures: newTextureImages,
+      }: {
+        atlas: Atlas;
+        textures: ImageData[];
+      }) => {
         const shouldUpgradeShaders = newTextureImages.length !== textureImages.length;
 
         atlas = newAtlas;
@@ -277,7 +277,10 @@ export function layerImage(inputOptions?: Partial<LayerImageOptions>): FragmentL
           // Set texture atlas uniform
           const atlasLocation = context.getUniformLocation("u_atlas_image");
           if (atlasLocation) {
-            gl.uniform1iv(atlasLocation, [...new Array(textureImages.length || 1)].map((_, i) => i));
+            gl.uniform1iv(
+              atlasLocation,
+              [...new Array(textureImages.length || 1)].map((_, i) => i),
+            );
           }
         },
 

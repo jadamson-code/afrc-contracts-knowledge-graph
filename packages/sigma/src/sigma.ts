@@ -12,11 +12,15 @@ import TouchCaptor from "./core/captors/touch";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import {
   AbstractEdgeProgram,
+  AbstractLabelProgram,
   AbstractNodeProgram,
   BucketCollection,
   EdgeProgramType,
+  LabelProgramType,
   NodeProgramType,
+  SDFTextLabelProgram,
 } from "./rendering";
+import { SDFAtlasManager } from "./core/sdf-atlas";
 import { Settings, resolveSettings, validateSettings } from "./settings";
 import {
   CameraState,
@@ -25,6 +29,7 @@ import {
   Dimensions,
   EdgeDisplayData,
   Extent,
+  LabelDisplayData,
   Listener,
   MouseCoords,
   MouseInteraction,
@@ -189,6 +194,10 @@ export default class Sigma<
   private nodePrograms: { [key: string]: AbstractNodeProgram<N, E, G> } = {};
   private nodeHoverPrograms: { [key: string]: AbstractNodeProgram<N, E, G> } = {};
   private edgePrograms: { [key: string]: AbstractEdgeProgram<N, E, G> } = {};
+  private labelPrograms: { [key: string]: AbstractLabelProgram<N, E, G> } = {};
+
+  // WebGL Labels (SDF-based rendering)
+  private sdfAtlas: SDFAtlasManager | null = null;
 
   // Bucket collections for depth management (supports future item types like labels)
   private itemBuckets: Record<"nodes" | "edges", BucketCollection>;
@@ -243,6 +252,9 @@ export default class Sigma<
     for (const type in this.settings.edgeProgramClasses) {
       this.registerEdgeProgram(type, this.settings.edgeProgramClasses[type]);
     }
+
+    // Initialize WebGL labels
+    this.initializeWebGLLabels();
 
     // Initializing the camera
     this.camera = new Camera();
@@ -342,6 +354,62 @@ export default class Sigma<
       const { [key]: program, ...programs } = this.edgePrograms;
       program.kill();
       this.edgePrograms = programs;
+    }
+    return this;
+  }
+
+  /**
+   * Internal function used to initialize WebGL labels.
+   * Sets up the SDF atlas and registers the default label program.
+   */
+  private initializeWebGLLabels(): void {
+    // Create SDF Atlas Manager
+    this.sdfAtlas = new SDFAtlasManager();
+
+    // Register default font from settings
+    this.sdfAtlas.registerFont({
+      family: this.settings.labelFont,
+      weight: this.settings.labelWeight,
+      style: this.settings.labelStyle,
+    });
+
+    // Register the default SDF label program
+    this.registerLabelProgram("sdf", SDFTextLabelProgram);
+
+    // Register any additional label programs from settings
+    for (const type in this.settings.labelProgramClasses) {
+      if (type !== "sdf") {
+        this.registerLabelProgram(type, this.settings.labelProgramClasses[type]);
+      }
+    }
+  }
+
+  /**
+   * Internal function used to register a label program
+   *
+   * @param  {string}           key               - The program's key, matching the related labels "type" values.
+   * @param  {LabelProgramType} LabelProgramClass - A labels program class.
+   * @return {Sigma}
+   */
+  private registerLabelProgram(key: string, LabelProgramClass: LabelProgramType<N, E, G>): this {
+    if (this.labelPrograms[key]) this.labelPrograms[key].kill();
+    this.labelPrograms[key] = new LabelProgramClass(this.webGLContext!, null, this);
+    return this;
+  }
+
+  /**
+   * Internal function used to unregister a label program.
+   * Currently unused but provided for API completeness (e.g., dynamic program switching).
+   *
+   * @param  {string} key - The program's key, matching the related labels "type" values.
+   * @return {Sigma}
+   */
+  // @ts-expect-error - Provided for API completeness, will be used for dynamic label program management
+  private unregisterLabelProgram(key: string): this {
+    if (this.labelPrograms[key]) {
+      const { [key]: program, ...programs } = this.labelPrograms;
+      program.kill();
+      this.labelPrograms = programs;
     }
     return this;
   }
@@ -921,8 +989,98 @@ export default class Sigma<
     this.nodeIndices = nodeIndices;
     this.edgeIndices = edgeIndices;
 
+    //
+    // WEBGL LABELS
+    //
+    this.processWebGLLabels(nodes);
+
     this.emit("afterProcess");
     return this;
+  }
+
+  /**
+   * Process labels for WebGL rendering.
+   * @private
+   */
+  private processWebGLLabels(nodes: string[]): void {
+    // First pass: count characters per label program type and collect label texts
+    const charactersPerProgram: Record<string, number> = {};
+    const labelTexts: string[] = [];
+    for (let i = 0, l = nodes.length; i < l; i++) {
+      const node = nodes[i];
+      const data = this.nodeDataCache[node];
+
+      if (data.hidden || !data.label) continue;
+
+      // Determine which label program to use based on node type
+      // If a matching label program exists for the node type, use it; otherwise fall back to default
+      const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
+      charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + data.label.length;
+      labelTexts.push(data.label);
+    }
+
+    // Ensure all glyphs are generated before processing
+    for (const type in this.labelPrograms) {
+      const program = this.labelPrograms[type];
+      if (program.ensureGlyphsReady) {
+        program.ensureGlyphsReady(labelTexts);
+      }
+    }
+
+    // Reallocate label programs based on their character counts
+    for (const type in this.labelPrograms) {
+      this.labelPrograms[type].reallocate(charactersPerProgram[type] || 0);
+    }
+
+    // Second pass: process each label in its matching program
+    const characterOffsets: Record<string, number> = {};
+    for (let i = 0, l = nodes.length; i < l; i++) {
+      const node = nodes[i];
+      const data = this.nodeDataCache[node];
+
+      if (data.hidden || !data.label) continue;
+
+      // Determine which label program to use
+      const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
+      const labelProgram = this.labelPrograms[labelType];
+      if (!labelProgram) continue;
+
+      // Build label display data
+      const labelData: LabelDisplayData = {
+        text: data.label,
+        x: data.x,
+        y: data.y,
+        size: this.settings.labelSize,
+        color: this.getLabelColor(data),
+        nodeSize: data.size,
+        margin: this.settings.labelMargin,
+        position: this.settings.defaultLabelPosition,
+        hidden: false,
+        forceLabel: data.forceLabel ?? false,
+        type: labelType,
+        zIndex: data.zIndex ?? 0,
+        parentType: "node",
+        parentKey: node,
+        fontKey: "", // Empty means default font
+      };
+
+      // Process label in its matching program
+      const offset = characterOffsets[labelType] || 0;
+      const charsProcessed = labelProgram.processLabel(node, offset, labelData);
+      characterOffsets[labelType] = offset + charsProcessed;
+    }
+  }
+
+  /**
+   * Get the label color for a node.
+   * @private
+   */
+  private getLabelColor(data: NodeDisplayData): string {
+    const settings = this.settings;
+    if (settings.labelColor.attribute && data[settings.labelColor.attribute as keyof NodeDisplayData]) {
+      return data[settings.labelColor.attribute as keyof NodeDisplayData] as string;
+    }
+    return settings.labelColor.color || "#000";
   }
 
   /**
@@ -1066,52 +1224,46 @@ export default class Sigma<
 
   /**
    * Method used to render labels.
+   * WebGL labels are now forced on - they are rendered before the blit in render().
    *
    * @return {Sigma}
    */
   private renderLabels(): this {
-    if (!this.settings.renderLabels) return this;
+    // WebGL labels are rendered before the blit in render(), so nothing to do here
+    return this;
+  }
 
+  /**
+   * Method used to render WebGL labels to the MRT framebuffer.
+   * Called from render() before the blit, so labels are included in the single blit.
+   *
+   * @param params - Render parameters
+   */
+  private renderWebGLLabelsToMRT(params: RenderParams): void {
     const cameraState = this.camera.getState();
 
     // Selecting labels to draw
     const labelsToDisplay = this.labelGrid.getLabelsToDisplay(cameraState.ratio, this.settings.labelDensity);
     extend(labelsToDisplay, this.nodesWithForcedLabels);
 
+    // Convert to Set for visibility updates
+    const visibleLabels = new Set<string>();
     this.displayedNodeLabels = new Set();
 
-    // Drawing labels
-    const context = this.canvasContexts.labels;
-
+    // Build label display data and determine which labels are visible
     for (let i = 0, l = labelsToDisplay.length; i < l; i++) {
       const node = labelsToDisplay[i];
       const data = this.nodeDataCache[node];
 
-      // If the node was already drawn (like if it is eligible AND has
-      // `forceLabel`), we don't want to draw it again
-      // NOTE: we can do better probably
       if (this.displayedNodeLabels.has(node)) continue;
-
-      // If the node is hidden, we don't need to display its label obviously
       if (data.hidden) continue;
+      if (!data.label) continue;
 
       const { x, y } = this.framedGraphToViewport(data);
-
-      // NOTE: we can cache the labels we need to render until the camera's ratio changes
       const size = this.scaleSize(data.size);
 
-      // Is node big enough?
       if (!data.forceLabel && size < this.settings.labelRenderedSizeThreshold) continue;
 
-      // Is node actually on screen (with some margin)
-      // NOTE: we used to rely on the quadtree for this, but the coordinates
-      // conversion make it unreliable and at that point we already converted
-      // to viewport coordinates and since the label grid already culls the
-      // number of potential labels to display this looks like a good
-      // performance compromise.
-      // NOTE: labelGrid.getLabelsToDisplay could probably optimize by not
-      // considering cells obviously outside of the range of the current
-      // view rectangle.
       if (
         x < -X_LABEL_MARGIN ||
         x > this.width + X_LABEL_MARGIN ||
@@ -1120,30 +1272,19 @@ export default class Sigma<
       )
         continue;
 
-      // Because displayed edge labels depend directly on actually rendered node
-      // labels, we need to only add to this.displayedNodeLabels nodes whose label
-      // is rendered.
-      // This makes this.displayedNodeLabels depend on viewport, which might become
-      // an issue once we start memoizing getLabelsToDisplay.
       this.displayedNodeLabels.add(node);
-
-      const { defaultDrawNodeLabel } = this.settings;
-      const nodeProgram = this.nodePrograms[data.type];
-      const drawLabel = nodeProgram?.drawLabel || defaultDrawNodeLabel;
-      drawLabel(
-        context,
-        {
-          key: node,
-          ...data,
-          size,
-          x,
-          y,
-        },
-        this.settings,
-      );
+      visibleLabels.add(node);
     }
 
-    return this;
+    // Update visibility in label programs
+    for (const type in this.labelPrograms) {
+      this.labelPrograms[type].updateVisibility(visibleLabels);
+    }
+
+    // Render WebGL labels (MRT framebuffer is already bound by caller)
+    for (const type in this.labelPrograms) {
+      this.labelPrograms[type].render(params);
+    }
   }
 
   /**
@@ -1388,6 +1529,12 @@ export default class Sigma<
     for (const type in this.nodePrograms) {
       const program = this.nodePrograms[type];
       program.render(params);
+    }
+
+    // Drawing WebGL labels (before blit, so they're included in the MRT)
+    // WebGL labels are GPU-accelerated, so they can render during camera movement
+    if (this.settings.renderLabels) {
+      this.renderWebGLLabelsToMRT(params);
     }
 
     // Blit visual output (COLOR_ATTACHMENT0) or picking layer (COLOR_ATTACHMENT1) to screen
@@ -2563,9 +2710,18 @@ export default class Sigma<
     for (const type in this.edgePrograms) {
       this.edgePrograms[type].kill();
     }
+    for (const type in this.labelPrograms) {
+      this.labelPrograms[type].kill();
+    }
     this.nodePrograms = {};
     this.nodeHoverPrograms = {};
     this.edgePrograms = {};
+    this.labelPrograms = {};
+
+    // Cleanup SDF atlas
+    if (this.sdfAtlas) {
+      this.sdfAtlas = null;
+    }
 
     // Kill all canvas/WebGL contexts
     for (const id in this.elements) {

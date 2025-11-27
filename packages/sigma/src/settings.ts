@@ -12,6 +12,7 @@ import {
   EdgeLabelDrawingFunction,
   EdgeProgramType,
   EdgeRectangleProgram,
+  LabelProgramType,
   NodeCircleProgram,
   NodeHoverDrawingFunction,
   NodeLabelDrawingFunction,
@@ -20,7 +21,7 @@ import {
   drawDiscNodeLabel,
   drawStraightEdgeLabel,
 } from "./rendering";
-import { AtLeastOne, EdgeDisplayData, NodeDisplayData } from "./types";
+import { AtLeastOne, EdgeDisplayData, LabelPosition, NodeDisplayData } from "./types";
 import { assign } from "./utils";
 
 /**
@@ -105,6 +106,13 @@ export interface Settings<
   nodeProgramClasses: { [type: string]: NodeProgramType<N, E, G> };
   nodeHoverProgramClasses: { [type: string]: NodeProgramType<N, E, G> };
   edgeProgramClasses: { [type: string]: EdgeProgramType<N, E, G> };
+  labelProgramClasses: { [type: string]: LabelProgramType<N, E, G> };
+
+  // WebGL Label Settings (for SDF-based rendering)
+  defaultLabelType: string;
+  defaultLabelPosition: LabelPosition;
+  labelMargin: number;
+  labelStyle: string;
 
   // Debug
   DEBUG_displayPickingLayer: boolean;
@@ -181,6 +189,13 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
   nodeProgramClasses: {},
   nodeHoverProgramClasses: {},
   edgeProgramClasses: {},
+  labelProgramClasses: {},
+
+  // WebGL Label Settings (for SDF-based rendering)
+  defaultLabelType: "sdf",
+  defaultLabelPosition: "right",
+  labelMargin: 3,
+  labelStyle: "normal",
 
   // Debug
   DEBUG_displayPickingLayer: false,
@@ -194,6 +209,9 @@ export const DEFAULT_EDGE_PROGRAM_CLASSES: Record<string, EdgeProgramType> = {
   arrow: EdgeArrowProgram,
   line: EdgeRectangleProgram,
 };
+
+// Default label program classes for WebGL SDF-based rendering
+export const DEFAULT_LABEL_PROGRAM_CLASSES: Record<string, LabelProgramType> = {};
 
 export function validateSettings<
   N extends Attributes = Attributes,
@@ -221,6 +239,7 @@ export function resolveSettings<
 
   resolvedSettings.nodeProgramClasses = assign({}, DEFAULT_NODE_PROGRAM_CLASSES, resolvedSettings.nodeProgramClasses);
   resolvedSettings.edgeProgramClasses = assign({}, DEFAULT_EDGE_PROGRAM_CLASSES, resolvedSettings.edgeProgramClasses);
+  resolvedSettings.labelProgramClasses = assign({}, DEFAULT_LABEL_PROGRAM_CLASSES, resolvedSettings.labelProgramClasses);
 
   return resolvedSettings;
 }

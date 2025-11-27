@@ -17,8 +17,9 @@ import { layerPiechart } from "@sigma/node-piechart";
 import Graph from "graphology";
 import Sigma from "sigma";
 import {
+  LabelProgramType,
   NodeProgramType,
-  createComposedNodeProgram,
+  createComposedPrograms,
   layerFill,
   sdfCircle,
   sdfDiamond,
@@ -32,8 +33,6 @@ export default () => {
   const graph = new Graph();
 
   // Grid configuration
-  const COLS = 4; // circle, square, triangle, diamond
-  const ROWS = 5; // fill, border, image, image+border, piechart
   const SPACING = 50;
   const NODE_SIZE = 15;
 
@@ -45,6 +44,9 @@ export default () => {
 
   // Row names for labels
   const ROW_LABELS = ["fill", "border", "image", "image-border", "piechart"];
+
+  const COLS = SHAPES.length;
+  const ROWS = ROW_LABELS.length;
 
   // Sample images for each column
   const IMAGES = [
@@ -163,26 +165,34 @@ export default () => {
   };
 
   // Function to create all program combinations with a given rotateWithCamera setting
-  const createNodePrograms = (rotateWithCamera: boolean): Record<string, NodeProgramType> => {
-    const programs: Record<string, NodeProgramType> = {};
+  // Returns both node and label programs that share the same shape SDF
+  const createPrograms = (
+    rotateWithCamera: boolean,
+  ): { nodePrograms: Record<string, NodeProgramType>; labelPrograms: Record<string, LabelProgramType> } => {
+    const nodePrograms: Record<string, NodeProgramType> = {};
+    const labelPrograms: Record<string, LabelProgramType> = {};
 
     for (const shape of SHAPES) {
       for (const rowType of ROW_LABELS) {
         const nodeType = `${shape}-${rowType}`;
-        programs[nodeType] = createComposedNodeProgram({
+        const { NodeProgram, LabelProgram } = createComposedPrograms({
           shape: getShape(shape),
           layers: getLayers(rowType),
           rotateWithCamera,
         });
+        nodePrograms[nodeType] = NodeProgram;
+        labelPrograms[nodeType] = LabelProgram;
       }
     }
 
-    return programs;
+    return { nodePrograms, labelPrograms };
   };
 
   // Initial state: nodes stay upright (rotateWithCamera: false)
+  const initialPrograms = createPrograms(false);
   const renderer = new Sigma(graph, container, {
-    nodeProgramClasses: createNodePrograms(false),
+    nodeProgramClasses: initialPrograms.nodePrograms,
+    labelProgramClasses: initialPrograms.labelPrograms,
     defaultNodeType: "circle-fill",
     // Use positions-based sizing for a clean grid appearance
     itemSizesReference: "positions",
@@ -197,7 +207,9 @@ export default () => {
   const checkbox = document.getElementById("rotate-with-camera") as HTMLInputElement;
   checkbox.addEventListener("change", () => {
     const rotateWithCamera = checkbox.checked;
-    renderer.setSetting("nodeProgramClasses", createNodePrograms(rotateWithCamera));
+    const programs = createPrograms(rotateWithCamera);
+    renderer.setSetting("nodeProgramClasses", programs.nodePrograms);
+    renderer.setSetting("labelProgramClasses", programs.labelPrograms);
   });
 
   return () => {

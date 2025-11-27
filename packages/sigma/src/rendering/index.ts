@@ -8,6 +8,8 @@ export { EdgeProgram, AbstractEdgeProgram, createEdgeCompoundProgram } from "./e
 export type { EdgeProgramType } from "./edge";
 export { Program, AbstractProgram } from "./program";
 export type { ProgramType } from "./program";
+export { LabelProgram, AbstractLabelProgram } from "./label";
+export type { LabelProgramType } from "./label";
 export { Bucket, BucketCollection, clampZIndex } from "./bucket";
 export type { ProcessItemFunction } from "./bucket";
 
@@ -54,3 +56,7 @@ export { default as EdgeDoubleArrowProgram, createEdgeDoubleArrowProgram } from 
 export { default as EdgeLineProgram } from "./programs/edge-line";
 export { default as EdgeRectangleProgram } from "./programs/edge-rectangle";
 export { default as EdgeTriangleProgram } from "./programs/edge-triangle";
+
+// Built-in label programs
+export { SDFTextLabelProgram, SDFHoverLabelProgram, DEFAULT_SDF_HOVER_OPTIONS } from "./label-programs";
+export type { SDFTextLabelProgramOptions, SDFHoverLabelProgramOptions, HoverLabelData } from "./label-programs";

@@ -185,8 +185,74 @@ export type SigmaEvents = SigmaStageEvents & SigmaNodeEvents & SigmaEdgeEvents &
 export type SigmaEventType = keyof SigmaEvents;
 
 /**
+ * Label types:
+ */
+
+/**
+ * Position of a label relative to its parent node.
+ */
+export type LabelPosition = "right" | "left" | "above" | "below" | "over";
+
+/**
+ * Display data for a label, computed during processing.
+ */
+export interface LabelDisplayData {
+  /** The label text content */
+  text: string;
+  /** X position in graph coordinates (node center) */
+  x: number;
+  /** Y position in graph coordinates (node center) */
+  y: number;
+  /** Font size in pixels */
+  size: number;
+  /** Label color (CSS color string) */
+  color: string;
+  /** Whether the label is hidden */
+  hidden: boolean;
+  /** Force display even if culled by LabelGrid */
+  forceLabel: boolean;
+  /** Label type (for program selection) */
+  type: string;
+  /** Z-index for depth ordering */
+  zIndex: number;
+  /** Reference to parent node/edge key */
+  parentKey: string;
+  /** Parent type: 'node' or 'edge' */
+  parentType: "node" | "edge";
+  /** Where label appears relative to node */
+  position: LabelPosition;
+  /** Node size (for offset calculation) */
+  nodeSize: number;
+  /** Gap between node boundary and label (pixels) */
+  margin: number;
+  /** Font key for multi-font support (references registered font in atlas) */
+  fontKey: string;
+}
+
+/**
+ * Label event types.
+ */
+export interface SigmaLabelEventPayload extends SigmaEventPayload {
+  /** The label text */
+  label: string;
+  /** Type of parent element */
+  parentType: "node" | "edge";
+  /** Key of the parent element */
+  parentKey: string;
+}
+
+export type SigmaLabelEvents = {
+  clickLabel: (payload: SigmaLabelEventPayload) => void;
+  rightClickLabel: (payload: SigmaLabelEventPayload) => void;
+  doubleClickLabel: (payload: SigmaLabelEventPayload) => void;
+  enterLabel: (payload: SigmaLabelEventPayload) => void;
+  leaveLabel: (payload: SigmaLabelEventPayload) => void;
+};
+
+/**
  * Export various other types:
  */
 export type { CameraEvents } from "./core/camera";
 export type { MouseCaptorEvents } from "./core/captors/mouse";
 export type { TouchCaptorEvents } from "./core/captors/touch";
+export type { FontKey, FontDescriptor, GlyphMetrics, SDFAtlasOptions } from "./core/sdf-atlas";

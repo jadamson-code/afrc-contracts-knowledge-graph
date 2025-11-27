@@ -7,8 +7,13 @@
  * @module
  */
 
-// Core factory function
-export { createComposedNodeProgram } from "./factory";
+// Core factory functions
+export { createComposedNodeProgram, createComposedPrograms } from "./factory";
+export type { ComposedPrograms } from "./factory";
+
+// Label factory (for advanced usage - separate label program creation)
+export { createComposedLabelProgram } from "./label-factory";
+export type { ComposedLabelProgramOptions } from "./label-factory";
 
 // Type definitions
 export type {
@@ -36,6 +41,8 @@ export type { SquareOptions, TriangleOptions, DiamondOptions } from "./shapes";
 // Fragment Layers (core)
 export { layerFill } from "./layers";
 
-// Shader generator (advanced usage)
+// Shader generators (advanced usage)
 export { generateShaders, generateVertexShader, generateFragmentShader, collectUniforms, collectAttributes } from "./generator";
 export type { GeneratedShaders } from "./generator";
+export { generateLabelShaders, generateLabelVertexShader, generateLabelFragmentShader, collectLabelUniforms } from "./label-generator";
+export type { GeneratedLabelShaders, LabelShaderOptions } from "./label-generator";

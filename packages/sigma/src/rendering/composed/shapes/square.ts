@@ -72,5 +72,8 @@ float sdf_square(vec2 uv, float size, float cornerRadius, float rotation) {
         value: rotation,
       },
     ],
+    // For axis-aligned square: inradius = circumradius * √2/2
+    // (the inscribed circle touches the middle of each side, not the corners)
+    inradiusFactor: Math.SQRT1_2,
   };
 }

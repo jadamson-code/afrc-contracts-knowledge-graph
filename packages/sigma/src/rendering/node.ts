@@ -86,10 +86,31 @@ export type NodeProgramType<
   G extends Attributes = Attributes,
 > = typeof _NodeProgramClass<N, E, G>;
 
+let compoundDeprecationWarned = false;
+
 /**
  * Helper function combining two or more programs into a single compound one.
  * Note that this is more a quick & easy way to combine program than a really
  * performant option. More performant programs can be written entirely.
+ *
+ * @deprecated Use `createComposedNodeProgram` instead for better performance
+ * and no visual artifacts. The compound approach renders each program
+ * independently, causing interleaving issues when nodes overlap. The composed
+ * approach uses a single shader with layered effects.
+ *
+ * @example
+ * // Old compound approach:
+ * const Program = createNodeCompoundProgram([BorderProgram, ImageProgram]);
+ *
+ * // New composed approach:
+ * import { createComposedNodeProgram, sdfCircle } from "sigma/rendering";
+ * import { layerBorder } from "@sigma/node-border";
+ * import { layerImage } from "@sigma/node-image";
+ *
+ * const Program = createComposedNodeProgram({
+ *   shape: sdfCircle(),
+ *   layers: [layerBorder({ ... }), layerImage({ ... })],
+ * });
  *
  * @param  {array}    programClasses - Program classes to combine.
  * @param  {function} drawLabel - An optional node "draw label" function.
@@ -105,6 +126,15 @@ export function createNodeCompoundProgram<
   drawLabel?: NodeLabelDrawingFunction<N, E, G>,
   drawHover?: NodeLabelDrawingFunction<N, E, G>,
 ): NodeProgramType<N, E, G> {
+  if (!compoundDeprecationWarned) {
+    console.warn(
+      "[sigma] createNodeCompoundProgram is deprecated. " +
+        "Use createComposedNodeProgram instead for better performance and no visual artifacts. " +
+        "See the JSDoc for migration examples.",
+    );
+    compoundDeprecationWarned = true;
+  }
+
   return class NodeCompoundProgram implements AbstractNodeProgram<N, E, G> {
     programs: NonEmptyArray<AbstractNodeProgram<N, E, G>>;
 

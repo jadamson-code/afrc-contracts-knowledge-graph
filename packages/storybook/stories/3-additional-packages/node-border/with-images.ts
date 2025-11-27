@@ -1,8 +1,8 @@
-import { createNodeBorderProgram } from "@sigma/node-border";
-import { createNodeImageProgram } from "@sigma/node-image";
+import { layerBorder } from "@sigma/node-border";
+import { layerImage } from "@sigma/node-image";
 import Graph from "graphology";
 import Sigma from "sigma";
-import { createNodeCompoundProgram } from "sigma/rendering";
+import { createComposedNodeProgram, sdfCircle } from "sigma/rendering";
 
 export default () => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -74,21 +74,23 @@ export default () => {
   graph.addEdge("e", "d", { size: 10 });
   graph.addEdge("f", "e", { size: 10 });
 
-  const NodeBorderCustomProgram = createNodeBorderProgram({
-    borders: [
-      { size: { value: 0.1 }, color: { attribute: "pictoColor" } },
-      { size: { fill: true }, color: { attribute: "color" } },
+  // Using the new composed approach instead of the deprecated createNodeCompoundProgram
+  const NodeProgram = createComposedNodeProgram({
+    shape: sdfCircle(),
+    layers: [
+      layerBorder({
+        borders: [
+          { size: { value: 0.1 }, color: { attribute: "pictoColor" } },
+          { size: { fill: true }, color: { attribute: "color" } },
+        ],
+      }),
+      layerImage({
+        padding: 0.3,
+        drawingMode: "color",
+        colorAttribute: "pictoColor",
+      }),
     ],
   });
-
-  const NodePictogramCustomProgram = createNodeImageProgram({
-    padding: 0.3,
-    size: { mode: "force", value: 256 },
-    drawingMode: "color",
-    colorAttribute: "pictoColor",
-  });
-
-  const NodeProgram = createNodeCompoundProgram([NodeBorderCustomProgram, NodePictogramCustomProgram]);
 
   const renderer = new Sigma(graph, container, {
     defaultNodeType: "pictogram",

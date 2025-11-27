@@ -7,11 +7,7 @@ import localImagesSource from "./local-images?raw";
 import nodeImagesPlay from "./node-images";
 import nodeImagesSource from "./node-images?raw";
 import nodePictogramsPlay from "./node-pictograms";
-import nodePictogramsBackgroundPlay from "./node-pictograms-background";
-import nodePictogramsBackgroundSource from "./node-pictograms-background?raw";
 import nodePictogramsSource from "./node-pictograms?raw";
-import optionsShowcasePlay from "./options-showcase";
-import optionsShowcaseSource from "./options-showcase?raw";
 
 const meta: Meta = {
   id: "@sigma/node-image",
@@ -45,18 +41,6 @@ export const nodePictograms: Story = {
   },
 };
 
-export const nodePictogramsWithBackground: Story = {
-  name: "NodePictogramRenderer with background colors",
-  render: () => template,
-  play: wrapStory(nodePictogramsBackgroundPlay),
-  args: {},
-  parameters: {
-    storySource: {
-      source: nodePictogramsBackgroundSource,
-    },
-  },
-};
-
 export const localImages: Story = {
   name: "Displaying local images",
   render: () => template,
@@ -65,18 +49,6 @@ export const localImages: Story = {
   parameters: {
     storySource: {
       source: localImagesSource,
-    },
-  },
-};
-
-export const optionsShowcase: Story = {
-  name: "Options showcase",
-  render: () => template,
-  play: wrapStory(optionsShowcasePlay),
-  args: {},
-  parameters: {
-    storySource: {
-      source: optionsShowcaseSource,
     },
   },
 };

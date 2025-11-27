@@ -1,15 +1,17 @@
 /**
  * This example demonstrates the composed node program system.
- * It shows a 4x4 grid of nodes where:
+ * It shows a 5x4 grid of nodes where:
  * - Each column uses a different shape (circle, square, triangle, diamond)
  * - Each row uses different layers:
  *   - Row 1: Simple fill (layerFill)
  *   - Row 2: Border with external relative (%) mode and internal pixel mode
  *   - Row 3: Image (using createNodeImageProgram)
  *   - Row 4: Image with blackish 10px border outside
+ *   - Row 5: Piechart with three slices
  */
 import { layerBorder } from "@sigma/node-border";
 import { layerImage } from "@sigma/node-image";
+import { layerPiechart } from "@sigma/node-piechart";
 import Graph from "graphology";
 import Sigma from "sigma";
 import {
@@ -29,18 +31,18 @@ export default () => {
 
   // Grid configuration
   const COLS = 4; // circle, square, triangle, diamond
-  const ROWS = 4; // fill, border, image, image+border
+  const ROWS = 5; // fill, border, image, image+border, piechart
   const SPACING = 50;
   const NODE_SIZE = 15;
 
   // Colors for each row
-  const ROW_COLORS = ["#5B8FF9", "#5AD8A6", "#F6BD16", "#E8684A"];
+  const ROW_COLORS = ["#5B8FF9", "#5AD8A6", "#F6BD16", "#E8684A", "#9270CA"];
 
   // Shape names for node types
   const SHAPES = ["circle", "square", "triangle", "diamond"];
 
   // Row names for labels
-  const ROW_LABELS = ["fill", "border", "image", "image-border"];
+  const ROW_LABELS = ["fill", "border", "image", "image-border", "piechart"];
 
   // Sample images for each column
   const IMAGES = [
@@ -73,6 +75,10 @@ export default () => {
         // Image-specific attributes (for rows 3 and 4)
         image: IMAGES[col],
         pictogram: PICTOGRAMS[col],
+        // Piechart-specific attributes (for row 5)
+        slice1: 1 + col,
+        slice2: 2 + col,
+        slice3: 3 - col * 0.5,
       });
     }
   }
@@ -139,6 +145,16 @@ export default () => {
               { size: { value: 0.1 }, color: { attribute: "borderColor" } },
               { size: { fill: true }, color: { attribute: "color" } },
               { size: { value: 40, mode: "pixels" }, color: { value: "#ffffff" } },
+            ],
+          }),
+        ];
+      case "piechart":
+        return [
+          layerPiechart({
+            slices: [
+              { color: { value: "#E74C3C" }, value: { attribute: "slice1" } },
+              { color: { value: "#3498DB" }, value: { attribute: "slice2" } },
+              { color: { value: "#2ECC71" }, value: { attribute: "slice3" } },
             ],
           }),
         ];

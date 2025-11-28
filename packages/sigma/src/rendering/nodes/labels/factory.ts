@@ -188,7 +188,9 @@ export function createLabelProgram<
 
       // Initialize SDF atlas manager for glyph generation
       this.atlasManager = new SDFAtlasManager();
-      this.gamma = 0.105; // Mapbox-style gamma constant for SDF anti-aliasing
+      // Gamma controls anti-aliasing sharpness: lower = sharper edges
+      // 0.08 provides crisp text while maintaining smooth anti-aliasing
+      this.gamma = 0.08;
       this.sdfBuffer = DEFAULT_SDF_ATLAS_OPTIONS.cutoff;
 
       // Create and configure WebGL texture for glyph atlas

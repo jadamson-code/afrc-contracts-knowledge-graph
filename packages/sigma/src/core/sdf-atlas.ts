@@ -77,9 +77,9 @@ export interface SDFAtlasOptions {
  * Default options for SDFAtlasManager.
  */
 export const DEFAULT_SDF_ATLAS_OPTIONS: SDFAtlasOptions = {
-  fontSize: 48,
-  buffer: 6,
-  radius: 16,
+  fontSize: 64,
+  buffer: 8,
+  radius: 24,
   cutoff: 0.25,
   maxTextureSize: 2048,
   debounceTimeout: 100,
@@ -215,7 +215,6 @@ export class SDFAtlasManager extends EventEmitter {
     }
 
     let hasNewGlyphs = false;
-    let newGlyphCount = 0;
 
     for (const char of text) {
       const charCode = char.codePointAt(0);
@@ -224,7 +223,6 @@ export class SDFAtlasManager extends EventEmitter {
       if (!fontState.glyphs.has(charCode)) {
         this.pendingGlyphs.push({ fontKey, charCode });
         hasNewGlyphs = true;
-        newGlyphCount++;
       }
     }
 

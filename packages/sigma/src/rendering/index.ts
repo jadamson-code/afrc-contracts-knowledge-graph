@@ -13,8 +13,8 @@ export { EdgeProgram, AbstractEdgeProgram, createEdgeCompoundProgram } from "./e
 export type { EdgeProgramType } from "./edge";
 export { Program, AbstractProgram } from "./program";
 export type { ProgramType } from "./program";
-export { LabelProgram, AbstractLabelProgram } from "./label";
-export type { LabelProgramType } from "./label";
+export { LabelProgram, AbstractLabelProgram } from "./nodes/labels";
+export type { LabelProgramType } from "./nodes/labels";
 export { Bucket, BucketCollection, clampZIndex } from "./bucket";
 export type { ProcessItemFunction } from "./bucket";
 

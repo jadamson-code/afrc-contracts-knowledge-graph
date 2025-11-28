@@ -22,8 +22,8 @@ import { DEFAULT_SDF_ATLAS_OPTIONS, GlyphMetrics, SDFAtlasManager } from "../../
 import type Sigma from "../../../sigma";
 import type { LabelDisplayData, LabelPosition, RenderParams } from "../../../types";
 import { floatColor } from "../../../utils";
-import { LabelProgram } from "../../label";
-import type { LabelProgramType } from "../../label";
+import { LabelProgram } from "./base";
+import type { LabelProgramType } from "./base";
 import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
 import { LabelOptions, SDFShape, UniformSpecification } from "../types";
 import { LabelShaderOptions, generateLabelShaders } from "./generator";

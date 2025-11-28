@@ -10,6 +10,7 @@ import { cleanMouseCoords } from "./core/captors/captor";
 import MouseCaptor from "./core/captors/mouse";
 import TouchCaptor from "./core/captors/touch";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
+import { SDFAtlasManager } from "./core/sdf-atlas";
 import {
   AbstractEdgeProgram,
   AbstractLabelProgram,
@@ -19,7 +20,6 @@ import {
   LabelProgramType,
   NodeProgramType,
 } from "./rendering";
-import { SDFAtlasManager } from "./core/sdf-atlas";
 import { Settings, resolveSettings, validateSettings } from "./settings";
 import {
   CameraState,
@@ -1003,75 +1003,27 @@ export default class Sigma<
   }
 
   /**
-   * Process labels for WebGL rendering.
+   * Pre-generate glyphs for all labels.
+   * Actual label processing happens per-frame in renderWebGLLabelsToMRT.
    * @private
    */
   private processWebGLLabels(nodes: string[]): void {
-    // First pass: count characters per label program type and collect label texts
-    const charactersPerProgram: Record<string, number> = {};
+    // Collect all label texts for glyph pre-generation
     const labelTexts: string[] = [];
     for (let i = 0, l = nodes.length; i < l; i++) {
       const node = nodes[i];
       const data = this.nodeDataCache[node];
 
       if (data.hidden || !data.label) continue;
-
-      // Determine which label program to use based on node type
-      // If a matching label program exists for the node type, use it; otherwise fall back to default
-      const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
-      charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + data.label.length;
       labelTexts.push(data.label);
     }
 
-    // Ensure all glyphs are generated before processing
+    // Ensure all glyphs are generated (this is the expensive part we want to do once)
     for (const type in this.labelPrograms) {
       const program = this.labelPrograms[type];
       if (program.ensureGlyphsReady) {
         program.ensureGlyphsReady(labelTexts);
       }
-    }
-
-    // Reallocate label programs based on their character counts
-    for (const type in this.labelPrograms) {
-      this.labelPrograms[type].reallocate(charactersPerProgram[type] || 0);
-    }
-
-    // Second pass: process each label in its matching program
-    const characterOffsets: Record<string, number> = {};
-    for (let i = 0, l = nodes.length; i < l; i++) {
-      const node = nodes[i];
-      const data = this.nodeDataCache[node];
-
-      if (data.hidden || !data.label) continue;
-
-      // Determine which label program to use
-      const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
-      const labelProgram = this.labelPrograms[labelType];
-      if (!labelProgram) continue;
-
-      // Build label display data
-      const labelData: LabelDisplayData = {
-        text: data.label,
-        x: data.x,
-        y: data.y,
-        size: this.settings.labelSize,
-        color: this.getLabelColor(data),
-        nodeSize: data.size,
-        margin: this.settings.labelMargin,
-        position: this.settings.defaultLabelPosition,
-        hidden: false,
-        forceLabel: data.forceLabel ?? false,
-        type: labelType,
-        zIndex: data.zIndex ?? 0,
-        parentType: "node",
-        parentKey: node,
-        fontKey: "", // Empty means default font
-      };
-
-      // Process label in its matching program
-      const offset = characterOffsets[labelType] || 0;
-      const charsProcessed = labelProgram.processLabel(node, offset, labelData);
-      characterOffsets[labelType] = offset + charsProcessed;
     }
   }
 
@@ -1241,20 +1193,65 @@ export default class Sigma<
    * Method used to render WebGL labels to the MRT framebuffer.
    * Called from render() before the blit, so labels are included in the single blit.
    *
+   * This method processes only visible labels each frame, using LabelGrid for
+   * density-based selection. Only visible labels are written to GPU buffers.
+   *
    * @param params - Render parameters
    */
   private renderWebGLLabelsToMRT(params: RenderParams): void {
     const cameraState = this.camera.getState();
 
-    // Selecting labels to draw
-    const labelsToDisplay = this.labelGrid.getLabelsToDisplay(cameraState.ratio, this.settings.labelDensity);
+    // Compute viewport bounds in framed graph coordinates for early rejection
+    // We add margins and compute min/max for axis-aligned bounds
+    const topLeft = this.viewportToFramedGraph({ x: -X_LABEL_MARGIN, y: -Y_LABEL_MARGIN });
+    const topRight = this.viewportToFramedGraph({ x: this.width + X_LABEL_MARGIN, y: -Y_LABEL_MARGIN });
+    const bottomLeft = this.viewportToFramedGraph({ x: -X_LABEL_MARGIN, y: this.height + Y_LABEL_MARGIN });
+    const bottomRight = this.viewportToFramedGraph({ x: this.width + X_LABEL_MARGIN, y: this.height + Y_LABEL_MARGIN });
+
+    // Get axis-aligned bounding box in framed graph space (handles rotation)
+    const graphMinX = Math.min(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x);
+    const graphMaxX = Math.max(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x);
+    const graphMinY = Math.min(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y);
+    const graphMaxY = Math.max(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y);
+
+    // Compute viewport bounds in "null camera space" for LabelGrid query
+    // LabelGrid stores positions using framedGraphToViewport with nullCameraMatrix
+    // We need to transform current viewport corners: viewport -> framedGraph -> nullCameraViewport
+    const nullCameraMatrix = matrixFromCamera(
+      { x: 0.5, y: 0.5, ratio: 1, angle: 0 },
+      this.getDimensions(),
+      this.getGraphDimensions(),
+      this.getStagePadding(),
+    );
+    const toNullCameraViewport = (framedGraphPos: Coordinates): Coordinates => {
+      const viewportPos = multiplyVec2(nullCameraMatrix, framedGraphPos);
+      return {
+        x: ((1 + viewportPos.x) * this.width) / 2,
+        y: ((1 - viewportPos.y) * this.height) / 2,
+      };
+    };
+
+    // Transform the framed graph bounds to null camera viewport space
+    const nc1 = toNullCameraViewport({ x: graphMinX, y: graphMinY });
+    const nc2 = toNullCameraViewport({ x: graphMaxX, y: graphMinY });
+    const nc3 = toNullCameraViewport({ x: graphMinX, y: graphMaxY });
+    const nc4 = toNullCameraViewport({ x: graphMaxX, y: graphMaxY });
+
+    const gridViewport = {
+      x1: Math.min(nc1.x, nc2.x, nc3.x, nc4.x),
+      y1: Math.min(nc1.y, nc2.y, nc3.y, nc4.y),
+      x2: Math.max(nc1.x, nc2.x, nc3.x, nc4.x),
+      y2: Math.max(nc1.y, nc2.y, nc3.y, nc4.y),
+    };
+
+    // Selecting labels to draw using LabelGrid with viewport culling
+    const labelsToDisplay = this.labelGrid.getLabelsToDisplay(cameraState.ratio, this.settings.labelDensity, gridViewport);
     extend(labelsToDisplay, this.nodesWithForcedLabels);
 
-    // Convert to Set for visibility updates
-    const visibleLabels = new Set<string>();
+    // Collect visible nodes after viewport/threshold culling
     this.displayedNodeLabels = new Set();
+    const visibleNodes: string[] = [];
 
-    // Build label display data and determine which labels are visible
     for (let i = 0, l = labelsToDisplay.length; i < l; i++) {
       const node = labelsToDisplay[i];
       const data = this.nodeDataCache[node];
@@ -1262,6 +1259,10 @@ export default class Sigma<
       if (this.displayedNodeLabels.has(node)) continue;
       if (data.hidden) continue;
       if (!data.label) continue;
+
+      // Early rejection in framed graph coordinates (cheap - no matrix multiply)
+      // data.x and data.y are already in framed graph space after normalization
+      if (data.x < graphMinX || data.x > graphMaxX || data.y < graphMinY || data.y > graphMaxY) continue;
 
       const { x, y } = this.framedGraphToViewport(data);
       const size = this.scaleSize(data.size);
@@ -1277,12 +1278,56 @@ export default class Sigma<
         continue;
 
       this.displayedNodeLabels.add(node);
-      visibleLabels.add(node);
+      visibleNodes.push(node);
     }
 
-    // Update visibility in label programs
+    // Count characters per label program type
+    const charactersPerProgram: Record<string, number> = {};
+    for (let i = 0, l = visibleNodes.length; i < l; i++) {
+      const node = visibleNodes[i];
+      const data = this.nodeDataCache[node];
+      const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
+      charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + data.label!.length;
+    }
+
+    // Reallocate label programs based on visible character counts
     for (const type in this.labelPrograms) {
-      this.labelPrograms[type].updateVisibility(visibleLabels);
+      this.labelPrograms[type].reallocate(charactersPerProgram[type] || 0);
+    }
+
+    // Process each visible label into its matching program's buffer
+    const characterOffsets: Record<string, number> = {};
+    for (let i = 0, l = visibleNodes.length; i < l; i++) {
+      const node = visibleNodes[i];
+      const data = this.nodeDataCache[node];
+
+      const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
+      const labelProgram = this.labelPrograms[labelType];
+      if (!labelProgram) continue;
+
+      // Build label display data
+      const labelData: LabelDisplayData = {
+        text: data.label!,
+        x: data.x,
+        y: data.y,
+        size: this.settings.labelSize,
+        color: this.getLabelColor(data),
+        nodeSize: data.size,
+        margin: this.settings.labelMargin,
+        position: this.settings.defaultLabelPosition,
+        hidden: false,
+        forceLabel: data.forceLabel ?? false,
+        type: labelType,
+        zIndex: data.zIndex ?? 0,
+        parentType: "node",
+        parentKey: node,
+        fontKey: "", // Empty means default font
+      };
+
+      // Process label in its matching program
+      const offset = characterOffsets[labelType] || 0;
+      const charsProcessed = labelProgram.processLabel(node, offset, labelData);
+      characterOffsets[labelType] = offset + charsProcessed;
     }
 
     // Render WebGL labels (MRT framebuffer is already bound by caller)

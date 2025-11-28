@@ -89,11 +89,19 @@ export class LabelGrid {
     }
   }
 
-  getLabelsToDisplay(ratio: number, density: number): Array<string> {
-    // TODO: work on visible nodes to optimize? ^ -> threshold outside so that memoization works?
-    // TODO: adjust threshold lower, but increase cells a bit?
-    // TODO: hunt for geom issue in disguise
-    // TODO: memoize while ratio does not move. method to force recompute
+  /**
+   * Get labels to display based on density and optional viewport culling.
+   *
+   * @param ratio - Camera zoom ratio
+   * @param density - Label density setting
+   * @param viewport - Optional viewport bounds in grid coordinates (null camera space).
+   *                   If provided, only cells intersecting this viewport are queried.
+   */
+  getLabelsToDisplay(
+    ratio: number,
+    density: number,
+    viewport?: { x1: number; y1: number; x2: number; y2: number },
+  ): Array<string> {
     const cellArea = this.cellSize * this.cellSize;
     const scaledCellArea = cellArea / ratio / ratio;
     const scaledDensity = (scaledCellArea * density) / cellArea;
@@ -102,11 +110,33 @@ export class LabelGrid {
 
     const labels: string[] = [];
 
-    for (const k in this.cells) {
-      const cell = this.cells[k];
+    if (viewport) {
+      // Viewport-aware query: only iterate cells within the viewport
+      const minCol = Math.max(0, Math.floor(viewport.x1 / this.cellSize));
+      const maxCol = Math.min(this.columns - 1, Math.floor(viewport.x2 / this.cellSize));
+      const minRow = Math.max(0, Math.floor(viewport.y1 / this.cellSize));
+      const maxRow = Math.min(this.rows - 1, Math.floor(viewport.y2 / this.cellSize));
 
-      for (let i = 0; i < Math.min(labelsToDisplayPerCell, cell.length); i++) {
-        labels.push(cell[i].key);
+      for (let row = minRow; row <= maxRow; row++) {
+        for (let col = minCol; col <= maxCol; col++) {
+          const index = row * this.columns + col;
+          const cell = this.cells[index];
+
+          if (!cell) continue;
+
+          for (let i = 0; i < Math.min(labelsToDisplayPerCell, cell.length); i++) {
+            labels.push(cell[i].key);
+          }
+        }
+      }
+    } else {
+      // Original behavior: iterate all cells
+      for (const k in this.cells) {
+        const cell = this.cells[k];
+
+        for (let i = 0; i < Math.min(labelsToDisplayPerCell, cell.length); i++) {
+          labels.push(cell[i].key);
+        }
       }
     }
 

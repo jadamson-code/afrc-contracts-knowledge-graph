@@ -9,7 +9,7 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { NodeDisplayData, RenderParams } from "../../types";
 import { indexToColor } from "../../utils";
-import { LabelProgramType } from "../label";
+import { LabelProgramType } from "./labels";
 import { NodeHoverDrawingFunction } from "../node-hover";
 import { NodeLabelDrawingFunction } from "../node-labels";
 import { AbstractProgram, Program } from "../program";

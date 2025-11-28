@@ -77,6 +77,7 @@ export default () => {
   const createPrograms = (
     rotateWithCamera: boolean,
     labelAngle: number,
+    labelMargin: number,
   ): { nodePrograms: Record<string, NodeProgramType>; labelPrograms: Record<string, LabelProgramType> } => {
     const nodePrograms: Record<string, NodeProgramType> = {};
     const labelPrograms: Record<string, LabelProgramType> = {};
@@ -91,6 +92,7 @@ export default () => {
           label: {
             position,
             angle: labelAngle,
+            margin: labelMargin,
           },
         });
         nodePrograms[nodeType] = NodeProgram;
@@ -104,7 +106,7 @@ export default () => {
   };
 
   // Initial state
-  const initialPrograms = createPrograms(false, 0);
+  const initialPrograms = createPrograms(false, 0, 5);
   const renderer = new Sigma(graph, container, {
     nodeProgramClasses: initialPrograms.nodePrograms,
     labelProgramClasses: initialPrograms.labelPrograms,
@@ -123,8 +125,9 @@ export default () => {
     const rotateWithCamera = (document.getElementById("rotate-with-camera") as HTMLInputElement).checked;
     const labelAngleDegrees = parseFloat((document.getElementById("label-angle") as HTMLInputElement).value) || 0;
     const labelAngle = (labelAngleDegrees * Math.PI) / 180; // Convert to radians
+    const labelMargin = parseFloat((document.getElementById("label-margin") as HTMLInputElement).value);
 
-    const programs = createPrograms(rotateWithCamera, labelAngle);
+    const programs = createPrograms(rotateWithCamera, labelAngle, labelMargin);
     renderer.setSetting("nodeProgramClasses", programs.nodePrograms);
     renderer.setSetting("labelProgramClasses", programs.labelPrograms);
   };
@@ -136,6 +139,10 @@ export default () => {
   // Handle angle input change
   const angleInput = document.getElementById("label-angle") as HTMLInputElement;
   angleInput.addEventListener("input", updatePrograms);
+
+  // Handle margin input change
+  const marginInput = document.getElementById("label-margin") as HTMLInputElement;
+  marginInput.addEventListener("input", updatePrograms);
 
   return () => {
     renderer.kill();

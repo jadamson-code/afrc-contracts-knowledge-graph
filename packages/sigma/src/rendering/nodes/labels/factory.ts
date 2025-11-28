@@ -114,6 +114,8 @@ export function createLabelProgram<
 >(options: CreateLabelProgramOptions): LabelProgramType<N, E, G> {
   const { shape, rotateWithCamera = false, label: labelOptions = {} } = options;
   const labelAngle = labelOptions.angle ?? 0;
+  const labelPosition = labelOptions.position ?? "right";
+  const labelMargin = labelOptions.margin ?? 5;
 
   // Generate shaders at factory creation time (not per-instance)
   const shaderOptions: LabelShaderOptions = { shape, rotateWithCamera, angle: labelAngle };
@@ -145,6 +147,12 @@ export function createLabelProgram<
 
     /** Static reference to the label angle */
     static readonly labelAngle = labelAngle;
+
+    /** Static reference to the label position */
+    static readonly labelPosition = labelPosition;
+
+    /** Static reference to the label margin */
+    static readonly labelMargin = labelMargin;
 
     // -----------------------------------------------------------------------
     // Instance Properties
@@ -233,6 +241,8 @@ export function createLabelProgram<
           { name: "a_nodeSize", size: 1, type: FLOAT },
           { name: "a_margin", size: 1, type: FLOAT },
           { name: "a_positionMode", size: 1, type: FLOAT },
+          { name: "a_labelWidth", size: 1, type: FLOAT },
+          { name: "a_labelHeight", size: 1, type: FLOAT },
         ],
         // Quad corners (same for all characters)
         CONSTANT_ATTRIBUTES: [{ name: "a_quadCorner", size: 2, type: FLOAT }],
@@ -386,10 +396,16 @@ export function createLabelProgram<
       array[i++] = labelData.nodeSize;
 
       // a_margin: Gap between node edge and label (pixels)
-      array[i++] = labelData.margin;
+      array[i++] = NodeLabelProgram.labelMargin;
 
       // a_positionMode: Label position mode for shader
-      array[i++] = POSITION_MODE_MAP[labelData.position];
+      array[i++] = POSITION_MODE_MAP[NodeLabelProgram.labelPosition];
+
+      // a_labelWidth: Total label width in pixels (for centering/right-alignment)
+      array[i++] = cache.totalWidth * scale;
+
+      // a_labelHeight: Label height in pixels (for vertical centering)
+      array[i++] = labelData.size;
     }
 
     /**

@@ -3,13 +3,12 @@
  * ====================================
  *
  * Factory function for creating node image programs.
- * Now delegates to createComposedNodeProgram with layerImage for
- * automatic texture management.
+ * Uses the node program system with SDF shapes and layers.
  *
  * @module
  */
 import { Attributes } from "graphology-types";
-import { NodeProgramType, createComposedNodeProgram } from "sigma/rendering";
+import { NodeProgramType, createNodeProgram } from "sigma/rendering";
 
 import { layerImage } from "./layer";
 import { DEFAULT_TEXTURE_MANAGER_OPTIONS, TextureManager } from "./texture";
@@ -17,7 +16,7 @@ import { CreateNodeImageProgramOptions, DEFAULT_CREATE_NODE_IMAGE_OPTIONS } from
 
 /**
  * Creates a node program that renders images inside nodes.
- * Uses the composable node program system with lifecycle-aware layerImage.
+ * Uses the node program system with lifecycle-aware layerImage.
  *
  * @param inputOptions - Image program configuration options
  * @returns A NodeProgram class for rendering nodes with images
@@ -38,6 +37,9 @@ import { CreateNodeImageProgramOptions, DEFAULT_CREATE_NODE_IMAGE_OPTIONS } from
  * const sigma = new Sigma(graph, container, {
  *   nodeProgramClasses: {
  *     image: ImageProgram,
+ *   },
+ *   labelProgramClasses: {
+ *     image: ImageProgram.LabelProgram,
  *   },
  * });
  * ```
@@ -81,8 +83,8 @@ export function createNodeImageProgram<
    */
   const textureManager = new TextureManager(textureManagerOptions);
 
-  // Create the composed program with image layer
-  const BaseProgram = createComposedNodeProgram<N, E, G>({
+  // Create the node program with image layer
+  const BaseProgram = createNodeProgram<N, E, G>({
     shape: shapeFactory(),
     layers: [
       backgroundLayerFactory(),
@@ -97,8 +99,11 @@ export function createNodeImageProgram<
   });
 
   // Extend to add static textureManager and optional drawing functions
-  return class NodeImageProgram extends BaseProgram {
+  const ImageProgram = class NodeImageProgram extends BaseProgram {
     drawLabel = drawLabel;
     drawHover = drawHover;
   };
+  // Copy the static LabelProgram reference
+  ImageProgram.LabelProgram = BaseProgram.LabelProgram;
+  return ImageProgram;
 }

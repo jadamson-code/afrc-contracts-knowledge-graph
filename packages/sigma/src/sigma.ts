@@ -18,7 +18,6 @@ import {
   EdgeProgramType,
   LabelProgramType,
   NodeProgramType,
-  SDFTextLabelProgram,
 } from "./rendering";
 import { SDFAtlasManager } from "./core/sdf-atlas";
 import { Settings, resolveSettings, validateSettings } from "./settings";
@@ -305,6 +304,13 @@ export default class Sigma<
     this.nodeHoverPrograms[key] = new (NodeHoverProgram || NodeProgramClass)(this.webGLContext!, null, this);
     // Register program type with bucket collection (stride will be set properly when used)
     this.itemBuckets.nodes.registerProgram(key, 1);
+
+    // Register the associated label program if the node program has one
+    const LabelProgramClass = NodeProgramClass.LabelProgram as LabelProgramType<N, E, G> | undefined;
+    if (LabelProgramClass) {
+      this.registerLabelProgram(key, LabelProgramClass);
+    }
+
     return this;
   }
 
@@ -338,8 +344,10 @@ export default class Sigma<
     if (this.nodeHoverPrograms[key]) {
       const { [key]: program, ...programs } = this.nodeHoverPrograms;
       program.kill();
-      this.nodePrograms = programs;
+      this.nodeHoverPrograms = programs;
     }
+    // Unregister the associated label program
+    this.unregisterLabelProgram(key);
     return this;
   }
 
@@ -373,14 +381,12 @@ export default class Sigma<
       style: this.settings.labelStyle,
     });
 
-    // Register the default SDF label program
-    this.registerLabelProgram("sdf", SDFTextLabelProgram);
+    // Note: Label programs are automatically registered when node programs are registered.
+    // The NodeProgram.LabelProgram static property provides the label renderer for each node type.
 
-    // Register any additional label programs from settings
+    // Register any additional label programs from settings (for custom labels not tied to node types)
     for (const type in this.settings.labelProgramClasses) {
-      if (type !== "sdf") {
-        this.registerLabelProgram(type, this.settings.labelProgramClasses[type]);
-      }
+      this.registerLabelProgram(type, this.settings.labelProgramClasses[type]);
     }
   }
 
@@ -399,12 +405,10 @@ export default class Sigma<
 
   /**
    * Internal function used to unregister a label program.
-   * Currently unused but provided for API completeness (e.g., dynamic program switching).
    *
    * @param  {string} key - The program's key, matching the related labels "type" values.
    * @return {Sigma}
    */
-  // @ts-expect-error - Provided for API completeness, will be used for dynamic label program management
   private unregisterLabelProgram(key: string): this {
     if (this.labelPrograms[key]) {
       const { [key]: program, ...programs } = this.labelPrograms;

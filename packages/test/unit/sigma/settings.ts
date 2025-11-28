@@ -1,6 +1,6 @@
 import Graph from "graphology";
 import Sigma from "sigma";
-import { NodePointProgram } from "sigma/rendering";
+import { NodeCircleProgram } from "sigma/rendering";
 import { createElement } from "sigma/utils";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
@@ -36,7 +36,7 @@ describe("Sigma settings management", () => {
   });
 
   test<SigmaTestContext>("it should update programs when they're updated", ({ sigma }) => {
-    sigma.setSetting("nodeProgramClasses", { point: NodePointProgram });
+    sigma.setSetting("nodeProgramClasses", { point: NodeCircleProgram });
     expect(() => sigma.refresh()).toThrow();
 
     const graph = sigma.getGraph();

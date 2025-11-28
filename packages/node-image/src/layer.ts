@@ -3,10 +3,10 @@
  * =========================
  *
  * Fragment layer for rendering images inside nodes.
- * Works with any SDF shape from the composable node program system.
+ * Works with any SDF shape from the node program system.
  *
- * Now supports lifecycle management for automatic texture handling when used
- * with createComposedNodeProgram().
+ * Supports lifecycle management for automatic texture handling when used
+ * with createNodeProgram().
  *
  * @module
  */
@@ -151,8 +151,8 @@ function createLayerDefinition(
 /**
  * Creates an image layer that renders images inside nodes.
  *
- * This layer now includes lifecycle management for automatic texture handling.
- * When used with createComposedNodeProgram(), the layer will:
+ * This layer includes lifecycle management for automatic texture handling.
+ * When used with createNodeProgram(), the layer will:
  * - Create/use a TextureManager to load and manage images
  * - Automatically bind textures before rendering
  * - Regenerate shaders when texture count changes
@@ -164,14 +164,14 @@ function createLayerDefinition(
  * @example
  * ```typescript
  * // Simple usage - TextureManager created automatically
- * const Program = createComposedNodeProgram({
+ * const Program = createNodeProgram({
  *   shape: sdfCircle(),
  *   layers: [layerImage({ drawingMode: "image", padding: 0.1 })],
  * });
  *
  * // Shared TextureManager across multiple programs
  * const sharedTM = new TextureManager();
- * const Program1 = createComposedNodeProgram({
+ * const Program1 = createNodeProgram({
  *   shape: sdfCircle(),
  *   layers: [layerImage({ textureManager: sharedTM })],
  * });

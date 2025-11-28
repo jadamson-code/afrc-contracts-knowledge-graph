@@ -1,14 +1,15 @@
 /**
- * Sigma.js Composable Node Programs - Type Definitions
- * =====================================================
+ * Sigma.js Node Programs - Type Definitions
+ * ==========================================
  *
- * Types and interfaces for the composable node program architecture.
+ * Types and interfaces for the node program architecture.
  * This system separates shape definition (using Signed Distance Fields)
  * from fragment coloring layers, enabling single-pass rendering of
  * complex node appearances.
  *
  * @module
  */
+import { LabelPosition } from "../../types";
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
@@ -334,9 +335,84 @@ export interface FragmentLayer {
 }
 
 /**
- * Options for creating a composed node program.
+ * Configuration for a specific layer instance, including its options.
  */
-export interface ComposedProgramOptions {
+export interface LayerConfig<Options = Record<string, unknown>> {
+  /**
+   * The layer definition.
+   */
+  layer: FragmentLayer;
+
+  /**
+   * Options/parameters for this layer instance.
+   */
+  options: Options;
+}
+
+/**
+ * Font configuration for label rendering.
+ */
+export interface LabelFontOptions {
+  /**
+   * Font family name (e.g., "Arial", "sans-serif").
+   */
+  family?: string;
+
+  /**
+   * Font weight (e.g., "normal", "bold", "400", "700").
+   */
+  weight?: string;
+
+  /**
+   * Font style (e.g., "normal", "italic").
+   */
+  style?: string;
+
+  /**
+   * Font size in pixels.
+   */
+  size?: number;
+}
+
+/**
+ * Options for configuring labels rendered by the LabelProgram.
+ */
+export interface LabelOptions {
+  /**
+   * Default label position relative to node.
+   * Default: "right"
+   */
+  position?: LabelPosition;
+
+  /**
+   * Default margin between node edge and label in pixels.
+   * Default: 5
+   */
+  margin?: number;
+
+  /**
+   * Font configuration for labels.
+   */
+  font?: LabelFontOptions;
+
+  /**
+   * Default label color (CSS color string).
+   * Default: "#000000"
+   */
+  color?: string;
+
+  /**
+   * Label rotation angle in radians.
+   * The label text is rotated around its anchor point (closest to the node).
+   * Default: 0
+   */
+  angle?: number;
+}
+
+/**
+ * Options for creating a node program via createNodeProgram().
+ */
+export interface NodeProgramOptions {
   /**
    * The SDF shape definition to use for this program.
    * Shape configuration (uniforms) is already set when the shape is created.
@@ -350,24 +426,15 @@ export interface ComposedProgramOptions {
   layers: FragmentLayer[];
 
   /**
+   * Label configuration options.
+   * The LabelProgram is automatically generated from the shape and these options.
+   */
+  label?: LabelOptions;
+
+  /**
    * Whether nodes should rotate with the camera.
    * - false (default): Nodes stay upright regardless of camera rotation
    * - true: Nodes rotate along with the camera
    */
   rotateWithCamera?: boolean;
-}
-
-/**
- * Configuration for a specific layer instance, including its options.
- */
-export interface LayerConfig<Options = Record<string, unknown>> {
-  /**
-   * The layer definition.
-   */
-  layer: FragmentLayer;
-
-  /**
-   * Options/parameters for this layer instance.
-   */
-  options: Options;
 }

@@ -176,8 +176,8 @@ ${colorAdjustments}
  *   ],
  * });
  *
- * // Use with createComposedNodeProgram
- * const program = createComposedNodeProgram({
+ * // Use with createNodeProgram
+ * const program = createNodeProgram({
  *   shape: sdfSquare({ cornerRadius: 0.1 }),
  *   layers: [borderLayer],
  * });

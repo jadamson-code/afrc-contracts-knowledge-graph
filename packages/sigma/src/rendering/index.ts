@@ -1,9 +1,14 @@
 /**
- * Just some shortcuts to ease importing various rendering related things from
- * the codebase:
+ * Sigma.js Rendering - Main Exports
+ * ==================================
+ *
+ * Exports for all rendering-related functionality.
  */
-export { NodeProgram, AbstractNodeProgram, createNodeCompoundProgram } from "./node";
-export type { NodeProgramType } from "./node";
+
+// Node programs
+export * from "./nodes";
+
+// Base classes
 export { EdgeProgram, AbstractEdgeProgram, createEdgeCompoundProgram } from "./edge";
 export type { EdgeProgramType } from "./edge";
 export { Program, AbstractProgram } from "./program";
@@ -23,14 +28,6 @@ export { drawDiscNodeHover } from "./node-hover";
 
 // Other various program helpers
 export * from "./utils";
-
-// Composable node programs (new SDF-based system)
-export * from "./composed";
-
-// Built-in node programs
-export { default as NodeCircleProgram } from "./programs/node-circle";
-export { default as NodeSquareProgram } from "./programs/node-square";
-export { default as NodePointProgram } from "./programs/node-point";
 
 // Built-in edge programs
 export {
@@ -56,7 +53,3 @@ export { default as EdgeDoubleArrowProgram, createEdgeDoubleArrowProgram } from 
 export { default as EdgeLineProgram } from "./programs/edge-line";
 export { default as EdgeRectangleProgram } from "./programs/edge-rectangle";
 export { default as EdgeTriangleProgram } from "./programs/edge-triangle";
-
-// Built-in label programs
-export { SDFTextLabelProgram, SDFHoverLabelProgram, DEFAULT_SDF_HOVER_OPTIONS } from "./label-programs";
-export type { SDFTextLabelProgramOptions, SDFHoverLabelProgramOptions, HoverLabelData } from "./label-programs";

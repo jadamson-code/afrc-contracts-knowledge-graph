@@ -3,22 +3,21 @@
  * =====================================
  *
  * Factory function for creating node border programs.
- * Provides backward compatibility with the original API while using
- * the new composable node program system internally.
+ * Uses the node program system with SDF shapes and layers.
  *
  * @module
  */
 import { Attributes } from "graphology-types";
-import { createComposedNodeProgram, NodeProgramType, sdfCircle } from "sigma/rendering";
+import { createNodeProgram, NodeProgramType, sdfCircle } from "sigma/rendering";
 
 import { layerBorder } from "./layer";
 import { CreateNodeBorderProgramOptions, DEFAULT_CREATE_NODE_BORDER_OPTIONS } from "./types";
 
 /**
  * Creates a node program that renders nodes with configurable borders.
- * Uses the composable node program system with circle shapes by default.
+ * Uses the node program system with circle shapes by default.
  *
- * For non-circle shapes, use createComposedNodeProgram directly with layerBorder().
+ * For non-circle shapes, use createNodeProgram directly with layerBorder().
  *
  * @param inputOptions - Border configuration options
  * @returns A NodeProgram class for rendering bordered nodes
@@ -41,6 +40,9 @@ import { CreateNodeBorderProgramOptions, DEFAULT_CREATE_NODE_BORDER_OPTIONS } fr
  *   nodeProgramClasses: {
  *     bordered: BorderedProgram,
  *   },
+ *   labelProgramClasses: {
+ *     bordered: BorderedProgram.LabelProgram,
+ *   },
  * });
  * ```
  */
@@ -56,18 +58,21 @@ export function createNodeBorderProgram<
 
   const { borders, drawLabel, drawHover } = options;
 
-  // Create the composed program with circle shape and border layer
-  const BaseProgram = createComposedNodeProgram<N, E, G>({
+  // Create the node program with circle shape and border layer
+  const BaseProgram = createNodeProgram<N, E, G>({
     shape: sdfCircle(),
     layers: [layerBorder({ borders })],
   });
 
   // If custom drawLabel/drawHover are provided, create a subclass with those overrides
   if (drawLabel || drawHover) {
-    return class NodeBorderProgram extends BaseProgram {
+    const CustomProgram = class NodeBorderProgram extends BaseProgram {
       drawLabel = drawLabel;
       drawHover = drawHover;
     };
+    // Copy the static LabelProgram reference
+    CustomProgram.LabelProgram = BaseProgram.LabelProgram;
+    return CustomProgram;
   }
 
   return BaseProgram;

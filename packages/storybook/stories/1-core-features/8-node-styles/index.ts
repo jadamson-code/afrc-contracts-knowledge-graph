@@ -1,5 +1,5 @@
 /**
- * This example demonstrates the composed node program system.
+ * This example demonstrates node styles using the node program system.
  * It shows a 5x4 grid of nodes where:
  * - Each column uses a different shape (circle, square, triangle, diamond)
  * - Each row uses different layers:
@@ -19,7 +19,7 @@ import Sigma from "sigma";
 import {
   LabelProgramType,
   NodeProgramType,
-  createComposedPrograms,
+  createNodeProgram,
   layerFill,
   sdfCircle,
   sdfDiamond,
@@ -175,13 +175,15 @@ export default () => {
     for (const shape of SHAPES) {
       for (const rowType of ROW_LABELS) {
         const nodeType = `${shape}-${rowType}`;
-        const { NodeProgram, LabelProgram } = createComposedPrograms({
+        const NodeProgram = createNodeProgram({
           shape: getShape(shape),
           layers: getLayers(rowType),
           rotateWithCamera,
         });
         nodePrograms[nodeType] = NodeProgram;
-        labelPrograms[nodeType] = LabelProgram;
+        if (NodeProgram.LabelProgram) {
+          labelPrograms[nodeType] = NodeProgram.LabelProgram;
+        }
       }
     }
 

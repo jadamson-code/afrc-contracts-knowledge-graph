@@ -6,14 +6,20 @@
  *
  * @module
  */
-import { numberToGLSLFloat } from "../utils";
-import { AttributeSpecification, ComposedProgramOptions, FragmentLayer, SDFShape } from "./types";
+import { numberToGLSLFloat } from "../../utils";
+import { AttributeSpecification, FragmentLayer, SDFShape } from "../types";
 
 export interface GeneratedShaders {
   vertexShader: string;
   fragmentShader: string;
   uniforms: string[];
   attributes: AttributeSpecification[];
+}
+
+export interface ShaderGenerationOptions {
+  shape: SDFShape;
+  layers: FragmentLayer[];
+  rotateWithCamera?: boolean;
 }
 
 /**
@@ -149,7 +155,7 @@ ${
   // Same derivation as v_antialiasingWidth which represents ~1 pixel in UV space
   // P pixels in UV space = P * u_correctionRatio / size
   v_pixelToUV = u_correctionRatio / size;
-    
+
   // We use an antialiasing width of 1px (so v_pixelToUV)
   v_antialiasingWidth = v_pixelToUV;
 
@@ -371,7 +377,7 @@ export function collectAttributes(layers: FragmentLayer[]): AttributeSpecificati
 /**
  * Main generator function that produces complete shader code and metadata.
  */
-export function generateShaders(options: ComposedProgramOptions): GeneratedShaders {
+export function generateShaders(options: ShaderGenerationOptions): GeneratedShaders {
   const { shape, layers, rotateWithCamera = false } = options;
 
   return {

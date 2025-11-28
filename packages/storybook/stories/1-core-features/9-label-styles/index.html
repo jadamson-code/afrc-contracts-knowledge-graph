@@ -1,0 +1,45 @@
+<style>
+  html,
+  body,
+  #storybook-root,
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+    font-family: sans-serif;
+  }
+  #controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #ffffffcc;
+    padding: 10px;
+  }
+  h4 {
+    margin: 0;
+  }
+  fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+  fieldset > div {
+    margin-bottom: 0.2em;
+  }
+</style>
+<div id="sigma-container"></div>
+<form id="controls">
+  <fieldset>
+    <h4>Rotation</h4>
+    <div>
+      <input type="checkbox" id="rotate-with-camera" name="rotate-with-camera" />
+      <label for="rotate-with-camera">Rotate nodes with camera</label>
+    </div>
+    <div>
+      <label for="label-angle">Labels angle (degrees):</label>
+      <input type="number" id="label-angle" name="label-angle" value="0" step="5" style="width: 60px" />
+    </div>
+  </fieldset>
+</form>

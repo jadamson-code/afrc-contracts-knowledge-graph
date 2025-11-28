@@ -17,7 +17,7 @@ import { SDFShape } from "../types";
  * @example
  * ```typescript
  * const circleShape = sdfCircle();
- * const program = createComposedNodeProgram({
+ * const program = createNodeProgram({
  *   shape: circleShape,
  *   layers: [layerFill()],
  * });

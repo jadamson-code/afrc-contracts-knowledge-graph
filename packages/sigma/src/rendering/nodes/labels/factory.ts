@@ -1,6 +1,6 @@
 /**
- * Sigma.js Composed Label Program Factory
- * ========================================
+ * Sigma.js Node Label Program Factory
+ * ====================================
  *
  * Factory function that creates a LabelProgram class from an SDF shape definition.
  * The resulting label program uses the shape's SDF to compute exact edge positions,
@@ -14,31 +14,19 @@
  * 3. Supports multiple label positions: right, left, above, below, over
  * 4. Handles camera rotation correctly for both rotating and non-rotating nodes
  *
- * ## Usage
- *
- * Typically used via `createComposedPrograms()` which creates both node and label
- * programs sharing the same shape SDF:
- *
- * ```typescript
- * const { NodeProgram, LabelProgram } = createComposedPrograms({
- *   shape: sdfSquare({ cornerRadius: 0.1 }),
- *   layers: [layerFill()],
- * });
- * ```
- *
  * @module
  */
 import { Attributes } from "graphology-types";
 
-import { DEFAULT_SDF_ATLAS_OPTIONS, GlyphMetrics, SDFAtlasManager } from "../../core/sdf-atlas";
-import type Sigma from "../../sigma";
-import type { LabelDisplayData, LabelPosition, RenderParams } from "../../types";
-import { floatColor } from "../../utils";
-import { LabelProgram } from "../label";
-import type { LabelProgramType } from "../label";
-import { InstancedProgramDefinition, ProgramInfo } from "../utils";
-import { LabelShaderOptions, generateLabelShaders } from "./label-generator";
-import { SDFShape, UniformSpecification } from "./types";
+import { DEFAULT_SDF_ATLAS_OPTIONS, GlyphMetrics, SDFAtlasManager } from "../../../core/sdf-atlas";
+import type Sigma from "../../../sigma";
+import type { LabelDisplayData, LabelPosition, RenderParams } from "../../../types";
+import { floatColor } from "../../../utils";
+import { LabelProgram } from "../../label";
+import type { LabelProgramType } from "../../label";
+import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
+import { LabelOptions, SDFShape, UniformSpecification } from "../types";
+import { LabelShaderOptions, generateLabelShaders } from "./generator";
 
 // ============================================================================
 // Constants
@@ -61,9 +49,9 @@ const POSITION_MODE_MAP: Record<LabelPosition, number> = {
 // ============================================================================
 
 /**
- * Options for creating a composed label program.
+ * Options for creating a label program.
  */
-export interface ComposedLabelProgramOptions {
+export interface CreateLabelProgramOptions {
   /**
    * The SDF shape definition for edge detection.
    * Must match the shape used by the corresponding node program.
@@ -76,6 +64,11 @@ export interface ComposedLabelProgramOptions {
    * When false (default), labels stay screen-aligned.
    */
   rotateWithCamera?: boolean;
+
+  /**
+   * Label styling and behavior options.
+   */
+  label?: LabelOptions;
 }
 
 /**
@@ -95,7 +88,7 @@ interface LabelGlyphCache {
 // ============================================================================
 
 /**
- * Creates a composed label program from an SDF shape.
+ * Creates a label program from an SDF shape.
  *
  * The resulting program renders text labels with shape-aware positioning,
  * using the shape's SDF to compute exact edge distances for any direction.
@@ -105,7 +98,7 @@ interface LabelGlyphCache {
  *
  * @example
  * ```typescript
- * const SquareLabelProgram = createComposedLabelProgram({
+ * const SquareLabelProgram = createLabelProgram({
  *   shape: sdfSquare({ cornerRadius: 0.1 }),
  * });
  *
@@ -114,12 +107,12 @@ interface LabelGlyphCache {
  * });
  * ```
  */
-export function createComposedLabelProgram<
+export function createLabelProgram<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
->(options: ComposedLabelProgramOptions): LabelProgramType<N, E, G> {
-  const { shape, rotateWithCamera = false } = options;
+>(options: CreateLabelProgramOptions): LabelProgramType<N, E, G> {
+  const { shape, rotateWithCamera = false, label: labelOptions = {} } = options;
 
   // Generate shaders at factory creation time (not per-instance)
   const shaderOptions: LabelShaderOptions = { shape, rotateWithCamera };
@@ -141,7 +134,7 @@ export function createComposedLabelProgram<
   // -------------------------------------------------------------------------
   // Return the LabelProgram class
   // -------------------------------------------------------------------------
-  return class ComposedLabelProgram extends LabelProgram<LabelUniform, N, E, G> {
+  return class NodeLabelProgram extends LabelProgram<LabelUniform, N, E, G> {
     /** Static reference to the options used to create this program */
     static readonly programOptions = options;
 
@@ -170,6 +163,9 @@ export function createComposedLabelProgram<
     /** Cache of pre-computed glyph layout data per label */
     private labelGlyphCache: Map<string, LabelGlyphCache> = new Map();
 
+    /** Default font key */
+    private defaultFontKey: string;
+
     // -----------------------------------------------------------------------
     // Constructor
     // -----------------------------------------------------------------------
@@ -185,7 +181,7 @@ export function createComposedLabelProgram<
       // Create and configure WebGL texture for glyph atlas
       this.atlasTexture = gl.createTexture();
       if (!this.atlasTexture) {
-        throw new Error("ComposedLabelProgram: failed to create atlas texture");
+        throw new Error("NodeLabelProgram: failed to create atlas texture");
       }
 
       gl.bindTexture(gl.TEXTURE_2D, this.atlasTexture);
@@ -201,11 +197,12 @@ export function createComposedLabelProgram<
       });
 
       // Register the default font
-      this.atlasManager.registerFont({
-        family: "sans-serif",
-        weight: "normal",
-        style: "normal",
-      });
+      const fontConfig = {
+        family: labelOptions.font?.family || "sans-serif",
+        weight: labelOptions.font?.weight || "normal",
+        style: labelOptions.font?.style || "normal",
+      };
+      this.defaultFontKey = this.atlasManager.registerFont(fontConfig);
     }
 
     // -----------------------------------------------------------------------
@@ -265,13 +262,7 @@ export function createComposedLabelProgram<
       }
 
       const text = data.text;
-      const fontKey =
-        data.fontKey ||
-        this.atlasManager.getFontKey({
-          family: "sans-serif",
-          weight: "normal",
-          style: "normal",
-        });
+      const fontKey = data.fontKey || this.defaultFontKey;
 
       // Ensure all glyphs exist in the atlas
       this.atlasManager.ensureGlyphs(text, fontKey);
@@ -566,13 +557,7 @@ export function createComposedLabelProgram<
      * @param fontKey Optional font key (defaults to sans-serif)
      */
     ensureGlyphsReady(texts: string[], fontKey?: string): void {
-      const actualFontKey =
-        fontKey ||
-        this.atlasManager.getFontKey({
-          family: "sans-serif",
-          weight: "normal",
-          style: "normal",
-        });
+      const actualFontKey = fontKey || this.defaultFontKey;
 
       // Queue all glyph requests
       for (const text of texts) {

@@ -5,8 +5,8 @@
  * A package for rendering nodes with configurable borders.
  *
  * Main exports:
- * - layerBorder(): Fragment layer factory for use with createComposedNodeProgram
- * - createNodeBorderProgram(): Program factory for backward compatibility (circle shapes)
+ * - layerBorder(): Fragment layer factory for use with createNodeProgram
+ * - createNodeBorderProgram(): Program factory with circle shape
  * - NodeBorderProgram: Pre-configured program with default options
  *
  * @module
@@ -15,7 +15,7 @@ import { NodeProgramType } from "sigma/rendering";
 
 import { createNodeBorderProgram } from "./program";
 
-// Layer factory (main export for new API)
+// Layer factory
 export { layerBorder } from "./layer";
 
 // Program factory (for backward compatibility)

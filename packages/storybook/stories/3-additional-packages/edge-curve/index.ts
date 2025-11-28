@@ -26,7 +26,7 @@ export default () => {
 
   const RENDERERS = [
     { type: "default", renderer: createNodeImageProgram() },
-    { type: "color", renderer: createNodeImageProgram() },
+    { type: "color", renderer: createNodeImageProgram({ drawingMode: "color" }) },
     {
       type: "padding",
       renderer: createNodeImageProgram({
@@ -43,33 +43,7 @@ export default () => {
     {
       type: "center",
       renderer: createNodeImageProgram({
-        keepWithinCircle: true,
         correctCentering: true,
-      }),
-    },
-    {
-      type: "scaled-no-crop",
-      renderer: createNodeImageProgram({
-        size: { mode: "force", value: 256 },
-        drawingMode: "color",
-        keepWithinCircle: false,
-      }),
-    },
-    {
-      type: "scaled-no-crop-centered",
-      renderer: createNodeImageProgram({
-        size: { mode: "force", value: 256 },
-        drawingMode: "color",
-        keepWithinCircle: false,
-        correctCentering: true,
-      }),
-    },
-    {
-      type: "center-color",
-      renderer: createNodeImageProgram({
-        keepWithinCircle: true,
-        correctCentering: true,
-        drawingMode: "color",
       }),
     },
     {
@@ -96,6 +70,13 @@ export default () => {
       type: "center-scaled-color",
       renderer: createNodeImageProgram({
         size: { mode: "force", value: 256 },
+        correctCentering: true,
+        drawingMode: "color",
+      }),
+    },
+    {
+      type: "center-color",
+      renderer: createNodeImageProgram({
         correctCentering: true,
         drawingMode: "color",
       }),

@@ -6,7 +6,7 @@ import template from "./index.html?raw";
 import source from "./index?raw";
 
 const meta: Meta = {
-  id: "composed-node-programs",
+  id: "node-styles",
   title: "Core library/Features showcases",
 };
 export default meta;
@@ -14,7 +14,7 @@ export default meta;
 type Story = StoryObj;
 
 export const story: Story = {
-  name: "Composed node programs",
+  name: "Node styles",
   render: () => template,
   play: wrapStory(play),
   args: {},

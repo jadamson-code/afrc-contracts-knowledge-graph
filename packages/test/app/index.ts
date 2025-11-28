@@ -8,7 +8,6 @@ import {
   EdgeRectangleProgram,
   EdgeTriangleProgram,
   NodeCircleProgram,
-  NodePointProgram,
 } from "sigma/rendering";
 
 // Useful data
@@ -58,7 +57,6 @@ const dependencies: BrowserTestDependencies = {
   data: { arctic, lesMiserables, largeGraph },
   nodePrograms: {
     NodeCircleProgram,
-    NodePointProgram,
     NodeImageProgram: createNodeImageProgram({ debounceTimeout: null }),
   },
   edgePrograms: {

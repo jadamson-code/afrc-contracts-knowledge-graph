@@ -5,7 +5,7 @@
  * A package for rendering nodes with images.
  *
  * Main exports:
- * - layerImage(): Fragment layer factory for use with createComposedNodeProgram
+ * - layerImage(): Fragment layer factory for use with createNodeProgram
  * - createNodeImageProgram(): Program factory with circle shape
  * - NodeImageProgram: Pre-configured program with default options
  * - NodePictogramProgram: Pre-configured program for pictograms
@@ -16,7 +16,7 @@ import { NodeProgramType, layerFill, sdfSquare } from "sigma/rendering";
 
 import { createNodeImageProgram } from "./program";
 
-// Layer factory (main export for new API)
+// Layer factory
 export { layerImage } from "./layer";
 
 // Program factory

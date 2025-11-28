@@ -335,12 +335,12 @@ const suite = [
     name: "programs",
     run: () => {
       const { Graph, Sigma, container, nodePrograms, edgePrograms } = dependencies;
-      const { NodeImageProgram, NodeCircleProgram, NodePointProgram } = nodePrograms;
+      const { NodeImageProgram, NodeCircleProgram } = nodePrograms;
       const { EdgeRectangleProgram, EdgeLineProgram, EdgeArrowProgram, EdgeTriangleProgram } = edgePrograms;
 
       const graph = new Graph();
       graph.addNode("n1", { x: 30, y: 120, size: 15, label: "Node 1", type: "node", color: "#ffcc00" });
-      graph.addNode("n2", { x: 120, y: -30, size: 15, label: "Node 2", type: "fast", color: "#00ffcc" });
+      graph.addNode("n2", { x: 120, y: -30, size: 15, label: "Node 2", type: "node", color: "#00ffcc" });
       graph.addNode("n3", { x: -30, y: -120, size: 15, label: "Node 3", type: "image", color: "#cc00ff" });
       graph.addNode("n4", {
         x: -120,
@@ -361,7 +361,6 @@ const suite = [
       new Sigma(graph, container, {
         nodeProgramClasses: {
           node: NodeCircleProgram,
-          fast: NodePointProgram,
           image: NodeImageProgram,
         },
         edgeProgramClasses: {

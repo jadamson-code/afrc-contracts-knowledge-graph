@@ -26,7 +26,7 @@
  *
  * @module
  */
-import { SDFShape } from "./types";
+import { SDFShape } from "../types";
 
 // ============================================================================
 // Types

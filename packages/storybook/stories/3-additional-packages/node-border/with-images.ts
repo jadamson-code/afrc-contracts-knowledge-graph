@@ -2,7 +2,7 @@ import { layerBorder } from "@sigma/node-border";
 import { layerImage } from "@sigma/node-image";
 import Graph from "graphology";
 import Sigma from "sigma";
-import { createComposedNodeProgram, sdfCircle } from "sigma/rendering";
+import { createNodeProgram, sdfCircle } from "sigma/rendering";
 
 export default () => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -74,8 +74,8 @@ export default () => {
   graph.addEdge("e", "d", { size: 10 });
   graph.addEdge("f", "e", { size: 10 });
 
-  // Using the new composed approach instead of the deprecated createNodeCompoundProgram
-  const NodeProgram = createComposedNodeProgram({
+  // Create a custom node program with border and image layers
+  const NodeProgram = createNodeProgram({
     shape: sdfCircle(),
     layers: [
       layerBorder({

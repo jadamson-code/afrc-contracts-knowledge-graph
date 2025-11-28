@@ -1,10 +1,10 @@
 /**
- * Sigma.js Composed Node Program Factory
- * =======================================
+ * Sigma.js Node Program Factory
+ * ==============================
  *
- * Factory function that creates a NodeProgram from composed shapes and layers.
- * Also provides a unified factory that creates both NodeProgram and LabelProgram
- * sharing the same SDF shape for accurate label positioning.
+ * Factory function that creates a NodeProgram from SDF shapes and fragment layers.
+ * The resulting program includes an automatically generated LabelProgram that uses
+ * the same shape for accurate label positioning.
  *
  * @module
  */
@@ -13,60 +13,66 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { NodeDisplayData, RenderParams } from "../../types";
 import { floatColor } from "../../utils";
-import { LabelProgramType } from "../label";
-import { NodeProgram } from "../node";
-import type { NodeProgramType } from "../node";
 import { ProgramInfo } from "../utils";
-import { generateShaders } from "./generator";
-import { createComposedLabelProgram } from "./label-factory";
+import { NodeProgram, NodeProgramType } from "./base";
+import { createLabelProgram } from "./labels";
+import { generateShaders } from "./shaders";
 import {
-  ComposedProgramOptions,
   FragmentLayer,
   LayerLifecycleContext,
   LayerLifecycleHooks,
+  NodeProgramOptions,
   UniformSpecification,
 } from "./types";
 
 /**
- * Creates a composed node program from an SDF shape and fragment layers.
+ * Creates a node program from an SDF shape and fragment layers.
  * The resulting program renders nodes as quads with the specified shape and layers.
+ * It also includes a static `LabelProgram` property for rendering shape-aware labels.
  *
- * @param options - Configuration for the composed program
+ * @param options - Configuration for the node program
  * @returns A NodeProgram class that can be used with Sigma
  *
  * @example
  * ```typescript
- * import { createComposedNodeProgram, sdfCircle, layerFill } from "sigma/rendering";
+ * import { createNodeProgram, sdfCircle, layerFill } from "sigma/rendering";
  *
- * const CircleProgram = createComposedNodeProgram({
+ * const CircleProgram = createNodeProgram({
  *   shape: sdfCircle(),
  *   layers: [layerFill()],
  * });
  *
  * const sigma = new Sigma(graph, container, {
- *   renderNodes: CircleProgram,
+ *   nodeProgramClasses: { circle: CircleProgram },
+ *   labelProgramClasses: { circle: CircleProgram.LabelProgram },
  * });
  * ```
  *
  * @example
  * ```typescript
- * // Complex example with multiple layers
- * const FancyProgram = createComposedNodeProgram({
+ * // Complex example with multiple layers and label options
+ * const FancyProgram = createNodeProgram({
  *   shape: sdfSquare({ cornerRadius: 0.2 }),
  *   layers: [
  *     layerFill(),
  *     layerImage({ drawingMode: "background", padding: 2 }),
  *     layerBorder({ size: 2, color: "#000000" }),
  *   ],
+ *   label: {
+ *     position: "right",
+ *     margin: 5,
+ *     font: { family: "Arial", weight: "bold" },
+ *     color: "#333333",
+ *   },
  * });
  * ```
  */
-export function createComposedNodeProgram<
+export function createNodeProgram<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
->(options: ComposedProgramOptions): NodeProgramType<N, E, G> {
-  const { shape, rotateWithCamera = false } = options;
+>(options: NodeProgramOptions): NodeProgramType<N, E, G> {
+  const { shape, rotateWithCamera = false, label: labelOptions = {} } = options;
 
   // Mutable layers array - can be regenerated
   let layers = [...options.layers];
@@ -74,12 +80,24 @@ export function createComposedNodeProgram<
   // Generate shaders and collect metadata
   let generated = generateShaders({ shape, layers, rotateWithCamera });
 
-  return class ComposedNodeProgram extends NodeProgram<string, N, E, G> {
+  // Create the label program class with the same shape
+  const LabelProgramClass = createLabelProgram({
+    shape,
+    rotateWithCamera,
+    label: labelOptions,
+  });
+
+  // Create the node program class
+  const NodeProgramClass = class extends NodeProgram<string, N, E, G> {
     static readonly programOptions = options;
+
     // Note: generatedShaders is now a getter to always return current shaders
     static get generatedShaders() {
       return generated;
     }
+
+    // Static reference to the associated LabelProgram
+    static LabelProgram = LabelProgramClass;
 
     // Lifecycle hooks storage (keyed by layer index for uniqueness)
     private layerLifecycles: Map<number, LayerLifecycleHooks> = new Map();
@@ -323,63 +341,6 @@ export function createComposedNodeProgram<
       super.kill();
     }
   };
-}
 
-/**
- * Result of createComposedPrograms - contains both node and label program classes.
- */
-export interface ComposedPrograms<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> {
-  /** Node program class for rendering nodes */
-  NodeProgram: NodeProgramType<N, E, G>;
-  /** Label program class for rendering labels with shape-aware positioning */
-  LabelProgram: LabelProgramType<N, E, G>;
-}
-
-/**
- * Creates both node and label programs from an SDF shape and fragment layers.
- * The label program uses the same shape's SDF to compute accurate edge positions
- * for label placement.
- *
- * This is the recommended way to create programs when you want labels to be
- * positioned correctly relative to the node shape.
- *
- * @param options - Configuration for the composed programs
- * @returns Object containing both NodeProgram and LabelProgram classes
- *
- * @example
- * ```typescript
- * import { createComposedPrograms, sdfSquare, layerFill } from "sigma/rendering";
- *
- * const { NodeProgram, LabelProgram } = createComposedPrograms({
- *   shape: sdfSquare({ cornerRadius: 0.1 }),
- *   layers: [layerFill()],
- * });
- *
- * const sigma = new Sigma(graph, container, {
- *   nodeProgramClasses: { default: NodeProgram },
- *   labelProgramClasses: { default: LabelProgram },
- * });
- * ```
- */
-export function createComposedPrograms<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
->(options: ComposedProgramOptions): ComposedPrograms<N, E, G> {
-  const { shape, rotateWithCamera = false } = options;
-
-  // Create the node program
-  const NodeProgram = createComposedNodeProgram<N, E, G>(options);
-
-  // Create the label program with the same shape
-  const LabelProgram = createComposedLabelProgram<N, E, G>({
-    shape,
-    rotateWithCamera,
-  });
-
-  return { NodeProgram, LabelProgram };
+  return NodeProgramClass as unknown as NodeProgramType<N, E, G>;
 }

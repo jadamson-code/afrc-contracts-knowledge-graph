@@ -3,13 +3,12 @@
  * ======================================
  *
  * Factory function for creating node piechart programs.
- * Provides backward compatibility with the original API while using
- * the new composable node program system internally.
+ * Uses the node program system with SDF shapes and layers.
  *
  * @module
  */
 import { Attributes } from "graphology-types";
-import { createComposedNodeProgram, NodeProgramType, sdfCircle } from "sigma/rendering";
+import { createNodeProgram, NodeProgramType, sdfCircle } from "sigma/rendering";
 import { PartialButFor } from "sigma/types";
 
 import { layerPiechart } from "./layer";
@@ -17,9 +16,9 @@ import { CreateNodePiechartProgramOptions, DEFAULT_CREATE_NODE_PIECHART_OPTIONS 
 
 /**
  * Creates a node program that renders nodes as piecharts.
- * Uses the composable node program system with circle shapes by default.
+ * Uses the node program system with circle shapes by default.
  *
- * For non-circle shapes, use createComposedNodeProgram directly with layerPiechart().
+ * For non-circle shapes, use createNodeProgram directly with layerPiechart().
  *
  * @param inputOptions - Piechart configuration options
  * @returns A NodeProgram class for rendering piechart nodes
@@ -40,6 +39,9 @@ import { CreateNodePiechartProgramOptions, DEFAULT_CREATE_NODE_PIECHART_OPTIONS 
  *   nodeProgramClasses: {
  *     piechart: PiechartProgram,
  *   },
+ *   labelProgramClasses: {
+ *     piechart: PiechartProgram.LabelProgram,
+ *   },
  * });
  * ```
  */
@@ -55,18 +57,21 @@ export function createNodePiechartProgram<
 
   const { slices, offset, defaultColor, drawLabel, drawHover } = options;
 
-  // Create the composed program with circle shape and piechart layer
-  const BaseProgram = createComposedNodeProgram<N, E, G>({
+  // Create the node program with circle shape and piechart layer
+  const BaseProgram = createNodeProgram<N, E, G>({
     shape: sdfCircle(),
     layers: [layerPiechart({ slices, offset, defaultColor })],
   });
 
   // If custom drawLabel/drawHover are provided, create a subclass with those overrides
   if (drawLabel || drawHover) {
-    return class NodePiechartProgram extends BaseProgram {
+    const CustomProgram = class NodePiechartProgram extends BaseProgram {
       drawLabel = drawLabel;
       drawHover = drawHover;
     };
+    // Copy the static LabelProgram reference
+    CustomProgram.LabelProgram = BaseProgram.LabelProgram;
+    return CustomProgram;
   }
 
   return BaseProgram;

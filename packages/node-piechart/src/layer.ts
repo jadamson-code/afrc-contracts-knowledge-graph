@@ -142,8 +142,8 @@ ${angleCalculations}
  *   ],
  * });
  *
- * // Use with createComposedNodeProgram
- * const program = createComposedNodeProgram({
+ * // Use with createNodeProgram
+ * const program = createNodeProgram({
  *   shape: sdfCircle(),
  *   layers: [piechartLayer],
  * });

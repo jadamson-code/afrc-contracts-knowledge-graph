@@ -30,13 +30,13 @@ export interface LayerFillOptions {
  * @example
  * ```typescript
  * // Use node color (default)
- * const program = createComposedNodeProgram({
+ * const program = createNodeProgram({
  *   shape: sdfCircle(),
  *   layers: [layerFill()],
  * });
  *
  * // Use fixed color
- * const redProgram = createComposedNodeProgram({
+ * const redProgram = createNodeProgram({
  *   shape: sdfCircle(),
  *   layers: [layerFill({ value: "#ff0000" })],
  * });

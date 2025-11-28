@@ -5,13 +5,13 @@
  * A package for rendering nodes as piecharts.
  *
  * Main exports:
- * - layerPiechart(): Fragment layer factory for use with createComposedNodeProgram
- * - createNodePiechartProgram(): Program factory for backward compatibility (circle shapes)
+ * - layerPiechart(): Fragment layer factory for use with createNodeProgram
+ * - createNodePiechartProgram(): Program factory with circle shape
  *
  * @module
  */
 
-// Layer factory (main export for new API)
+// Layer factory
 export { layerPiechart } from "./layer";
 
 // Program factory (for backward compatibility)

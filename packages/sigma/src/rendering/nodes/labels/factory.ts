@@ -113,9 +113,10 @@ export function createLabelProgram<
   G extends Attributes = Attributes,
 >(options: CreateLabelProgramOptions): LabelProgramType<N, E, G> {
   const { shape, rotateWithCamera = false, label: labelOptions = {} } = options;
+  const labelAngle = labelOptions.angle ?? 0;
 
   // Generate shaders at factory creation time (not per-instance)
-  const shaderOptions: LabelShaderOptions = { shape, rotateWithCamera };
+  const shaderOptions: LabelShaderOptions = { shape, rotateWithCamera, angle: labelAngle };
   const generatedShaders = generateLabelShaders(shaderOptions);
 
   // Uniform type for TypeScript
@@ -124,6 +125,7 @@ export function createLabelProgram<
     | "u_sizeRatio"
     | "u_correctionRatio"
     | "u_cameraAngle"
+    | "u_labelAngle"
     | "u_resolution"
     | "u_atlasSize"
     | "u_atlas"
@@ -140,6 +142,9 @@ export function createLabelProgram<
 
     /** Static reference to the generated shader code */
     static readonly generatedShaders = generatedShaders;
+
+    /** Static reference to the label angle */
+    static readonly labelAngle = labelAngle;
 
     // -----------------------------------------------------------------------
     // Instance Properties
@@ -482,6 +487,7 @@ export function createLabelProgram<
       gl.uniform1f(uniformLocations.u_sizeRatio, params.sizeRatio);
       gl.uniform1f(uniformLocations.u_correctionRatio, params.correctionRatio);
       gl.uniform1f(uniformLocations.u_cameraAngle, params.cameraAngle);
+      gl.uniform1f(uniformLocations.u_labelAngle, NodeLabelProgram.labelAngle);
 
       // Viewport size in physical pixels
       gl.uniform2f(uniformLocations.u_resolution, params.width * params.pixelRatio, params.height * params.pixelRatio);

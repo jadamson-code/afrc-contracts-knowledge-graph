@@ -52,6 +52,8 @@ export interface LabelShaderOptions {
   shape: SDFShape;
   /** Whether nodes rotate with the camera (affects edge direction computation) */
   rotateWithCamera?: boolean;
+  /** Label rotation angle in radians (rotates around node center) */
+  angle?: number;
 }
 
 // ============================================================================
@@ -147,6 +149,9 @@ uniform vec2 u_atlasSize;        // Glyph atlas texture dimensions in pixels
 
 // Shape-specific uniforms (for SDF edge detection)
 ${shapeUniformDeclarations}
+
+// Label angle uniform
+uniform float u_labelAngle;      // Label rotation angle in radians
 
 // ============================================================================
 // Varyings (passed to fragment shader)
@@ -282,6 +287,11 @@ ${positionOffsetRotationCode}
   // - cornerOffset * a_charSize: position within the character quad
   vec2 charPixelPos = positionOffset + a_charOffset + cornerOffset * a_charSize;
 
+  // Apply label angle rotation around node center
+  float la_c = cos(u_labelAngle);
+  float la_s = sin(u_labelAngle);
+  charPixelPos = mat2(la_c, -la_s, la_s, la_c) * charPixelPos;
+
   // Convert pixel offset to NDC offset
   // Note: Y is negated because screen Y increases downward, but clip Y increases upward
   vec2 ndcOffset = vec2(charPixelPos.x, -charPixelPos.y) * 2.0 / u_resolution;
@@ -410,6 +420,7 @@ export function collectLabelUniforms(shape: SDFShape): string[] {
     "u_sizeRatio",
     "u_correctionRatio",
     "u_cameraAngle",
+    "u_labelAngle",
     // Label rendering uniforms
     "u_resolution",
     "u_atlasSize",

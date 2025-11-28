@@ -115,7 +115,7 @@ export function createLabelProgram<
   const { shape, rotateWithCamera = false, label: labelOptions = {} } = options;
   const labelAngle = labelOptions.angle ?? 0;
   const labelPosition = labelOptions.position ?? "right";
-  const labelMargin = labelOptions.margin ?? 5;
+  const labelMargin = labelOptions.margin ?? 1;
 
   // Generate shaders at factory creation time (not per-instance)
   const shaderOptions: LabelShaderOptions = { shape, rotateWithCamera, angle: labelAngle };
@@ -188,7 +188,7 @@ export function createLabelProgram<
 
       // Initialize SDF atlas manager for glyph generation
       this.atlasManager = new SDFAtlasManager();
-      this.gamma = Math.SQRT2;
+      this.gamma = 0.105; // Mapbox-style gamma constant for SDF anti-aliasing
       this.sdfBuffer = DEFAULT_SDF_ATLAS_OPTIONS.cutoff;
 
       // Create and configure WebGL texture for glyph atlas
@@ -524,6 +524,7 @@ export function createLabelProgram<
       // SDF rendering parameters
       gl.uniform1f(uniformLocations.u_gamma, this.gamma);
       gl.uniform1f(uniformLocations.u_sdfBuffer, this.sdfBuffer);
+      gl.uniform1f(uniformLocations.u_pixelRatio, params.pixelRatio);
 
       // Shape-specific uniforms (for SDF edge detection)
       for (const uniform of shape.uniforms) {

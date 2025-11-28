@@ -77,9 +77,9 @@ export interface SDFAtlasOptions {
  * Default options for SDFAtlasManager.
  */
 export const DEFAULT_SDF_ATLAS_OPTIONS: SDFAtlasOptions = {
-  fontSize: 24,
-  buffer: 3,
-  radius: 8,
+  fontSize: 48,
+  buffer: 6,
+  radius: 16,
   cutoff: 0.25,
   maxTextureSize: 2048,
   debounceTimeout: 100,

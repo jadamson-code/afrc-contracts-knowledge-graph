@@ -221,7 +221,7 @@ ${step3Code}
   vec2 charPixelPos = positionOffset + a_charOffset + cornerOffset * a_charSize;
 
   // Apply text alignment based on position mode
-  float verticalCenter = a_labelHeight * 0.35;
+  float verticalCenter = a_labelHeight * 0.2;
   float baselineToBottom = a_labelHeight * 0.25;
 
   if (a_positionMode < 0.5) {
@@ -229,7 +229,7 @@ ${step3Code}
     charPixelPos.y += verticalCenter;
   } else if (a_positionMode < 1.5) {
     // Left: right-align and vertically center
-    charPixelPos.x -= a_labelWidth;
+    charPixelPos.x -= a_labelWidth + 1.0;
     charPixelPos.y += verticalCenter;
   } else if (a_positionMode < 2.5) {
     // Above: center horizontally
@@ -288,21 +288,26 @@ in vec4 v_color;
 uniform sampler2D u_atlas;
 uniform float u_gamma;
 uniform float u_sdfBuffer;
+uniform float u_pixelRatio;
 
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec4 fragPicking;
 
 void main() {
-  // Sample SDF value (high = inside glyph, low = outside)
+  // Sample SDF value from atlas (high = inside glyph, low = outside)
   float sdfValue = texture(u_atlas, v_texCoord).a;
 
-  // Convert to signed distance from edge
-  float edgeThreshold = 1.0 - u_sdfBuffer - 0.02;
-  float signedDist = sdfValue - edgeThreshold;
+  // Edge threshold: 1.0 - cutoff = 0.75 for default cutoff=0.25
+  // This is where the glyph edge is located in the SDF
+  float edgeThreshold = 1.0 - u_sdfBuffer;
 
-  // Anti-aliased alpha using screen-space derivatives
-  float edgeWidth = clamp(fwidth(signedDist) * 0.75, 0.01, 0.1);
-  float alpha = smoothstep(-edgeWidth, edgeWidth, signedDist);
+  // Gamma controls the anti-aliasing band width
+  // Scale by pixel ratio for HiDPI support (sharper on high-DPI)
+  float gamma = u_gamma / u_pixelRatio;
+
+  // Pure gamma-based anti-aliasing using smoothstep
+  // The AA band extends from (threshold - gamma) to (threshold + gamma)
+  float alpha = smoothstep(edgeThreshold - gamma, edgeThreshold + gamma, sdfValue);
 
   fragColor = vec4(v_color.rgb, v_color.a * alpha);
   fragPicking = v_color;
@@ -328,6 +333,7 @@ export function collectLabelUniforms(shape: SDFShape): string[] {
     "u_atlas",
     "u_gamma",
     "u_sdfBuffer",
+    "u_pixelRatio",
   ];
 
   for (const uniform of shape.uniforms) {

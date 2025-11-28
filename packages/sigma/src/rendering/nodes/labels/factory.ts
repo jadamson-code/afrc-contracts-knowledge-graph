@@ -209,11 +209,11 @@ export function createLabelProgram<
         this.atlasNeedsUpdate = true;
       });
 
-      // Register the default font
+      // Register the default font (fall back to global settings if not specified)
       const fontConfig = {
-        family: labelOptions.font?.family || "sans-serif",
-        weight: labelOptions.font?.weight || "normal",
-        style: labelOptions.font?.style || "normal",
+        family: labelOptions.font?.family || this.renderer.getSetting("labelFont"),
+        weight: labelOptions.font?.weight || this.renderer.getSetting("labelWeight"),
+        style: labelOptions.font?.style || this.renderer.getSetting("labelStyle"),
       };
       this.defaultFontKey = this.atlasManager.registerFont(fontConfig);
     }

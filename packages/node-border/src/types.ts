@@ -6,8 +6,6 @@
  *
  * @module
  */
-import { Attributes } from "graphology-types";
-import { NodeHoverDrawingFunction, NodeLabelDrawingFunction } from "sigma/rendering";
 
 /**
  * Mode for border size specification.
@@ -51,11 +49,7 @@ export interface LayerBorderOptions {
  * Options for the createNodeBorderProgram() function.
  * Maintains backward compatibility with the original API.
  */
-export interface CreateNodeBorderProgramOptions<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> {
+export interface CreateNodeBorderProgramOptions {
   /**
    * Array of border definitions, from outermost to innermost.
    */
@@ -63,14 +57,6 @@ export interface CreateNodeBorderProgramOptions<
     color: BorderColor;
     size: BorderSize;
   }[];
-  /**
-   * Custom label drawing function.
-   */
-  drawLabel: NodeLabelDrawingFunction<N, E, G> | undefined;
-  /**
-   * Custom hover drawing function.
-   */
-  drawHover: NodeHoverDrawingFunction<N, E, G> | undefined;
 }
 
 /**
@@ -84,9 +70,7 @@ export const DEFAULT_BORDERS: LayerBorderOptions["borders"] = [
 /**
  * Default options for createNodeBorderProgram.
  */
-export const DEFAULT_CREATE_NODE_BORDER_OPTIONS: CreateNodeBorderProgramOptions<Attributes, Attributes, Attributes> = {
-  drawLabel: undefined,
-  drawHover: undefined,
+export const DEFAULT_CREATE_NODE_BORDER_OPTIONS: CreateNodeBorderProgramOptions = {
   borders: DEFAULT_BORDERS,
 };
 

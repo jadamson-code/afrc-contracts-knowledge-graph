@@ -50,30 +50,17 @@ export function createNodeBorderProgram<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
->(inputOptions?: Partial<CreateNodeBorderProgramOptions<N, E, G>>): NodeProgramType<N, E, G> {
-  const options: CreateNodeBorderProgramOptions<N, E, G> = {
-    ...(DEFAULT_CREATE_NODE_BORDER_OPTIONS as CreateNodeBorderProgramOptions<N, E, G>),
+>(inputOptions?: Partial<CreateNodeBorderProgramOptions>): NodeProgramType<N, E, G> {
+  const options: CreateNodeBorderProgramOptions = {
+    ...DEFAULT_CREATE_NODE_BORDER_OPTIONS,
     ...(inputOptions || {}),
   };
 
-  const { borders, drawLabel, drawHover } = options;
+  const { borders } = options;
 
   // Create the node program with circle shape and border layer
-  const BaseProgram = createNodeProgram<N, E, G>({
+  return createNodeProgram<N, E, G>({
     shape: sdfCircle(),
     layers: [layerBorder({ borders })],
   });
-
-  // If custom drawLabel/drawHover are provided, create a subclass with those overrides
-  if (drawLabel || drawHover) {
-    const CustomProgram = class NodeBorderProgram extends BaseProgram {
-      drawLabel = drawLabel;
-      drawHover = drawHover;
-    };
-    // Copy the static LabelProgram reference
-    CustomProgram.LabelProgram = BaseProgram.LabelProgram;
-    return CustomProgram;
-  }
-
-  return BaseProgram;
 }

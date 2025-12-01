@@ -48,7 +48,7 @@ export function createNodeImageProgram<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
->(inputOptions?: Partial<CreateNodeImageProgramOptions<N, E, G>>): NodeProgramType<N, E, G> {
+>(inputOptions?: Partial<CreateNodeImageProgramOptions>): NodeProgramType<N, E, G> {
   // Compute effective MAX_TEXTURE_SIZE from the current WebGL context
   const gl = document.createElement("canvas").getContext("webgl2") as WebGL2RenderingContext;
   const defaultMaxTextureSize = Math.min(
@@ -57,15 +57,13 @@ export function createNodeImageProgram<
   );
   (gl.canvas as HTMLCanvasElement).remove();
 
-  const options: CreateNodeImageProgramOptions<N, E, G> = {
-    ...(DEFAULT_CREATE_NODE_IMAGE_OPTIONS as CreateNodeImageProgramOptions<N, E, G>),
+  const options: CreateNodeImageProgramOptions = {
+    ...DEFAULT_CREATE_NODE_IMAGE_OPTIONS,
     maxTextureSize: defaultMaxTextureSize,
     ...(inputOptions || {}),
   };
 
   const {
-    drawHover,
-    drawLabel,
     drawingMode,
     padding,
     colorAttribute,
@@ -98,12 +96,5 @@ export function createNodeImageProgram<
     ],
   });
 
-  // Extend to add static textureManager and optional drawing functions
-  const ImageProgram = class NodeImageProgram extends BaseProgram {
-    drawLabel = drawLabel;
-    drawHover = drawHover;
-  };
-  // Copy the static LabelProgram reference
-  ImageProgram.LabelProgram = BaseProgram.LabelProgram;
-  return ImageProgram;
+  return BaseProgram;
 }

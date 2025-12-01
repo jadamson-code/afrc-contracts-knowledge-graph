@@ -6,15 +6,7 @@
  *
  * @module
  */
-import { Attributes } from "graphology-types";
-import {
-  FragmentLayer,
-  NodeHoverDrawingFunction,
-  NodeLabelDrawingFunction,
-  SDFShape,
-  layerFill,
-  sdfCircle,
-} from "sigma/rendering";
+import { FragmentLayer, SDFShape, layerFill, sdfCircle } from "sigma/rendering";
 
 import { DEFAULT_TEXTURE_MANAGER_OPTIONS, TextureManagerOptions } from "./texture";
 
@@ -75,11 +67,7 @@ export interface LayerImageOptions {
  * Options for the createNodeImageProgram() function.
  * Maintains backward compatibility with the original API.
  */
-export interface CreateNodeImageProgramOptions<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> extends TextureManagerOptions {
+export interface CreateNodeImageProgramOptions extends TextureManagerOptions {
   /**
    * Drawing mode:
    * - "image": Image is rendered as-is (transparent pixels show through)
@@ -99,16 +87,6 @@ export interface CreateNodeImageProgramOptions<
    * @default layerFill
    */
   backgroundLayerFactory: () => FragmentLayer;
-
-  /**
-   * Custom label drawing function.
-   */
-  drawLabel: NodeLabelDrawingFunction<N, E, G> | undefined;
-
-  /**
-   * Custom hover drawing function.
-   */
-  drawHover: NodeHoverDrawingFunction<N, E, G> | undefined;
 
   /**
    * Padding around the image, expressed as a [0, 1] percentage.
@@ -144,13 +122,11 @@ export const DEFAULT_LAYER_IMAGE_OPTIONS: LayerImageOptions = {
 /**
  * Default options for createNodeImageProgram.
  */
-export const DEFAULT_CREATE_NODE_IMAGE_OPTIONS: CreateNodeImageProgramOptions<Attributes, Attributes, Attributes> = {
+export const DEFAULT_CREATE_NODE_IMAGE_OPTIONS: CreateNodeImageProgramOptions = {
   ...DEFAULT_TEXTURE_MANAGER_OPTIONS,
   drawingMode: "image",
   shapeFactory: sdfCircle,
   backgroundLayerFactory: layerFill,
-  drawLabel: undefined,
-  drawHover: undefined,
   padding: 0,
   colorAttribute: "color",
   imageAttribute: "image",

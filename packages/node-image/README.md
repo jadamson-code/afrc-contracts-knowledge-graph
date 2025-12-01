@@ -43,8 +43,6 @@ Please check the related [Storybook](https://github.com/jacomyal/sigma.js/tree/m
 - `correctCentering` (`boolean`, default: `false`): If `true`, the images are centered on the barycenter of all its non-transparent pixels.
 - `keepWithinCircle`(`boolean`, default: `true`): If `true`, the images are always cropped to the circle.
 - `padding` (`number`, default: `0`): The padding should be expressed as a `[0, 1]` percentage. A padding of `0.05` will always be 5% of the diameter of a node.
-- `drawLabel`(`NodeLabelDrawingFunction | undefined`, default: `undefined`): Will override the `drawLabel` method from the returned class.
-- `drawHover` (`NodeHoverDrawingFunction | undefined`, default: `undefined`): Will override the `drawHover` method from the returned class.
 - `colorAttribute` (`string`, default: `"color"`): Allows using a different node attribute name than `"color"`.
 - `imageAttribute` (`string`, default: `"image"`): Allows using a different node attribute name than `"image"`.
 - `maxTextureSize` (`number`, default: `4096`): Allows specifying a custom maximum texture size.

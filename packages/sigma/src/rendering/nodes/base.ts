@@ -9,9 +9,8 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { NodeDisplayData, RenderParams } from "../../types";
 import { indexToColor } from "../../utils";
+import { HoverProgramType } from "./hovers";
 import { LabelProgramType } from "./labels";
-import { NodeHoverDrawingFunction } from "../node-hover";
-import { NodeLabelDrawingFunction } from "../node-labels";
 import { AbstractProgram, Program } from "../program";
 
 export abstract class AbstractNodeProgram<
@@ -19,8 +18,6 @@ export abstract class AbstractNodeProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 > extends AbstractProgram<N, E, G> {
-  abstract drawLabel: NodeLabelDrawingFunction<N, E, G> | undefined;
-  abstract drawHover: NodeHoverDrawingFunction<N, E, G> | undefined;
   abstract process(nodeIndex: number, offset: number, data: NodeDisplayData): void;
 }
 
@@ -39,8 +36,11 @@ export abstract class NodeProgram<
    */
   static LabelProgram: LabelProgramType | undefined;
 
-  drawLabel: NodeLabelDrawingFunction<N, E, G> | undefined;
-  drawHover: NodeHoverDrawingFunction<N, E, G> | undefined;
+  /**
+   * Static reference to the associated HoverProgram class.
+   * This is set by createNodeProgram() for programs created via the factory.
+   */
+  static HoverProgram: HoverProgramType | undefined;
 
   kill(): void {
     super.kill();
@@ -69,12 +69,11 @@ class _NodeProgramClass<
 > implements AbstractNodeProgram<N, E, G>
 {
   static LabelProgram: LabelProgramType | undefined;
+  static HoverProgram: HoverProgramType | undefined;
 
   constructor(_gl: WebGL2RenderingContext, _pickingBuffer: WebGLFramebuffer | null, _renderer: Sigma<N, E, G>) {
     return this;
   }
-  drawLabel: NodeLabelDrawingFunction<N, E, G> | undefined;
-  drawHover: NodeHoverDrawingFunction<N, E, G> | undefined;
 
   kill(): void {
     return undefined;

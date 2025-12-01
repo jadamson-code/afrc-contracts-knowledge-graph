@@ -5,6 +5,9 @@
  * Exports for all rendering-related functionality.
  */
 
+// GLSL utilities
+export * from "./glsl";
+
 // Node programs
 export * from "./nodes";
 
@@ -15,16 +18,14 @@ export { Program, AbstractProgram } from "./program";
 export type { ProgramType } from "./program";
 export { LabelProgram, AbstractLabelProgram } from "./nodes/labels";
 export type { LabelProgramType } from "./nodes/labels";
+export { HoverProgram, AbstractHoverProgram } from "./nodes/hovers";
+export type { HoverProgramType, HoverDisplayData } from "./nodes/hovers";
 export { Bucket, BucketCollection, clampZIndex } from "./bucket";
 export type { ProcessItemFunction } from "./bucket";
 
 // Canvas helpers
 export type { EdgeLabelDrawingFunction } from "./edge-labels";
 export { drawStraightEdgeLabel } from "./edge-labels";
-export type { NodeLabelDrawingFunction } from "./node-labels";
-export { drawDiscNodeLabel } from "./node-labels";
-export type { NodeHoverDrawingFunction } from "./node-hover";
-export { drawDiscNodeHover } from "./node-hover";
 
 // Other various program helpers
 export * from "./utils";

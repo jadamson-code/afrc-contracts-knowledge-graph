@@ -15,15 +15,10 @@ import { NodeDisplayData, RenderParams } from "../../types";
 import { floatColor } from "../../utils";
 import { ProgramInfo } from "../utils";
 import { NodeProgram, NodeProgramType } from "./base";
+import { createHoverProgram } from "./hovers";
 import { createLabelProgram } from "./labels";
 import { generateShaders } from "./shaders";
-import {
-  FragmentLayer,
-  LayerLifecycleContext,
-  LayerLifecycleHooks,
-  NodeProgramOptions,
-  UniformSpecification,
-} from "./types";
+import { FragmentLayer, LayerLifecycleContext, LayerLifecycleHooks, NodeProgramOptions } from "./types";
 
 /**
  * Creates a node program from an SDF shape and fragment layers.
@@ -87,6 +82,13 @@ export function createNodeProgram<
     label: labelOptions,
   });
 
+  // Create the hover program class with the same shape and label options
+  const HoverProgramClass = createHoverProgram({
+    shape,
+    rotateWithCamera,
+    label: labelOptions,
+  });
+
   // Create the node program class
   const NodeProgramClass = class extends NodeProgram<string, N, E, G> {
     static readonly programOptions = options;
@@ -98,6 +100,9 @@ export function createNodeProgram<
 
     // Static reference to the associated LabelProgram
     static LabelProgram = LabelProgramClass;
+
+    // Static reference to the associated HoverProgram
+    static HoverProgram = HoverProgramClass;
 
     // Lifecycle hooks storage (keyed by layer index for uniqueness)
     private layerLifecycles: Map<number, LayerLifecycleHooks> = new Map();
@@ -256,39 +261,6 @@ export function createNodeProgram<
       return;
     }
 
-    setUniform(uniform: UniformSpecification, { gl, uniformLocations }: ProgramInfo): void {
-      const location = uniformLocations[uniform.name];
-      if (!location) return;
-
-      // Skip sampler2D uniforms (they don't have values)
-      if (uniform.type === "sampler2D") return;
-
-      switch (uniform.type) {
-        case "float":
-          gl.uniform1f(location, uniform.value);
-          break;
-        case "int":
-        case "bool":
-          gl.uniform1i(location, uniform.value);
-          break;
-        case "vec2":
-          gl.uniform2fv(location, uniform.value);
-          break;
-        case "vec3":
-          gl.uniform3fv(location, uniform.value);
-          break;
-        case "vec4":
-          gl.uniform4fv(location, uniform.value);
-          break;
-        case "mat3":
-          gl.uniformMatrix3fv(location, false, uniform.value);
-          break;
-        case "mat4":
-          gl.uniformMatrix4fv(location, false, uniform.value);
-          break;
-      }
-    }
-
     setUniforms(params: RenderParams, programInfo: ProgramInfo): void {
       const { gl, uniformLocations } = programInfo;
 
@@ -308,13 +280,13 @@ export function createNodeProgram<
 
       // Set shape-specific uniforms
       shape.uniforms.forEach((uniform) => {
-        this.setUniform(uniform, programInfo);
+        this.setTypedUniform(uniform, programInfo);
       });
 
       // Set layer-specific uniforms
       layers.forEach((layer) => {
         layer.uniforms.forEach((uniform) => {
-          this.setUniform(uniform, programInfo);
+          this.setTypedUniform(uniform, programInfo);
         });
       });
     }

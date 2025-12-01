@@ -22,10 +22,10 @@ import { DEFAULT_SDF_ATLAS_OPTIONS, GlyphMetrics, SDFAtlasManager } from "../../
 import type Sigma from "../../../sigma";
 import type { LabelDisplayData, LabelPosition, RenderParams } from "../../../types";
 import { floatColor } from "../../../utils";
+import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
+import { LabelOptions, SDFShape } from "../types";
 import { LabelProgram } from "./base";
 import type { LabelProgramType } from "./base";
-import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
-import { LabelOptions, SDFShape, UniformSpecification } from "../types";
 import { LabelShaderOptions, generateLabelShaders } from "./generator";
 
 // ============================================================================
@@ -458,43 +458,6 @@ export function createLabelProgram<
     // -----------------------------------------------------------------------
 
     /**
-     * Sets a shape-specific uniform value.
-     */
-    private setShapeUniform(uniform: UniformSpecification, programInfo: ProgramInfo): void {
-      const { gl, uniformLocations } = programInfo;
-      const location = uniformLocations[uniform.name];
-      if (!location) return;
-
-      // Sampler uniforms are bound separately
-      if (uniform.type === "sampler2D") return;
-
-      switch (uniform.type) {
-        case "float":
-          gl.uniform1f(location, uniform.value);
-          break;
-        case "int":
-        case "bool":
-          gl.uniform1i(location, uniform.value);
-          break;
-        case "vec2":
-          gl.uniform2fv(location, uniform.value);
-          break;
-        case "vec3":
-          gl.uniform3fv(location, uniform.value);
-          break;
-        case "vec4":
-          gl.uniform4fv(location, uniform.value);
-          break;
-        case "mat3":
-          gl.uniformMatrix3fv(location, false, uniform.value);
-          break;
-        case "mat4":
-          gl.uniformMatrix4fv(location, false, uniform.value);
-          break;
-      }
-    }
-
-    /**
      * Sets all uniforms for the label shader.
      */
     setUniforms(params: RenderParams, programInfo: ProgramInfo): void {
@@ -530,7 +493,7 @@ export function createLabelProgram<
 
       // Shape-specific uniforms (for SDF edge detection)
       for (const uniform of shape.uniforms) {
-        this.setShapeUniform(uniform, programInfo);
+        this.setTypedUniform(uniform, programInfo);
       }
     }
 

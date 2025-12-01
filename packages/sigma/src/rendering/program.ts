@@ -9,6 +9,7 @@ import { Attributes } from "graphology-types";
 
 import type Sigma from "../sigma";
 import type { RenderParams } from "../types";
+import { UniformSpecification } from "./nodes";
 import {
   InstancedProgramDefinition,
   ProgramAttributeSpecification,
@@ -280,6 +281,40 @@ export abstract class Program<
 
   hasNothingToRender(): boolean {
     return this.verticesCount === 0;
+  }
+
+  protected setTypedUniform(uniform: UniformSpecification, programInfo: ProgramInfo): void {
+    const { gl, uniformLocations } = programInfo;
+    const location = uniformLocations[uniform.name];
+    if (!location) return;
+
+    // Sampler uniforms are bound separately
+    if (uniform.type === "sampler2D") return;
+
+    switch (uniform.type) {
+      case "float":
+        gl.uniform1f(location, uniform.value);
+        break;
+      case "int":
+      case "bool":
+        gl.uniform1i(location, uniform.value);
+        break;
+      case "vec2":
+        gl.uniform2fv(location, uniform.value);
+        break;
+      case "vec3":
+        gl.uniform3fv(location, uniform.value);
+        break;
+      case "vec4":
+        gl.uniform4fv(location, uniform.value);
+        break;
+      case "mat3":
+        gl.uniformMatrix3fv(location, false, uniform.value);
+        break;
+      case "mat4":
+        gl.uniformMatrix4fv(location, false, uniform.value);
+        break;
+    }
   }
 
   abstract setUniforms(params: RenderParams, programInfo: ProgramInfo): void;

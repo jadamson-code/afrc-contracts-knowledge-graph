@@ -8,6 +8,7 @@
  *
  * @module
  */
+import { generateFindEdgeDistance, GLSL_GET_LABEL_DIRECTION } from "../../glsl";
 import { SDFShape } from "../types";
 
 // ============================================================================
@@ -50,6 +51,11 @@ export function generateLabelVertexShader(options: LabelShaderOptions): string {
     ? `${shapeFunctionName}(uv, size, ${shapeUniformParams})`
     : `${shapeFunctionName}(uv, size)`;
 
+  // Generate findEdgeDistance function using shared utility
+  // Note: labels don't rotate with camera themselves, but they need to query the SDF
+  // in the correct orientation when the shape rotates with camera
+  const findEdgeDistanceCode = generateFindEdgeDistance(shapeCall, false);
+
   // Step 3 computes label offset from node center using the shape's SDF.
   // The offset direction accounts for label angle, and for rotateWithCamera=true,
   // also counter-rotates by camera angle to query the SDF in shape-local space.
@@ -61,7 +67,7 @@ export function generateLabelVertexShader(options: LabelShaderOptions): string {
 
   if (a_positionMode < 4.0) {
     // Base screen direction for this position mode
-    vec2 screenDir = getScreenLabelDirection(a_positionMode);
+    vec2 screenDir = getLabelDirection(a_positionMode);
 
     // Rotate by label angle to get actual offset direction
     float la_c = cos(u_labelAngle);
@@ -87,7 +93,7 @@ export function generateLabelVertexShader(options: LabelShaderOptions): string {
 
   if (a_positionMode < 4.0) {
     // Base screen direction for this position mode
-    vec2 screenDir = getScreenLabelDirection(a_positionMode);
+    vec2 screenDir = getLabelDirection(a_positionMode);
 
     // Rotate by label angle to get actual offset direction
     float la_c = cos(u_labelAngle);
@@ -161,38 +167,8 @@ ${shape.glsl}
 // Helper Functions
 // ============================================================================
 
-/**
- * Binary search for the distance from center to shape edge along a direction.
- */
-float findEdgeDistance(vec2 direction, float size) {
-  float lo = 0.0;
-  float hi = size * 1.5;
-
-  for (int i = 0; i < 10; i++) {
-    float mid = (lo + hi) * 0.5;
-    vec2 uv = direction * mid;
-    float d = ${shapeCall};
-    if (d < 0.0) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-  }
-
-  return (lo + hi) * 0.5;
-}
-
-/**
- * Get screen-space direction for label position mode.
- * Directions use screen coordinates (Y-down).
- */
-vec2 getScreenLabelDirection(float positionMode) {
-  if (positionMode < 0.5) return vec2(1.0, 0.0);   // Right
-  if (positionMode < 1.5) return vec2(-1.0, 0.0);  // Left
-  if (positionMode < 2.5) return vec2(0.0, -1.0);  // Above
-  if (positionMode < 3.5) return vec2(0.0, 1.0);   // Below
-  return vec2(0.0);                                 // Over
-}
+${findEdgeDistanceCode}
+${GLSL_GET_LABEL_DIRECTION}
 
 // ============================================================================
 // Main

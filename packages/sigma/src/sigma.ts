@@ -13,10 +13,13 @@ import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
 import {
   AbstractEdgeProgram,
+  AbstractHoverProgram,
   AbstractLabelProgram,
   AbstractNodeProgram,
   BucketCollection,
   EdgeProgramType,
+  HoverDisplayData,
+  HoverProgramType,
   LabelProgramType,
   NodeProgramType,
 } from "./rendering";
@@ -192,6 +195,7 @@ export default class Sigma<
   // Programs
   private nodePrograms: { [key: string]: AbstractNodeProgram<N, E, G> } = {};
   private nodeHoverPrograms: { [key: string]: AbstractNodeProgram<N, E, G> } = {};
+  private hoverPrograms: { [key: string]: AbstractHoverProgram<N, E, G> } = {};
   private edgePrograms: { [key: string]: AbstractEdgeProgram<N, E, G> } = {};
   private labelPrograms: { [key: string]: AbstractLabelProgram<N, E, G> } = {};
 
@@ -233,7 +237,6 @@ export default class Sigma<
     this.createWebGLContext("stage", { picking: true });
     this.createCanvasContext("edgeLabels");
     this.createCanvasContext("labels");
-    this.createCanvasContext("hovers");
     this.createCanvasContext("mouse", { style: { touchAction: "none", userSelect: "none" } });
 
     // Initial resize
@@ -241,11 +244,7 @@ export default class Sigma<
 
     // Loading programs
     for (const type in this.settings.nodeProgramClasses) {
-      this.registerNodeProgram(
-        type,
-        this.settings.nodeProgramClasses[type],
-        this.settings.nodeHoverProgramClasses[type],
-      );
+      this.registerNodeProgram(type, this.settings.nodeProgramClasses[type]);
     }
 
     for (const type in this.settings.edgeProgramClasses) {
@@ -290,18 +289,13 @@ export default class Sigma<
    *
    * @param  {string}           key              - The program's key, matching the related nodes "type" values.
    * @param  {NodeProgramType}  NodeProgramClass - A nodes program class.
-   * @param  {NodeProgramType?} NodeHoverProgram - A nodes program class to render hovered nodes (optional).
    * @return {Sigma}
    */
-  private registerNodeProgram(
-    key: string,
-    NodeProgramClass: NodeProgramType<N, E, G>,
-    NodeHoverProgram?: NodeProgramType<N, E, G>,
-  ): this {
+  private registerNodeProgram(key: string, NodeProgramClass: NodeProgramType<N, E, G>): this {
     if (this.nodePrograms[key]) this.nodePrograms[key].kill();
     if (this.nodeHoverPrograms[key]) this.nodeHoverPrograms[key].kill();
     this.nodePrograms[key] = new NodeProgramClass(this.webGLContext!, null, this);
-    this.nodeHoverPrograms[key] = new (NodeHoverProgram || NodeProgramClass)(this.webGLContext!, null, this);
+    this.nodeHoverPrograms[key] = new NodeProgramClass(this.webGLContext!, null, this);
     // Register program type with bucket collection (stride will be set properly when used)
     this.itemBuckets.nodes.registerProgram(key, 1);
 
@@ -309,6 +303,12 @@ export default class Sigma<
     const LabelProgramClass = NodeProgramClass.LabelProgram as LabelProgramType<N, E, G> | undefined;
     if (LabelProgramClass) {
       this.registerLabelProgram(key, LabelProgramClass);
+    }
+
+    // Register the associated hover program if the node program has one
+    const HoverProgramClass = NodeProgramClass.HoverProgram as HoverProgramType<N, E, G> | undefined;
+    if (HoverProgramClass) {
+      this.registerHoverProgram(key, HoverProgramClass);
     }
 
     return this;
@@ -348,6 +348,8 @@ export default class Sigma<
     }
     // Unregister the associated label program
     this.unregisterLabelProgram(key);
+    // Unregister the associated hover program
+    this.unregisterHoverProgram(key);
     return this;
   }
 
@@ -414,6 +416,34 @@ export default class Sigma<
       const { [key]: program, ...programs } = this.labelPrograms;
       program.kill();
       this.labelPrograms = programs;
+    }
+    return this;
+  }
+
+  /**
+   * Internal function used to register a hover program
+   *
+   * @param  {string}           key               - The program's key, matching the related node "type" values.
+   * @param  {HoverProgramType} HoverProgramClass - A hover program class.
+   * @return {Sigma}
+   */
+  private registerHoverProgram(key: string, HoverProgramClass: HoverProgramType<N, E, G>): this {
+    if (this.hoverPrograms[key]) this.hoverPrograms[key].kill();
+    this.hoverPrograms[key] = new HoverProgramClass(this.webGLContext!, null, this);
+    return this;
+  }
+
+  /**
+   * Internal function used to unregister a hover program.
+   *
+   * @param  {string} key - The program's key, matching the related node "type" values.
+   * @return {Sigma}
+   */
+  private unregisterHoverProgram(key: string): this {
+    if (this.hoverPrograms[key]) {
+      const { [key]: program, ...programs } = this.hoverPrograms;
+      program.kill();
+      this.hoverPrograms = programs;
     }
     return this;
   }
@@ -1078,16 +1108,10 @@ export default class Sigma<
       }
 
       // Check node programs:
-      if (
-        oldSettings.nodeProgramClasses !== settings.nodeProgramClasses ||
-        oldSettings.nodeHoverProgramClasses !== settings.nodeHoverProgramClasses
-      ) {
+      if (oldSettings.nodeProgramClasses !== settings.nodeProgramClasses) {
         for (const type in settings.nodeProgramClasses) {
-          if (
-            settings.nodeProgramClasses[type] !== oldSettings.nodeProgramClasses[type] ||
-            settings.nodeHoverProgramClasses[type] !== oldSettings.nodeHoverProgramClasses[type]
-          ) {
-            this.registerNodeProgram(type, settings.nodeProgramClasses[type], settings.nodeHoverProgramClasses[type]);
+          if (settings.nodeProgramClasses[type] !== oldSettings.nodeProgramClasses[type]) {
+            this.registerNodeProgram(type, settings.nodeProgramClasses[type]);
           }
         }
         for (const type in oldSettings.nodeProgramClasses) {
@@ -1245,7 +1269,11 @@ export default class Sigma<
     };
 
     // Selecting labels to draw using LabelGrid with viewport culling
-    const labelsToDisplay = this.labelGrid.getLabelsToDisplay(cameraState.ratio, this.settings.labelDensity, gridViewport);
+    const labelsToDisplay = this.labelGrid.getLabelsToDisplay(
+      cameraState.ratio,
+      this.settings.labelDensity,
+      gridViewport,
+    );
     extend(labelsToDisplay, this.nodesWithForcedLabels);
 
     // Collect visible nodes after viewport/threshold culling
@@ -1410,39 +1438,12 @@ export default class Sigma<
 
   /**
    * Method used to render the highlighted nodes.
+   * Renders hover backgrounds, labels, and nodes in WebGL.
    *
    * @return {Sigma}
    */
   private renderHighlightedNodes(): void {
-    const context = this.canvasContexts.hovers;
-
-    // Clearing
-    context.clearRect(0, 0, this.width, this.height);
-
-    // Rendering
-    const render = (node: string): void => {
-      const data = this.nodeDataCache[node];
-
-      const { x, y } = this.framedGraphToViewport(data);
-
-      const size = this.scaleSize(data.size);
-
-      const { defaultDrawNodeHover } = this.settings;
-      const nodeProgram = this.nodePrograms[data.type];
-      const drawHover = nodeProgram?.drawHover || defaultDrawNodeHover;
-      drawHover(
-        context,
-        {
-          key: node,
-          ...data,
-          size,
-          x,
-          y,
-        },
-        this.settings,
-      );
-    };
-
+    // 1. Collect nodes to render
     const nodesToRender: string[] = [];
 
     if (this.hoveredNode && !this.nodeDataCache[this.hoveredNode].hidden) {
@@ -1454,34 +1455,148 @@ export default class Sigma<
       if (node !== this.hoveredNode) nodesToRender.push(node);
     });
 
-    // Draw labels:
-    nodesToRender.forEach((node) => render(node));
+    if (nodesToRender.length === 0) return;
 
-    // Draw WebGL nodes on top of the labels:
-    const nodesPerPrograms: Record<string, number> = {};
+    const renderParams = this.getRenderParams();
 
-    // 1. Count nodes per type:
-    nodesToRender.forEach((node) => {
-      const type = this.nodeDataCache[node].type;
-      nodesPerPrograms[type] = (nodesPerPrograms[type] || 0) + 1;
-    });
-    // 2. Allocate for each type for the proper number of nodes
-    for (const type in this.nodeHoverPrograms) {
-      this.nodeHoverPrograms[type].reallocate(nodesPerPrograms[type] || 0);
-      // Also reset count, to use when rendering:
-      nodesPerPrograms[type] = 0;
-    }
-    // 3. Process all nodes to render:
+    // 2. Prepare hover data with label dimensions
+    const hoverDataByType: Record<string, HoverDisplayData[]> = {};
+
     nodesToRender.forEach((node) => {
       const data = this.nodeDataCache[node];
-      this.nodeHoverPrograms[data.type].process(0, nodesPerPrograms[data.type]++, data);
+
+      // Measure label dimensions if there's a label
+      // These values match the canvas hover implementation in node-hover.ts
+      let labelWidth = 0;
+      let labelHeight = 0;
+      if (data.label) {
+        const context = this.canvasContexts.labels;
+        const { labelSize, labelFont, labelWeight } = this.settings;
+        context.font = `${labelWeight} ${labelSize}px ${labelFont}`;
+        const textWidth = context.measureText(data.label).width;
+        // Match canvas: boxWidth = textWidth + 5, boxHeight = labelSize + 2*PADDING (PADDING=2)
+        labelWidth = Math.round(textWidth + 5);
+        labelHeight = Math.round(labelSize + 4);
+      }
+
+      const hoverData: HoverDisplayData = {
+        key: node,
+        x: data.x,
+        y: data.y,
+        size: data.size,
+        label: data.label,
+        labelWidth,
+        labelHeight,
+        type: data.type,
+      };
+
+      if (!hoverDataByType[data.type]) {
+        hoverDataByType[data.type] = [];
+      }
+      hoverDataByType[data.type].push(hoverData);
     });
-    // 4. Render:
-    const renderParams = this.getRenderParams();
-    for (const type in this.nodeHoverPrograms) {
-      const program = this.nodeHoverPrograms[type];
-      program.render(renderParams);
+
+    // 3. Render hover backgrounds via WebGL (if hover programs are available)
+    for (const type in hoverDataByType) {
+      const hoverProgram = this.hoverPrograms[type];
+      if (hoverProgram) {
+        const items = hoverDataByType[type];
+        hoverProgram.reallocate(items.length);
+        items.forEach((hoverData, index) => {
+          hoverProgram.processHover(index, hoverData);
+        });
+        hoverProgram.render(renderParams);
+      }
     }
+
+    // Helper function to render labels for a set of nodes
+    const renderLabelsForNodes = (nodes: string[]) => {
+      // Count characters per label program type
+      const charactersPerProgram: Record<string, number> = {};
+      nodes.forEach((node) => {
+        const data = this.nodeDataCache[node];
+        if (!data.label) return;
+        const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
+        charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + data.label.length;
+      });
+
+      // Reallocate label programs based on character counts
+      for (const type in this.labelPrograms) {
+        this.labelPrograms[type].reallocate(charactersPerProgram[type] || 0);
+      }
+
+      // Process each node's label into its matching program's buffer
+      const characterOffsets: Record<string, number> = {};
+      nodes.forEach((node) => {
+        const data = this.nodeDataCache[node];
+        if (!data.label) return;
+
+        const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
+        const labelProgram = this.labelPrograms[labelType];
+        if (!labelProgram) return;
+
+        // Build label display data
+        const labelData: LabelDisplayData = {
+          text: data.label,
+          x: data.x,
+          y: data.y,
+          size: this.settings.labelSize,
+          color: this.getLabelColor(data),
+          nodeSize: data.size,
+          margin: this.settings.labelMargin,
+          position: this.settings.defaultLabelPosition,
+          hidden: false,
+          forceLabel: data.forceLabel ?? false,
+          type: labelType,
+          zIndex: data.zIndex ?? 0,
+          parentType: "node",
+          parentKey: node,
+          fontKey: "", // Empty means default font
+        };
+
+        // Process label in its matching program
+        const offset = characterOffsets[labelType] || 0;
+        const charsProcessed = labelProgram.processLabel(node, offset, labelData);
+        characterOffsets[labelType] = offset + charsProcessed;
+      });
+
+      // Render WebGL labels
+      for (const type in this.labelPrograms) {
+        this.labelPrograms[type].render(renderParams);
+      }
+    };
+
+    // Helper function to render nodes
+    const renderNodes = (nodes: string[]) => {
+      const nodesPerPrograms: Record<string, number> = {};
+
+      // Count nodes per type:
+      nodes.forEach((node) => {
+        const type = this.nodeDataCache[node].type;
+        nodesPerPrograms[type] = (nodesPerPrograms[type] || 0) + 1;
+      });
+      // Allocate for each type for the proper number of nodes
+      for (const type in this.nodeHoverPrograms) {
+        this.nodeHoverPrograms[type].reallocate(nodesPerPrograms[type] || 0);
+        // Also reset count, to use when rendering:
+        nodesPerPrograms[type] = 0;
+      }
+      // Process all nodes to render:
+      nodes.forEach((node) => {
+        const data = this.nodeDataCache[node];
+        this.nodeHoverPrograms[data.type].process(0, nodesPerPrograms[data.type]++, data);
+      });
+      // Render:
+      for (const type in this.nodeHoverPrograms) {
+        const program = this.nodeHoverPrograms[type];
+        program.render(renderParams);
+      }
+    };
+
+    // 4. Render nodes on top of hover backgrounds
+    renderNodes(nodesToRender);
+    // 5. Render labels on top of everything
+    renderLabelsForNodes(nodesToRender);
   }
 
   /**
@@ -2411,7 +2526,6 @@ export default class Sigma<
     this.webGLContext!.bindFramebuffer(WebGLRenderingContext.FRAMEBUFFER, null);
     this.webGLContext!.clear(WebGLRenderingContext.COLOR_BUFFER_BIT);
     this.canvasContexts.labels.clearRect(0, 0, this.width, this.height);
-    this.canvasContexts.hovers.clearRect(0, 0, this.width, this.height);
     this.canvasContexts.edgeLabels.clearRect(0, 0, this.width, this.height);
 
     this.emit("afterClear");
@@ -2762,8 +2876,12 @@ export default class Sigma<
     for (const type in this.labelPrograms) {
       this.labelPrograms[type].kill();
     }
+    for (const type in this.hoverPrograms) {
+      this.hoverPrograms[type].kill();
+    }
     this.nodePrograms = {};
     this.nodeHoverPrograms = {};
+    this.hoverPrograms = {};
     this.edgePrograms = {};
     this.labelPrograms = {};
 
@@ -2805,7 +2923,6 @@ export default class Sigma<
    * - `stage` (WebGL)
    * - `edgeLabels`
    * - `labels`
-   * - `hovers`
    * - `mouse`
    *
    * @return {PlainObject<HTMLCanvasElement>} - The collection of canvases.

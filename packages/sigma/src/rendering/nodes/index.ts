@@ -46,6 +46,12 @@ export { layerFill } from "./layers";
 export { createLabelProgram } from "./labels";
 export type { CreateLabelProgramOptions } from "./labels";
 
+// Hover program creation
+export { createHoverProgram } from "./hovers";
+export type { CreateHoverProgramOptions, HoverStyleOptions } from "./hovers";
+export { AbstractHoverProgram, HoverProgram } from "./hovers";
+export type { HoverProgramType, HoverDisplayData } from "./hovers";
+
 // Shader generators (advanced usage)
 export {
   generateShaders,
@@ -63,6 +69,14 @@ export {
   collectLabelUniforms,
 } from "./labels";
 export type { GeneratedLabelShaders, LabelShaderOptions } from "./labels";
+
+export {
+  generateHoverShaders,
+  generateHoverVertexShader,
+  generateHoverFragmentShader,
+  collectHoverUniforms,
+} from "./hovers";
+export type { GeneratedHoverShaders, HoverShaderOptions } from "./hovers";
 
 // Built-in node programs
 export { NodeCircleProgram, NodeSquareProgram } from "./programs";

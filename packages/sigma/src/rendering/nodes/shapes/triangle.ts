@@ -6,6 +6,7 @@
  *
  * @module
  */
+import { GLSL_ROTATE_2D } from "../../glsl";
 import { SDFShape } from "../types";
 
 export type TriangleOptions = {
@@ -36,13 +37,7 @@ export function sdfTriangle(options: TriangleOptions = {}): SDFShape {
 
   // language=GLSL
   const glsl = /*glsl*/ `
-// 2D rotation matrix
-mat2 rotate2D(float angle) {
-  float c = cos(angle);
-  float s = sin(angle);
-  return mat2(c, -s, s, c);
-}
-
+${GLSL_ROTATE_2D}
 float sdf_triangle(vec2 uv, float size, float cornerRadius, float rotation) {
   // Apply rotation if needed
   vec2 p = uv;

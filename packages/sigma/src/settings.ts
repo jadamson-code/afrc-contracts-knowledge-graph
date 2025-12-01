@@ -14,11 +14,7 @@ import {
   EdgeRectangleProgram,
   LabelProgramType,
   NodeCircleProgram,
-  NodeHoverDrawingFunction,
-  NodeLabelDrawingFunction,
   NodeProgramType,
-  drawDiscNodeHover,
-  drawDiscNodeLabel,
   drawStraightEdgeLabel,
 } from "./rendering";
 import { AtLeastOne, EdgeDisplayData, LabelPosition, NodeDisplayData } from "./types";
@@ -55,8 +51,6 @@ export interface Settings<
   edgeLabelColor: { attribute: string; color?: string } | { color: string; attribute?: undefined };
   stagePadding: number;
   defaultDrawEdgeLabel: EdgeLabelDrawingFunction<N, E, G>;
-  defaultDrawNodeLabel: NodeLabelDrawingFunction<N, E, G>;
-  defaultDrawNodeHover: NodeHoverDrawingFunction<N, E, G>;
   minEdgeThickness: number;
   antiAliasingFeather: number;
 
@@ -104,7 +98,6 @@ export interface Settings<
 
   // Program classes
   nodeProgramClasses: { [type: string]: NodeProgramType<N, E, G> };
-  nodeHoverProgramClasses: { [type: string]: NodeProgramType<N, E, G> };
   edgeProgramClasses: { [type: string]: EdgeProgramType<N, E, G> };
   labelProgramClasses: { [type: string]: LabelProgramType<N, E, G> };
 
@@ -141,8 +134,6 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
   edgeLabelColor: { attribute: "color" },
   stagePadding: 30,
   defaultDrawEdgeLabel: drawStraightEdgeLabel,
-  defaultDrawNodeLabel: drawDiscNodeLabel,
-  defaultDrawNodeHover: drawDiscNodeHover,
   minEdgeThickness: 1.7,
   antiAliasingFeather: 1,
 
@@ -187,7 +178,6 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
 
   // Program classes
   nodeProgramClasses: {},
-  nodeHoverProgramClasses: {},
   edgeProgramClasses: {},
   labelProgramClasses: {},
 

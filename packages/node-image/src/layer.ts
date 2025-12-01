@@ -191,19 +191,19 @@ export function layerImage(inputOptions?: Partial<LayerImageOptions>): FragmentL
   // Create initial layer definition
   const initialDefinition = createLayerDefinition(layerOptions, currentTexturesCount);
 
+  // Create or use provided TextureManager (shared across all program instances using this layer)
+  const textureManager =
+    providedTextureManager ??
+    new TextureManager({
+      ...DEFAULT_TEXTURE_MANAGER_OPTIONS,
+      ...textureManagerOptions,
+    });
+
   return {
     ...initialDefinition,
 
     lifecycle: (context: LayerLifecycleContext): LayerLifecycleHooks => {
       const { gl, requestShaderRegeneration, requestRefresh } = context;
-
-      // Create or use provided TextureManager
-      const textureManager =
-        providedTextureManager ??
-        new TextureManager({
-          ...DEFAULT_TEXTURE_MANAGER_OPTIONS,
-          ...textureManagerOptions,
-        });
 
       // WebGL textures
       let textures: WebGLTexture[] = [];

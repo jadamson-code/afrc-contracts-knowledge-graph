@@ -6,8 +6,6 @@
  *
  * @module
  */
-import { Attributes } from "graphology-types";
-import { NodeHoverDrawingFunction, NodeLabelDrawingFunction } from "sigma/rendering";
 import { NonEmptyArray } from "sigma/types";
 
 /**
@@ -73,11 +71,7 @@ export interface LayerPiechartOptions {
  * Options for the createNodePiechartProgram() function.
  * Maintains backward compatibility with the original API.
  */
-export interface CreateNodePiechartProgramOptions<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> {
+export interface CreateNodePiechartProgramOptions {
   /**
    * Array of slice definitions.
    */
@@ -97,16 +91,6 @@ export interface CreateNodePiechartProgramOptions<
    * Default: "#000000"
    */
   defaultColor: string;
-
-  /**
-   * Custom label drawing function.
-   */
-  drawLabel: NodeLabelDrawingFunction<N, E, G> | undefined;
-
-  /**
-   * Custom hover drawing function.
-   */
-  drawHover: NodeHoverDrawingFunction<N, E, G> | undefined;
 }
 
 /**
@@ -118,8 +102,6 @@ export const DEFAULT_COLOR = "#000000";
  * Default options for createNodePiechartProgram.
  */
 export const DEFAULT_CREATE_NODE_PIECHART_OPTIONS: Omit<CreateNodePiechartProgramOptions, "slices"> = {
-  drawLabel: undefined,
-  drawHover: undefined,
   defaultColor: DEFAULT_COLOR,
   offset: { value: 0 },
 };

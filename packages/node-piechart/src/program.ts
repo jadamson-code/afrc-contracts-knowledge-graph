@@ -49,30 +49,17 @@ export function createNodePiechartProgram<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
->(inputOptions: PartialButFor<CreateNodePiechartProgramOptions<N, E, G>, "slices">): NodeProgramType<N, E, G> {
-  const options: CreateNodePiechartProgramOptions<N, E, G> = {
-    ...(DEFAULT_CREATE_NODE_PIECHART_OPTIONS as Omit<CreateNodePiechartProgramOptions<N, E, G>, "slices">),
+>(inputOptions: PartialButFor<CreateNodePiechartProgramOptions, "slices">): NodeProgramType<N, E, G> {
+  const options: CreateNodePiechartProgramOptions = {
+    ...DEFAULT_CREATE_NODE_PIECHART_OPTIONS,
     ...inputOptions,
   };
 
-  const { slices, offset, defaultColor, drawLabel, drawHover } = options;
+  const { slices, offset, defaultColor } = options;
 
   // Create the node program with circle shape and piechart layer
-  const BaseProgram = createNodeProgram<N, E, G>({
+  return createNodeProgram<N, E, G>({
     shape: sdfCircle(),
     layers: [layerPiechart({ slices, offset, defaultColor })],
   });
-
-  // If custom drawLabel/drawHover are provided, create a subclass with those overrides
-  if (drawLabel || drawHover) {
-    const CustomProgram = class NodePiechartProgram extends BaseProgram {
-      drawLabel = drawLabel;
-      drawHover = drawHover;
-    };
-    // Copy the static LabelProgram reference
-    CustomProgram.LabelProgram = BaseProgram.LabelProgram;
-    return CustomProgram;
-  }
-
-  return BaseProgram;
 }

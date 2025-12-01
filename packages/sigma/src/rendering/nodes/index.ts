@@ -59,8 +59,8 @@ export {
   generateFragmentShader,
   collectUniforms,
   collectAttributes,
-} from "./shaders";
-export type { GeneratedShaders, ShaderGenerationOptions } from "./shaders";
+} from "./generator";
+export type { GeneratedShaders, ShaderGenerationOptions } from "./generator";
 
 export {
   generateLabelShaders,

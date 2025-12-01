@@ -77,6 +77,7 @@ export interface DisplayData {
 
 export interface NodeDisplayData extends Coordinates, DisplayData {
   highlighted: boolean;
+  shape?: string; // Shape name for edge clamping (e.g., "circle", "square")
 }
 export type EdgeDisplayData = DisplayData;
 
@@ -227,6 +228,25 @@ export interface LabelDisplayData {
   margin: number;
   /** Font key for multi-font support (references registered font in atlas) */
   fontKey: string;
+}
+
+/**
+ * Display data for an edge label, computed during processing.
+ * Extends LabelDisplayData with edge-specific positioning info.
+ */
+export interface EdgeLabelDisplayData extends LabelDisplayData {
+  /** Source node X position in graph coordinates */
+  sourceX: number;
+  /** Source node Y position in graph coordinates */
+  sourceY: number;
+  /** Target node X position in graph coordinates */
+  targetX: number;
+  /** Target node Y position in graph coordinates */
+  targetY: number;
+  /** Perpendicular offset from path centerline (pixels) */
+  offset: number;
+  /** Path curvature for curved edges (0 for straight) */
+  curvature: number;
 }
 
 /**

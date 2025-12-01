@@ -13,11 +13,12 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { NodeDisplayData, RenderParams } from "../../types";
 import { floatColor } from "../../utils";
+import { registerShape } from "../shapes";
 import { ProgramInfo } from "../utils";
 import { NodeProgram, NodeProgramType } from "./base";
+import { generateShaders } from "./generator";
 import { createHoverProgram } from "./hovers";
 import { createLabelProgram } from "./labels";
-import { generateShaders } from "./shaders";
 import { FragmentLayer, LayerLifecycleContext, LayerLifecycleHooks, NodeProgramOptions } from "./types";
 
 /**
@@ -68,6 +69,9 @@ export function createNodeProgram<
   G extends Attributes = Attributes,
 >(options: NodeProgramOptions): NodeProgramType<N, E, G> {
   const { shape, rotateWithCamera = false, label: labelOptions = {} } = options;
+
+  // Register the shape in the global registry for edge programs to use
+  registerShape(shape);
 
   // Mutable layers array - can be regenerated
   let layers = [...options.layers];

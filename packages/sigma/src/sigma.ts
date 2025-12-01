@@ -12,6 +12,7 @@ import TouchCaptor from "./core/captors/touch";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
 import {
+  AbstractEdgeLabelProgram,
   AbstractEdgeProgram,
   AbstractHoverProgram,
   AbstractLabelProgram,
@@ -198,6 +199,10 @@ export default class Sigma<
   private hoverPrograms: { [key: string]: AbstractHoverProgram<N, E, G> } = {};
   private edgePrograms: { [key: string]: AbstractEdgeProgram<N, E, G> } = {};
   private labelPrograms: { [key: string]: AbstractLabelProgram<N, E, G> } = {};
+  private edgeLabelPrograms: { [key: string]: AbstractEdgeLabelProgram<N, E, G> } = {};
+
+  // Cache mapping node type to shape name (for edge clamping)
+  private nodeTypeShapeCache: { [type: string]: string } = {};
 
   // WebGL Labels (SDF-based rendering)
   private sdfAtlas: SDFAtlasManager | null = null;
@@ -299,6 +304,13 @@ export default class Sigma<
     // Register program type with bucket collection (stride will be set properly when used)
     this.itemBuckets.nodes.registerProgram(key, 1);
 
+    // Cache the shape name for edge clamping
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const programOptions = (NodeProgramClass as any).programOptions;
+    if (programOptions?.shape?.name) {
+      this.nodeTypeShapeCache[key] = programOptions.shape.name;
+    }
+
     // Register the associated label program if the node program has one
     const LabelProgramClass = NodeProgramClass.LabelProgram as LabelProgramType<N, E, G> | undefined;
     if (LabelProgramClass) {
@@ -326,6 +338,15 @@ export default class Sigma<
     this.edgePrograms[key] = new EdgeProgramClass(this.webGLContext!, null, this);
     // Register program type with bucket collection (stride will be set properly when used)
     this.itemBuckets.edges.registerProgram(key, 1);
+
+    // Register edge label program if the edge program has one
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const LabelProgram = (EdgeProgramClass as any).LabelProgram;
+    if (LabelProgram) {
+      if (this.edgeLabelPrograms[key]) this.edgeLabelPrograms[key].kill();
+      this.edgeLabelPrograms[key] = new LabelProgram(this.webGLContext!, null, this);
+    }
+
     return this;
   }
 
@@ -364,6 +385,12 @@ export default class Sigma<
       const { [key]: program, ...programs } = this.edgePrograms;
       program.kill();
       this.edgePrograms = programs;
+    }
+    // Also unregister the associated edge label program
+    if (this.edgeLabelPrograms[key]) {
+      const { [key]: program, ...programs } = this.edgeLabelPrograms;
+      program.kill();
+      this.edgeLabelPrograms = programs;
     }
     return this;
   }
@@ -1365,18 +1392,13 @@ export default class Sigma<
   }
 
   /**
-   * Method used to render edge labels, based on which node labels were
-   * rendered.
+   * Method used to render edge labels using WebGL (SDF-based),
+   * based on which node labels were rendered.
    *
    * @return {Sigma}
    */
   private renderEdgeLabels(): this {
     if (!this.settings.renderEdgeLabels) return this;
-
-    const context = this.canvasContexts.edgeLabels;
-
-    // Clearing
-    context.clearRect(0, 0, this.width, this.height);
 
     const edgeLabelsToDisplay = edgeLabelsToDisplayFromNodes({
       graph: this.graph,
@@ -1385,50 +1407,102 @@ export default class Sigma<
       highlightedNodes: this.highlightedNodes,
     });
     extend(edgeLabelsToDisplay, this.edgesWithForcedLabels);
+    // Clear the canvas layer (we're using WebGL instead)
+    const context = this.canvasContexts.edgeLabels;
+    context.clearRect(0, 0, this.width, this.height);
 
     const displayedLabels = new Set<string>();
+    const params = this.getRenderParams();
+
+    // Count characters per edge label program type
+    const charactersPerProgram: Record<string, number> = {};
+    const edgesToProcess: Array<{
+      edge: string;
+      type: string;
+      sourceData: NodeDisplayData;
+      targetData: NodeDisplayData;
+      edgeData: EdgeDisplayData;
+    }> = [];
+
     for (let i = 0, l = edgeLabelsToDisplay.length; i < l; i++) {
-      const edge = edgeLabelsToDisplay[i],
-        extremities = this.graph.extremities(edge),
+      const edge = edgeLabelsToDisplay[i];
+      if (displayedLabels.has(edge)) continue;
+
+      const extremities = this.graph.extremities(edge),
         sourceData = this.nodeDataCache[extremities[0]],
         targetData = this.nodeDataCache[extremities[1]],
         edgeData = this.edgeDataCache[edge];
 
-      // If the edge was already drawn (like if it is eligible AND has
-      // `forceLabel`), we don't want to draw it again
-      if (displayedLabels.has(edge)) continue;
-
-      // If the edge is hidden we don't need to display its label
-      // NOTE: the test on sourceData & targetData is probably paranoid at this point?
       if (edgeData.hidden || sourceData.hidden || targetData.hidden) {
         continue;
       }
 
-      const { defaultDrawEdgeLabel } = this.settings;
-      const edgeProgram = this.edgePrograms[edgeData.type];
-      const drawLabel = edgeProgram?.drawLabel || defaultDrawEdgeLabel;
-      drawLabel(
-        context,
-        {
-          key: edge,
-          ...edgeData,
-          size: this.scaleSize(edgeData.size),
-        },
-        {
-          key: extremities[0],
-          ...sourceData,
-          ...this.framedGraphToViewport(sourceData),
-          size: this.scaleSize(sourceData.size),
-        },
-        {
-          key: extremities[1],
-          ...targetData,
-          ...this.framedGraphToViewport(targetData),
-          size: this.scaleSize(targetData.size),
-        },
-        this.settings,
-      );
+      if (!edgeData.label) continue;
+
+      // Use the edge's type to find the matching label program
+      const labelType = this.edgeLabelPrograms[edgeData.type] ? edgeData.type : this.settings.defaultEdgeType;
+      if (!this.edgeLabelPrograms[labelType]) continue;
+
+      charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + edgeData.label.length;
+      edgesToProcess.push({ edge, type: labelType, sourceData, targetData, edgeData });
       displayedLabels.add(edge);
+    }
+
+    // Reallocate edge label programs based on visible character counts
+    for (const type in this.edgeLabelPrograms) {
+      this.edgeLabelPrograms[type].reallocate(charactersPerProgram[type] || 0);
+    }
+
+    // Process each visible edge label into its matching program's buffer
+    const characterOffsets: Record<string, number> = {};
+    for (const { edge, type, sourceData, targetData, edgeData } of edgesToProcess) {
+      const labelProgram = this.edgeLabelPrograms[type];
+      if (!labelProgram) continue;
+
+      // Get edge label color
+      const labelColor = this.settings.edgeLabelColor;
+      let color: string;
+      if ("attribute" in labelColor && labelColor.attribute) {
+        color = (edgeData as unknown as Record<string, string>)[labelColor.attribute] || labelColor.color || "#000";
+      } else {
+        color = labelColor.color || "#000";
+      }
+
+      // Build edge label display data
+      const labelData: import("./types").EdgeLabelDisplayData = {
+        text: edgeData.label!,
+        x: (sourceData.x + targetData.x) / 2,
+        y: (sourceData.y + targetData.y) / 2,
+        size: this.settings.edgeLabelSize,
+        color,
+        nodeSize: 0, // Not applicable for edge labels
+        margin: 0,
+        position: "over",
+        hidden: false,
+        forceLabel: edgeData.forceLabel ?? false,
+        type,
+        zIndex: edgeData.zIndex ?? 0,
+        parentType: "edge",
+        parentKey: edge,
+        fontKey: "", // Empty means default font
+        // Edge-specific fields
+        sourceX: sourceData.x,
+        sourceY: sourceData.y,
+        targetX: targetData.x,
+        targetY: targetData.y,
+        offset: this.settings.edgeLabelSize / 2 + 5, // Offset below the edge with 3px margin
+        curvature: (edgeData as unknown as { curvature?: number }).curvature || 0,
+      };
+
+      // Process label in its matching program
+      const offset = characterOffsets[type] || 0;
+      const charsProcessed = labelProgram.processEdgeLabel(edge, offset, labelData);
+      characterOffsets[type] = offset + charsProcessed;
+    }
+
+    // Render WebGL edge labels
+    for (const type in this.edgeLabelPrograms) {
+      this.edgeLabelPrograms[type].render(params);
     }
 
     this.displayedEdgeLabels = displayedLabels;
@@ -1745,6 +1819,12 @@ export default class Sigma<
     let attr = Object.assign({}, this.graph.getNodeAttributes(key)) as Partial<NodeDisplayData>;
     if (this.settings.nodeReducer) attr = this.settings.nodeReducer(key, attr as N);
     const data = applyNodeDefaults(this.settings, key, attr);
+
+    // Set shape from node type for edge clamping
+    if (this.nodeTypeShapeCache[data.type]) {
+      data.shape = this.nodeTypeShapeCache[data.type];
+    }
+
     this.nodeDataCache[key] = data;
 
     // Label:
@@ -2876,6 +2956,9 @@ export default class Sigma<
     for (const type in this.labelPrograms) {
       this.labelPrograms[type].kill();
     }
+    for (const type in this.edgeLabelPrograms) {
+      this.edgeLabelPrograms[type].kill();
+    }
     for (const type in this.hoverPrograms) {
       this.hoverPrograms[type].kill();
     }
@@ -2884,6 +2967,7 @@ export default class Sigma<
     this.hoverPrograms = {};
     this.edgePrograms = {};
     this.labelPrograms = {};
+    this.edgeLabelPrograms = {};
 
     // Cleanup SDF atlas
     if (this.sdfAtlas) {

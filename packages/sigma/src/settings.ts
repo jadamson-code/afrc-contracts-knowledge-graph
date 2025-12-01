@@ -9,13 +9,11 @@ import { Attributes } from "graphology-types";
 
 import {
   EdgeArrowProgram,
-  EdgeLabelDrawingFunction,
+  EdgeLineProgram,
   EdgeProgramType,
-  EdgeRectangleProgram,
   LabelProgramType,
   NodeCircleProgram,
   NodeProgramType,
-  drawStraightEdgeLabel,
 } from "./rendering";
 import { AtLeastOne, EdgeDisplayData, LabelPosition, NodeDisplayData } from "./types";
 import { assign } from "./utils";
@@ -50,7 +48,6 @@ export interface Settings<
   edgeLabelWeight: string;
   edgeLabelColor: { attribute: string; color?: string } | { color: string; attribute?: undefined };
   stagePadding: number;
-  defaultDrawEdgeLabel: EdgeLabelDrawingFunction<N, E, G>;
   minEdgeThickness: number;
   antiAliasingFeather: number;
 
@@ -133,7 +130,6 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
   edgeLabelWeight: "normal",
   edgeLabelColor: { attribute: "color" },
   stagePadding: 30,
-  defaultDrawEdgeLabel: drawStraightEdgeLabel,
   minEdgeThickness: 1.7,
   antiAliasingFeather: 1,
 
@@ -197,7 +193,7 @@ export const DEFAULT_NODE_PROGRAM_CLASSES: Record<string, NodeProgramType> = {
 
 export const DEFAULT_EDGE_PROGRAM_CLASSES: Record<string, EdgeProgramType> = {
   arrow: EdgeArrowProgram,
-  line: EdgeRectangleProgram,
+  line: EdgeLineProgram,
 };
 
 // Default label program classes for WebGL SDF-based rendering

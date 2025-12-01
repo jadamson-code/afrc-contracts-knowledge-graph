@@ -8,13 +8,11 @@ import FA2Layout from "graphology-layout-forceatlas2/worker";
 import circlepack from "graphology-layout/circlepack";
 import seedrandom from "seedrandom";
 import Sigma from "sigma";
-import { EdgeLineProgram, EdgeRectangleProgram } from "sigma/rendering";
 
 const DEFAULT_ARGS = {
   order: 5000,
   size: 1000,
   clusters: 3,
-  edgesRenderer: "edges-default",
 };
 
 export default () => {
@@ -42,7 +40,6 @@ export default () => {
     size: +document.querySelector<HTMLInputElement>("#size")!.value,
     clusters: +document.querySelector<HTMLInputElement>("#clusters")!.value,
     debugPicking: document.querySelector<HTMLInputElement>("[name=debug-picking]")!.checked,
-    edgesRenderer: document.querySelector<HTMLInputElement>('[name="edges-renderer"]:checked')!.value,
   };
 
   // 3. Generate a graph:
@@ -67,12 +64,7 @@ export default () => {
   const container = document.getElementById("sigma-container") as HTMLElement;
   const renderer = new Sigma(graph, container, {
     defaultEdgeColor: "#e6e6e6",
-    defaultEdgeType: state.edgesRenderer,
     DEBUG_displayPickingLayer: state.debugPicking,
-    edgeProgramClasses: {
-      "edges-default": EdgeRectangleProgram,
-      "edges-fast": EdgeLineProgram,
-    },
   });
 
   // 5. Enable FA2 button:

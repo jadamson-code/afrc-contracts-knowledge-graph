@@ -201,7 +201,8 @@ export default class Sigma<
   private labelPrograms: { [key: string]: AbstractLabelProgram<N, E, G> } = {};
   private edgeLabelPrograms: { [key: string]: AbstractEdgeLabelProgram<N, E, G> } = {};
 
-  // Cache mapping node type to shape name (for edge clamping)
+  // Cache mapping node type to shape slug (for edge clamping)
+  // The slug encodes shape name, params, and rotateWithCamera flag
   private nodeTypeShapeCache: { [type: string]: string } = {};
 
   // WebGL Labels (SDF-based rendering)
@@ -304,11 +305,12 @@ export default class Sigma<
     // Register program type with bucket collection (stride will be set properly when used)
     this.itemBuckets.nodes.registerProgram(key, 1);
 
-    // Cache the shape name for edge clamping
+    // Cache the shape slug for edge clamping
+    // The slug encodes shape name, uniform values, and rotateWithCamera flag
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const programOptions = (NodeProgramClass as any).programOptions;
-    if (programOptions?.shape?.name) {
-      this.nodeTypeShapeCache[key] = programOptions.shape.name;
+    if (programOptions?.shapeSlug) {
+      this.nodeTypeShapeCache[key] = programOptions.shapeSlug;
     }
 
     // Register the associated label program if the node program has one
@@ -1820,7 +1822,8 @@ export default class Sigma<
     if (this.settings.nodeReducer) attr = this.settings.nodeReducer(key, attr as N);
     const data = applyNodeDefaults(this.settings, key, attr);
 
-    // Set shape from node type for edge clamping
+    // Set shape slug from node type for edge clamping
+    // The slug is used by edge programs to look up the correct shape variant
     if (this.nodeTypeShapeCache[data.type]) {
       data.shape = this.nodeTypeShapeCache[data.type];
     }

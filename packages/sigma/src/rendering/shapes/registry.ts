@@ -6,74 +6,146 @@
  * Edge programs use this registry to access node shape SDFs for shape-aware
  * edge clamping (edges stopping at node boundaries).
  *
+ * Shapes are registered with auto-generated slugs that encode:
+ * - Base shape name (e.g., "square")
+ * - Uniform values (e.g., cornerRadius=0.2)
+ * - rotateWithCamera flag
+ *
+ * This allows multiple variants of the same base shape to coexist.
+ *
  * @module
  */
 import { SDFShape } from "../nodes/types";
+import { numberToGLSLFloat } from "../utils";
 
 /**
- * Global registry mapping shape names to their SDF definitions.
+ * Registered shape with all metadata needed for edge clamping.
  */
-const shapeRegistry = new Map<string, SDFShape>();
+interface RegisteredShape {
+  shape: SDFShape;
+  uniformValues: Record<string, number>;
+  rotatesWithCamera: boolean;
+  slug: string;
+}
 
 /**
- * Map of shape names to their numeric IDs for GPU-side shape selection.
+ * Global registry mapping shape slugs to their full definitions.
+ */
+const shapeRegistry = new Map<string, RegisteredShape>();
+
+/**
+ * Map of shape slugs to their numeric IDs for GPU-side shape selection.
  * IDs are assigned incrementally as shapes are registered.
  */
 const shapeIdMap = new Map<string, number>();
 let nextShapeId = 0;
 
 /**
- * Registers a shape in the global registry.
+ * Generates a unique slug for a shape variant.
+ * The slug encodes the base name, non-default uniform values, and rotateWithCamera flag.
+ *
+ * Examples:
+ * - "circle" → "circle"
+ * - "square" with cornerRadius=0.2 → "square#cornerRadius=0.2"
+ * - "square" with cornerRadius=0.2 and rotateWithCamera → "square#cornerRadius=0.2#rwc"
+ */
+function generateShapeSlug(shape: SDFShape, rotatesWithCamera: boolean): string {
+  let slug = shape.name;
+
+  // Add non-zero uniform values (sorted for consistency)
+  const nonZeroParams = shape.uniforms
+    .filter((u) => u.type === "float" && u.value !== undefined && u.value !== 0)
+    .map((u) => `${u.name.replace("u_", "")}=${u.value}`)
+    .sort();
+
+  if (nonZeroParams.length > 0) {
+    slug += "#" + nonZeroParams.join("#");
+  }
+
+  // Add rotateWithCamera flag
+  if (rotatesWithCamera) {
+    slug += "#rwc";
+  }
+
+  return slug;
+}
+
+/**
+ * Registers a shape variant in the global registry.
  * Called automatically by createNodeProgram() when a node program is created.
  *
  * @param shape - The SDF shape to register
+ * @param rotatesWithCamera - Whether this shape variant rotates with camera
+ * @returns The generated slug for this shape variant
  */
-export function registerShape(shape: SDFShape): void {
-  if (!shapeRegistry.has(shape.name)) {
-    shapeRegistry.set(shape.name, shape);
-    shapeIdMap.set(shape.name, nextShapeId++);
+export function registerShape(shape: SDFShape, rotatesWithCamera = false): string {
+  const slug = generateShapeSlug(shape, rotatesWithCamera);
+
+  if (!shapeRegistry.has(slug)) {
+    // Extract uniform values
+    const uniformValues: Record<string, number> = {};
+    for (const u of shape.uniforms) {
+      if (u.type === "float" && u.value !== undefined) {
+        uniformValues[u.name] = u.value;
+      }
+    }
+
+    shapeRegistry.set(slug, { shape, uniformValues, rotatesWithCamera, slug });
+    shapeIdMap.set(slug, nextShapeId++);
   }
+
+  return slug;
 }
 
 /**
- * Gets a shape from the registry by name.
+ * Gets a registered shape by its slug.
  *
- * @param name - The shape name (e.g., "circle", "square")
+ * @param slug - The shape slug (e.g., "circle", "square#cornerRadius=0.2")
+ * @returns The RegisteredShape, or undefined if not registered
+ */
+export function getRegisteredShape(slug: string): RegisteredShape | undefined {
+  return shapeRegistry.get(slug);
+}
+
+/**
+ * Gets the SDFShape definition from a slug.
+ *
+ * @param slug - The shape slug
  * @returns The SDFShape definition, or undefined if not registered
  */
-export function getShape(name: string): SDFShape | undefined {
-  return shapeRegistry.get(name);
+export function getShape(slug: string): SDFShape | undefined {
+  return shapeRegistry.get(slug)?.shape;
 }
 
 /**
- * Gets the numeric ID assigned to a shape.
+ * Gets the numeric ID assigned to a shape variant.
  * Used for GPU-side shape selection in edge shaders.
  *
- * @param name - The shape name
+ * @param slug - The shape slug
  * @returns The shape ID, or -1 if not registered
  */
-export function getShapeId(name: string): number {
-  return shapeIdMap.get(name) ?? -1;
+export function getShapeId(slug: string): number {
+  return shapeIdMap.get(slug) ?? -1;
 }
 
 /**
- * Gets all registered shape names.
+ * Gets all registered shape slugs.
  *
- * @returns Array of registered shape names
+ * @returns Array of registered shape slugs
  */
-export function getRegisteredShapeNames(): string[] {
+export function getRegisteredShapeSlugs(): string[] {
   return Array.from(shapeRegistry.keys());
 }
 
 /**
  * Gets the GLSL code for a specific shape's SDF function.
  *
- * @param name - The shape name
+ * @param slug - The shape slug
  * @returns The GLSL code defining the sdf_{name}() function, or empty string if not found
  */
-export function getShapeGLSL(name: string): string {
-  const shape = shapeRegistry.get(name);
-  return shape?.glsl ?? "";
+export function getShapeGLSL(slug: string): string {
+  const registered = shapeRegistry.get(slug);
+  return registered?.shape.glsl ?? "";
 }
 
 /**
@@ -81,15 +153,26 @@ export function getShapeGLSL(name: string): string {
  * Used by edge shaders to have access to all node shape SDFs.
  *
  * Note: This deduplicates common helper functions (like rotate2D) that may
- * appear in multiple shape definitions.
+ * appear in multiple shape definitions, and also deduplicates shape functions
+ * that appear in multiple variants (e.g., "square" and "square#cornerRadius=0.2"
+ * both use the same sdf_square function).
  *
  * @returns Combined GLSL code with all shape SDF functions
  */
 export function getAllShapeGLSL(): string {
   const glslParts: string[] = [];
   const seenHelpers = new Set<string>();
+  const seenShapes = new Set<string>();
 
-  shapeRegistry.forEach((shape) => {
+  shapeRegistry.forEach((registered) => {
+    const { shape } = registered;
+
+    // Skip if we've already included this base shape's GLSL
+    if (seenShapes.has(shape.name)) {
+      return;
+    }
+    seenShapes.add(shape.name);
+
     // Filter out duplicate helper functions that may be included in multiple shapes
     let glsl = shape.glsl;
 
@@ -113,8 +196,10 @@ export function getAllShapeGLSL(): string {
  * Generates GLSL code for a shape selector function.
  * This function takes a shape ID and UV coordinates and returns the SDF value.
  *
- * For edge clamping, we use default values for shape-specific parameters
- * (like cornerRadius, rotation) since we just need the basic shape boundary.
+ * Each shape variant (unique slug) gets its own case with:
+ * - Actual uniform values (cornerRadius, rotation, etc.) baked in
+ * - Counter-rotation applied for shapes that DON'T rotate with camera
+ *   (because their node quad is counter-rotated in the vertex shader)
  *
  * @returns GLSL code for the querySDF() function
  */
@@ -131,24 +216,34 @@ float querySDF(int shapeId, vec2 uv, float size) {
   }
 
   // Generate switch statement for shape selection
-  // Each shape needs to be called with appropriate default parameters
+  // Each shape variant gets its own case with actual param values
   const cases = shapes
-    .map(([name, shape], index) => {
-      // Determine the default parameter values for this shape
-      const paramCount = shape.uniforms.filter((u) => u.type === "float").length;
+    .map(([slug, registered], index) => {
+      const { shape, uniformValues, rotatesWithCamera } = registered;
 
-      if (paramCount === 0) {
-        return `    case ${index}: return sdf_${name}(uv, size);`;
-      } else if (paramCount === 1) {
-        // Shapes with 1 param (e.g., triangle rotation) - use 0.0 as default
-        return `    case ${index}: return sdf_${name}(uv, size, 0.0);`;
-      } else if (paramCount === 2) {
-        // Shapes with 2 params (e.g., square cornerRadius, rotation) - use 0.0 for both
-        return `    case ${index}: return sdf_${name}(uv, size, 0.0, 0.0);`;
+      // Get the ordered float uniform values
+      const floatUniforms = shape.uniforms.filter((u) => u.type === "float");
+      const paramValues = floatUniforms.map((u) => numberToGLSLFloat(uniformValues[u.name] ?? 0));
+
+      // Build the SDF function call
+      let sdfCall: string;
+      if (paramValues.length === 0) {
+        sdfCall = `sdf_${shape.name}(queryUV, size)`;
       } else {
-        // Fallback for shapes with more params
-        const defaults = Array(paramCount).fill("0.0").join(", ");
-        return `    case ${index}: return sdf_${name}(uv, size, ${defaults});`;
+        sdfCall = `sdf_${shape.name}(queryUV, size, ${paramValues.join(", ")})`;
+      }
+
+      // Shapes that don't rotate with camera need counter-rotation:
+      // The node quad is rotated by +θ to stay upright, so edge queries need -θ.
+      if (!rotatesWithCamera) {
+        return `    case ${index}: { // ${slug}
+      float c = cos(u_cameraAngle), s = sin(u_cameraAngle);
+      vec2 queryUV = mat2(c, -s, s, c) * uv;
+      return ${sdfCall};
+    }`;
+      } else {
+        return `    case ${index}: // ${slug}
+      return ${sdfCall.replace("queryUV", "uv")};`;
       }
     })
     .join("\n");
@@ -158,53 +253,6 @@ float querySDF(int shapeId, vec2 uv, float size) {
   switch (shapeId) {
 ${cases}
     default: return length(uv) - size; // Default to circle
-  }
-}
-`;
-}
-
-/**
- * Generates GLSL code for a shape selector that includes additional parameters.
- * This version passes shape-specific uniforms as additional parameters.
- *
- * Note: For shape-aware edge clamping, we typically use the basic querySDF()
- * since we only need to know where the node boundary is, not the exact
- * corner radius or rotation.
- *
- * @returns GLSL code for the querySDFWithParams() function
- */
-export function generateShapeSelectorWithParamsGLSL(): string {
-  const shapes = Array.from(shapeRegistry.entries());
-
-  if (shapes.length === 0) {
-    return /*glsl*/ `
-float querySDFWithParams(int shapeId, vec2 uv, float size, float param1, float param2) {
-  return length(uv) - size;
-}
-`;
-  }
-
-  // Generate switch statement with parameter passing
-  const cases = shapes
-    .map(([name, shape], index) => {
-      // Determine how many params the shape needs
-      const paramCount = shape.uniforms.filter((u) => u.type === "float").length;
-
-      if (paramCount === 0) {
-        return `    case ${index}: return sdf_${name}(uv, size);`;
-      } else if (paramCount === 1) {
-        return `    case ${index}: return sdf_${name}(uv, size, param1);`;
-      } else {
-        return `    case ${index}: return sdf_${name}(uv, size, param1, param2);`;
-      }
-    })
-    .join("\n");
-
-  return /*glsl*/ `
-float querySDFWithParams(int shapeId, vec2 uv, float size, float param1, float param2) {
-  switch (shapeId) {
-${cases}
-    default: return length(uv) - size;
   }
 }
 `;

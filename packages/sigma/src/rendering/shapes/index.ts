@@ -7,12 +7,12 @@
 
 export {
   registerShape,
+  getRegisteredShape,
   getShape,
   getShapeId,
-  getRegisteredShapeNames,
+  getRegisteredShapeSlugs,
   getShapeGLSL,
   getAllShapeGLSL,
   generateShapeSelectorGLSL,
-  generateShapeSelectorWithParamsGLSL,
   clearShapeRegistry,
 } from "./registry";

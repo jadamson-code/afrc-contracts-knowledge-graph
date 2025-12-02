@@ -58,14 +58,19 @@ export function createEdgeProgram<
 >(options: EdgeProgramOptions): EdgeProgramType<N, E, G> {
   const { path, head, tail, filling } = options;
 
-  // Generate shaders
-  let generated: GeneratedEdgeShaders = generateEdgeShaders({ path, head, tail, filling });
+  // Shaders are generated lazily on first instantiation.
+  // This ensures all node shapes are registered before edge shaders are compiled,
+  // since generateShapeSelectorGLSL() reads from the shape registry.
+  let generated: GeneratedEdgeShaders | null = null;
 
   // Create the edge program class
   const EdgeProgramClass = class extends BaseEdgeProgram<string, N, E, G> {
     static readonly programOptions = options;
 
     static get generatedShaders() {
+      if (!generated) {
+        generated = generateEdgeShaders({ path, head, tail, filling });
+      }
       return generated;
     }
 
@@ -75,6 +80,11 @@ export function createEdgeProgram<
     private _pickingBuffer: WebGLFramebuffer | null;
 
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
+      // Generate shaders on first instantiation (after node shapes are registered)
+      if (!generated) {
+        generated = generateEdgeShaders({ path, head, tail, filling });
+      }
+
       super(gl, pickingBuffer, renderer);
       this._pickingBuffer = pickingBuffer;
 
@@ -106,15 +116,18 @@ export function createEdgeProgram<
       // Use TRIANGLES for straight edges (6 vertices), TRIANGLE_STRIP for curved
       const method = path.segments === 1 ? TRIANGLES : TRIANGLE_STRIP;
 
+      // generated is guaranteed to be set by constructor before getDefinition is called
+      const shaders = generated!;
+
       return {
-        VERTICES: generated.verticesPerEdge,
-        VERTEX_SHADER_SOURCE: generated.vertexShader,
-        FRAGMENT_SHADER_SOURCE: generated.fragmentShader,
+        VERTICES: shaders.verticesPerEdge,
+        VERTEX_SHADER_SOURCE: shaders.vertexShader,
+        FRAGMENT_SHADER_SOURCE: shaders.fragmentShader,
         METHOD: method,
-        UNIFORMS: generated.uniforms,
-        ATTRIBUTES: generated.attributes,
-        CONSTANT_ATTRIBUTES: generated.constantAttributes,
-        CONSTANT_DATA: generated.constantData,
+        UNIFORMS: shaders.uniforms,
+        ATTRIBUTES: shaders.attributes,
+        CONSTANT_ATTRIBUTES: shaders.constantAttributes,
+        CONSTANT_DATA: shaders.constantData,
       };
     }
 

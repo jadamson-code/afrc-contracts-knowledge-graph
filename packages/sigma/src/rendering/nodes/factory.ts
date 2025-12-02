@@ -70,8 +70,9 @@ export function createNodeProgram<
 >(options: NodeProgramOptions): NodeProgramType<N, E, G> {
   const { shape, rotateWithCamera = false, label: labelOptions = {} } = options;
 
-  // Register the shape in the global registry for edge programs to use
-  registerShape(shape);
+  // Register the shape variant in the global registry for edge programs to use.
+  // Returns a slug that uniquely identifies this shape variant (including params and rwc).
+  const shapeSlug = registerShape(shape, rotateWithCamera);
 
   // Mutable layers array - can be regenerated
   let layers = [...options.layers];
@@ -95,7 +96,8 @@ export function createNodeProgram<
 
   // Create the node program class
   const NodeProgramClass = class extends NodeProgram<string, N, E, G> {
-    static readonly programOptions = options;
+    // Store program options with the computed shapeSlug for Sigma to access
+    static readonly programOptions = { ...options, shapeSlug };
 
     // Note: generatedShaders is now a getter to always return current shaders
     static get generatedShaders() {

@@ -82,7 +82,6 @@ function collectUniforms(path: EdgePath, head: EdgeExtremity, tail: EdgeExtremit
     "u_zoomRatio",
     "u_pixelRatio",
     "u_cameraAngle",
-    "u_feather",
     "u_minEdgeThickness",
   ]);
 
@@ -173,7 +172,6 @@ function generateVertexShader(
     "u_zoomRatio",
     "u_pixelRatio",
     "u_cameraAngle",
-    "u_feather",
     "u_minEdgeThickness",
   ]);
 
@@ -265,7 +263,6 @@ uniform float u_correctionRatio;
 uniform float u_zoomRatio;
 uniform float u_pixelRatio;
 uniform float u_cameraAngle;
-uniform float u_feather;
 uniform float u_minEdgeThickness;
 
 // Custom uniforms
@@ -280,7 +277,7 @@ out float v_t;
 out float v_tStart;
 out float v_tEnd;
 out float v_side;
-out float v_feather;
+out float v_antialiasingWidth;  // Anti-aliasing width (normalized: u_correctionRatio / thickness)
 out vec2 v_source;
 out vec2 v_target;
 out float v_edgeLength;
@@ -374,7 +371,9 @@ void main() {
 
   // Width factor for geometry expansion (use max of both extremities)
   float widthFactor = max(max(headWidthFactor, tailWidthFactor), 1.0);
-  float featherWidth = u_feather * u_correctionRatio / u_sizeRatio;
+
+  // Anti-aliasing width (~1 pixel, normalized by thickness)
+  float antialiasingWidth = u_correctionRatio / webGLThickness;
 
   // Compute path length and visible length
   float pathLength = path_${pathName}_length(a_source, a_target);
@@ -409,6 +408,9 @@ void main() {
     tHeadStart = mid;
   }
 
+  // Convert to webGL units for geometry expansion
+  float aaWidthWebGL = antialiasingWidth * webGLThickness;
+
   ${
     hasCustomConstantData
       ? `// Custom vertex processing for path with generateConstantData
@@ -421,7 +423,7 @@ void main() {
     a_source, a_target,
     tStart, tEnd, tTailEnd, tHeadStart,
     a_zone, a_zoneT, a_side,
-    webGLThickness, featherWidth,
+    webGLThickness, aaWidthWebGL,
     headWidthFactor, tailWidthFactor,
     position, normal, vertexT
   );
@@ -442,7 +444,7 @@ void main() {
     normal = vec2(-tang.y, tang.x);
     vec2 centerPos = mix(path_${pathName}_position(tStart, a_source, a_target),
                          path_${pathName}_position(tTailEnd, a_source, a_target), zoneT);
-    float halfWidth = webGLThickness * tailWidthFactor * 0.5 + featherWidth;
+    float halfWidth = webGLThickness * tailWidthFactor * 0.5 + aaWidthWebGL;
     position = centerPos + normal * side * halfWidth;
     t = mix(tStart, tTailEnd, zoneT);
 
@@ -450,7 +452,7 @@ void main() {
     // BODY ZONE: follows path curvature with width = 1.0
     t = mix(tTailEnd, tHeadStart, zoneT);
     normal = path_${pathName}_normal(t, a_source, a_target);
-    float halfWidth = webGLThickness * 0.5 + featherWidth;
+    float halfWidth = webGLThickness * 0.5 + aaWidthWebGL;
     position = path_${pathName}_position(t, a_source, a_target) + normal * side * halfWidth;
 
   } else {
@@ -459,7 +461,7 @@ void main() {
     normal = vec2(-tang.y, tang.x);
     vec2 centerPos = mix(path_${pathName}_position(tHeadStart, a_source, a_target),
                          path_${pathName}_position(tEnd, a_source, a_target), zoneT);
-    float halfWidth = webGLThickness * headWidthFactor * 0.5 + featherWidth;
+    float halfWidth = webGLThickness * headWidthFactor * 0.5 + aaWidthWebGL;
     position = centerPos + normal * side * halfWidth;
     t = mix(tHeadStart, tEnd, zoneT);
   }`
@@ -477,7 +479,7 @@ void main() {
   v_tStart = tStart;
   v_tEnd = tEnd;
   v_side = side;
-  v_feather = featherWidth;
+  v_antialiasingWidth = antialiasingWidth;
   v_source = a_source;
   v_target = a_target;
   v_edgeLength = pathLength;
@@ -517,7 +519,6 @@ function generateFragmentShader(
     "u_zoomRatio",
     "u_pixelRatio",
     "u_cameraAngle",
-    "u_feather",
     "u_minEdgeThickness",
   ]);
 
@@ -568,7 +569,7 @@ in float v_t;
 in float v_tStart;
 in float v_tEnd;
 in float v_side;
-in float v_feather;
+in float v_antialiasingWidth;  // Anti-aliasing width (normalized: u_correctionRatio / thickness)
 in vec2 v_source;
 in vec2 v_target;
 in float v_edgeLength;
@@ -584,7 +585,7 @@ in float v_tailWidthRatio;  // Tail width factor
 // Custom varyings
 ${customVaryings}
 
-// Standard uniforms (needed by some path types like taxi)
+// Standard uniforms (needed by some path types)
 uniform float u_sizeRatio;
 uniform float u_correctionRatio;
 uniform float u_cameraAngle;
@@ -633,6 +634,9 @@ void main() {
   // Edge body half-thickness
   float halfThickness = v_thickness * 0.5;
 
+  // Convert normalized AA width to webGL units (~1 pixel)
+  float aaWidthWebGL = v_antialiasingWidth * v_thickness;
+
   // Distance from centerline based on v_side interpolation
   // Width is CONSTANT within each zone:
   // - Tail: v_tailWidthRatio (to contain full arrow shape)
@@ -641,7 +645,7 @@ void main() {
   float zoneWidthFactor = v_zone < 0.5 ? v_tailWidthRatio :
                           v_zone < 1.5 ? 1.0 :
                           v_headWidthRatio;
-  float halfGeometryWidth = halfThickness * zoneWidthFactor + v_feather;
+  float halfGeometryWidth = halfThickness * zoneWidthFactor + aaWidthWebGL;
   float distFromCenter = abs(v_side) * halfGeometryWidth;
 
   // Populate EdgeContext (for filling function)
@@ -651,7 +655,7 @@ void main() {
   context.tangent = path_${pathName}_tangent(v_t, v_source, v_target);
   context.normal = path_${pathName}_normal(v_t, v_source, v_target);
   context.thickness = v_thickness;
-  context.aaWidth = v_feather;
+  context.aaWidth = aaWidthWebGL;
   context.edgeLength = v_edgeLength;
   context.tStart = v_tStart;
   context.tEnd = v_tEnd;
@@ -659,22 +663,44 @@ void main() {
   context.distanceToTarget = (1.0 - tNorm) * v_edgeLength * (v_tEnd - v_tStart);
 
   // Compute SDF based on zone
+  // For head/tail zones, we use SDF union (min) with the body near the BASE
+  // to create seamless connection, but use extremity-only SDF near the TIP
+  float bodySDF = distFromCenter - halfThickness;
   float finalSDF;
+
+  // Base ratios: how far from base toward tip the union extends
+  const float HEAD_BASE_RATIO = ${numberToGLSLFloat(head.baseRatio ?? 0.5)};
+  const float TAIL_BASE_RATIO = ${numberToGLSLFloat(tail.baseRatio ?? 0.5)};
+
   if (v_zone < 0.5) {
-    // TAIL ZONE: uv.x from lengthRatio (tip) to 0 (base)
+    // TAIL ZONE: v_zoneT goes 0 (tip) to 1 (base)
     vec2 uv = vec2((1.0 - v_zoneT) * v_tailLengthRatio, v_side * v_tailWidthRatio * 0.5);
-    finalSDF = extremity_${tail.name}(uv, v_tailLengthRatio, v_tailWidthRatio) * v_thickness;
+    float tailSDF = extremity_${tail.name}(uv, v_tailLengthRatio, v_tailWidthRatio) * v_thickness;
+
+    // Apply union only near base (v_zoneT > 1 - baseRatio)
+    if (v_zoneT > 1.0 - TAIL_BASE_RATIO) {
+      finalSDF = min(tailSDF, bodySDF);
+    } else {
+      finalSDF = tailSDF;
+    }
   } else if (v_zone < 1.5) {
     // BODY ZONE: distance from centerline
-    finalSDF = distFromCenter - halfThickness;
+    finalSDF = bodySDF;
   } else {
-    // HEAD ZONE: uv.x from 0 (base) to lengthRatio (tip)
+    // HEAD ZONE: v_zoneT goes 0 (base) to 1 (tip)
     vec2 uv = vec2(v_zoneT * v_headLengthRatio, v_side * v_headWidthRatio * 0.5);
-    finalSDF = extremity_${head.name}(uv, v_headLengthRatio, v_headWidthRatio) * v_thickness;
+    float headSDF = extremity_${head.name}(uv, v_headLengthRatio, v_headWidthRatio) * v_thickness;
+
+    // Apply union only near base (v_zoneT < baseRatio)
+    if (v_zoneT < HEAD_BASE_RATIO) {
+      finalSDF = min(headSDF, bodySDF);
+    } else {
+      finalSDF = headSDF;
+    }
   }
 
-  // Anti-aliasing and final color
-  float alpha = smoothstep(v_feather, -v_feather, finalSDF);
+  // Anti-aliasing via smoothstep on SDF
+  float alpha = smoothstep(aaWidthWebGL, -aaWidthWebGL, finalSDF);
   if (alpha < 0.01) discard;
 
   vec4 color = filling_${filling.name}(context);

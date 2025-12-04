@@ -61,29 +61,29 @@ export function extremityArrow(options: ArrowExtremityOptions = {}): EdgeExtremi
 
   // language=GLSL
   const glsl = /*glsl*/ `
-// Arrow extremity SDF
-// uv is in arrow-local coordinates:
-//   - x: 0 at base of arrow, lengthRatio at tip
-//   - y: perpendicular offset, normalized to [-widthRatio/2, widthRatio/2]
+// Arrow SDF: triangle with base at x=0, tip at x=lengthRatio
+// uv.x: 0 (base) to lengthRatio (tip), uv.y: [-halfW, +halfW]
+// Returns signed distance (negative inside, positive outside)
 float extremity_arrow(vec2 uv, float lengthRatio, float widthRatio) {
-  // Triangle pointing right (positive x direction)
-  // Base is at x=0, tip is at x=lengthRatio
-  // Width tapers from widthRatio at base to 0 at tip
-
   float x = uv.x;
   float y = abs(uv.y);
+  float halfW = widthRatio * 0.5;
 
-  // If x < 0, we're before the arrow base (in the edge body)
-  if (x < 0.0) return -1.0; // Inside
+  // Past the tip: euclidean distance to tip point
+  if (x > lengthRatio) {
+    return length(vec2(x - lengthRatio, y));
+  }
 
-  // If x > lengthRatio, we're past the tip
-  if (x > lengthRatio) return x - lengthRatio;
+  // Back edge: signed distance to x=0 line
+  float backDist = -x;
 
-  // Triangle edge: y = widthRatio/2 * (1 - x/lengthRatio)
-  float maxY = widthRatio * 0.5 * (1.0 - x / lengthRatio);
+  // Side edge: signed distance to sloped triangle edge
+  float clampedX = max(0.0, x);
+  float maxY = halfW * (1.0 - clampedX / lengthRatio);
+  float sideDist = y - maxY;
 
-  // Distance to triangle edge
-  return y - maxY;
+  // Convex shape SDF = max of half-plane distances
+  return max(backDist, sideDist);
 }
 `;
 

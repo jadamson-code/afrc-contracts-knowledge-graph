@@ -156,6 +156,18 @@ export interface EdgeExtremity {
   margin?: number | { attribute: string };
 
   /**
+   * Ratio of the extremity length (from base toward tip) where the body SDF
+   * union is applied for seamless anti-aliasing at the junction.
+   *
+   * - 0: No union (may cause gap at junction)
+   * - 0.5: Union for first 50% of extremity (default)
+   * - 1: Union for entire extremity (may affect tip shape)
+   *
+   * Default: 0.5
+   */
+  baseRatio?: number;
+
+  /**
    * Additional uniforms required by this extremity.
    */
   uniforms: UniformSpecification[];

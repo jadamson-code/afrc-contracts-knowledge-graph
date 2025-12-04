@@ -73,6 +73,26 @@ export interface EdgePath {
    * Additional per-edge attributes required by this path.
    */
   attributes: AttributeSpecification[];
+
+  /**
+   * Optional custom constant data generator for advanced tessellation.
+   * If provided, overrides the default triangle strip generation.
+   *
+   * This is useful for paths with sharp corners (like taxi with cornerRadius=0)
+   * where the default smooth parametric approach doesn't work well.
+   *
+   * The returned data should contain vertex attributes that the shader will use
+   * to compute final positions. Standard attributes are [t, side] but custom
+   * attributes can be added for special geometry (e.g., miter joins).
+   */
+  generateConstantData?: () => {
+    /** Vertex data as array of attribute values per vertex */
+    data: number[][];
+    /** Attribute specifications for the vertex data */
+    attributes: Array<{ name: string; size: number; type: number }>;
+    /** Number of vertices per edge instance */
+    verticesPerEdge: number;
+  };
 }
 
 /**

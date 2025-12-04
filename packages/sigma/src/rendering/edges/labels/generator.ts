@@ -76,6 +76,7 @@ uniform mat3 u_matrix;
 uniform float u_sizeRatio;
 uniform float u_correctionRatio;
 uniform float u_zoomRatio;
+uniform float u_cameraAngle;
 uniform vec2 u_resolution;
 uniform vec2 u_atlasSize;
 
@@ -270,6 +271,7 @@ export function collectEdgeLabelUniforms(): string[] {
     "u_sizeRatio",
     "u_correctionRatio",
     "u_zoomRatio",
+    "u_cameraAngle",
     "u_resolution",
     "u_atlasSize",
     "u_atlas",

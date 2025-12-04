@@ -25,6 +25,8 @@ export interface EdgeShaderGenerationOptions {
  * Generates constant vertex data for edge tessellation.
  * For straight edges (segments=1): 6 vertices forming 2 triangles
  * For curved edges (segments>1): 2*(segments+1) vertices forming a triangle strip
+ *
+ * @param segments - Number of segments for tessellation
  */
 function generateConstantData(segments: number): {
   data: number[][];
@@ -151,8 +153,15 @@ function collectAttributes(
 /**
  * Generates the vertex shader for edge rendering.
  */
-function generateVertexShader(path: EdgePath, head: EdgeExtremity, tail: EdgeExtremity, filling: EdgeFilling): string {
+function generateVertexShader(
+  path: EdgePath,
+  head: EdgeExtremity,
+  tail: EdgeExtremity,
+  filling: EdgeFilling,
+  constantAttributes: Array<{ name: string; size: number; type: number }>,
+): string {
   const pathName = path.name;
+  const hasCustomConstantData = !!path.generateConstantData;
 
   // Collect custom uniforms (not standard ones)
   const standardUniforms = new Set([
@@ -219,12 +228,19 @@ function generateVertexShader(path: EdgePath, head: EdgeExtremity, tail: EdgeExt
         ? numberToGLSLFloat(tail.margin)
         : `a_${tail.margin.attribute}`;
 
+  // Generate constant attribute declarations
+  const constantAttrDeclarations = constantAttributes
+    .map((attr) => {
+      const glslType = attr.size === 1 ? "float" : `vec${attr.size}`;
+      return `in ${glslType} ${attr.name};`;
+    })
+    .join("\n");
+
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es
 
 // Constant attributes (per vertex)
-in float a_t;           // Parameter along path [0, 1]
-in float a_side;        // -1 for bottom, +1 for top
+${constantAttrDeclarations}
 
 // Per-edge attributes
 in vec2 a_source;       // Source node position
@@ -280,6 +296,9 @@ ${generateShapeSelectorGLSL()}
 
 // Path functions
 ${path.glsl}
+
+// Custom vertex processing (if any)
+${path.vertexGlsl || ""}
 
 // Binary search to find where path exits/enters a node.
 // Coordinate system: localPos is normalized so 1.0 = node quad boundary.
@@ -341,6 +360,29 @@ void main() {
   float tStart = tailLengthValue > 0.0 ? findSourceClampT(a_source, a_sourceSize, int(a_sourceShapeId), a_target, tailMarginValue) : 0.0;
   float tEnd = headLengthValue > 0.0 ? findTargetClampT(a_source, a_target, a_targetSize, int(a_targetShapeId), headMarginValue) : 1.0;
 
+  // Width factors for geometry expansion
+  float headWidthFactor = ${numberToGLSLFloat(head.widthFactor)};
+  float tailWidthFactor = ${numberToGLSLFloat(tail.widthFactor)};
+  float widthFactor = max(headWidthFactor, tailWidthFactor);
+  float featherWidth = u_feather * u_correctionRatio / u_sizeRatio;
+
+  ${
+    hasCustomConstantData
+      ? `// Custom vertex processing for path with generateConstantData
+  vec2 position;
+  vec2 normal;
+  float vertexT;
+  ${pathName}_getVertexPosition(
+    a_source, a_target,
+    tStart, tEnd,
+    a_segment, a_localPos, a_side, a_corner,
+    webGLThickness * widthFactor, featherWidth,
+    position, normal, vertexT
+  );
+
+  float t = vertexT;
+  float side = a_side;`
+      : `// Standard vertex processing
   // Remap a_t from [0,1] to [tStart, tEnd]
   float t = mix(tStart, tEnd, a_t);
 
@@ -351,18 +393,13 @@ void main() {
   vec2 normal = path_${pathName}_normal(t, a_source, a_target);
 
   // Compute offset from path centerline
-  // Use the maximum width factor to ensure we have enough geometry coverage
-  // The actual shaping (arrows, etc.) is done in the fragment shader via SDF
-  float headWidthFactor = ${numberToGLSLFloat(head.widthFactor)};
-  float tailWidthFactor = ${numberToGLSLFloat(tail.widthFactor)};
-  float widthFactor = max(headWidthFactor, tailWidthFactor);
-
   float halfThickness = webGLThickness * widthFactor * 0.5;
-  float featherWidth = u_feather * u_correctionRatio / u_sizeRatio;
   vec2 offset = normal * (halfThickness + featherWidth) * a_side;
 
   // Final position
   vec2 position = pathPos + offset;
+  float side = a_side;`
+  }
 
   gl_Position = vec4((u_matrix * vec3(position, 1.0)).xy, 0.0, 1.0);
 
@@ -375,7 +412,7 @@ void main() {
   v_t = t;
   v_tStart = tStart;
   v_tEnd = tEnd;
-  v_side = a_side;
+  v_side = side;
   v_feather = featherWidth;
   v_source = a_source;
   v_target = a_target;
@@ -470,6 +507,11 @@ in float v_edgeLength;
 
 // Custom varyings
 ${customVaryings}
+
+// Standard uniforms (needed by some path types like taxi)
+uniform float u_sizeRatio;
+uniform float u_correctionRatio;
+uniform float u_cameraAngle;
 
 // Custom uniforms
 ${customUniforms}
@@ -612,11 +654,21 @@ void main() {
 export function generateEdgeShaders(options: EdgeShaderGenerationOptions): GeneratedEdgeShaders {
   const { path, head, tail, filling } = options;
 
-  const constantData = generateConstantData(path.segments);
-  const verticesPerEdge = path.segments === 1 ? 6 : 2 * (path.segments + 1);
+  // Use custom constant data generator if provided, otherwise use default
+  let constantData: { data: number[][]; attributes: Array<{ name: string; size: number; type: number }> };
+  let verticesPerEdge: number;
+
+  if (path.generateConstantData) {
+    const custom = path.generateConstantData();
+    constantData = { data: custom.data, attributes: custom.attributes };
+    verticesPerEdge = custom.verticesPerEdge;
+  } else {
+    constantData = generateConstantData(path.segments);
+    verticesPerEdge = path.segments === 1 ? 6 : 2 * (path.segments + 1);
+  }
 
   return {
-    vertexShader: generateVertexShader(path, head, tail, filling),
+    vertexShader: generateVertexShader(path, head, tail, filling, constantData.attributes),
     fragmentShader: generateFragmentShader(path, head, tail, filling),
     uniforms: collectUniforms(path, head, tail, filling),
     attributes: collectAttributes(path, head, tail, filling),

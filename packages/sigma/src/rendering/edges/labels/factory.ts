@@ -395,6 +395,7 @@ export function createEdgeLabelProgram<
       gl.uniform1f(uniformLocations.u_sizeRatio, params.sizeRatio);
       gl.uniform1f(uniformLocations.u_correctionRatio, params.correctionRatio);
       gl.uniform1f(uniformLocations.u_zoomRatio, params.zoomRatio);
+      gl.uniform1f(uniformLocations.u_cameraAngle, params.cameraAngle);
 
       // Viewport size in physical pixels
       gl.uniform2f(uniformLocations.u_resolution, params.width * params.pixelRatio, params.height * params.pixelRatio);

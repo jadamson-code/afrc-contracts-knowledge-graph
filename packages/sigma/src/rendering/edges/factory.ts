@@ -114,7 +114,8 @@ export function createEdgeProgram<
       const { TRIANGLES, TRIANGLE_STRIP } = WebGL2RenderingContext;
 
       // Use TRIANGLES for straight edges (6 vertices), TRIANGLE_STRIP for curved
-      const method = path.segments === 1 ? TRIANGLES : TRIANGLE_STRIP;
+      // Custom generateConstantData always uses TRIANGLE_STRIP
+      const method = path.generateConstantData ? TRIANGLE_STRIP : path.segments === 1 ? TRIANGLES : TRIANGLE_STRIP;
 
       // generated is guaranteed to be set by constructor before getDefinition is called
       const shaders = generated!;

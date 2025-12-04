@@ -281,6 +281,7 @@ out float v_antialiasingWidth;  // Anti-aliasing width (normalized: u_correction
 out vec2 v_source;
 out vec2 v_target;
 out float v_edgeLength;
+out vec2 v_position;         // World position of the vertex (for position-based distance)
 
 // Zone varyings
 out float v_zone;            // 0=tail, 1=body, 2=head
@@ -483,6 +484,7 @@ void main() {
   v_source = a_source;
   v_target = a_target;
   v_edgeLength = pathLength;
+  v_position = position;
 
   // Zone varyings
   v_zone = zone;
@@ -510,6 +512,7 @@ function generateFragmentShader(
   filling: EdgeFilling,
 ): string {
   const pathName = path.name;
+  const hasCustomConstantData = !!path.generateConstantData;
 
   // Collect custom uniforms
   const standardUniforms = new Set([
@@ -573,6 +576,7 @@ in float v_antialiasingWidth;  // Anti-aliasing width (normalized: u_correctionR
 in vec2 v_source;
 in vec2 v_target;
 in float v_edgeLength;
+in vec2 v_position;          // World position of the fragment
 
 // Zone varyings
 in float v_zone;            // 0=tail, 1=body, 2=head
@@ -627,6 +631,23 @@ ${head.name !== tail.name ? tail.glsl : "// (tail uses same extremity as head)"}
 // Filling function
 ${filling.glsl}
 
+${
+  !path.linearParameterization
+    ? `// Helper: Compute arc length from t0 to t1 along the path using numerical integration
+float computeArcLength(float t0, float t1, vec2 source, vec2 target, int samples) {
+  float arcLen = 0.0;
+  vec2 prev = path_${pathName}_position(t0, source, target);
+  for (int i = 1; i <= samples; i++) {
+    float t = t0 + (t1 - t0) * float(i) / float(samples);
+    vec2 curr = path_${pathName}_position(t, source, target);
+    arcLen += length(curr - prev);
+    prev = curr;
+  }
+  return arcLen;
+}`
+    : ""
+}
+
 void main() {
   // Compute normalized t within visible edge (0 = start, 1 = end)
   float tNorm = (v_t - v_tStart) / max(v_tEnd - v_tStart, 0.0001);
@@ -659,8 +680,29 @@ void main() {
   context.edgeLength = v_edgeLength;
   context.tStart = v_tStart;
   context.tEnd = v_tEnd;
-  context.distanceFromSource = tNorm * v_edgeLength * (v_tEnd - v_tStart);
-  context.distanceToTarget = (1.0 - tNorm) * v_edgeLength * (v_tEnd - v_tStart);
+  // Compute arc distances
+  // - Paths with custom geometry (generateConstantData) use position-based t via closest_t
+  // - Paths with linearParameterization use direct linear formula
+  // - Other paths use numerical integration for accurate arc distances
+  float visibleLength = v_edgeLength * (v_tEnd - v_tStart);
+  ${
+    hasCustomConstantData
+      ? `// Position-based t for paths with custom geometry (e.g., miter corners)
+  float pathT = path_${pathName}_closest_t(v_position, v_source, v_target);
+  float pathTNorm = clamp((pathT - v_tStart) / (v_tEnd - v_tStart), 0.0, 1.0);`
+      : `// Interpolated t for standard parametric paths
+  float pathT = v_t;
+  float pathTNorm = tNorm;`
+  }
+  ${
+    path.linearParameterization
+      ? `// Linear parameterization: t maps directly to arc length
+  context.distanceFromSource = pathTNorm * visibleLength;
+  context.distanceToTarget = (1.0 - pathTNorm) * visibleLength;`
+      : `// Non-linear parameterization: use numerical integration
+  context.distanceFromSource = computeArcLength(v_tStart, pathT, v_source, v_target, 16);
+  context.distanceToTarget = computeArcLength(pathT, v_tEnd, v_source, v_target, 16);`
+  }
 
   // Compute SDF based on zone
   // For head/tail zones, we use SDF union (min) with the body near the BASE

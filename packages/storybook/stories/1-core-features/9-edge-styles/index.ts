@@ -1,12 +1,14 @@
 /**
  * This example demonstrates edge styles using the composable edge program system.
- * It shows a 2x4 grid where:
- * - Each row uses a different path type (straight, curved)
- * - Each column uses a different extremity configuration:
+ * It shows a 6x6 grid where:
+ * - Each row uses a different path type (straight, curved, taxi, cubic)
+ * - Each column uses a different extremity/filling configuration:
  *   - Column 1: No extremity (simple line)
  *   - Column 2: Arrow head at target
  *   - Column 3: Arrow heads at both ends (double arrow)
  *   - Column 4: Arrow head with 5px margin from node
+ *   - Column 5: Dashed filling (transparent gaps, centered)
+ *   - Column 6: Dashed filling with faded gaps, start-aligned, arrow head
  *
  * Each edge displays its label.
  */
@@ -17,6 +19,7 @@ import {
   createNodeProgram,
   extremityArrow,
   extremityNone,
+  fillingDashed,
   fillingPlain,
   layerFill,
   pathCubic,
@@ -74,31 +77,60 @@ export default () => {
     },
   ];
 
-  // Column types (extremity configurations)
+  // Column types (extremity and filling configurations)
   const COLS = [
     {
       name: "no-extremity",
       label: "No extremity",
       head: extremityNone(),
       tail: extremityNone(),
+      filling: fillingPlain(),
     },
     {
       name: "arrow-head",
       label: "Arrow head",
       head: extremityArrow(),
       tail: extremityNone(),
+      filling: fillingPlain(),
     },
     {
       name: "double-arrow",
       label: "Both arrows",
       head: extremityArrow(),
       tail: extremityArrow(),
+      filling: fillingPlain(),
     },
     {
       name: "arrow-margin",
       label: "5px margin",
       head: extremityArrow({ margin: 5 }),
       tail: extremityNone(),
+      filling: fillingPlain(),
+    },
+    {
+      name: "dashed",
+      label: "Dashed",
+      head: extremityNone(),
+      tail: extremityNone(),
+      filling: fillingDashed({
+        dashSize: { thicknessRelative: 1 },
+        gapSize: { thicknessRelative: 1 },
+        gap: "#ffcbd1",
+      }),
+    },
+    {
+      name: "dashed-arrow",
+      label: "Dashed faded",
+      head: extremityArrow(),
+      tail: extremityNone(),
+      filling: fillingDashed({
+        dashSize: { thicknessRelative: 3 },
+        gapSize: { thicknessRelative: 1.5 },
+        solidExtremities: true,
+        solidMargin: { head: 10 },
+        gap: 0.3,
+        align: 1,
+      }),
     },
   ];
 
@@ -116,7 +148,7 @@ export default () => {
         path: row.path,
         head: col.head,
         tail: col.tail,
-        filling: fillingPlain(),
+        filling: col.filling,
       });
     }
   }

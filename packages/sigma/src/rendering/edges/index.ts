@@ -45,7 +45,15 @@ export {
 export { extremityNone, extremityArrow, type ArrowExtremityOptions } from "./extremities";
 
 // Fillings
-export { fillingPlain } from "./fillings";
+export {
+  fillingDashed,
+  fillingPlain,
+  type DashValue,
+  type FillingDashedOptions,
+  type GapFilling,
+  type SolidExtremities,
+  type SolidMargin,
+} from "./fillings";
 
 // Built-in programs
 export { EdgeLineProgram, EdgeArrowProgram, EdgeCurveProgram, EdgeCurvedArrowProgram } from "./programs";

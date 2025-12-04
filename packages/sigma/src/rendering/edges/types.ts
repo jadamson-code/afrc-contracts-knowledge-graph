@@ -101,6 +101,23 @@ export interface EdgePath {
    * Default: 0 (no minimum)
    */
   minBodyLengthRatio?: number;
+
+  /**
+   * Whether the path parameter t maps linearly to arc distance.
+   *
+   * - true: For straight and piecewise-linear paths where arcDistance = t * totalLength.
+   *   The generator will use direct linear formula: distance = t * visibleLength
+   *
+   * - false: For curved paths where speed varies along the curve.
+   *   The generator will use numerical integration for accurate arc distances.
+   *
+   * Default: false (numerical integration is safer for unknown paths)
+   *
+   * Note: When `generateConstantData` is provided, the generator automatically uses
+   * position-based t computation via `path_*_closest_t(fragmentPosition)` to ensure
+   * accurate distances at custom geometry (e.g., miter corners in taxi paths).
+   */
+  linearParameterization?: boolean;
 }
 
 /**

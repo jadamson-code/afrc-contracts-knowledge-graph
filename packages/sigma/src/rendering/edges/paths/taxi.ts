@@ -507,20 +507,30 @@ void taxi_getVertexPosition(
    */
   function generateConstantData() {
     const FLOAT = WebGL2RenderingContext.FLOAT;
-    const TAIL = 0, BODY = 1, HEAD = 2;
+    const TAIL = 0,
+      BODY = 1,
+      HEAD = 2;
 
     const data: number[][] = [
       // Tail: tip to base
-      [TAIL, 0, -1, 0], [TAIL, 0, +1, 0],
-      [TAIL, 1, -1, 0], [TAIL, 1, +1, 0],
+      [TAIL, 0, -1, 0],
+      [TAIL, 0, +1, 0],
+      [TAIL, 1, -1, 0],
+      [TAIL, 1, +1, 0],
       // Body: start, corner1, corner2, end (vertexId = 0,1,2,3)
-      [BODY, 0, -1, 0], [BODY, 0, +1, 0],
-      [BODY, 0.333, -1, 1], [BODY, 0.333, +1, 1],
-      [BODY, 0.667, -1, 2], [BODY, 0.667, +1, 2],
-      [BODY, 1, -1, 3], [BODY, 1, +1, 3],
+      [BODY, 0, -1, 0],
+      [BODY, 0, +1, 0],
+      [BODY, 0.333, -1, 1],
+      [BODY, 0.333, +1, 1],
+      [BODY, 0.667, -1, 2],
+      [BODY, 0.667, +1, 2],
+      [BODY, 1, -1, 3],
+      [BODY, 1, +1, 3],
       // Head: base to tip
-      [HEAD, 0, -1, 0], [HEAD, 0, +1, 0],
-      [HEAD, 1, -1, 0], [HEAD, 1, +1, 0],
+      [HEAD, 0, -1, 0],
+      [HEAD, 0, +1, 0],
+      [HEAD, 1, -1, 0],
+      [HEAD, 1, +1, 0],
     ];
 
     return {
@@ -539,6 +549,7 @@ void taxi_getVertexPosition(
     name: "taxi",
     segments: 1, // Not used when generateConstantData is provided
     minBodyLengthRatio: 2, // Ensure corners stay in body zone
+    linearParameterization: true, // t maps linearly to arc distance (piecewise-linear path)
     glsl,
     vertexGlsl,
     uniforms: [],

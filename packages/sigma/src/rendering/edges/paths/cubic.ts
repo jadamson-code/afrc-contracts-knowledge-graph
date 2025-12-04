@@ -386,6 +386,7 @@ float path_cubic_distance(vec2 p, vec2 source, vec2 target) {
   return {
     name: "cubic",
     segments,
+    minBodyLengthRatio: 0, // No minimum for cubic curves
     glsl,
     vertexGlsl: "", // Uses standard parametric tessellation
     uniforms: [],

@@ -21,51 +21,53 @@ export interface EdgeShaderGenerationOptions {
   filling: EdgeFilling;
 }
 
+// Zone constants: tail extremity, body, head extremity
+const ZONE_TAIL = 0;
+const ZONE_BODY = 1;
+const ZONE_HEAD = 2;
+
 /**
- * Generates constant vertex data for edge tessellation.
- * For straight edges (segments=1): 6 vertices forming 2 triangles
- * For curved edges (segments>1): 2*(segments+1) vertices forming a triangle strip
- *
- * @param segments - Number of segments for tessellation
+ * Generates constant vertex data for zone-based edge geometry.
+ * Each edge is a triangle strip with 3 zones: tail quad, body segments, head quad.
  */
-function generateConstantData(segments: number): {
+function generateZonedConstantData(
+  bodySegments: number,
+  hasHead: boolean,
+  hasTail: boolean,
+): {
   data: number[][];
   attributes: Array<{ name: string; size: number; type: number }>;
+  verticesPerEdge: number;
 } {
-  if (segments === 1) {
-    // Simple quad: 6 vertices (2 triangles)
-    // Each vertex has: [t, side] where t is position along edge and side is -1 or 1
-    return {
-      data: [
-        [0, 1], // Source, top
-        [0, -1], // Source, bottom
-        [1, 1], // Target, top
-        [1, 1], // Target, top
-        [0, -1], // Source, bottom
-        [1, -1], // Target, bottom
-      ],
-      attributes: [
-        { name: "a_t", size: 1, type: FLOAT },
-        { name: "a_side", size: 1, type: FLOAT },
-      ],
-    };
+  // Vertex format: [zone, zoneT, side]
+  const data: number[][] = [];
+
+  if (hasTail) {
+    // Tail: zoneT=0 at tip, zoneT=1 at body junction
+    data.push([ZONE_TAIL, 0, -1], [ZONE_TAIL, 0, +1]);
+    data.push([ZONE_TAIL, 1, -1], [ZONE_TAIL, 1, +1]);
   }
 
-  // Curved path: triangle strip along the curve
-  // Vertices alternate: top, bottom, top, bottom...
-  const data: number[][] = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    data.push([t, 1]); // Top side
-    data.push([t, -1]); // Bottom side
+  // Body: includes junction vertices at zoneT=0 and zoneT=1
+  for (let i = 0; i <= bodySegments; i++) {
+    const t = i / bodySegments;
+    data.push([ZONE_BODY, t, -1], [ZONE_BODY, t, +1]);
+  }
+
+  if (hasHead) {
+    // Head: zoneT=0 at body junction, zoneT=1 at tip
+    data.push([ZONE_HEAD, 0, -1], [ZONE_HEAD, 0, +1]);
+    data.push([ZONE_HEAD, 1, -1], [ZONE_HEAD, 1, +1]);
   }
 
   return {
     data,
     attributes: [
-      { name: "a_t", size: 1, type: FLOAT },
+      { name: "a_zone", size: 1, type: FLOAT },
+      { name: "a_zoneT", size: 1, type: FLOAT },
       { name: "a_side", size: 1, type: FLOAT },
     ],
+    verticesPerEdge: data.length,
   };
 }
 
@@ -283,6 +285,14 @@ out vec2 v_source;
 out vec2 v_target;
 out float v_edgeLength;
 
+// Zone varyings
+out float v_zone;            // 0=tail, 1=body, 2=head
+out float v_zoneT;           // Position within zone [0,1]
+out float v_headLengthRatio; // Head length as ratio of thickness
+out float v_tailLengthRatio; // Tail length as ratio of thickness
+out float v_headWidthRatio;  // Head width factor
+out float v_tailWidthRatio;  // Tail width factor
+
 // Custom varyings
 ${customVaryings}
 
@@ -348,23 +358,56 @@ void main() {
   float webGLThickness = pixelsThickness * u_correctionRatio / u_sizeRatio;
 
   // Find clamped t values (where edge starts/ends at node boundaries)
-  // Note: We only add the margin to the clamp, NOT the arrow length.
-  // The arrow extends from the edge body to touch the node boundary.
   float headMarginValue = ${headMargin};
   float tailMarginValue = ${tailMargin};
 
-  // For extremityNone (length=0), skip clamping - edge goes to node center
-  float headLengthValue = ${numberToGLSLFloat(head.length as number)};
-  float tailLengthValue = ${numberToGLSLFloat(tail.length as number)};
-
-  float tStart = tailLengthValue > 0.0 ? findSourceClampT(a_source, a_sourceSize, int(a_sourceShapeId), a_target, tailMarginValue) : 0.0;
-  float tEnd = headLengthValue > 0.0 ? findTargetClampT(a_source, a_target, a_targetSize, int(a_targetShapeId), headMarginValue) : 1.0;
-
-  // Width factors for geometry expansion
+  // Extremity parameters
+  float headLengthRatio = ${numberToGLSLFloat(head.length as number)};
+  float tailLengthRatio = ${numberToGLSLFloat(tail.length as number)};
   float headWidthFactor = ${numberToGLSLFloat(head.widthFactor)};
   float tailWidthFactor = ${numberToGLSLFloat(tail.widthFactor)};
-  float widthFactor = max(headWidthFactor, tailWidthFactor);
+  float minBodyLengthRatio = ${numberToGLSLFloat(path.minBodyLengthRatio || 0)};
+
+  // For extremityNone (length=0), skip clamping - edge goes to node center
+  float tStart = tailLengthRatio > 0.0 ? findSourceClampT(a_source, a_sourceSize, int(a_sourceShapeId), a_target, tailMarginValue) : 0.0;
+  float tEnd = headLengthRatio > 0.0 ? findTargetClampT(a_source, a_target, a_targetSize, int(a_targetShapeId), headMarginValue) : 1.0;
+
+  // Width factor for geometry expansion (use max of both extremities)
+  float widthFactor = max(max(headWidthFactor, tailWidthFactor), 1.0);
   float featherWidth = u_feather * u_correctionRatio / u_sizeRatio;
+
+  // Compute path length and visible length
+  float pathLength = path_${pathName}_length(a_source, a_target);
+  float visibleLength = pathLength * (tEnd - tStart);
+
+  // Compute extremity lengths in world units
+  float headLength = headLengthRatio * webGLThickness;
+  float tailLength = tailLengthRatio * webGLThickness;
+  float minBodyLength = minBodyLengthRatio * webGLThickness;
+
+  // Handle short edges: scale down extremities if needed
+  float totalNeededLength = headLength + tailLength + minBodyLength;
+  float extremityScale = 1.0;
+  if (totalNeededLength > visibleLength && totalNeededLength > 0.0001) {
+    extremityScale = visibleLength / totalNeededLength;
+    headLength *= extremityScale;
+    tailLength *= extremityScale;
+  }
+
+  // Convert lengths to t-values
+  float headLengthT = pathLength > 0.0001 ? headLength / pathLength : 0.0;
+  float tailLengthT = pathLength > 0.0001 ? tailLength / pathLength : 0.0;
+
+  // Zone boundaries in t-space
+  float tTailEnd = tStart + tailLengthT;   // Where tail ends / body starts
+  float tHeadStart = tEnd - headLengthT;   // Where body ends / head starts
+
+  // Ensure body has non-negative length
+  if (tTailEnd > tHeadStart) {
+    float mid = (tStart + tEnd) * 0.5;
+    tTailEnd = mid;
+    tHeadStart = mid;
+  }
 
   ${
     hasCustomConstantData
@@ -372,33 +415,54 @@ void main() {
   vec2 position;
   vec2 normal;
   float vertexT;
+  float zone = a_zone;
+  float zoneT = a_zoneT;
   ${pathName}_getVertexPosition(
     a_source, a_target,
-    tStart, tEnd,
-    a_segment, a_localPos, a_side, a_corner,
-    webGLThickness * widthFactor, featherWidth,
+    tStart, tEnd, tTailEnd, tHeadStart,
+    a_zone, a_zoneT, a_side,
+    webGLThickness, featherWidth,
+    headWidthFactor, tailWidthFactor,
     position, normal, vertexT
   );
 
   float t = vertexT;
   float side = a_side;`
-      : `// Standard vertex processing
-  // Remap a_t from [0,1] to [tStart, tEnd]
-  float t = mix(tStart, tEnd, a_t);
+      : `// Zone-based vertex processing
+  vec2 position;
+  vec2 normal;
+  float t;
+  float zone = a_zone;
+  float zoneT = a_zoneT;
+  float side = a_side;
 
-  // Compute position on path
-  vec2 pathPos = path_${pathName}_position(t, a_source, a_target);
+  if (zone < 0.5) {
+    // TAIL ZONE: rectangular quad with width = tailWidthFactor
+    vec2 tang = path_${pathName}_tangent(tTailEnd, a_source, a_target);
+    normal = vec2(-tang.y, tang.x);
+    vec2 centerPos = mix(path_${pathName}_position(tStart, a_source, a_target),
+                         path_${pathName}_position(tTailEnd, a_source, a_target), zoneT);
+    float halfWidth = webGLThickness * tailWidthFactor * 0.5 + featherWidth;
+    position = centerPos + normal * side * halfWidth;
+    t = mix(tStart, tTailEnd, zoneT);
 
-  // Compute normal at this point
-  vec2 normal = path_${pathName}_normal(t, a_source, a_target);
+  } else if (zone < 1.5) {
+    // BODY ZONE: follows path curvature with width = 1.0
+    t = mix(tTailEnd, tHeadStart, zoneT);
+    normal = path_${pathName}_normal(t, a_source, a_target);
+    float halfWidth = webGLThickness * 0.5 + featherWidth;
+    position = path_${pathName}_position(t, a_source, a_target) + normal * side * halfWidth;
 
-  // Compute offset from path centerline
-  float halfThickness = webGLThickness * widthFactor * 0.5;
-  vec2 offset = normal * (halfThickness + featherWidth) * a_side;
-
-  // Final position
-  vec2 position = pathPos + offset;
-  float side = a_side;`
+  } else {
+    // HEAD ZONE: rectangular quad with width = headWidthFactor
+    vec2 tang = path_${pathName}_tangent(tHeadStart, a_source, a_target);
+    normal = vec2(-tang.y, tang.x);
+    vec2 centerPos = mix(path_${pathName}_position(tHeadStart, a_source, a_target),
+                         path_${pathName}_position(tEnd, a_source, a_target), zoneT);
+    float halfWidth = webGLThickness * headWidthFactor * 0.5 + featherWidth;
+    position = centerPos + normal * side * halfWidth;
+    t = mix(tHeadStart, tEnd, zoneT);
+  }`
   }
 
   gl_Position = vec4((u_matrix * vec3(position, 1.0)).xy, 0.0, 1.0);
@@ -416,7 +480,15 @@ void main() {
   v_feather = featherWidth;
   v_source = a_source;
   v_target = a_target;
-  v_edgeLength = path_${pathName}_length(a_source, a_target);
+  v_edgeLength = pathLength;
+
+  // Zone varyings
+  v_zone = zone;
+  v_zoneT = zoneT;
+  v_headLengthRatio = headLengthRatio * extremityScale;
+  v_tailLengthRatio = tailLengthRatio * extremityScale;
+  v_headWidthRatio = headWidthFactor;
+  v_tailWidthRatio = tailWidthFactor;
 
   // Pass custom varyings
 ${varyingAssignments}
@@ -480,10 +552,6 @@ function generateFragmentShader(
     })
     .join("\n");
 
-  // Get head/tail length as GLSL expressions
-  const headLength = typeof head.length === "number" ? numberToGLSLFloat(head.length) : `v_${head.length.attribute}`;
-  const tailLength = typeof tail.length === "number" ? numberToGLSLFloat(tail.length) : `v_${tail.length.attribute}`;
-
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es
 precision highp float;
@@ -504,6 +572,14 @@ in float v_feather;
 in vec2 v_source;
 in vec2 v_target;
 in float v_edgeLength;
+
+// Zone varyings
+in float v_zone;            // 0=tail, 1=body, 2=head
+in float v_zoneT;           // Position within zone [0,1]
+in float v_headLengthRatio; // Head length as ratio of thickness (scaled for short edges)
+in float v_tailLengthRatio; // Tail length as ratio of thickness (scaled for short edges)
+in float v_headWidthRatio;  // Head width factor
+in float v_tailWidthRatio;  // Tail width factor
 
 // Custom varyings
 ${customVaryings}
@@ -554,16 +630,21 @@ void main() {
   // Compute normalized t within visible edge (0 = start, 1 = end)
   float tNorm = (v_t - v_tStart) / max(v_tEnd - v_tStart, 0.0001);
 
-  // The geometry is expanded by v_maxWidthFactor to accommodate arrow width
-  // v_side goes from -1 to +1 across this expanded geometry
-  // So the actual distance from centerline is:
-  float halfGeometryWidth = v_thickness * v_maxWidthFactor * 0.5;
-  float distFromCenter = abs(v_side) * halfGeometryWidth;
-
-  // Edge body half-thickness (the actual edge line width)
+  // Edge body half-thickness
   float halfThickness = v_thickness * 0.5;
 
-  // Populate EdgeContext
+  // Distance from centerline based on v_side interpolation
+  // Width is CONSTANT within each zone:
+  // - Tail: v_tailWidthRatio (to contain full arrow shape)
+  // - Body: 1.0
+  // - Head: v_headWidthRatio (to contain full arrow shape)
+  float zoneWidthFactor = v_zone < 0.5 ? v_tailWidthRatio :
+                          v_zone < 1.5 ? 1.0 :
+                          v_headWidthRatio;
+  float halfGeometryWidth = halfThickness * zoneWidthFactor + v_feather;
+  float distFromCenter = abs(v_side) * halfGeometryWidth;
+
+  // Populate EdgeContext (for filling function)
   context.t = tNorm;
   context.sdf = distFromCenter - halfThickness;
   context.position = path_${pathName}_position(v_t, v_source, v_target);
@@ -577,71 +658,29 @@ void main() {
   context.distanceFromSource = tNorm * v_edgeLength * (v_tEnd - v_tStart);
   context.distanceToTarget = (1.0 - tNorm) * v_edgeLength * (v_tEnd - v_tStart);
 
-  // Get extremity parameters
-  float headLengthRatio = ${headLength};
-  float tailLengthRatio = ${tailLength};
-  float headWidthRatio = ${numberToGLSLFloat(head.widthFactor)};
-  float tailWidthRatio = ${numberToGLSLFloat(tail.widthFactor)};
-
-  // Visible edge length in the same units as thickness
-  float visibleLength = v_edgeLength * (v_tEnd - v_tStart);
-
-  // Arrow length in world units (based on edge thickness)
-  float headLength = headLengthRatio * v_thickness;
-  float tailLength = tailLengthRatio * v_thickness;
-
-  // Distance along the visible edge from source
-  float distFromSource = tNorm * visibleLength;
-  // Distance along the visible edge to target
-  float distToTarget = (1.0 - tNorm) * visibleLength;
-
-  // Default: edge body SDF (distance from centerline minus half thickness)
-  float finalSDF = distFromCenter - halfThickness;
-
-  // Check if we're in the head region (arrow at target)
-  // The arrow occupies the last 'headLength' world units before the target
-  if (distToTarget < headLength && headLengthRatio > 0.0) {
-    // How far into the arrow are we? 0 = base, 1 = tip
-    float arrowProgress = 1.0 - distToTarget / headLength;
-
-    // Arrow half-width tapers from (headWidthRatio * halfThickness) at base to 0 at tip
-    float arrowHalfWidth = halfThickness * headWidthRatio * (1.0 - arrowProgress);
-
-    finalSDF = distFromCenter - arrowHalfWidth;
-  }
-  // Check if we're in the tail region (arrow at source)
-  else if (distFromSource < tailLength && tailLengthRatio > 0.0) {
-    // How far into the arrow are we? 0 = base, 1 = tip (pointing backward)
-    float arrowProgress = 1.0 - distFromSource / tailLength;
-
-    // Arrow half-width tapers from (tailWidthRatio * halfThickness) at base to 0 at tip
-    float arrowHalfWidth = halfThickness * tailWidthRatio * (1.0 - arrowProgress);
-
-    finalSDF = distFromCenter - arrowHalfWidth;
+  // Compute SDF based on zone
+  float finalSDF;
+  if (v_zone < 0.5) {
+    // TAIL ZONE: uv.x from lengthRatio (tip) to 0 (base)
+    vec2 uv = vec2((1.0 - v_zoneT) * v_tailLengthRatio, v_side * v_tailWidthRatio * 0.5);
+    finalSDF = extremity_${tail.name}(uv, v_tailLengthRatio, v_tailWidthRatio) * v_thickness;
+  } else if (v_zone < 1.5) {
+    // BODY ZONE: distance from centerline
+    finalSDF = distFromCenter - halfThickness;
+  } else {
+    // HEAD ZONE: uv.x from 0 (base) to lengthRatio (tip)
+    vec2 uv = vec2(v_zoneT * v_headLengthRatio, v_side * v_headWidthRatio * 0.5);
+    finalSDF = extremity_${head.name}(uv, v_headLengthRatio, v_headWidthRatio) * v_thickness;
   }
 
-  // Apply anti-aliasing
+  // Anti-aliasing and final color
   float alpha = smoothstep(v_feather, -v_feather, finalSDF);
-
-  // Discard fully transparent fragments
   if (alpha < 0.01) discard;
 
-  // Get filling color
-  vec4 fillColor = filling_${filling.name}(context);
-
-  // Apply alpha
-  vec4 color = fillColor;
+  vec4 color = filling_${filling.name}(context);
   color.a *= alpha;
-
-  // Output to render targets
   fragColor = color;
-
-  // Picking (hard cutoff)
-  if (finalSDF > 0.0) {
-    fragPicking = transparent;
-  } else {
-    fragPicking = v_id;
-  }
+  fragPicking = finalSDF > 0.0 ? transparent : v_id;
 }
 `;
 
@@ -654,17 +693,27 @@ void main() {
 export function generateEdgeShaders(options: EdgeShaderGenerationOptions): GeneratedEdgeShaders {
   const { path, head, tail, filling } = options;
 
-  // Use custom constant data generator if provided, otherwise use default
-  let constantData: { data: number[][]; attributes: Array<{ name: string; size: number; type: number }> };
-  let verticesPerEdge: number;
+  // Determine if extremities are present (length > 0)
+  const hasHead = typeof head.length === "number" ? head.length > 0 : true;
+  const hasTail = typeof tail.length === "number" ? tail.length > 0 : true;
+
+  // Use custom constant data generator if provided, otherwise use zone-based default
+  let constantData: {
+    data: number[][];
+    attributes: Array<{ name: string; size: number; type: number }>;
+    verticesPerEdge: number;
+  };
 
   if (path.generateConstantData) {
     const custom = path.generateConstantData();
-    constantData = { data: custom.data, attributes: custom.attributes };
-    verticesPerEdge = custom.verticesPerEdge;
+    constantData = {
+      data: custom.data,
+      attributes: custom.attributes,
+      verticesPerEdge: custom.verticesPerEdge,
+    };
   } else {
-    constantData = generateConstantData(path.segments);
-    verticesPerEdge = path.segments === 1 ? 6 : 2 * (path.segments + 1);
+    // Use zone-based constant data generation
+    constantData = generateZonedConstantData(path.segments, hasHead, hasTail);
   }
 
   return {
@@ -672,7 +721,7 @@ export function generateEdgeShaders(options: EdgeShaderGenerationOptions): Gener
     fragmentShader: generateFragmentShader(path, head, tail, filling),
     uniforms: collectUniforms(path, head, tail, filling),
     attributes: collectAttributes(path, head, tail, filling),
-    verticesPerEdge,
+    verticesPerEdge: constantData.verticesPerEdge,
     constantData: constantData.data,
     constantAttributes: constantData.attributes,
   };

@@ -88,6 +88,7 @@ float path_straight_closest_t(vec2 p, vec2 source, vec2 target) {
   return {
     name: "straight",
     segments: 1, // Simple quad
+    minBodyLengthRatio: 0, // No minimum for straight edges
     glsl,
     vertexGlsl: "", // No special vertex logic needed for straight edges
     uniforms: [],

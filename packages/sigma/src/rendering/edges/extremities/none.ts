@@ -29,7 +29,7 @@ export function extremityNone(): EdgeExtremity {
   // language=GLSL
   const glsl = /*glsl*/ `
 // No extremity - always returns positive (outside)
-float extremity_none(vec2 uv) {
+float extremity_none(vec2 uv, float lengthRatio, float widthRatio) {
   return 1.0;
 }
 `;

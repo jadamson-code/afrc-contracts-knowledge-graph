@@ -376,21 +376,17 @@ float path_taxi_distance(vec2 p, vec2 source, vec2 target) {
 }
 `;
 
-  // Custom vertex GLSL for exact miter geometry
   // language=GLSL
   const vertexGlsl = /*glsl*/ `
-// Taxi-specific vertex processing with exact miter geometry
-// Attributes from generateConstantData:
-// a_segment: which segment (0, 1, 2)
-// a_localPos: position within segment (0 = start, 1 = end)
-// a_side: -1 for left edge, +1 for right edge
-// a_corner: 0 for regular vertex, 1 for corner vertex (needs miter)
+// Taxi vertex processing: tail/head quads + body with miter corners
+// a_vertexId for body: 0=start, 1=corner1, 2=corner2, 3=end
 
 void taxi_getVertexPosition(
   vec2 source, vec2 target,
-  float tStart, float tEnd,
-  float segment, float localPos, float side, float corner,
+  float tStart, float tEnd, float tTailEnd, float tHeadStart,
+  float zone, float zoneT, float side,
   float thickness, float aaWidth,
+  float headWidthFactor, float tailWidthFactor,
   out vec2 position, out vec2 normal, out float outT
 ) {
   // Apply camera rotation if not rotating with camera
@@ -402,26 +398,38 @@ void taxi_getVertexPosition(
   }
 
   vec2 delta = tgt - src;
-  float halfThickness = (thickness + aaWidth) * 0.5;
 
-  // Get clamped start and end positions (where edge touches nodes)
-  vec2 clampedStart = path_taxi_position(tStart, source, target);
-  vec2 clampedEnd = path_taxi_position(tEnd, source, target);
+  // Get key positions
+  vec2 tipTail = path_taxi_position(tStart, source, target);
+  vec2 baseTail = path_taxi_position(tTailEnd, source, target);
+  vec2 baseHead = path_taxi_position(tHeadStart, source, target);
+  vec2 tipHead = path_taxi_position(tEnd, source, target);
+
   if (!TAXI_ROTATE_WITH_CAMERA) {
-    clampedStart = taxi_rotate(clampedStart, -u_cameraAngle);
-    clampedEnd = taxi_rotate(clampedEnd, -u_cameraAngle);
+    tipTail = taxi_rotate(tipTail, -u_cameraAngle);
+    baseTail = taxi_rotate(baseTail, -u_cameraAngle);
+    baseHead = taxi_rotate(baseHead, -u_cameraAngle);
+    tipHead = taxi_rotate(tipHead, -u_cameraAngle);
   }
 
-  // Handle degenerate case (aligned nodes) -> straight line
+  // Degenerate case (aligned nodes) -> straight line
   if (abs(delta.x) < 0.0001 || abs(delta.y) < 0.0001) {
-    vec2 dir = normalize(delta);
+    vec2 dir = length(delta) > 0.0001 ? normalize(delta) : vec2(1.0, 0.0);
     vec2 n = vec2(-dir.y, dir.x);
-    float localT = (segment == 0.0) ? localPos * 0.333 :
-                   (segment == 1.0) ? 0.333 + localPos * 0.334 :
-                                      0.667 + localPos * 0.333;
-    outT = mix(tStart, tEnd, localT);
-    position = mix(clampedStart, clampedEnd, localT) + n * side * halfThickness;
-    normal = n * side;
+    vec2 pos;
+    float widthFactor;
+
+    if (zone < 0.5) {
+      pos = mix(tipTail, baseTail, zoneT); outT = mix(tStart, tTailEnd, zoneT); widthFactor = tailWidthFactor;
+    } else if (zone < 1.5) {
+      pos = mix(baseTail, baseHead, zoneT); outT = mix(tTailEnd, tHeadStart, zoneT); widthFactor = 1.0;
+    } else {
+      pos = mix(baseHead, tipHead, zoneT); outT = mix(tHeadStart, tEnd, zoneT); widthFactor = headWidthFactor;
+    }
+
+    float halfWidth = (thickness * widthFactor + aaWidth) * 0.5;
+    position = pos + n * side * halfWidth;
+    normal = n * sign(side);
     if (!TAXI_ROTATE_WITH_CAMERA) {
       position = taxi_rotate(position, u_cameraAngle);
       normal = taxi_rotate(normal, u_cameraAngle);
@@ -429,91 +437,60 @@ void taxi_getVertexPosition(
     return;
   }
 
-  // Get segment points (corners)
+  // Corner points and t values
   vec2 c1, c2;
   getTaxiSegmentPoints(src, tgt, c1, c2);
-
-  // Compute segment lengths for t mapping
-  float L1 = length(c1 - src);
-  float L2 = length(c2 - c1);
-  float L3 = length(tgt - c2);
+  float L1 = length(c1 - src), L2 = length(c2 - c1), L3 = length(tgt - c2);
   float totalLen = L1 + L2 + L3;
+  float tCorner1 = L1 / totalLen, tCorner2 = (L1 + L2) / totalLen;
 
-  // t values at corners
-  float tCorner1 = L1 / totalLen;
-  float tCorner2 = (L1 + L2) / totalLen;
+  // Attachment normals for tail/head quads
+  vec2 tailTang = path_taxi_tangent(tTailEnd, source, target);
+  vec2 tailAttachNormal = vec2(-tailTang.y, tailTang.x);
+  vec2 headTang = path_taxi_tangent(tHeadStart, source, target);
+  vec2 headAttachNormal = vec2(-headTang.y, headTang.x);
+  if (!TAXI_ROTATE_WITH_CAMERA) {
+    tailAttachNormal = taxi_rotate(tailAttachNormal, -u_cameraAngle);
+    headAttachNormal = taxi_rotate(headAttachNormal, -u_cameraAngle);
+  }
 
-  // Segment directions (using clamped positions for first/last)
-  vec2 dir1 = normalize(c1 - clampedStart);
-  vec2 dir2 = normalize(c2 - c1);
-  vec2 dir3 = normalize(clampedEnd - c2);
-
-  // Segment normals
-  vec2 n1 = vec2(-dir1.y, dir1.x);
-  vec2 n2 = vec2(-dir2.y, dir2.x);
-  vec2 n3 = vec2(-dir3.y, dir3.x);
+  // Segment directions and normals for body
+  vec2 dir1 = normalize(c1 - baseTail), dir2 = normalize(c2 - c1), dir3 = normalize(baseHead - c2);
+  vec2 n1 = vec2(-dir1.y, dir1.x), n2 = vec2(-dir2.y, dir2.x), n3 = vec2(-dir3.y, dir3.x);
 
   vec2 pos;
   vec2 norm;
+  float widthFactor;
 
-  if (segment < 0.5) {
-    // Segment 0: clampedStart to corner1
-    if (localPos < 0.5) {
-      // Start of segment (clamped)
-      pos = clampedStart;
-      norm = n1;
-      outT = tStart;
+  if (zone < 0.5) {
+    // TAIL ZONE
+    pos = mix(tipTail, baseTail, zoneT);
+    norm = tailAttachNormal;
+    outT = mix(tStart, tTailEnd, zoneT);
+    widthFactor = tailWidthFactor;
+  } else if (zone < 1.5) {
+    // BODY ZONE with miter corners
+    int vertexId = int(a_vertexId + 0.5);
+    if (vertexId == 0) {
+      pos = baseTail; norm = n1; outT = tTailEnd;
+    } else if (vertexId == 1) {
+      pos = c1; norm = taxi_miterNormal(dir1, dir2, 1.0); outT = tCorner1;
+    } else if (vertexId == 2) {
+      pos = c2; norm = taxi_miterNormal(dir2, dir3, 1.0); outT = tCorner2;
     } else {
-      // End of segment (corner1)
-      pos = c1;
-      outT = mix(tStart, tEnd, (tCorner1 - tStart) / (1.0 - tStart - (1.0 - tEnd)));
-      if (corner > 0.5) {
-        norm = taxi_miterNormal(dir1, dir2, 1.0);
-      } else {
-        norm = n1;
-      }
+      pos = baseHead; norm = n3; outT = tHeadStart;
     }
-  } else if (segment < 1.5) {
-    // Segment 1: corner1 to corner2
-    if (localPos < 0.5) {
-      // Start of segment (corner1)
-      pos = c1;
-      outT = mix(tStart, tEnd, (tCorner1 - tStart) / (1.0 - tStart - (1.0 - tEnd)));
-      if (corner > 0.5) {
-        norm = taxi_miterNormal(dir1, dir2, 1.0);
-      } else {
-        norm = n2;
-      }
-    } else {
-      // End of segment (corner2)
-      pos = c2;
-      outT = mix(tStart, tEnd, (tCorner2 - tStart) / (1.0 - tStart - (1.0 - tEnd)));
-      if (corner > 0.5) {
-        norm = taxi_miterNormal(dir2, dir3, 1.0);
-      } else {
-        norm = n2;
-      }
-    }
+    widthFactor = 1.0;
   } else {
-    // Segment 2: corner2 to clampedEnd
-    if (localPos < 0.5) {
-      // Start of segment (corner2)
-      pos = c2;
-      outT = mix(tStart, tEnd, (tCorner2 - tStart) / (1.0 - tStart - (1.0 - tEnd)));
-      if (corner > 0.5) {
-        norm = taxi_miterNormal(dir2, dir3, 1.0);
-      } else {
-        norm = n3;
-      }
-    } else {
-      // End of segment (clamped)
-      pos = clampedEnd;
-      norm = n3;
-      outT = tEnd;
-    }
+    // HEAD ZONE
+    pos = mix(baseHead, tipHead, zoneT);
+    norm = headAttachNormal;
+    outT = mix(tHeadStart, tEnd, zoneT);
+    widthFactor = headWidthFactor;
   }
 
-  position = pos + norm * side * halfThickness;
+  float halfWidth = (thickness * widthFactor + aaWidth) * 0.5;
+  position = pos + norm * side * halfWidth;
   normal = norm * sign(side);
 
   // Rotate back to world space if needed
@@ -525,48 +502,43 @@ void taxi_getVertexPosition(
 `;
 
   /**
-   * Generate constant vertex data for taxi path with exact miter geometry.
-   * Uses triangle strip with 8 vertices forming 6 triangles.
+   * Generate constant vertex data: tail (4) + body with corners (8) + head (4) = 16 vertices
+   * Format: [zone, zoneT, side, vertexId]
    */
   function generateConstantData() {
     const FLOAT = WebGL2RenderingContext.FLOAT;
-
-    // Triangle strip vertices for 3 segments with miter joins:
-    // v0,v1: start of segment 0
-    // v2,v3: corner1 (end of seg0 / start of seg1) with miter
-    // v4,v5: corner2 (end of seg1 / start of seg2) with miter
-    // v6,v7: end of segment 2
-    //
-    // Triangle strip: v0-v1-v2-v3-v4-v5-v6-v7
-    // Forms triangles: (v0,v1,v2), (v1,v2,v3), (v2,v3,v4), (v3,v4,v5), (v4,v5,v6), (v5,v6,v7)
+    const TAIL = 0, BODY = 1, HEAD = 2;
 
     const data: number[][] = [
-      // [segment, localPos, side, corner]
-      [0, 0, -1, 0], // v0: seg0 start, left
-      [0, 0, 1, 0], // v1: seg0 start, right
-      [0, 1, -1, 1], // v2: corner1, left miter
-      [0, 1, 1, 1], // v3: corner1, right miter
-      [2, 0, -1, 1], // v4: corner2, left miter (use seg2 to get dir2→dir3 miter)
-      [2, 0, 1, 1], // v5: corner2, right miter
-      [2, 1, -1, 0], // v6: seg2 end, left
-      [2, 1, 1, 0], // v7: seg2 end, right
+      // Tail: tip to base
+      [TAIL, 0, -1, 0], [TAIL, 0, +1, 0],
+      [TAIL, 1, -1, 0], [TAIL, 1, +1, 0],
+      // Body: start, corner1, corner2, end (vertexId = 0,1,2,3)
+      [BODY, 0, -1, 0], [BODY, 0, +1, 0],
+      [BODY, 0.333, -1, 1], [BODY, 0.333, +1, 1],
+      [BODY, 0.667, -1, 2], [BODY, 0.667, +1, 2],
+      [BODY, 1, -1, 3], [BODY, 1, +1, 3],
+      // Head: base to tip
+      [HEAD, 0, -1, 0], [HEAD, 0, +1, 0],
+      [HEAD, 1, -1, 0], [HEAD, 1, +1, 0],
     ];
 
     return {
       data,
       attributes: [
-        { name: "a_segment", size: 1, type: FLOAT },
-        { name: "a_localPos", size: 1, type: FLOAT },
+        { name: "a_zone", size: 1, type: FLOAT },
+        { name: "a_zoneT", size: 1, type: FLOAT },
         { name: "a_side", size: 1, type: FLOAT },
-        { name: "a_corner", size: 1, type: FLOAT },
+        { name: "a_vertexId", size: 1, type: FLOAT },
       ],
-      verticesPerEdge: 8,
+      verticesPerEdge: 16,
     };
   }
 
   return {
     name: "taxi",
     segments: 1, // Not used when generateConstantData is provided
+    minBodyLengthRatio: 2, // Ensure corners stay in body zone
     glsl,
     vertexGlsl,
     uniforms: [],

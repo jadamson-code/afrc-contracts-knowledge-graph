@@ -93,6 +93,14 @@ export interface EdgePath {
     /** Number of vertices per edge instance */
     verticesPerEdge: number;
   };
+
+  /**
+   * Minimum body length as a ratio of edge thickness.
+   * Ensures the body zone has at least this length even when extremities are large.
+   * Useful for paths with corners (taxi) to ensure corners stay in body zone.
+   * Default: 0 (no minimum)
+   */
+  minBodyLengthRatio?: number;
 }
 
 /**

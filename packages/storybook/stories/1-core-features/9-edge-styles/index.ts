@@ -19,8 +19,10 @@ import {
   extremityNone,
   fillingPlain,
   layerFill,
+  pathCubic,
   pathQuadratic,
   pathStraight,
+  pathTaxi,
   sdfDiamond,
   sdfTriangle,
 } from "sigma/rendering";
@@ -34,12 +36,42 @@ export default () => {
   const COL_SPACING = 120;
   const ROW_SPACING = 80;
   const NODE_SPACING = 60; // Horizontal distance between source and target nodes
-  const NODE_SIZE = 8;
+  const NODE_SIZE = 12;
+  const EDGE_SIZE = 6;
 
   // Row types (path types)
   const ROWS = [
     { name: "line", path: pathStraight() },
     { name: "curve", path: pathQuadratic() },
+    {
+      name: "taxi",
+      path: pathTaxi({
+        orientation: "automatic",
+        rotateWithCamera: false,
+      }),
+    },
+    {
+      name: "taxi-2",
+      path: pathTaxi({
+        orientation: "horizontal",
+        rotateWithCamera: true,
+      }),
+    },
+    {
+      name: "cubic",
+      path: pathCubic({
+        orientation: "automatic",
+        rotateWithCamera: false,
+      }),
+    },
+    {
+      name: "cubic-2",
+      path: pathCubic({
+        orientation: "horizontal",
+        rotateWithCamera: true,
+        curveOffset: 0.8,
+      }),
+    },
   ];
 
   // Column types (extremity configurations)
@@ -127,7 +159,7 @@ export default () => {
       const edgeLabel = `${row.name} / ${col.label}`;
       graph.addEdge(sourceId, targetId, {
         type: edgeType,
-        size: 3,
+        size: EDGE_SIZE,
         color: EDGE_COLOR,
         label: edgeLabel,
         forceLabel: true,
@@ -157,7 +189,6 @@ export default () => {
     edgeLabelSize: 12,
     // Use positions-based sizing for a clean grid appearance
     itemSizesReference: "positions",
-    zoomToSizeRatioFunction: (x) => x,
     autoRescale: true,
   });
 

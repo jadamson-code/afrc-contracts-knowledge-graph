@@ -7,4 +7,5 @@
 
 export { pathStraight } from "./straight";
 export { pathQuadratic, type QuadraticPathOptions } from "./quadratic";
+export { pathTaxi, type TaxiPathOptions } from "./taxi";
 export { pathCubic, type CubicPathOptions } from "./cubic";

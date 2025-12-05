@@ -10,6 +10,7 @@
  */
 import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../shapes/registry";
 import { numberToGLSLFloat } from "../utils";
+import { generateFindSourceClampT, generateFindTargetClampT } from "./shared-glsl";
 import { AttributeSpecification, EdgeExtremity, EdgeFilling, EdgePath, GeneratedEdgeShaders } from "./types";
 
 const { FLOAT, UNSIGNED_BYTE } = WebGL2RenderingContext;
@@ -309,45 +310,9 @@ ${path.glsl}
 ${path.vertexGlsl || ""}
 
 // Binary search to find where path exits/enters a node.
-// Coordinate system: localPos is normalized so 1.0 = node quad boundary.
-// effectiveSize accounts for AA width to match the visual node boundary.
-float findSourceClampT(vec2 source, float sourceSize, int sourceShapeId, vec2 target, float margin) {
-  float lo = 0.0, hi = 0.5;
-  float nodeExtent = sourceSize * u_correctionRatio / u_sizeRatio * 2.0;
-  float effectiveSize = 1.0 - u_correctionRatio / nodeExtent;
-
-  for (int i = 0; i < 12; i++) {
-    float mid = (lo + hi) * 0.5;
-    vec2 pos = path_${pathName}_position(mid, source, target);
-    vec2 localPos = (pos - source) / nodeExtent;
-    float sdf = querySDF(sourceShapeId, localPos, effectiveSize);
-    if (sdf < 0.0) lo = mid;
-    else hi = mid;
-  }
-
-  float pathLen = path_${pathName}_length(source, target);
-  float marginT = (margin * u_correctionRatio / u_sizeRatio) / pathLen;
-  return (lo + hi) * 0.5 + marginT;
-}
-
-float findTargetClampT(vec2 source, vec2 target, float targetSize, int targetShapeId, float margin) {
-  float lo = 0.5, hi = 1.0;
-  float nodeExtent = targetSize * u_correctionRatio / u_sizeRatio * 2.0;
-  float effectiveSize = 1.0 - u_correctionRatio / nodeExtent;
-
-  for (int i = 0; i < 12; i++) {
-    float mid = (lo + hi) * 0.5;
-    vec2 pos = path_${pathName}_position(mid, source, target);
-    vec2 localPos = (pos - target) / nodeExtent;
-    float sdf = querySDF(targetShapeId, localPos, effectiveSize);
-    if (sdf < 0.0) hi = mid;
-    else lo = mid;
-  }
-
-  float pathLen = path_${pathName}_length(source, target);
-  float marginT = (margin * u_correctionRatio / u_sizeRatio) / pathLen;
-  return (lo + hi) * 0.5 - marginT;
-}
+// (Generated from shared-glsl.ts)
+${generateFindSourceClampT(pathName)}
+${generateFindTargetClampT(pathName)}
 
 void main() {
   // Convert thickness to WebGL units

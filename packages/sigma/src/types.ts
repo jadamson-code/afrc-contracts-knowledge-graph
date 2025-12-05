@@ -243,6 +243,16 @@ export interface EdgeLabelDisplayData extends LabelDisplayData {
   targetX: number;
   /** Target node Y position in graph coordinates */
   targetY: number;
+  /** Source node size in graph coordinates */
+  sourceSize: number;
+  /** Target node size in graph coordinates */
+  targetSize: number;
+  /** Source node shape slug (e.g., "circle", "square") */
+  sourceShape: string;
+  /** Target node shape slug (e.g., "circle", "square") */
+  targetShape: string;
+  /** Edge thickness/size in pixels */
+  edgeSize: number;
   /** Perpendicular offset from path centerline (pixels) */
   offset: number;
   /** Path curvature for curved edges (0 for straight) */

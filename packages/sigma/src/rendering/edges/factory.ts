@@ -321,7 +321,12 @@ export function createEdgeProgram<
 
   // Create and attach the label program for this edge type
   // This allows WebGL edge label rendering that follows the same path
-  const LabelProgramClass = createEdgeLabelProgram({ path });
+  const LabelProgramClass = createEdgeLabelProgram({
+    path,
+    // Pass extremity length ratios so labels know where the edge body starts/ends
+    headLengthRatio: typeof head.length === "number" ? head.length : 0,
+    tailLengthRatio: typeof tail.length === "number" ? tail.length : 0,
+  });
   (EdgeProgramClass as unknown as { LabelProgram: EdgeLabelProgramType }).LabelProgram = LabelProgramClass;
 
   return EdgeProgramClass as unknown as EdgeProgramType<N, E, G>;

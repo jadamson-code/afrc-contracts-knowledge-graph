@@ -1394,13 +1394,35 @@ export default class Sigma<
   }
 
   /**
+   * Method used to render edge labels to the MRT framebuffer.
+   * Called from render() before nodes are drawn, so edge labels appear under nodes.
+   *
+   * @private
+   */
+  private renderEdgeLabelsToMRT(): void {
+    this.renderEdgeLabelsInternal();
+  }
+
+  /**
    * Method used to render edge labels using WebGL (SDF-based),
    * based on which node labels were rendered.
+   * Now just a no-op since edge labels are rendered in renderEdgeLabelsToMRT.
    *
    * @return {Sigma}
    */
   private renderEdgeLabels(): this {
-    if (!this.settings.renderEdgeLabels) return this;
+    // Edge labels are now rendered in renderEdgeLabelsToMRT() before the blit
+    return this;
+  }
+
+  /**
+   * Internal method that does the actual edge label rendering.
+   * Called by renderEdgeLabelsToMRT when the MRT framebuffer is bound.
+   *
+   * @private
+   */
+  private renderEdgeLabelsInternal(): void {
+    if (!this.settings.renderEdgeLabels) return;
 
     const edgeLabelsToDisplay = edgeLabelsToDisplayFromNodes({
       graph: this.graph,
@@ -1477,7 +1499,7 @@ export default class Sigma<
         y: (sourceData.y + targetData.y) / 2,
         size: this.settings.edgeLabelSize,
         color,
-        nodeSize: 0, // Not applicable for edge labels
+        nodeSize: 0, // Not applicable for edge labels (use sourceSize/targetSize instead)
         margin: 0,
         position: "over",
         hidden: false,
@@ -1492,6 +1514,11 @@ export default class Sigma<
         sourceY: sourceData.y,
         targetX: targetData.x,
         targetY: targetData.y,
+        sourceSize: sourceData.size,
+        targetSize: targetData.size,
+        sourceShape: sourceData.shape || "circle",
+        targetShape: targetData.shape || "circle",
+        edgeSize: edgeData.size,
         offset: this.settings.edgeLabelSize / 2 + 5, // Offset below the edge with 3px margin
         curvature: (edgeData as unknown as { curvature?: number }).curvature || 0,
       };
@@ -1508,8 +1535,6 @@ export default class Sigma<
     }
 
     this.displayedEdgeLabels = displayedLabels;
-
-    return this;
   }
 
   /**
@@ -1763,6 +1788,12 @@ export default class Sigma<
         const program = this.edgePrograms[type];
         program.render(params);
       }
+    }
+
+    // Drawing edge labels (after edges, before nodes, so they appear under nodes)
+    // Edge labels are WebGL-rendered like node labels
+    if (this.settings.renderEdgeLabels && (!this.settings.hideLabelsOnMove || !moving)) {
+      this.renderEdgeLabelsToMRT();
     }
 
     // Drawing nodes

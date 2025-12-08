@@ -5,7 +5,8 @@
  * @module
  */
 
-export { pathStraight } from "./straight";
-export { pathQuadratic, type QuadraticPathOptions } from "./quadratic";
-export { pathTaxi, type TaxiPathOptions } from "./taxi";
-export { pathCubic, type CubicPathOptions } from "./cubic";
+export { pathLine } from "./line";
+export { pathCurved, type CurvedPathOptions } from "./curved";
+export { pathCurvedS, type CurvedSPathOptions } from "./curvedS";
+export { pathStep, type StepPathOptions } from "./step";
+export { pathStepCurved, type StepCurvedPathOptions } from "./stepCurved";

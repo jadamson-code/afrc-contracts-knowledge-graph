@@ -9,7 +9,7 @@
 import { extremityArrow, extremityNone } from "../extremities";
 import { createEdgeProgram } from "../factory";
 import { fillingPlain } from "../fillings";
-import { pathStraight } from "../paths";
+import { pathLine } from "../paths";
 
 /**
  * EdgeArrowProgram renders edges as straight lines with arrow heads.
@@ -28,7 +28,7 @@ import { pathStraight } from "../paths";
  * ```
  */
 export const EdgeArrowProgram = createEdgeProgram({
-  path: pathStraight(),
+  path: pathLine(),
   head: extremityArrow(),
   tail: extremityNone(),
   filling: fillingPlain(),

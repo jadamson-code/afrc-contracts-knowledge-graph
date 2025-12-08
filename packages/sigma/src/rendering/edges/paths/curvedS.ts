@@ -1,9 +1,9 @@
 /**
- * Sigma.js Edge Path - Cubic Bézier
- * =================================
+ * Sigma.js Edge Path - Curved S (S-Curve)
+ * =======================================
  *
- * Cubic Bézier path for edges that renders smooth S-curves.
- * Control points are positioned to create curves similar to taxi edges
+ * S-curve path using cubic Bézier with two control points.
+ * Creates smooth curves with an inflection point, similar to step paths
  * but with smooth transitions instead of sharp corners.
  *
  * @module
@@ -12,9 +12,9 @@ import { numberToGLSLFloat } from "../../utils";
 import { EdgePath } from "../types";
 
 /**
- * Options for cubic Bézier path creation.
+ * Options for S-curve path creation.
  */
-export interface CubicPathOptions {
+export interface CurvedSPathOptions {
   /**
    * Number of segments for tessellation.
    * Higher values = smoother curve but more vertices.
@@ -56,25 +56,25 @@ export interface CubicPathOptions {
 }
 
 /**
- * Creates a cubic Bézier edge path with smooth S-curves.
+ * Creates an S-curve edge path using cubic Bézier.
  *
  * The path is a cubic Bézier curve with control points positioned to create
- * smooth transitions similar to taxi edges but without sharp corners.
+ * smooth S-shaped transitions similar to step paths but without sharp corners.
  *
  * @param options - Path configuration
- * @returns EdgePath definition for cubic Bézier paths
+ * @returns EdgePath definition for S-curve paths
  *
  * @example
  * ```typescript
- * const EdgeCubicProgram = createEdgeProgram({
- *   path: pathCubic({ curveOffset: 0.4 }),
+ * const EdgeCurvedSProgram = createEdgeProgram({
+ *   path: pathCurvedS({ curveOffset: 0.4 }),
  *   head: extremityArrow(),
  *   tail: extremityNone(),
  *   filling: fillingPlain(),
  * });
  * ```
  */
-export function pathCubic(options: CubicPathOptions = {}): EdgePath {
+export function pathCurvedS(options: CurvedSPathOptions = {}): EdgePath {
   const {
     segments = 16,
     orientation = "automatic",
@@ -101,17 +101,17 @@ export function pathCubic(options: CubicPathOptions = {}): EdgePath {
 
   // language=GLSL
   const glsl = /*glsl*/ `
-// Cubic path constants (baked from options)
-const int CUBIC_ORIENTATION = ${orientationCode};
-const float CUBIC_FIXED_ANGLE = ${numberToGLSLFloat(fixedAngle)};
-const bool CUBIC_ROTATE_WITH_CAMERA = ${rotateWithCamera ? "true" : "false"};
-const float CUBIC_OFFSET = ${numberToGLSLFloat(curveOffset)};
-const float CUBIC_POSITION = ${numberToGLSLFloat(curvePosition)};
+// S-curve path constants (baked from options)
+const int CURVEDS_ORIENTATION = ${orientationCode};
+const float CURVEDS_FIXED_ANGLE = ${numberToGLSLFloat(fixedAngle)};
+const bool CURVEDS_ROTATE_WITH_CAMERA = ${rotateWithCamera ? "true" : "false"};
+const float CURVEDS_OFFSET = ${numberToGLSLFloat(curveOffset)};
+const float CURVEDS_POSITION = ${numberToGLSLFloat(curvePosition)};
 
 // ============================================================================
 // HELPER: Rotate a 2D vector by angle (counter-clockwise)
 // ============================================================================
-vec2 cubic_rotate(vec2 v, float angle) {
+vec2 curvedS_rotate(vec2 v, float angle) {
   float c = cos(angle);
   float s = sin(angle);
   return vec2(c * v.x - s * v.y, s * v.x + c * v.y);
@@ -120,18 +120,18 @@ vec2 cubic_rotate(vec2 v, float angle) {
 // ============================================================================
 // HELPER: Get control point direction based on orientation
 // ============================================================================
-vec2 getControlDirection(vec2 source, vec2 target) {
+vec2 getCurvedSControlDirection(vec2 source, vec2 target) {
   vec2 delta = target - source;
 
-  if (CUBIC_ORIENTATION == 1) {
+  if (CURVEDS_ORIENTATION == 1) {
     // Horizontal: control points extend horizontally
     return vec2(sign(delta.x), 0.0);
-  } else if (CUBIC_ORIENTATION == 2) {
+  } else if (CURVEDS_ORIENTATION == 2) {
     // Vertical: control points extend vertically
     return vec2(0.0, sign(delta.y));
-  } else if (CUBIC_ORIENTATION == 3) {
+  } else if (CURVEDS_ORIENTATION == 3) {
     // Fixed angle
-    return vec2(cos(CUBIC_FIXED_ANGLE), sin(CUBIC_FIXED_ANGLE));
+    return vec2(cos(CURVEDS_FIXED_ANGLE), sin(CURVEDS_FIXED_ANGLE));
   } else {
     // Automatic: choose based on which delta is larger
     if (abs(delta.x) >= abs(delta.y)) {
@@ -145,13 +145,13 @@ vec2 getControlDirection(vec2 source, vec2 target) {
 // ============================================================================
 // HELPER: Get cubic Bézier control points
 // ============================================================================
-void getCubicControlPoints(vec2 source, vec2 target, out vec2 c1, out vec2 c2) {
-  vec2 dir = getControlDirection(source, target);
+void getCurvedSControlPoints(vec2 source, vec2 target, out vec2 c1, out vec2 c2) {
+  vec2 dir = getCurvedSControlDirection(source, target);
   float dist = length(target - source);
 
   // Control point distances based on curveOffset
-  float offset1 = dist * CUBIC_OFFSET * CUBIC_POSITION * 2.0;
-  float offset2 = dist * CUBIC_OFFSET * (1.0 - CUBIC_POSITION) * 2.0;
+  float offset1 = dist * CURVEDS_OFFSET * CURVEDS_POSITION * 2.0;
+  float offset2 = dist * CURVEDS_OFFSET * (1.0 - CURVEDS_POSITION) * 2.0;
 
   c1 = source + dir * offset1;
   c2 = target - dir * offset2;
@@ -160,7 +160,7 @@ void getCubicControlPoints(vec2 source, vec2 target, out vec2 c1, out vec2 c2) {
 // ============================================================================
 // HELPER: Evaluate cubic Bézier: B(t) = (1-t)³P₀ + 3(1-t)²tP₁ + 3(1-t)t²P₂ + t³P₃
 // ============================================================================
-vec2 cubicBezier(float t, vec2 p0, vec2 p1, vec2 p2, vec2 p3) {
+vec2 curvedS_cubicBezier(float t, vec2 p0, vec2 p1, vec2 p2, vec2 p3) {
   float t2 = t * t;
   float t3 = t2 * t;
   float mt = 1.0 - t;
@@ -173,7 +173,7 @@ vec2 cubicBezier(float t, vec2 p0, vec2 p1, vec2 p2, vec2 p3) {
 // ============================================================================
 // HELPER: Evaluate cubic Bézier derivative: B'(t)
 // ============================================================================
-vec2 cubicBezierDerivative(float t, vec2 p0, vec2 p1, vec2 p2, vec2 p3) {
+vec2 curvedS_cubicBezierDerivative(float t, vec2 p0, vec2 p1, vec2 p2, vec2 p3) {
   float t2 = t * t;
   float mt = 1.0 - t;
   float mt2 = mt * mt;
@@ -185,13 +185,13 @@ vec2 cubicBezierDerivative(float t, vec2 p0, vec2 p1, vec2 p2, vec2 p3) {
 // ============================================================================
 // POSITION - Core function for vertex placement
 // ============================================================================
-vec2 path_cubic_position(float t, vec2 source, vec2 target) {
+vec2 path_curvedS_position(float t, vec2 source, vec2 target) {
   // Apply camera rotation if not rotating with camera
   vec2 src = source;
   vec2 tgt = target;
-  if (!CUBIC_ROTATE_WITH_CAMERA) {
-    src = cubic_rotate(source, -u_cameraAngle);
-    tgt = cubic_rotate(target, -u_cameraAngle);
+  if (!CURVEDS_ROTATE_WITH_CAMERA) {
+    src = curvedS_rotate(source, -u_cameraAngle);
+    tgt = curvedS_rotate(target, -u_cameraAngle);
   }
 
   vec2 delta = tgt - src;
@@ -199,22 +199,22 @@ vec2 path_cubic_position(float t, vec2 source, vec2 target) {
   // Handle degenerate case (very close nodes) -> straight line
   if (length(delta) < 0.0001) {
     vec2 result = mix(src, tgt, t);
-    if (!CUBIC_ROTATE_WITH_CAMERA) {
-      result = cubic_rotate(result, u_cameraAngle);
+    if (!CURVEDS_ROTATE_WITH_CAMERA) {
+      result = curvedS_rotate(result, u_cameraAngle);
     }
     return result;
   }
 
   // Get control points
   vec2 c1, c2;
-  getCubicControlPoints(src, tgt, c1, c2);
+  getCurvedSControlPoints(src, tgt, c1, c2);
 
   // Evaluate Bézier
-  vec2 result = cubicBezier(t, src, c1, c2, tgt);
+  vec2 result = curvedS_cubicBezier(t, src, c1, c2, tgt);
 
   // Rotate back to world space if needed
-  if (!CUBIC_ROTATE_WITH_CAMERA) {
-    result = cubic_rotate(result, u_cameraAngle);
+  if (!CURVEDS_ROTATE_WITH_CAMERA) {
+    result = curvedS_rotate(result, u_cameraAngle);
   }
 
   return result;
@@ -223,13 +223,13 @@ vec2 path_cubic_position(float t, vec2 source, vec2 target) {
 // ============================================================================
 // TANGENT - Direction of travel
 // ============================================================================
-vec2 path_cubic_tangent(float t, vec2 source, vec2 target) {
+vec2 path_curvedS_tangent(float t, vec2 source, vec2 target) {
   // Apply camera rotation if not rotating with camera
   vec2 src = source;
   vec2 tgt = target;
-  if (!CUBIC_ROTATE_WITH_CAMERA) {
-    src = cubic_rotate(source, -u_cameraAngle);
-    tgt = cubic_rotate(target, -u_cameraAngle);
+  if (!CURVEDS_ROTATE_WITH_CAMERA) {
+    src = curvedS_rotate(source, -u_cameraAngle);
+    tgt = curvedS_rotate(target, -u_cameraAngle);
   }
 
   vec2 delta = tgt - src;
@@ -237,24 +237,24 @@ vec2 path_cubic_tangent(float t, vec2 source, vec2 target) {
   // Handle degenerate case
   if (length(delta) < 0.0001) {
     vec2 tang = vec2(1.0, 0.0);
-    if (!CUBIC_ROTATE_WITH_CAMERA) {
-      tang = cubic_rotate(tang, u_cameraAngle);
+    if (!CURVEDS_ROTATE_WITH_CAMERA) {
+      tang = curvedS_rotate(tang, u_cameraAngle);
     }
     return tang;
   }
 
   // Get control points
   vec2 c1, c2;
-  getCubicControlPoints(src, tgt, c1, c2);
+  getCurvedSControlPoints(src, tgt, c1, c2);
 
   // Evaluate derivative and normalize
-  vec2 deriv = cubicBezierDerivative(t, src, c1, c2, tgt);
+  vec2 deriv = curvedS_cubicBezierDerivative(t, src, c1, c2, tgt);
   float len = length(deriv);
   vec2 tang = len > 0.0001 ? deriv / len : normalize(delta);
 
   // Rotate back to world space if needed
-  if (!CUBIC_ROTATE_WITH_CAMERA) {
-    tang = cubic_rotate(tang, u_cameraAngle);
+  if (!CURVEDS_ROTATE_WITH_CAMERA) {
+    tang = curvedS_rotate(tang, u_cameraAngle);
   }
 
   return tang;
@@ -263,33 +263,33 @@ vec2 path_cubic_tangent(float t, vec2 source, vec2 target) {
 // ============================================================================
 // NORMAL - Perpendicular to tangent
 // ============================================================================
-vec2 path_cubic_normal(float t, vec2 source, vec2 target) {
-  vec2 tang = path_cubic_tangent(t, source, target);
+vec2 path_curvedS_normal(float t, vec2 source, vec2 target) {
+  vec2 tang = path_curvedS_tangent(t, source, target);
   return vec2(-tang.y, tang.x);
 }
 
 // ============================================================================
 // LENGTH - Total path length (numerical approximation)
 // ============================================================================
-float path_cubic_length(vec2 source, vec2 target) {
+float path_curvedS_length(vec2 source, vec2 target) {
   // Apply camera rotation if not rotating with camera
   vec2 src = source;
   vec2 tgt = target;
-  if (!CUBIC_ROTATE_WITH_CAMERA) {
-    src = cubic_rotate(source, -u_cameraAngle);
-    tgt = cubic_rotate(target, -u_cameraAngle);
+  if (!CURVEDS_ROTATE_WITH_CAMERA) {
+    src = curvedS_rotate(source, -u_cameraAngle);
+    tgt = curvedS_rotate(target, -u_cameraAngle);
   }
 
   // Get control points
   vec2 c1, c2;
-  getCubicControlPoints(src, tgt, c1, c2);
+  getCurvedSControlPoints(src, tgt, c1, c2);
 
   // Approximate length using 16 samples
   float len = 0.0;
   vec2 prev = src;
   for (int i = 1; i <= 16; i++) {
     float t = float(i) / 16.0;
-    vec2 curr = cubicBezier(t, src, c1, c2, tgt);
+    vec2 curr = curvedS_cubicBezier(t, src, c1, c2, tgt);
     len += length(curr - prev);
     prev = curr;
   }
@@ -300,18 +300,18 @@ float path_cubic_length(vec2 source, vec2 target) {
 // ============================================================================
 // T_AT_DISTANCE - Find t for given arc distance (numerical approximation)
 // ============================================================================
-float path_cubic_t_at_distance(float d, vec2 source, vec2 target) {
+float path_curvedS_t_at_distance(float d, vec2 source, vec2 target) {
   // Apply camera rotation if not rotating with camera
   vec2 src = source;
   vec2 tgt = target;
-  if (!CUBIC_ROTATE_WITH_CAMERA) {
-    src = cubic_rotate(source, -u_cameraAngle);
-    tgt = cubic_rotate(target, -u_cameraAngle);
+  if (!CURVEDS_ROTATE_WITH_CAMERA) {
+    src = curvedS_rotate(source, -u_cameraAngle);
+    tgt = curvedS_rotate(target, -u_cameraAngle);
   }
 
   // Get control points
   vec2 c1, c2;
-  getCubicControlPoints(src, tgt, c1, c2);
+  getCurvedSControlPoints(src, tgt, c1, c2);
 
   // Walk along curve until we reach desired distance
   float accLen = 0.0;
@@ -319,7 +319,7 @@ float path_cubic_t_at_distance(float d, vec2 source, vec2 target) {
 
   for (int i = 1; i <= 64; i++) {
     float t = float(i) / 64.0;
-    vec2 curr = cubicBezier(t, src, c1, c2, tgt);
+    vec2 curr = curvedS_cubicBezier(t, src, c1, c2, tgt);
     float segLen = length(curr - prev);
 
     if (accLen + segLen >= d) {
@@ -339,20 +339,20 @@ float path_cubic_t_at_distance(float d, vec2 source, vec2 target) {
 // ============================================================================
 // CLOSEST_T - Find t for closest point on path (numerical approximation)
 // ============================================================================
-float path_cubic_closest_t(vec2 p, vec2 source, vec2 target) {
+float path_curvedS_closest_t(vec2 p, vec2 source, vec2 target) {
   // Apply camera rotation if not rotating with camera
   vec2 pt = p;
   vec2 src = source;
   vec2 tgt = target;
-  if (!CUBIC_ROTATE_WITH_CAMERA) {
-    pt = cubic_rotate(p, -u_cameraAngle);
-    src = cubic_rotate(source, -u_cameraAngle);
-    tgt = cubic_rotate(target, -u_cameraAngle);
+  if (!CURVEDS_ROTATE_WITH_CAMERA) {
+    pt = curvedS_rotate(p, -u_cameraAngle);
+    src = curvedS_rotate(source, -u_cameraAngle);
+    tgt = curvedS_rotate(target, -u_cameraAngle);
   }
 
   // Get control points
   vec2 c1, c2;
-  getCubicControlPoints(src, tgt, c1, c2);
+  getCurvedSControlPoints(src, tgt, c1, c2);
 
   // Sample curve and find closest point
   float bestT = 0.0;
@@ -360,7 +360,7 @@ float path_cubic_closest_t(vec2 p, vec2 source, vec2 target) {
 
   for (int i = 1; i <= 32; i++) {
     float t = float(i) / 32.0;
-    vec2 pos = cubicBezier(t, src, c1, c2, tgt);
+    vec2 pos = curvedS_cubicBezier(t, src, c1, c2, tgt);
     float dist = length(pt - pos);
     if (dist < bestDist) {
       bestDist = dist;
@@ -374,19 +374,19 @@ float path_cubic_closest_t(vec2 p, vec2 source, vec2 target) {
 // ============================================================================
 // DISTANCE - Signed distance from point to path
 // ============================================================================
-float path_cubic_distance(vec2 p, vec2 source, vec2 target) {
-  float closestT = path_cubic_closest_t(p, source, target);
-  vec2 closest = path_cubic_position(closestT, source, target);
-  vec2 normal = path_cubic_normal(closestT, source, target);
+float path_curvedS_distance(vec2 p, vec2 source, vec2 target) {
+  float closestT = path_curvedS_closest_t(p, source, target);
+  vec2 closest = path_curvedS_position(closestT, source, target);
+  vec2 normal = path_curvedS_normal(closestT, source, target);
   vec2 diff = p - closest;
   return length(diff) * sign(dot(diff, normal));
 }
 `;
 
   return {
-    name: "cubic",
+    name: "curvedS",
     segments,
-    minBodyLengthRatio: 0, // No minimum for cubic curves
+    minBodyLengthRatio: 0, // No minimum for S-curves
     glsl,
     vertexGlsl: "", // Uses standard parametric tessellation
     uniforms: [],

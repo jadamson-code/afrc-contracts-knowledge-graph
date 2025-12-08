@@ -1500,8 +1500,8 @@ export default class Sigma<
         size: this.settings.edgeLabelSize,
         color,
         nodeSize: 0, // Not applicable for edge labels (use sourceSize/targetSize instead)
-        margin: 0,
-        position: "over",
+        margin: this.settings.edgeLabelMargin,
+        position: this.settings.edgeLabelPosition,
         hidden: false,
         forceLabel: edgeData.forceLabel ?? false,
         type,
@@ -1519,7 +1519,7 @@ export default class Sigma<
         sourceShape: sourceData.shape || "circle",
         targetShape: targetData.shape || "circle",
         edgeSize: edgeData.size,
-        offset: this.settings.edgeLabelSize / 2 + 5, // Offset below the edge with 3px margin
+        offset: 0, // Computed by GPU based on position mode
         curvature: (edgeData as unknown as { curvature?: number }).curvature || 0,
       };
 

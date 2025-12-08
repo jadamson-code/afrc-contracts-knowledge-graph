@@ -9,7 +9,7 @@
 import { extremityArrow, extremityNone } from "../extremities";
 import { createEdgeProgram } from "../factory";
 import { fillingPlain } from "../fillings";
-import { pathQuadratic } from "../paths";
+import { pathCurved } from "../paths";
 
 /**
  * EdgeCurvedArrowProgram renders edges as curved lines with arrow heads.
@@ -32,7 +32,7 @@ import { pathQuadratic } from "../paths";
  * ```
  */
 export const EdgeCurvedArrowProgram = createEdgeProgram({
-  path: pathQuadratic(),
+  path: pathCurved(),
   head: extremityArrow(),
   tail: extremityNone(),
   filling: fillingPlain(),

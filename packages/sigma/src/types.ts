@@ -195,6 +195,15 @@ export type SigmaEventType = keyof SigmaEvents;
 export type LabelPosition = "right" | "left" | "above" | "below" | "over";
 
 /**
+ * Position of an edge label relative to the edge path.
+ * - "over": Centered on the path centerline
+ * - "above": Above the edge (perpendicular offset)
+ * - "below": Below the edge (perpendicular offset)
+ * - "auto": GPU determines above/below based on which node is leftmost on screen
+ */
+export type EdgeLabelPosition = "over" | "above" | "below" | "auto";
+
+/**
  * Display data for a label, computed during processing.
  */
 export interface LabelDisplayData {
@@ -234,7 +243,9 @@ export interface LabelDisplayData {
  * Display data for an edge label, computed during processing.
  * Extends LabelDisplayData with edge-specific positioning info.
  */
-export interface EdgeLabelDisplayData extends LabelDisplayData {
+export interface EdgeLabelDisplayData extends Omit<LabelDisplayData, "position"> {
+  /** Position of edge label relative to path (overrides LabelDisplayData.position) */
+  position: EdgeLabelPosition;
   /** Source node X position in graph coordinates */
   sourceX: number;
   /** Source node Y position in graph coordinates */

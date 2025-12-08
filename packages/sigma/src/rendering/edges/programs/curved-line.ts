@@ -9,7 +9,7 @@
 import { extremityNone } from "../extremities";
 import { createEdgeProgram } from "../factory";
 import { fillingPlain } from "../fillings";
-import { pathQuadratic } from "../paths";
+import { pathCurved } from "../paths";
 
 /**
  * EdgeCurveProgram renders edges as quadratic Bezier curves.
@@ -32,7 +32,7 @@ import { pathQuadratic } from "../paths";
  * ```
  */
 export const EdgeCurveProgram = createEdgeProgram({
-  path: pathQuadratic(),
+  path: pathCurved(),
   head: extremityNone(),
   tail: extremityNone(),
   filling: fillingPlain(),

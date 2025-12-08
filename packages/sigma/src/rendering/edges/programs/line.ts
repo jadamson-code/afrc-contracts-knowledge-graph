@@ -9,7 +9,7 @@
 import { extremityNone } from "../extremities";
 import { createEdgeProgram } from "../factory";
 import { fillingPlain } from "../fillings";
-import { pathStraight } from "../paths";
+import { pathLine } from "../paths";
 
 /**
  * EdgeLineProgram renders edges as simple straight lines.
@@ -27,7 +27,7 @@ import { pathStraight } from "../paths";
  * ```
  */
 export const EdgeLineProgram = createEdgeProgram({
-  path: pathStraight(),
+  path: pathLine(),
   head: extremityNone(),
   tail: extremityNone(),
   filling: fillingPlain(),

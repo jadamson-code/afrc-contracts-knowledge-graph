@@ -1,5 +1,10 @@
 /**
- * This example demonstrates edge styles using the composable edge program system.
+ * This example demonstrates edge label styles using the composable edge program system.
+ * All labels use "auto" position mode by default, which places labels above or below
+ * the edge based on edge direction (left-to-right = above, right-to-left = below).
+ *
+ * The last two columns show what "over" mode would look like (labels centered on path).
+ * Per-program position mode is set via the `label: { position: "over" }` option.
  */
 import Graph from "graphology";
 import Sigma from "sigma";
@@ -8,7 +13,6 @@ import {
   createNodeProgram,
   extremityArrow,
   extremityNone,
-  fillingDashed,
   fillingPlain,
   layerFill,
   pathCurved,
@@ -82,59 +86,56 @@ export default () => {
   ];
 
   // Column types (extremity and filling configurations)
+  // The first three columns use the default "auto" label position from settings.
+  // The last two columns override with "over" position via the `label` option.
   const COLS = [
     {
-      name: "no-extremity",
-      label: "No extremity",
+      name: "above",
+      displayLabel: "Above",
       head: extremityNone(),
       tail: extremityNone(),
       filling: fillingPlain(),
+      labelPosition: "above" as const, // Used to set label.position in the program
+    },
+    {
+      name: "below",
+      displayLabel: "Below",
+      head: extremityNone(),
+      tail: extremityNone(),
+      filling: fillingPlain(),
+      labelPosition: "below" as const, // Used to set label.position in the program
     },
     {
       name: "arrow-head",
-      label: "Arrow head",
+      displayLabel: "Auto + arrow",
       head: extremityArrow(),
       tail: extremityNone(),
       filling: fillingPlain(),
     },
     {
       name: "double-arrow",
-      label: "Both arrows",
+      displayLabel: "Auto + both arrows",
       head: extremityArrow(),
       tail: extremityArrow(),
       filling: fillingPlain(),
     },
     {
-      name: "arrow-margin",
-      label: "5px margin",
-      head: extremityArrow({ margin: 5 }),
-      tail: extremityNone(),
-      filling: fillingPlain(),
-    },
-    {
-      name: "dashed",
-      label: "Dashed",
-      head: extremityNone(),
-      tail: extremityNone(),
-      filling: fillingDashed({
-        dashSize: { thicknessRelative: 1 },
-        gapSize: { thicknessRelative: 1 },
-        gap: "#ffcbd1",
-      }),
-    },
-    {
-      name: "dashed-arrow",
-      label: "Dashed faded",
+      name: "over-arrow",
+      displayLabel: "Over + arrow",
       head: extremityArrow(),
       tail: extremityNone(),
-      filling: fillingDashed({
-        dashSize: { thicknessRelative: 3 },
-        gapSize: { thicknessRelative: 1.5 },
-        solidExtremities: true,
-        solidMargin: { head: 10 },
-        gap: 0.3,
-        align: 1,
-      }),
+      filling: fillingPlain(),
+      labelPosition: "over" as const,
+      textBorder: { width: 5, color: "#ffffff" },
+    },
+    {
+      name: "over-double",
+      displayLabel: "Over + both",
+      head: extremityArrow(),
+      tail: extremityArrow(),
+      filling: fillingPlain(),
+      labelPosition: "over" as const,
+      textBorder: { width: 5, color: "#ffffff" },
     },
   ];
 
@@ -148,11 +149,26 @@ export default () => {
   for (const row of ROWS) {
     for (const col of COLS) {
       const edgeType = `${row.name}-${col.name}`;
+
+      // Build label options conditionally
+      const colWithOptions = col as {
+        labelPosition?: "over" | "above" | "below";
+        textBorder?: { width: number; color: { color: string } };
+      };
+      const labelOptions =
+        colWithOptions.labelPosition || colWithOptions.textBorder
+          ? {
+              ...(colWithOptions.labelPosition ? { position: colWithOptions.labelPosition } : {}),
+              ...(colWithOptions.textBorder ? { textBorder: colWithOptions.textBorder } : {}),
+            }
+          : undefined;
+
       edgeProgramClasses[edgeType] = createEdgeProgram({
         path: row.path,
         head: col.head,
         tail: col.tail,
         filling: col.filling,
+        label: labelOptions,
       });
     }
   }
@@ -192,10 +208,13 @@ export default () => {
       });
 
       // Edge connecting them
+      const edgeLabel = `${row.name} / ${col.displayLabel}`;
       graph.addEdge(sourceId, targetId, {
         type: edgeType,
         size: EDGE_SIZE,
         color: EDGE_COLOR,
+        label: edgeLabel,
+        forceLabel: true,
         // Curvature for curved edges
         curvature: row.name === "curved" ? 0.3 : 0,
       });
@@ -204,6 +223,7 @@ export default () => {
 
   const renderer = new Sigma(graph, container, {
     edgeLabelColor: { color: "#000" },
+    edgeLabelPosition: "auto",
     edgeProgramClasses,
     nodeProgramClasses: {
       diamond: createNodeProgram({

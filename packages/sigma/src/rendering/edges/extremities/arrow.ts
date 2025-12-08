@@ -41,7 +41,7 @@ export interface ArrowExtremityOptions {
  * ```typescript
  * // Default arrow
  * const EdgeArrowProgram = createEdgeProgram({
- *   path: pathStraight(),
+ *   path: pathLine(),
  *   head: extremityArrow(),
  *   tail: extremityNone(),
  *   filling: fillingPlain(),
@@ -49,7 +49,7 @@ export interface ArrowExtremityOptions {
  *
  * // Custom arrow with margin
  * const EdgeArrowMarginProgram = createEdgeProgram({
- *   path: pathStraight(),
+ *   path: pathLine(),
  *   head: extremityArrow({ lengthRatio: 3, widthRatio: 2.5, margin: 5 }),
  *   tail: extremityNone(),
  *   filling: fillingPlain(),

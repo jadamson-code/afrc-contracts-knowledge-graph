@@ -32,13 +32,15 @@ export { createEdgeProgram } from "./factory";
 
 // Paths
 export {
-  pathStraight,
-  pathQuadratic,
-  type QuadraticPathOptions,
-  pathTaxi,
-  type TaxiPathOptions,
-  pathCubic,
-  type CubicPathOptions,
+  pathLine,
+  pathCurved,
+  type CurvedPathOptions,
+  pathCurvedS,
+  type CurvedSPathOptions,
+  pathStep,
+  type StepPathOptions,
+  pathStepCurved,
+  type StepCurvedPathOptions,
 } from "./paths";
 
 // Extremities

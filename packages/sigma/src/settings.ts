@@ -15,7 +15,7 @@ import {
   NodeCircleProgram,
   NodeProgramType,
 } from "./rendering";
-import { AtLeastOne, EdgeDisplayData, LabelPosition, NodeDisplayData } from "./types";
+import { AtLeastOne, EdgeDisplayData, EdgeLabelPosition, LabelPosition, NodeDisplayData } from "./types";
 import { assign } from "./utils";
 
 /**
@@ -47,6 +47,8 @@ export interface Settings<
   edgeLabelSize: number;
   edgeLabelWeight: string;
   edgeLabelColor: { attribute: string; color?: string } | { color: string; attribute?: undefined };
+  edgeLabelPosition: EdgeLabelPosition;
+  edgeLabelMargin: number;
   stagePadding: number;
   minEdgeThickness: number;
   antiAliasingFeather: number;
@@ -128,7 +130,9 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
   edgeLabelFont: "Arial",
   edgeLabelSize: 14,
   edgeLabelWeight: "normal",
-  edgeLabelColor: { attribute: "color" },
+  edgeLabelColor: { color: "#000" },
+  edgeLabelPosition: "over",
+  edgeLabelMargin: 3,
   stagePadding: 30,
   minEdgeThickness: 1.7,
   antiAliasingFeather: 1,
@@ -225,7 +229,11 @@ export function resolveSettings<
 
   resolvedSettings.nodeProgramClasses = assign({}, DEFAULT_NODE_PROGRAM_CLASSES, resolvedSettings.nodeProgramClasses);
   resolvedSettings.edgeProgramClasses = assign({}, DEFAULT_EDGE_PROGRAM_CLASSES, resolvedSettings.edgeProgramClasses);
-  resolvedSettings.labelProgramClasses = assign({}, DEFAULT_LABEL_PROGRAM_CLASSES, resolvedSettings.labelProgramClasses);
+  resolvedSettings.labelProgramClasses = assign(
+    {},
+    DEFAULT_LABEL_PROGRAM_CLASSES,
+    resolvedSettings.labelProgramClasses,
+  );
 
   return resolvedSettings;
 }

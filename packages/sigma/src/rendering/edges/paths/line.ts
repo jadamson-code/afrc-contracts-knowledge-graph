@@ -1,6 +1,6 @@
 /**
- * Sigma.js Edge Path - Straight
- * ==============================
+ * Sigma.js Edge Path - Line
+ * =========================
  *
  * Straight line path for edges.
  * This is the simplest path type, rendered as a quad.
@@ -12,7 +12,7 @@ import { EdgePath } from "../types";
 /**
  * Creates a straight line edge path.
  *
- * Straight edges are the most efficient, rendered as a single quad (6 vertices).
+ * Line edges are the most efficient, rendered as a single quad (6 vertices).
  * All path functions have closed-form solutions.
  *
  * @returns EdgePath definition for straight lines
@@ -20,23 +20,23 @@ import { EdgePath } from "../types";
  * @example
  * ```typescript
  * const EdgeLineProgram = createEdgeProgram({
- *   path: pathStraight(),
+ *   path: pathLine(),
  *   head: extremityNone(),
  *   tail: extremityNone(),
  *   filling: fillingPlain(),
  * });
  * ```
  */
-export function pathStraight(): EdgePath {
+export function pathLine(): EdgePath {
   // language=GLSL
   const glsl = /*glsl*/ `
 // Position at parameter t ∈ [0, 1]
-vec2 path_straight_position(float t, vec2 source, vec2 target) {
+vec2 path_line_position(float t, vec2 source, vec2 target) {
   return mix(source, target, t);
 }
 
 // Unit tangent (constant along straight line)
-vec2 path_straight_tangent(float t, vec2 source, vec2 target) {
+vec2 path_line_tangent(float t, vec2 source, vec2 target) {
   vec2 delta = target - source;
   float len = length(delta);
   if (len < 0.0001) return vec2(1.0, 0.0);
@@ -44,19 +44,19 @@ vec2 path_straight_tangent(float t, vec2 source, vec2 target) {
 }
 
 // Unit normal (perpendicular to tangent, constant along straight line)
-vec2 path_straight_normal(float t, vec2 source, vec2 target) {
-  vec2 tang = path_straight_tangent(t, source, target);
+vec2 path_line_normal(float t, vec2 source, vec2 target) {
+  vec2 tang = path_line_tangent(t, source, target);
   return vec2(-tang.y, tang.x);
 }
 
 // Total length of the path
-float path_straight_length(vec2 source, vec2 target) {
+float path_line_length(vec2 source, vec2 target) {
   return length(target - source);
 }
 
 // Signed distance from point p to the path
 // Negative = left of path direction, Positive = right
-float path_straight_distance(vec2 p, vec2 source, vec2 target) {
+float path_line_distance(vec2 p, vec2 source, vec2 target) {
   vec2 pa = p - source;
   vec2 ba = target - source;
   float denom = dot(ba, ba);
@@ -69,14 +69,14 @@ float path_straight_distance(vec2 p, vec2 source, vec2 target) {
 }
 
 // Find parameter t for a given arc distance from source
-float path_straight_t_at_distance(float d, vec2 source, vec2 target) {
-  float totalLen = path_straight_length(source, target);
+float path_line_t_at_distance(float d, vec2 source, vec2 target) {
+  float totalLen = path_line_length(source, target);
   if (totalLen < 0.0001) return 0.0;
   return clamp(d / totalLen, 0.0, 1.0);
 }
 
 // Find closest parameter t for a given point
-float path_straight_closest_t(vec2 p, vec2 source, vec2 target) {
+float path_line_closest_t(vec2 p, vec2 source, vec2 target) {
   vec2 pa = p - source;
   vec2 ba = target - source;
   float denom = dot(ba, ba);
@@ -86,7 +86,7 @@ float path_straight_closest_t(vec2 p, vec2 source, vec2 target) {
 `;
 
   return {
-    name: "straight",
+    name: "line",
     segments: 1, // Simple quad
     minBodyLengthRatio: 0, // No minimum for straight edges
     linearParameterization: true, // t maps directly to arc distance

@@ -1,10 +1,10 @@
 /**
- * Sigma.js Edge Path - Taxi (Orthogonal)
+ * Sigma.js Edge Path - Step (Orthogonal)
  * ======================================
  *
- * Taxi path for edges that renders orthogonal (right-angle) connections.
+ * Step path for edges that renders orthogonal (right-angle) connections.
  * The path connects nodes using only horizontal and vertical segments,
- * similar to how a taxi would navigate a city grid.
+ * forming a stair-step pattern.
  *
  * This implementation uses exact geometry with perfect miter joins at corners,
  * achieved through custom generateConstantData().
@@ -15,9 +15,9 @@ import { numberToGLSLFloat } from "../../utils";
 import { EdgePath } from "../types";
 
 /**
- * Options for taxi path creation.
+ * Options for step path creation.
  */
-export interface TaxiPathOptions {
+export interface StepPathOptions {
   /**
    * Path orientation preference.
    * - "horizontal": Always go horizontal first (H→V→H)
@@ -45,25 +45,25 @@ export interface TaxiPathOptions {
 }
 
 /**
- * Creates a taxi (orthogonal) edge path with sharp corners.
+ * Creates a step (orthogonal) edge path with sharp corners.
  *
  * The path consists of 3 segments with 2 90° corners, forming a Z-shape or
  * step pattern depending on the orientation. Corners have perfect miter joins.
  *
  * @param options - Path configuration
- * @returns EdgePath definition for taxi paths
+ * @returns EdgePath definition for step paths
  *
  * @example
  * ```typescript
- * const EdgeTaxiProgram = createEdgeProgram({
- *   path: pathTaxi({ orientation: "horizontal" }),
+ * const EdgeStepProgram = createEdgeProgram({
+ *   path: pathStep({ orientation: "horizontal" }),
  *   head: extremityArrow(),
  *   tail: extremityNone(),
  *   filling: fillingPlain(),
  * });
  * ```
  */
-export function pathTaxi(options: TaxiPathOptions = {}): EdgePath {
+export function pathStep(options: StepPathOptions = {}): EdgePath {
   const { orientation = "automatic", rotateWithCamera = false, offset = 0.5 } = options;
 
   // Determine orientation mode:
@@ -84,41 +84,41 @@ export function pathTaxi(options: TaxiPathOptions = {}): EdgePath {
 
   // language=GLSL
   const glsl = /*glsl*/ `
-// Taxi path constants (baked from options)
-const float TAXI_OFFSET = ${numberToGLSLFloat(offset)};
-const int TAXI_ORIENTATION = ${orientationCode};
-const float TAXI_FIXED_ANGLE = ${numberToGLSLFloat(fixedAngle)};
-const bool TAXI_ROTATE_WITH_CAMERA = ${rotateWithCamera ? "true" : "false"};
-const float TAXI_SQRT2 = 1.41421356237;
+// Step path constants (baked from options)
+const float STEP_OFFSET = ${numberToGLSLFloat(offset)};
+const int STEP_ORIENTATION = ${orientationCode};
+const float STEP_FIXED_ANGLE = ${numberToGLSLFloat(fixedAngle)};
+const bool STEP_ROTATE_WITH_CAMERA = ${rotateWithCamera ? "true" : "false"};
+const float STEP_SQRT2 = 1.41421356237;
 
 // ============================================================================
 // HELPER: Rotate a 2D vector by angle (counter-clockwise)
 // ============================================================================
-vec2 taxi_rotate(vec2 v, float angle) {
+vec2 step_rotate(vec2 v, float angle) {
   float c = cos(angle);
   float s = sin(angle);
   return vec2(c * v.x - s * v.y, s * v.x + c * v.y);
 }
 
 // ============================================================================
-// HELPER: Get taxi segment points (source, corner1, corner2, target)
+// HELPER: Get step segment points (source, corner1, corner2, target)
 // ============================================================================
-void getTaxiSegmentPoints(vec2 source, vec2 target, out vec2 c1, out vec2 c2) {
+void getStepSegmentPoints(vec2 source, vec2 target, out vec2 c1, out vec2 c2) {
   vec2 delta = target - source;
 
   // Determine orientation
   bool horizontalFirst;
-  if (TAXI_ORIENTATION == 1) {
+  if (STEP_ORIENTATION == 1) {
     horizontalFirst = true;
-  } else if (TAXI_ORIENTATION == 2) {
+  } else if (STEP_ORIENTATION == 2) {
     horizontalFirst = false;
-  } else if (TAXI_ORIENTATION == 3) {
+  } else if (STEP_ORIENTATION == 3) {
     // Fixed angle mode: first segment goes in fixed direction
-    vec2 dir = vec2(cos(TAXI_FIXED_ANGLE), sin(TAXI_FIXED_ANGLE));
-    float projLen = dot(delta, dir) * TAXI_OFFSET;
+    vec2 dir = vec2(cos(STEP_FIXED_ANGLE), sin(STEP_FIXED_ANGLE));
+    float projLen = dot(delta, dir) * STEP_OFFSET;
     c1 = source + dir * projLen;
     // Last segment goes in same fixed direction
-    c2 = target - dir * (dot(delta, dir) * (1.0 - TAXI_OFFSET));
+    c2 = target - dir * (dot(delta, dir) * (1.0 - STEP_OFFSET));
     return;
   } else {
     // Automatic: choose based on which delta is larger
@@ -127,12 +127,12 @@ void getTaxiSegmentPoints(vec2 source, vec2 target, out vec2 c1, out vec2 c2) {
 
   if (horizontalFirst) {
     // H→V→H pattern
-    float midX = source.x + delta.x * TAXI_OFFSET;
+    float midX = source.x + delta.x * STEP_OFFSET;
     c1 = vec2(midX, source.y);
     c2 = vec2(midX, target.y);
   } else {
     // V→H→V pattern
-    float midY = source.y + delta.y * TAXI_OFFSET;
+    float midY = source.y + delta.y * STEP_OFFSET;
     c1 = vec2(source.x, midY);
     c2 = vec2(target.x, midY);
   }
@@ -142,7 +142,7 @@ void getTaxiSegmentPoints(vec2 source, vec2 target, out vec2 c1, out vec2 c2) {
 // HELPER: Compute miter normal at corner between two segments
 // Returns the normal direction and miter scale factor
 // ============================================================================
-vec2 taxi_miterNormal(vec2 dir1, vec2 dir2, float side) {
+vec2 step_miterNormal(vec2 dir1, vec2 dir2, float side) {
   // Normals for each segment
   vec2 n1 = vec2(-dir1.y, dir1.x);
   vec2 n2 = vec2(-dir2.y, dir2.x);
@@ -151,19 +151,19 @@ vec2 taxi_miterNormal(vec2 dir1, vec2 dir2, float side) {
   vec2 miter = normalize(n1 + n2);
 
   // Scale factor for 90° corner: 1/cos(45°) = sqrt(2)
-  return miter * side * TAXI_SQRT2;
+  return miter * side * STEP_SQRT2;
 }
 
 // ============================================================================
 // POSITION - Core function for vertex placement
 // ============================================================================
-vec2 path_taxi_position(float t, vec2 source, vec2 target) {
+vec2 path_step_position(float t, vec2 source, vec2 target) {
   // Apply camera rotation if not rotating with camera
   vec2 src = source;
   vec2 tgt = target;
-  if (!TAXI_ROTATE_WITH_CAMERA) {
-    src = taxi_rotate(source, -u_cameraAngle);
-    tgt = taxi_rotate(target, -u_cameraAngle);
+  if (!STEP_ROTATE_WITH_CAMERA) {
+    src = step_rotate(source, -u_cameraAngle);
+    tgt = step_rotate(target, -u_cameraAngle);
   }
 
   vec2 delta = tgt - src;
@@ -171,15 +171,15 @@ vec2 path_taxi_position(float t, vec2 source, vec2 target) {
   // Handle degenerate case (aligned nodes) -> straight line
   if (abs(delta.x) < 0.0001 || abs(delta.y) < 0.0001) {
     vec2 result = mix(src, tgt, t);
-    if (!TAXI_ROTATE_WITH_CAMERA) {
-      result = taxi_rotate(result, u_cameraAngle);
+    if (!STEP_ROTATE_WITH_CAMERA) {
+      result = step_rotate(result, u_cameraAngle);
     }
     return result;
   }
 
   // Get segment points
   vec2 c1, c2;
-  getTaxiSegmentPoints(src, tgt, c1, c2);
+  getStepSegmentPoints(src, tgt, c1, c2);
 
   // Compute segment lengths
   float L1 = length(c1 - src);
@@ -203,8 +203,8 @@ vec2 path_taxi_position(float t, vec2 source, vec2 target) {
   }
 
   // Rotate back to world space if needed
-  if (!TAXI_ROTATE_WITH_CAMERA) {
-    result = taxi_rotate(result, u_cameraAngle);
+  if (!STEP_ROTATE_WITH_CAMERA) {
+    result = step_rotate(result, u_cameraAngle);
   }
 
   return result;
@@ -213,13 +213,13 @@ vec2 path_taxi_position(float t, vec2 source, vec2 target) {
 // ============================================================================
 // TANGENT - Direction of travel
 // ============================================================================
-vec2 path_taxi_tangent(float t, vec2 source, vec2 target) {
+vec2 path_step_tangent(float t, vec2 source, vec2 target) {
   // Apply camera rotation if not rotating with camera
   vec2 src = source;
   vec2 tgt = target;
-  if (!TAXI_ROTATE_WITH_CAMERA) {
-    src = taxi_rotate(source, -u_cameraAngle);
-    tgt = taxi_rotate(target, -u_cameraAngle);
+  if (!STEP_ROTATE_WITH_CAMERA) {
+    src = step_rotate(source, -u_cameraAngle);
+    tgt = step_rotate(target, -u_cameraAngle);
   }
 
   vec2 delta = tgt - src;
@@ -227,14 +227,14 @@ vec2 path_taxi_tangent(float t, vec2 source, vec2 target) {
   // Handle degenerate case
   if (abs(delta.x) < 0.0001 || abs(delta.y) < 0.0001) {
     vec2 tang = normalize(delta);
-    if (!TAXI_ROTATE_WITH_CAMERA) {
-      tang = taxi_rotate(tang, u_cameraAngle);
+    if (!STEP_ROTATE_WITH_CAMERA) {
+      tang = step_rotate(tang, u_cameraAngle);
     }
     return tang;
   }
 
   vec2 c1, c2;
-  getTaxiSegmentPoints(src, tgt, c1, c2);
+  getStepSegmentPoints(src, tgt, c1, c2);
 
   float L1 = length(c1 - src);
   float L2 = length(c2 - c1);
@@ -257,8 +257,8 @@ vec2 path_taxi_tangent(float t, vec2 source, vec2 target) {
   }
 
   // Rotate back to world space if needed
-  if (!TAXI_ROTATE_WITH_CAMERA) {
-    tang = taxi_rotate(tang, u_cameraAngle);
+  if (!STEP_ROTATE_WITH_CAMERA) {
+    tang = step_rotate(tang, u_cameraAngle);
   }
 
   return tang;
@@ -267,21 +267,21 @@ vec2 path_taxi_tangent(float t, vec2 source, vec2 target) {
 // ============================================================================
 // NORMAL - Perpendicular to tangent (used in fragment shader for SDF)
 // ============================================================================
-vec2 path_taxi_normal(float t, vec2 source, vec2 target) {
-  vec2 tang = path_taxi_tangent(t, source, target);
+vec2 path_step_normal(float t, vec2 source, vec2 target) {
+  vec2 tang = path_step_tangent(t, source, target);
   return vec2(-tang.y, tang.x);
 }
 
 // ============================================================================
 // LENGTH - Total path length
 // ============================================================================
-float path_taxi_length(vec2 source, vec2 target) {
+float path_step_length(vec2 source, vec2 target) {
   // Apply camera rotation if not rotating with camera
   vec2 src = source;
   vec2 tgt = target;
-  if (!TAXI_ROTATE_WITH_CAMERA) {
-    src = taxi_rotate(source, -u_cameraAngle);
-    tgt = taxi_rotate(target, -u_cameraAngle);
+  if (!STEP_ROTATE_WITH_CAMERA) {
+    src = step_rotate(source, -u_cameraAngle);
+    tgt = step_rotate(target, -u_cameraAngle);
   }
 
   vec2 delta = tgt - src;
@@ -292,7 +292,7 @@ float path_taxi_length(vec2 source, vec2 target) {
   }
 
   vec2 c1, c2;
-  getTaxiSegmentPoints(src, tgt, c1, c2);
+  getStepSegmentPoints(src, tgt, c1, c2);
 
   return length(c1 - src) + length(c2 - c1) + length(tgt - c2);
 }
@@ -300,8 +300,8 @@ float path_taxi_length(vec2 source, vec2 target) {
 // ============================================================================
 // T_AT_DISTANCE - Find t for given arc distance
 // ============================================================================
-float path_taxi_t_at_distance(float d, vec2 source, vec2 target) {
-  float totalLen = path_taxi_length(source, target);
+float path_step_t_at_distance(float d, vec2 source, vec2 target) {
+  float totalLen = path_step_length(source, target);
   if (totalLen < 0.0001) return 0.0;
   return clamp(d / totalLen, 0.0, 1.0);
 }
@@ -309,15 +309,15 @@ float path_taxi_t_at_distance(float d, vec2 source, vec2 target) {
 // ============================================================================
 // CLOSEST_T - Find t for closest point on path (approximate)
 // ============================================================================
-float path_taxi_closest_t(vec2 p, vec2 source, vec2 target) {
+float path_step_closest_t(vec2 p, vec2 source, vec2 target) {
   // Apply camera rotation if not rotating with camera
   vec2 pt = p;
   vec2 src = source;
   vec2 tgt = target;
-  if (!TAXI_ROTATE_WITH_CAMERA) {
-    pt = taxi_rotate(p, -u_cameraAngle);
-    src = taxi_rotate(source, -u_cameraAngle);
-    tgt = taxi_rotate(target, -u_cameraAngle);
+  if (!STEP_ROTATE_WITH_CAMERA) {
+    pt = step_rotate(p, -u_cameraAngle);
+    src = step_rotate(source, -u_cameraAngle);
+    tgt = step_rotate(target, -u_cameraAngle);
   }
 
   vec2 delta = tgt - src;
@@ -331,7 +331,7 @@ float path_taxi_closest_t(vec2 p, vec2 source, vec2 target) {
   }
 
   vec2 c1, c2;
-  getTaxiSegmentPoints(src, tgt, c1, c2);
+  getStepSegmentPoints(src, tgt, c1, c2);
 
   float L1 = length(c1 - src);
   float L2 = length(c2 - c1);
@@ -367,10 +367,10 @@ float path_taxi_closest_t(vec2 p, vec2 source, vec2 target) {
 // ============================================================================
 // DISTANCE - Signed distance from point to path
 // ============================================================================
-float path_taxi_distance(vec2 p, vec2 source, vec2 target) {
-  float closestT = path_taxi_closest_t(p, source, target);
-  vec2 closest = path_taxi_position(closestT, source, target);
-  vec2 normal = path_taxi_normal(closestT, source, target);
+float path_step_distance(vec2 p, vec2 source, vec2 target) {
+  float closestT = path_step_closest_t(p, source, target);
+  vec2 closest = path_step_position(closestT, source, target);
+  vec2 normal = path_step_normal(closestT, source, target);
   vec2 diff = p - closest;
   return length(diff) * sign(dot(diff, normal));
 }
@@ -378,10 +378,10 @@ float path_taxi_distance(vec2 p, vec2 source, vec2 target) {
 
   // language=GLSL
   const vertexGlsl = /*glsl*/ `
-// Taxi vertex processing: tail/head quads + body with miter corners
+// Step vertex processing: tail/head quads + body with miter corners
 // a_vertexId for body: 0=start, 1=corner1, 2=corner2, 3=end
 
-void taxi_getVertexPosition(
+void step_getVertexPosition(
   vec2 source, vec2 target,
   float tStart, float tEnd, float tTailEnd, float tHeadStart,
   float zone, float zoneT, float side,
@@ -392,24 +392,24 @@ void taxi_getVertexPosition(
   // Apply camera rotation if not rotating with camera
   vec2 src = source;
   vec2 tgt = target;
-  if (!TAXI_ROTATE_WITH_CAMERA) {
-    src = taxi_rotate(source, -u_cameraAngle);
-    tgt = taxi_rotate(target, -u_cameraAngle);
+  if (!STEP_ROTATE_WITH_CAMERA) {
+    src = step_rotate(source, -u_cameraAngle);
+    tgt = step_rotate(target, -u_cameraAngle);
   }
 
   vec2 delta = tgt - src;
 
   // Get key positions
-  vec2 tipTail = path_taxi_position(tStart, source, target);
-  vec2 baseTail = path_taxi_position(tTailEnd, source, target);
-  vec2 baseHead = path_taxi_position(tHeadStart, source, target);
-  vec2 tipHead = path_taxi_position(tEnd, source, target);
+  vec2 tipTail = path_step_position(tStart, source, target);
+  vec2 baseTail = path_step_position(tTailEnd, source, target);
+  vec2 baseHead = path_step_position(tHeadStart, source, target);
+  vec2 tipHead = path_step_position(tEnd, source, target);
 
-  if (!TAXI_ROTATE_WITH_CAMERA) {
-    tipTail = taxi_rotate(tipTail, -u_cameraAngle);
-    baseTail = taxi_rotate(baseTail, -u_cameraAngle);
-    baseHead = taxi_rotate(baseHead, -u_cameraAngle);
-    tipHead = taxi_rotate(tipHead, -u_cameraAngle);
+  if (!STEP_ROTATE_WITH_CAMERA) {
+    tipTail = step_rotate(tipTail, -u_cameraAngle);
+    baseTail = step_rotate(baseTail, -u_cameraAngle);
+    baseHead = step_rotate(baseHead, -u_cameraAngle);
+    tipHead = step_rotate(tipHead, -u_cameraAngle);
   }
 
   // Degenerate case (aligned nodes) -> straight line
@@ -430,28 +430,28 @@ void taxi_getVertexPosition(
     float halfWidth = (thickness * widthFactor + aaWidth) * 0.5;
     position = pos + n * side * halfWidth;
     normal = n * sign(side);
-    if (!TAXI_ROTATE_WITH_CAMERA) {
-      position = taxi_rotate(position, u_cameraAngle);
-      normal = taxi_rotate(normal, u_cameraAngle);
+    if (!STEP_ROTATE_WITH_CAMERA) {
+      position = step_rotate(position, u_cameraAngle);
+      normal = step_rotate(normal, u_cameraAngle);
     }
     return;
   }
 
   // Corner points and t values
   vec2 c1, c2;
-  getTaxiSegmentPoints(src, tgt, c1, c2);
+  getStepSegmentPoints(src, tgt, c1, c2);
   float L1 = length(c1 - src), L2 = length(c2 - c1), L3 = length(tgt - c2);
   float totalLen = L1 + L2 + L3;
   float tCorner1 = L1 / totalLen, tCorner2 = (L1 + L2) / totalLen;
 
   // Attachment normals for tail/head quads
-  vec2 tailTang = path_taxi_tangent(tTailEnd, source, target);
+  vec2 tailTang = path_step_tangent(tTailEnd, source, target);
   vec2 tailAttachNormal = vec2(-tailTang.y, tailTang.x);
-  vec2 headTang = path_taxi_tangent(tHeadStart, source, target);
+  vec2 headTang = path_step_tangent(tHeadStart, source, target);
   vec2 headAttachNormal = vec2(-headTang.y, headTang.x);
-  if (!TAXI_ROTATE_WITH_CAMERA) {
-    tailAttachNormal = taxi_rotate(tailAttachNormal, -u_cameraAngle);
-    headAttachNormal = taxi_rotate(headAttachNormal, -u_cameraAngle);
+  if (!STEP_ROTATE_WITH_CAMERA) {
+    tailAttachNormal = step_rotate(tailAttachNormal, -u_cameraAngle);
+    headAttachNormal = step_rotate(headAttachNormal, -u_cameraAngle);
   }
 
   // Segment directions and normals for body
@@ -474,9 +474,9 @@ void taxi_getVertexPosition(
     if (vertexId == 0) {
       pos = baseTail; norm = n1; outT = tTailEnd;
     } else if (vertexId == 1) {
-      pos = c1; norm = taxi_miterNormal(dir1, dir2, 1.0); outT = tCorner1;
+      pos = c1; norm = step_miterNormal(dir1, dir2, 1.0); outT = tCorner1;
     } else if (vertexId == 2) {
-      pos = c2; norm = taxi_miterNormal(dir2, dir3, 1.0); outT = tCorner2;
+      pos = c2; norm = step_miterNormal(dir2, dir3, 1.0); outT = tCorner2;
     } else {
       pos = baseHead; norm = n3; outT = tHeadStart;
     }
@@ -494,9 +494,9 @@ void taxi_getVertexPosition(
   normal = norm * sign(side);
 
   // Rotate back to world space if needed
-  if (!TAXI_ROTATE_WITH_CAMERA) {
-    position = taxi_rotate(position, u_cameraAngle);
-    normal = taxi_rotate(normal, u_cameraAngle);
+  if (!STEP_ROTATE_WITH_CAMERA) {
+    position = step_rotate(position, u_cameraAngle);
+    normal = step_rotate(normal, u_cameraAngle);
   }
 }
 `;
@@ -546,7 +546,7 @@ void taxi_getVertexPosition(
   }
 
   return {
-    name: "taxi",
+    name: "step",
     segments: 1, // Not used when generateConstantData is provided
     minBodyLengthRatio: 2, // Ensure corners stay in body zone
     linearParameterization: true, // t maps linearly to arc distance (piecewise-linear path)

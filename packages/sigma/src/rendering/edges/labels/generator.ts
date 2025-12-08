@@ -35,6 +35,8 @@ export interface GeneratedEdgeLabelShaders {
 export interface EdgeLabelShaderOptions {
   /** The path type for positioning labels along the edge */
   path: EdgePath;
+  /** Whether to render text border (outline) */
+  hasBorder?: boolean;
 }
 
 // ============================================================================
@@ -66,7 +68,7 @@ export interface EdgeLabelShaderOptions {
  *    f. Apply perpendicular offset (for above/below positioning - Milestone 3)
  */
 export function generateEdgeLabelVertexShader(options: EdgeLabelShaderOptions): string {
-  const { path } = options;
+  const { path, hasBorder = false } = options;
   const pathName = path.name;
 
   // language=GLSL
@@ -82,14 +84,18 @@ in vec4 a_nodeSizes;        // (sourceSize, targetSize, sourceShapeId, targetSha
 in vec4 a_edgeParams;       // (thickness, headLengthRatio, tailLengthRatio, baseFontSize)
 
 // Character metrics (in glyph units = atlas font size pixels)
-in vec4 a_charMetrics;      // (charTextOffset, charAdvance, totalTextWidth, unused)
+in vec4 a_charMetrics;      // (charTextOffset, charAdvance, totalTextWidth, positionMode)
 in vec4 a_charDims;         // (charSize.x, charSize.y, charOffset.x, charOffset.y)
 
 // Atlas texture coordinates
 in vec4 a_texCoords;        // (x, y, width, height) in atlas pixels
 
+// Label parameters
+in vec2 a_labelParams;      // (margin, unused)
+
 // Appearance
 in vec4 a_color;            // Character color (RGBA, normalized)
+${hasBorder ? "in vec4 a_borderColor;      // Border color (RGBA, normalized)" : ""}
 
 // Path-specific attributes
 ${path.attributes
@@ -125,12 +131,15 @@ uniform vec2 u_atlasSize;
 
 out vec2 v_texCoord;
 out vec4 v_color;
+${hasBorder ? "out vec4 v_borderColor;" : ""}
+out float v_edgeFade;  // 0 = fully visible, 1 = fully faded (outside body)
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const float bias = 255.0 / 254.0;
+const float FADE_WIDTH_PIXELS = 15.0;  // Width of fade gradient in pixels
 
 // ============================================================================
 // Node Shape SDFs (for binary search)
@@ -175,8 +184,10 @@ void main() {
   float charTextOffset = a_charMetrics.x;
   float charAdvance = a_charMetrics.y;
   float totalTextWidth = a_charMetrics.z;
+  float positionMode = a_charMetrics.w;
   vec2 charSize = a_charDims.xy;
   vec2 charOffset = a_charDims.zw;
+  float margin = a_labelParams.x;
 
   // -------------------------------------------------------------------------
   // Step 1: Convert thickness to WebGL units
@@ -225,37 +236,104 @@ void main() {
   float charAdvanceWebGL = charAdvance * fontScale * u_correctionRatio / u_sizeRatio;
 
   // -------------------------------------------------------------------------
-  // Step 4: Truncation check
+  // Step 4: Compute character center offset (truncation check moved to after curvature adjustment)
   // -------------------------------------------------------------------------
-  // Discard characters that don't fit within the body
-  // Character center position relative to label center
+  // Character center position relative to label center (on centerline, before curvature adjustment)
   float charCenterOffset = charOffsetWebGL + charAdvanceWebGL * 0.5 - textWidthWebGL * 0.5;
 
-  // Check if this character fits within half the body length
-  if (abs(charCenterOffset) > bodyLength * 0.5) {
-    // Character doesn't fit - move vertex off-screen
-    gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
-    return;
+  // -------------------------------------------------------------------------
+  // Step 5: Compute perpendicular offset based on position mode
+  // -------------------------------------------------------------------------
+  // Position modes: 0=over, 1=above, 2=below, 3=auto
+  // We need to compute this early for curvature-adaptive spacing
+  float halfThickness = webGLThickness * 0.5;
+  float marginWebGL = margin * u_correctionRatio / u_sizeRatio;
+  // Half text height to center the label visually on the offset line
+  // Using 0.35 factor (not 0.5) because the visual center of mixed-case text
+  // is typically below the midpoint between baseline and cap height
+  float halfTextHeight = baseFontSize * 0.35 * u_correctionRatio / u_sizeRatio;
+  float perpOffset = 0.0;
+
+  if (positionMode == 1.0) {
+    // "above": positive perpendicular offset
+    perpOffset = halfThickness + marginWebGL + halfTextHeight;
+  } else if (positionMode == 2.0) {
+    // "below": negative perpendicular offset
+    perpOffset = -(halfThickness + marginWebGL + halfTextHeight);
+  } else if (positionMode == 3.0) {
+    // "auto": determine based on screen positions of source and target
+    // Transform source and target to clip space to compare screen X positions
+    vec3 sourceClip = u_matrix * vec3(source, 1.0);
+    vec3 targetClip = u_matrix * vec3(target, 1.0);
+    // If source is to the left of target on screen, use "above"; otherwise "below"
+    // This ensures text is always readable (not upside-down)
+    perpOffset = sourceClip.x < targetClip.x
+      ? (halfThickness + marginWebGL + halfTextHeight)
+      : -(halfThickness + marginWebGL + halfTextHeight);
   }
+  // else positionMode == 0.0 ("over"): perpOffset stays 0
 
   // -------------------------------------------------------------------------
-  // Step 5: Position character on path
+  // Step 6: Position character on path with curvature-adaptive spacing
   // -------------------------------------------------------------------------
   // Body center in arc distance
   float bodyCenterDist = (bodyStartDist + bodyEndDist) * 0.5;
 
-  // Character center in arc distance
-  float charArcDist = bodyCenterDist + charCenterOffset;
+  // Base character position on centerline
+  float baseCharArcDist = bodyCenterDist + charCenterOffset;
+  float charT = path_${pathName}_t_at_distance(baseCharArcDist, source, target);
 
-  // Convert arc distance to parameter t
-  float charT = path_${pathName}_t_at_distance(charArcDist, source, target);
+  // For above/below modes, apply curvature-adaptive spacing
+  // When offset from the centerline, the arc length on the offset path differs.
+  // We need to compute the CUMULATIVE arc difference from the label center to this character.
+  if (perpOffset != 0.0) {
+    // Get the t value at body center for reference
+    float centerT = path_${pathName}_t_at_distance(bodyCenterDist, source, target);
+    vec2 tangentAtCenter = path_${pathName}_tangent(centerT, source, target);
+    float angleAtCenter = atan(tangentAtCenter.y, tangentAtCenter.x);
 
-  // Get position and tangent at this t
+    // Iterative refinement: the adjustment changes the character position,
+    // which changes the angle, which changes the adjustment. For paths with
+    // concentrated curvature (like taxiRounded corners), we need to iterate.
+    float adjustedCharArcDist = baseCharArcDist;
+    for (int iter = 0; iter < 3; iter++) {
+      // Compute angle at current character position
+      vec2 tangentAtChar = path_${pathName}_tangent(charT, source, target);
+      float angleAtChar = atan(tangentAtChar.y, tangentAtChar.x);
+
+      // Handle angle wraparound
+      float totalAngleChange = angleAtChar - angleAtCenter;
+      if (totalAngleChange > 3.14159) totalAngleChange -= 6.28318;
+      if (totalAngleChange < -3.14159) totalAngleChange += 6.28318;
+
+      // The arc length difference on the offset path is: perpOffset * totalAngleChange
+      // This is exact for any curve: integral of (1 + curvature * offset) ds = s + offset * delta_angle
+      // We apply a 2x scale factor because the visual offset includes both the perpendicular offset
+      // from centerline AND the curvature effect on the character positioning itself
+      float arcAdjustment = perpOffset * totalAngleChange;
+
+      // Apply the adjustment to get the corrected arc distance
+      adjustedCharArcDist = baseCharArcDist + arcAdjustment;
+      charT = path_${pathName}_t_at_distance(adjustedCharArcDist, source, target);
+    }
+
+    // Store adjusted offset for edge fade calculation
+    charCenterOffset = adjustedCharArcDist - bodyCenterDist;
+  }
+  // For "over" mode, charCenterOffset is already set correctly
+
+  // Get position and tangent at final character position
   vec2 pathPos = path_${pathName}_position(charT, source, target);
   vec2 tangent = path_${pathName}_tangent(charT, source, target);
 
+  // Compute perpendicular direction (90 degrees from tangent)
+  vec2 perpDir = vec2(-tangent.y, tangent.x);
+
+  // Apply perpendicular offset to path position
+  vec2 offsetPathPos = pathPos + perpDir * perpOffset;
+
   // -------------------------------------------------------------------------
-  // Step 6: Build character quad
+  // Step 7: Build character quad
   // -------------------------------------------------------------------------
   // Character size in screen pixels
   vec2 charSizePixels = charSize * fontScale;
@@ -286,12 +364,14 @@ void main() {
   // Quad corner (0,0) = bottom-left, (1,1) = top-right
   quadPos.y = -charOffsetPixels.y + sdfBufferOffset - charSizePixels.y * (1.0 - a_quadCorner.y);
 
-  // Center vertically on the path (offset by half the typical cap height)
-  // This is approximate - a proper solution would use font metrics
-  quadPos.y -= charSizePixels.y * 0.15;
+  // Center vertically on the path by offsetting by half the visual text height
+  // The offset should scale linearly with font size (not quadratically)
+  // 17.0 is approximately the distance from baseline to visual center in atlas units (64px base)
+  float verticalCenterOffset = 17.0 * fontScale;
+  quadPos.y -= verticalCenterOffset;
 
   // -------------------------------------------------------------------------
-  // Step 7: Rotate quad to align with tangent
+  // Step 8: Rotate quad to align with tangent
   // -------------------------------------------------------------------------
   // Rotation matrix from tangent
   // tangent = (cos(angle), sin(angle)), so we can build rotation directly
@@ -303,27 +383,51 @@ void main() {
   // Rotate around character center on path
   vec2 rotatedOffset = rotation * quadPosWebGL;
 
-  // Final position in graph space
-  vec2 worldPos = pathPos + rotatedOffset;
+  // Final position in graph space (using offset path position for above/below modes)
+  vec2 worldPos = offsetPathPos + rotatedOffset;
 
   // -------------------------------------------------------------------------
-  // Step 8: Transform to clip space
+  // Step 9: Transform to clip space
   // -------------------------------------------------------------------------
   vec3 clipPos = u_matrix * vec3(worldPos, 1.0);
   gl_Position = vec4(clipPos.xy, 0.0, 1.0);
 
   // -------------------------------------------------------------------------
-  // Step 9: Texture coordinates
+  // Step 10: Texture coordinates
   // -------------------------------------------------------------------------
   // Flip Y for texture coordinates (texture Y goes down, quad Y goes up)
   vec2 texCorner = vec2(a_quadCorner.x, 1.0 - a_quadCorner.y);
   v_texCoord = (a_texCoords.xy + texCorner * a_texCoords.zw) / u_atlasSize;
 
   // -------------------------------------------------------------------------
-  // Step 10: Pass color
+  // Step 11: Pass color and border color
   // -------------------------------------------------------------------------
   v_color = a_color;
   v_color.a *= bias;
+${hasBorder ? "  v_borderColor = a_borderColor;\n  v_borderColor.a *= bias;" : ""}
+
+  // -------------------------------------------------------------------------
+  // Step 12: Compute edge fade for soft truncation
+  // -------------------------------------------------------------------------
+  // Convert fade width from pixels to WebGL units
+  float fadeWidthWebGL = FADE_WIDTH_PIXELS * u_correctionRatio / u_sizeRatio;
+
+  // Compute the arc position of THIS VERTEX (not just character center)
+  // The quad extends from charCenter - advance/2 to charCenter + advance/2
+  // a_quadCorner.x is 0 for left edge, 1 for right edge
+  float vertexLocalOffset = (a_quadCorner.x - 0.5) * charAdvanceWebGL;
+  float vertexArcOffset = charCenterOffset + vertexLocalOffset;
+
+  // Compute distance from body edges (positive = inside body, negative = outside)
+  float halfBody = bodyLength * 0.5;
+  float distFromStart = vertexArcOffset + halfBody;  // Distance from body start edge
+  float distFromEnd = halfBody - vertexArcOffset;    // Distance from body end edge
+  float distFromEdge = min(distFromStart, distFromEnd);
+
+  // Compute fade: 0 = fully visible (deep inside body), 1 = fully faded (at body edge)
+  // Fade goes from 0 (at 2*fadeWidth inside) to 1 (at body edge)
+  // This ensures text is fully transparent before reaching extremities
+  v_edgeFade = 1.0 - smoothstep(0.0, fadeWidthWebGL * 2.0, distFromEdge);
 }
 `;
 
@@ -336,44 +440,77 @@ void main() {
 
 /**
  * Generates the fragment shader for SDF-based text rendering.
- * Uses smoothstep for anti-aliased edges.
  *
- * Edge labels are NOT pickable (picking output is transparent).
+ * Uses signed distance field (SDF) textures to render crisp text at any scale.
+ * The SDF stores distance-to-edge values, and we use smoothstep for anti-aliasing.
+ *
+ * When border is enabled, renders a colored outline around the text using
+ * a wider SDF threshold for the border than for the fill.
  */
-export function generateEdgeLabelFragmentShader(): string {
+export function generateEdgeLabelFragmentShader(options: { hasBorder?: boolean } = {}): string {
+  const { hasBorder = false } = options;
+
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es
 precision highp float;
 
 in vec2 v_texCoord;
 in vec4 v_color;
+${hasBorder ? "in vec4 v_borderColor;" : ""}
+in float v_edgeFade;  // 0 = fully visible, 1 = fully faded
 
 uniform sampler2D u_atlas;
 uniform float u_gamma;
 uniform float u_sdfBuffer;
 uniform float u_pixelRatio;
+${hasBorder ? "uniform float u_borderWidth;  // Border width in SDF units (normalized)" : ""}
 
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec4 fragPicking;
 
 void main() {
-  // Sample SDF value from atlas (high = inside glyph, low = outside)
+  // SDF stores normalized distance: 0.5 = on edge, >0.5 = inside glyph
   float sdfValue = texture(u_atlas, v_texCoord).a;
 
-  // Edge threshold: 1.0 - cutoff = 0.75 for default cutoff=0.25
-  float edgeThreshold = 1.0 - u_sdfBuffer;
+  // Edge threshold accounting for SDF buffer padding
+  float edge = 1.0 - u_sdfBuffer;
 
-  // Gamma controls the anti-aliasing band width
-  // Scale by pixel ratio for HiDPI support
-  float gamma = u_gamma / u_pixelRatio;
+  // Anti-aliasing width adjusted for pixel density
+  float aaWidth = u_gamma / u_pixelRatio;
 
-  // Anti-aliasing using smoothstep
-  float alpha = smoothstep(edgeThreshold - gamma, edgeThreshold + gamma, sdfValue);
+  // Apply edge fade for soft truncation at body boundaries
+  float edgeAlpha = 1.0 - v_edgeFade;
 
-  // Use premultiplied alpha output to match the blend function (ONE, ONE_MINUS_SRC_ALPHA)
-  // This ensures that when alpha=0, RGB is also 0 and doesn't affect blending
-  float finalAlpha = v_color.a * alpha;
-  fragColor = vec4(v_color.rgb * finalAlpha, finalAlpha);
+${
+  hasBorder
+    ? `  // Border rendering: compute alpha for both fill and border regions
+  // Border extends from (edge - borderWidth) to edge
+  float borderEdge = edge - u_borderWidth;
+
+  // Fill alpha: fully opaque inside the glyph
+  float fillAlpha = smoothstep(edge - aaWidth, edge + aaWidth, sdfValue);
+
+  // Border alpha: opaque in the border region (between borderEdge and edge)
+  float borderAlpha = smoothstep(borderEdge - aaWidth, borderEdge + aaWidth, sdfValue);
+
+  // Composite: fill on top of border
+  // Border is visible where borderAlpha > 0 but fillAlpha < 1
+  vec3 borderColorPremult = v_borderColor.rgb * v_borderColor.a * borderAlpha * edgeAlpha;
+  vec3 fillColorPremult = v_color.rgb * v_color.a * fillAlpha * edgeAlpha;
+
+  // Blend fill over border (fill replaces border where fill is opaque)
+  float finalBorderAlpha = borderAlpha * (1.0 - fillAlpha);
+  vec3 finalColor = fillColorPremult + v_borderColor.rgb * v_borderColor.a * finalBorderAlpha * edgeAlpha;
+  float finalAlpha = (v_color.a * fillAlpha + v_borderColor.a * finalBorderAlpha) * edgeAlpha;
+
+  fragColor = vec4(finalColor, finalAlpha);`
+    : `  // Smooth transition from transparent to opaque at glyph edge
+  float alpha = smoothstep(edge - aaWidth, edge + aaWidth, sdfValue);
+
+  // Premultiplied alpha output
+  float finalAlpha = v_color.a * alpha * edgeAlpha;
+  fragColor = vec4(v_color.rgb * finalAlpha, finalAlpha);`
+}
 
   // Edge labels are not pickable
   fragPicking = vec4(0.0);
@@ -387,7 +524,7 @@ void main() {
 // Uniform Collection
 // ============================================================================
 
-export function collectEdgeLabelUniforms(path: EdgePath): string[] {
+export function collectEdgeLabelUniforms(path: EdgePath, hasBorder = false): string[] {
   const uniforms = [
     "u_matrix",
     "u_sizeRatio",
@@ -401,6 +538,11 @@ export function collectEdgeLabelUniforms(path: EdgePath): string[] {
     "u_gamma",
     "u_sdfBuffer",
   ];
+
+  // Add border width uniform if border is enabled
+  if (hasBorder) {
+    uniforms.push("u_borderWidth");
+  }
 
   // Add path-specific uniforms
   for (const uniform of path.uniforms) {
@@ -417,9 +559,10 @@ export function collectEdgeLabelUniforms(path: EdgePath): string[] {
 // ============================================================================
 
 export function generateEdgeLabelShaders(options: EdgeLabelShaderOptions): GeneratedEdgeLabelShaders {
+  const { hasBorder = false } = options;
   return {
     vertexShader: generateEdgeLabelVertexShader(options),
-    fragmentShader: generateEdgeLabelFragmentShader(),
-    uniforms: collectEdgeLabelUniforms(options.path),
+    fragmentShader: generateEdgeLabelFragmentShader({ hasBorder }),
+    uniforms: collectEdgeLabelUniforms(options.path, hasBorder),
   };
 }

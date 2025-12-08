@@ -20,9 +20,31 @@ import { Attributes } from "graphology-types";
 
 import { DEFAULT_SDF_ATLAS_OPTIONS, GlyphMetrics, SDFAtlasManager } from "../../../core/sdf-atlas";
 import type Sigma from "../../../sigma";
-import type { EdgeLabelDisplayData, RenderParams } from "../../../types";
+import type { EdgeLabelDisplayData, EdgeLabelPosition, RenderParams } from "../../../types";
 import { floatColor } from "../../../utils";
 import { getShapeId } from "../../shapes";
+
+/**
+ * Converts edge label position string to numeric mode for GPU.
+ * - 0: "over" (centered on path)
+ * - 1: "above" (positive perpendicular offset)
+ * - 2: "below" (negative perpendicular offset)
+ * - 3: "auto" (GPU determines based on screen positions)
+ */
+function positionToMode(position: EdgeLabelPosition): number {
+  switch (position) {
+    case "over":
+      return 0;
+    case "above":
+      return 1;
+    case "below":
+      return 2;
+    case "auto":
+      return 3;
+    default:
+      return 0;
+  }
+}
 import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
 import { EdgePath } from "../types";
 import { EdgeLabelProgram } from "./base";
@@ -36,6 +58,16 @@ import { generateEdgeLabelShaders, GeneratedEdgeLabelShaders } from "./generator
 /**
  * Options for creating an edge label program.
  */
+/**
+ * Color specification type - either a fixed color string or an attribute-based color.
+ *
+ * Examples:
+ * - `"#ff0000"` - Fixed red color
+ * - `{ attribute: "labelColor" }` - Read from edge attribute
+ * - `{ attribute: "labelColor", defaultColor: "#000" }` - Attribute with fallback
+ */
+export type ColorSpecification = string | { attribute: string; defaultColor?: string };
+
 export interface CreateEdgeLabelProgramOptions {
   /**
    * The path type for positioning labels along edges.
@@ -54,6 +86,35 @@ export interface CreateEdgeLabelProgramOptions {
    * Default: 0 (no tail extremity)
    */
   tailLengthRatio?: number;
+
+  /**
+   * Label color configuration. Can specify either a fixed color or an attribute name.
+   * Default: uses settings.edgeLabelColor
+   */
+  edgeLabelColor?: { attribute: string; color?: string } | { color: string; attribute?: undefined };
+
+  /**
+   * Label position mode: "over" (centered on path), "above", "below", or "auto".
+   * Default: uses settings.edgeLabelPosition
+   */
+  edgeLabelPosition?: EdgeLabelPosition;
+
+  /**
+   * Margin between the edge and the label (in pixels) for "above"/"below"/"auto" modes.
+   * Default: uses settings.edgeLabelMargin
+   */
+  edgeLabelMargin?: number;
+
+  /**
+   * Text border (outline/stroke) configuration for improved readability.
+   * When specified, renders a border around each character using SDF techniques.
+   */
+  textBorder?: {
+    /** Border width in pixels */
+    width: number;
+    /** Border color - fixed color string or attribute-based */
+    color: ColorSpecification;
+  };
 }
 
 /**
@@ -83,12 +144,12 @@ interface EdgeLabelGlyphCache {
  *
  * @example
  * ```typescript
- * const StraightEdgeLabelProgram = createEdgeLabelProgram({
- *   path: pathStraight(),
+ * const LineEdgeLabelProgram = createEdgeLabelProgram({
+ *   path: pathLine(),
  * });
  *
  * // Attach to edge program
- * ComposedEdgeLineProgram.LabelProgram = StraightEdgeLabelProgram;
+ * ComposedEdgeLineProgram.LabelProgram = LineEdgeLabelProgram;
  * ```
  */
 export function createEdgeLabelProgram<
@@ -96,7 +157,17 @@ export function createEdgeLabelProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: CreateEdgeLabelProgramOptions): EdgeLabelProgramType<N, E, G> {
-  const { path, headLengthRatio = 0, tailLengthRatio = 0 } = options;
+  const {
+    path,
+    headLengthRatio = 0,
+    tailLengthRatio = 0,
+    edgeLabelColor,
+    edgeLabelPosition,
+    edgeLabelMargin,
+    textBorder,
+  } = options;
+
+  const hasBorder = !!textBorder;
 
   // Shaders are generated lazily on first instantiation.
   // This ensures all node shapes are registered before edge label shaders are compiled,
@@ -114,6 +185,7 @@ export function createEdgeLabelProgram<
     | "u_atlas"
     | "u_gamma"
     | "u_sdfBuffer"
+    | "u_borderWidth"
     | string;
 
   // -------------------------------------------------------------------------
@@ -126,7 +198,7 @@ export function createEdgeLabelProgram<
     /** Static getter for generated shader code (lazy generation) */
     static get generatedShaders() {
       if (!generated) {
-        generated = generateEdgeLabelShaders({ path });
+        generated = generateEdgeLabelShaders({ path, hasBorder });
       }
       return generated;
     }
@@ -134,6 +206,12 @@ export function createEdgeLabelProgram<
     /** Static reference to extremity ratios */
     static readonly headLengthRatio = headLengthRatio;
     static readonly tailLengthRatio = tailLengthRatio;
+
+    /** Static reference to label styling options (overrides settings when provided) */
+    static readonly edgeLabelColor = edgeLabelColor;
+    static readonly edgeLabelPosition = edgeLabelPosition;
+    static readonly edgeLabelMargin = edgeLabelMargin;
+    static readonly textBorder = textBorder;
 
     // -----------------------------------------------------------------------
     // Instance Properties
@@ -167,7 +245,7 @@ export function createEdgeLabelProgram<
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
       // Generate shaders on first instantiation (after node shapes are registered)
       if (!generated) {
-        generated = generateEdgeLabelShaders({ path });
+        generated = generateEdgeLabelShaders({ path, hasBorder });
       }
 
       super(gl, pickingBuffer, renderer);
@@ -232,14 +310,16 @@ export function createEdgeLabelProgram<
           { name: "a_edgeParams", size: 4, type: FLOAT }, // (thickness, headLengthRatio, tailLengthRatio, baseFontSize)
 
           // Character metrics (packed)
-          { name: "a_charMetrics", size: 4, type: FLOAT }, // (charTextOffset, charAdvance, totalTextWidth, unused)
+          { name: "a_charMetrics", size: 4, type: FLOAT }, // (charTextOffset, charAdvance, totalTextWidth, positionMode)
           { name: "a_charDims", size: 4, type: FLOAT }, // (charSize.x, charSize.y, charOffset.x, charOffset.y)
 
-          // Atlas texture coordinates
-          { name: "a_texCoords", size: 4, type: FLOAT },
+          // Atlas texture coordinates and margin
+          { name: "a_texCoords", size: 4, type: FLOAT }, // (x, y, width, height)
+          { name: "a_labelParams", size: 2, type: FLOAT }, // (margin, unused)
 
           // Appearance
           { name: "a_color", size: 4, type: UNSIGNED_BYTE, normalized: true },
+          ...(hasBorder ? [{ name: "a_borderColor", size: 4, type: UNSIGNED_BYTE, normalized: true }] : []),
 
           // Path-specific attributes
           ...pathAttributes,
@@ -368,7 +448,13 @@ export function createEdgeLabelProgram<
       // Use actual edge thickness for extremity length calculations
       const thickness = labelData.edgeSize || 1;
 
-      const color = floatColor(labelData.color);
+      // Compute effective color: program-level override takes precedence
+      // Program-level color can specify { color: "#xxx" } or { attribute: "attrName" }
+      // For simplicity, we only support fixed color override at program level
+      const programColor = GeneratedEdgeLabelProgram.edgeLabelColor;
+      const effectiveColor =
+        programColor && "color" in programColor && programColor.color ? programColor.color : labelData.color;
+      const color = floatColor(effectiveColor);
       let i = startIndex;
 
       // a_sourceTarget: (sourceX, sourceY, targetX, targetY)
@@ -389,11 +475,13 @@ export function createEdgeLabelProgram<
       array[i++] = GeneratedEdgeLabelProgram.tailLengthRatio;
       array[i++] = labelData.size;
 
-      // a_charMetrics: (charTextOffset, charAdvance, totalTextWidth, unused)
+      // a_charMetrics: (charTextOffset, charAdvance, totalTextWidth, positionMode)
+      // Use program-level position override if specified, otherwise use labelData.position
+      const effectivePosition = GeneratedEdgeLabelProgram.edgeLabelPosition ?? labelData.position;
       array[i++] = xOffset;
       array[i++] = glyph.advance;
       array[i++] = cache.totalWidth;
-      array[i++] = 0; // unused
+      array[i++] = positionToMode(effectivePosition);
 
       // a_charDims: (charSize.x, charSize.y, charOffset.x, charOffset.y)
       array[i++] = glyph.atlasWidth; // includes SDF buffer
@@ -407,8 +495,28 @@ export function createEdgeLabelProgram<
       array[i++] = glyph.atlasWidth;
       array[i++] = glyph.atlasHeight;
 
+      // a_labelParams: (margin, unused)
+      // Use program-level margin override if specified, otherwise use labelData.margin
+      const effectiveMargin = GeneratedEdgeLabelProgram.edgeLabelMargin ?? labelData.margin;
+      array[i++] = effectiveMargin;
+      array[i++] = 0; // unused
+
       // a_color: packed RGBA
       array[i++] = color;
+
+      // a_borderColor: packed RGBA (only if border is enabled)
+      if (hasBorder && textBorder) {
+        // Get border color from ColorSpecification (string | { attribute, defaultColor? })
+        let borderColorValue: string;
+        if (typeof textBorder.color === "string") {
+          // Fixed color string
+          borderColorValue = textBorder.color;
+        } else {
+          // Attribute-based color with optional default
+          borderColorValue = textBorder.color.defaultColor || "#ffffff";
+        }
+        array[i++] = floatColor(borderColorValue);
+      }
 
       // Path-specific attributes
       // For now we only handle curvature (used by quadratic/cubic paths)
@@ -501,6 +609,15 @@ export function createEdgeLabelProgram<
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.atlasTexture);
       gl.uniform1i(uniformLocations.u_atlas, 0);
+
+      // Border width uniform (only if border is enabled)
+      if (hasBorder && textBorder && uniformLocations.u_borderWidth !== undefined) {
+        // Convert border width from pixels to SDF units
+        // SDF buffer is typically 8 pixels at 64px atlas size, giving ~0.125 normalized
+        // Border width in pixels needs to be converted to the same normalized scale
+        const borderWidthNormalized = (textBorder.width / DEFAULT_SDF_ATLAS_OPTIONS.buffer) * this.sdfBuffer;
+        gl.uniform1f(uniformLocations.u_borderWidth, borderWidthNormalized);
+      }
     }
 
     // -----------------------------------------------------------------------

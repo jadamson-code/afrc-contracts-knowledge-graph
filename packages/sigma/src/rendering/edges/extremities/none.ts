@@ -18,7 +18,7 @@ import { EdgeExtremity } from "../types";
  * @example
  * ```typescript
  * const EdgeLineProgram = createEdgeProgram({
- *   path: pathStraight(),
+ *   path: pathLine(),
  *   head: extremityNone(),
  *   tail: extremityNone(),
  *   filling: fillingPlain(),

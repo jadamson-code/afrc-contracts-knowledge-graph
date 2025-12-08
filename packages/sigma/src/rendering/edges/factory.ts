@@ -27,17 +27,17 @@ import { EdgeLifecycleContext, EdgeLifecycleHooks, EdgeProgramOptions, Generated
  *
  * @example
  * ```typescript
- * import { createEdgeProgram, pathStraight, extremityNone, extremityArrow, fillingPlain } from "sigma/rendering";
+ * import { createEdgeProgram, pathLine, extremityNone, extremityArrow, fillingPlain } from "sigma/rendering";
  *
  * const EdgeLineProgram = createEdgeProgram({
- *   path: pathStraight(),
+ *   path: pathLine(),
  *   head: extremityNone(),
  *   tail: extremityNone(),
  *   filling: fillingPlain(),
  * });
  *
  * const EdgeArrowProgram = createEdgeProgram({
- *   path: pathStraight(),
+ *   path: pathLine(),
  *   head: extremityArrow(),
  *   tail: extremityNone(),
  *   filling: fillingPlain(),
@@ -321,11 +321,17 @@ export function createEdgeProgram<
 
   // Create and attach the label program for this edge type
   // This allows WebGL edge label rendering that follows the same path
+  const labelOptions = options.label;
   const LabelProgramClass = createEdgeLabelProgram({
     path,
     // Pass extremity length ratios so labels know where the edge body starts/ends
     headLengthRatio: typeof head.length === "number" ? head.length : 0,
     tailLengthRatio: typeof tail.length === "number" ? tail.length : 0,
+    // Pass label styling options from EdgeProgramOptions
+    edgeLabelColor: labelOptions?.color,
+    edgeLabelPosition: labelOptions?.position,
+    edgeLabelMargin: labelOptions?.margin,
+    textBorder: labelOptions?.textBorder,
   });
   (EdgeProgramClass as unknown as { LabelProgram: EdgeLabelProgramType }).LabelProgram = LabelProgramClass;
 

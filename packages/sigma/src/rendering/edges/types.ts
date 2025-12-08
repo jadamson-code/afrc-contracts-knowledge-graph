@@ -11,7 +11,7 @@
 import { Attributes } from "graphology-types";
 
 import Sigma from "../../sigma";
-import { LabelPosition } from "../../types";
+import { EdgeLabelPosition, LabelPosition } from "../../types";
 import { AttributeSpecification, LabelFontOptions, UniformSpecification } from "../nodes";
 
 export type { AttributeSpecification, UniformSpecification } from "../nodes/types";
@@ -371,16 +371,43 @@ export interface EdgeLabelOptions {
   font?: LabelFontOptions;
 
   /**
-   * Label color (CSS color string).
-   * Default: "#000000"
+   * Label color configuration. Can specify either a fixed color or an attribute name.
+   * Default: uses settings.edgeLabelColor
    */
-  color?: string;
+  color?: { attribute: string; color?: string } | { color: string; attribute?: undefined };
 
   /**
-   * Default label position relative to edge (for midpoint mode).
-   * Default: "over" (centered on edge)
+   * Label position relative to edge path.
+   * - "over": centered on the path
+   * - "above": above the path (positive perpendicular offset)
+   * - "below": below the path (negative perpendicular offset)
+   * - "auto": GPU determines based on edge direction (left-to-right = above, right-to-left = below)
+   * Default: uses settings.edgeLabelPosition
    */
-  position?: LabelPosition;
+  position?: EdgeLabelPosition;
+
+  /**
+   * Margin between the edge surface and the label (in pixels) for "above"/"below"/"auto" modes.
+   * Default: uses settings.edgeLabelMargin
+   */
+  margin?: number;
+
+  /**
+   * Text border (outline/stroke) configuration for improved readability.
+   * When specified, renders a border around each character using SDF techniques.
+   */
+  textBorder?: {
+    /** Border width in pixels */
+    width: number;
+    /**
+     * Border color - fixed color string or attribute-based.
+     * Examples:
+     * - `"#ffffff"` - Fixed white color
+     * - `{ attribute: "borderColor" }` - Read from edge attribute
+     * - `{ attribute: "borderColor", defaultColor: "#fff" }` - Attribute with fallback
+     */
+    color: string | { attribute: string; defaultColor?: string };
+  };
 }
 
 /**

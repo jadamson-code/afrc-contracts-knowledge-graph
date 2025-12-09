@@ -23,6 +23,11 @@ import type Sigma from "../../../sigma";
 import type { EdgeLabelDisplayData, EdgeLabelPosition, RenderParams } from "../../../types";
 import { floatColor } from "../../../utils";
 import { getShapeId } from "../../shapes";
+import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
+import type { EdgeLabelOptions, EdgePath } from "../types";
+import { EdgeLabelProgram } from "./base";
+import type { EdgeLabelProgramType } from "./base";
+import { GeneratedEdgeLabelShaders, generateEdgeLabelShaders } from "./generator";
 
 /**
  * Converts edge label position string to numeric mode for GPU.
@@ -45,11 +50,6 @@ function positionToMode(position: EdgeLabelPosition): number {
       return 0;
   }
 }
-import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
-import { EdgePath } from "../types";
-import { EdgeLabelProgram } from "./base";
-import type { EdgeLabelProgramType } from "./base";
-import { generateEdgeLabelShaders, GeneratedEdgeLabelShaders } from "./generator";
 
 // ============================================================================
 // Types
@@ -57,18 +57,9 @@ import { generateEdgeLabelShaders, GeneratedEdgeLabelShaders } from "./generator
 
 /**
  * Options for creating an edge label program.
+ * Extends EdgeLabelOptions with program-specific options (path, extremity ratios).
  */
-/**
- * Color specification type - either a fixed color string or an attribute-based color.
- *
- * Examples:
- * - `"#ff0000"` - Fixed red color
- * - `{ attribute: "labelColor" }` - Read from edge attribute
- * - `{ attribute: "labelColor", defaultColor: "#000" }` - Attribute with fallback
- */
-export type ColorSpecification = string | { attribute: string; defaultColor?: string };
-
-export interface CreateEdgeLabelProgramOptions {
+export interface CreateEdgeLabelProgramOptions extends EdgeLabelOptions {
   /**
    * The path type for positioning labels along edges.
    * Must match the path used by the corresponding edge program.
@@ -86,35 +77,6 @@ export interface CreateEdgeLabelProgramOptions {
    * Default: 0 (no tail extremity)
    */
   tailLengthRatio?: number;
-
-  /**
-   * Label color configuration. Can specify either a fixed color or an attribute name.
-   * Default: uses settings.edgeLabelColor
-   */
-  edgeLabelColor?: { attribute: string; color?: string } | { color: string; attribute?: undefined };
-
-  /**
-   * Label position mode: "over" (centered on path), "above", "below", or "auto".
-   * Default: uses settings.edgeLabelPosition
-   */
-  edgeLabelPosition?: EdgeLabelPosition;
-
-  /**
-   * Margin between the edge and the label (in pixels) for "above"/"below"/"auto" modes.
-   * Default: uses settings.edgeLabelMargin
-   */
-  edgeLabelMargin?: number;
-
-  /**
-   * Text border (outline/stroke) configuration for improved readability.
-   * When specified, renders a border around each character using SDF techniques.
-   */
-  textBorder?: {
-    /** Border width in pixels */
-    width: number;
-    /** Border color - fixed color string or attribute-based */
-    color: ColorSpecification;
-  };
 }
 
 /**
@@ -161,10 +123,13 @@ export function createEdgeLabelProgram<
     path,
     headLengthRatio = 0,
     tailLengthRatio = 0,
-    edgeLabelColor,
-    edgeLabelPosition,
-    edgeLabelMargin,
+    color: labelColor,
+    position: labelPosition,
+    margin: labelMargin,
     textBorder,
+    fontSizeMode,
+    minVisibilityThreshold = 0.7,
+    fullVisibilityThreshold = 0.8,
   } = options;
 
   const hasBorder = !!textBorder;
@@ -198,7 +163,13 @@ export function createEdgeLabelProgram<
     /** Static getter for generated shader code (lazy generation) */
     static get generatedShaders() {
       if (!generated) {
-        generated = generateEdgeLabelShaders({ path, hasBorder });
+        generated = generateEdgeLabelShaders({
+          path,
+          hasBorder,
+          fontSizeMode,
+          minVisibilityThreshold,
+          fullVisibilityThreshold,
+        });
       }
       return generated;
     }
@@ -208,10 +179,11 @@ export function createEdgeLabelProgram<
     static readonly tailLengthRatio = tailLengthRatio;
 
     /** Static reference to label styling options (overrides settings when provided) */
-    static readonly edgeLabelColor = edgeLabelColor;
-    static readonly edgeLabelPosition = edgeLabelPosition;
-    static readonly edgeLabelMargin = edgeLabelMargin;
+    static readonly labelColor = labelColor;
+    static readonly labelPosition = labelPosition;
+    static readonly labelMargin = labelMargin;
     static readonly textBorder = textBorder;
+    static readonly fontSizeMode = fontSizeMode;
 
     // -----------------------------------------------------------------------
     // Instance Properties
@@ -245,7 +217,13 @@ export function createEdgeLabelProgram<
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
       // Generate shaders on first instantiation (after node shapes are registered)
       if (!generated) {
-        generated = generateEdgeLabelShaders({ path, hasBorder });
+        generated = generateEdgeLabelShaders({
+          path,
+          hasBorder,
+          fontSizeMode,
+          minVisibilityThreshold,
+          fullVisibilityThreshold,
+        });
       }
 
       super(gl, pickingBuffer, renderer);
@@ -272,6 +250,9 @@ export function createEdgeLabelProgram<
       // Subscribe to atlas updates
       this.atlasManager.on(SDFAtlasManager.ATLAS_UPDATED_EVENT, () => {
         this.atlasNeedsUpdate = true;
+        // Trigger re-render to update vertex data with new glyph metrics
+        // Use setTimeout to defer refresh to next tick, avoiding interference with ongoing render
+        setTimeout(() => this.renderer.refresh(), 0);
       });
 
       // Register the default font
@@ -417,12 +398,7 @@ export function createEdgeLabelProgram<
      * - a_color (1): Packed RGBA color
      * - a_baseFontSize (1): Font size in pixels
      */
-    protected processCharacter(
-      index: number,
-      labelData: EdgeLabelDisplayData,
-      _char: string,
-      charIndex: number,
-    ): void {
+    protected processCharacter(index: number, labelData: EdgeLabelDisplayData, _char: string, charIndex: number): void {
       const array = this.array;
       const stride = this.STRIDE;
       const startIndex = index * stride;
@@ -451,7 +427,7 @@ export function createEdgeLabelProgram<
       // Compute effective color: program-level override takes precedence
       // Program-level color can specify { color: "#xxx" } or { attribute: "attrName" }
       // For simplicity, we only support fixed color override at program level
-      const programColor = GeneratedEdgeLabelProgram.edgeLabelColor;
+      const programColor = GeneratedEdgeLabelProgram.labelColor;
       const effectiveColor =
         programColor && "color" in programColor && programColor.color ? programColor.color : labelData.color;
       const color = floatColor(effectiveColor);
@@ -477,7 +453,7 @@ export function createEdgeLabelProgram<
 
       // a_charMetrics: (charTextOffset, charAdvance, totalTextWidth, positionMode)
       // Use program-level position override if specified, otherwise use labelData.position
-      const effectivePosition = GeneratedEdgeLabelProgram.edgeLabelPosition ?? labelData.position;
+      const effectivePosition = GeneratedEdgeLabelProgram.labelPosition ?? labelData.position;
       array[i++] = xOffset;
       array[i++] = glyph.advance;
       array[i++] = cache.totalWidth;
@@ -497,7 +473,7 @@ export function createEdgeLabelProgram<
 
       // a_labelParams: (margin, unused)
       // Use program-level margin override if specified, otherwise use labelData.margin
-      const effectiveMargin = GeneratedEdgeLabelProgram.edgeLabelMargin ?? labelData.margin;
+      const effectiveMargin = GeneratedEdgeLabelProgram.labelMargin ?? labelData.margin;
       array[i++] = effectiveMargin;
       array[i++] = 0; // unused
 
@@ -617,6 +593,16 @@ export function createEdgeLabelProgram<
         // Border width in pixels needs to be converted to the same normalized scale
         const borderWidthNormalized = (textBorder.width / DEFAULT_SDF_ATLAS_OPTIONS.buffer) * this.sdfBuffer;
         gl.uniform1f(uniformLocations.u_borderWidth, borderWidthNormalized);
+      }
+
+      // Zoom size ratio uniform (only if scaled font size mode)
+      if (fontSizeMode === "scaled" && uniformLocations.u_zoomSizeRatio !== undefined) {
+        // zoomRatio is the camera ratio
+        // zoomToSizeRatioFunction transforms it to a size multiplier
+        // We want labels to scale inversely with this (larger when zoomed in)
+        const zoomToSizeRatioFunction = this.renderer.getSetting("zoomToSizeRatioFunction");
+        const zoomSizeRatio = 1 / zoomToSizeRatioFunction(params.zoomRatio);
+        gl.uniform1f(uniformLocations.u_zoomSizeRatio, zoomSizeRatio);
       }
     }
 

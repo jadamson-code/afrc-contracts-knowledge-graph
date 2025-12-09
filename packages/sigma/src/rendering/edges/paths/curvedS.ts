@@ -221,54 +221,6 @@ vec2 path_curvedS_position(float t, vec2 source, vec2 target) {
 }
 
 // ============================================================================
-// TANGENT - Direction of travel
-// ============================================================================
-vec2 path_curvedS_tangent(float t, vec2 source, vec2 target) {
-  // Apply camera rotation if not rotating with camera
-  vec2 src = source;
-  vec2 tgt = target;
-  if (!CURVEDS_ROTATE_WITH_CAMERA) {
-    src = curvedS_rotate(source, -u_cameraAngle);
-    tgt = curvedS_rotate(target, -u_cameraAngle);
-  }
-
-  vec2 delta = tgt - src;
-
-  // Handle degenerate case
-  if (length(delta) < 0.0001) {
-    vec2 tang = vec2(1.0, 0.0);
-    if (!CURVEDS_ROTATE_WITH_CAMERA) {
-      tang = curvedS_rotate(tang, u_cameraAngle);
-    }
-    return tang;
-  }
-
-  // Get control points
-  vec2 c1, c2;
-  getCurvedSControlPoints(src, tgt, c1, c2);
-
-  // Evaluate derivative and normalize
-  vec2 deriv = curvedS_cubicBezierDerivative(t, src, c1, c2, tgt);
-  float len = length(deriv);
-  vec2 tang = len > 0.0001 ? deriv / len : normalize(delta);
-
-  // Rotate back to world space if needed
-  if (!CURVEDS_ROTATE_WITH_CAMERA) {
-    tang = curvedS_rotate(tang, u_cameraAngle);
-  }
-
-  return tang;
-}
-
-// ============================================================================
-// NORMAL - Perpendicular to tangent
-// ============================================================================
-vec2 path_curvedS_normal(float t, vec2 source, vec2 target) {
-  vec2 tang = path_curvedS_tangent(t, source, target);
-  return vec2(-tang.y, tang.x);
-}
-
-// ============================================================================
 // LENGTH - Total path length (numerical approximation)
 // ============================================================================
 float path_curvedS_length(vec2 source, vec2 target) {
@@ -377,8 +329,17 @@ float path_curvedS_closest_t(vec2 p, vec2 source, vec2 target) {
 float path_curvedS_distance(vec2 p, vec2 source, vec2 target) {
   float closestT = path_curvedS_closest_t(p, source, target);
   vec2 closest = path_curvedS_position(closestT, source, target);
-  vec2 normal = path_curvedS_normal(closestT, source, target);
   vec2 diff = p - closest;
+
+  // Compute normal inline using numerical tangent (perpendicular)
+  float epsilon = 0.001;
+  float t1 = max(0.0, closestT - epsilon);
+  float t2 = min(1.0, closestT + epsilon);
+  vec2 p1 = path_curvedS_position(t1, source, target);
+  vec2 p2 = path_curvedS_position(t2, source, target);
+  vec2 tangent = normalize(p2 - p1);
+  vec2 normal = vec2(-tangent.y, tangent.x);
+
   return length(diff) * sign(dot(diff, normal));
 }
 `;

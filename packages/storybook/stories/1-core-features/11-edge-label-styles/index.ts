@@ -5,6 +5,10 @@
  *
  * The last two columns show what "over" mode would look like (labels centered on path).
  * Per-program position mode is set via the `label: { position: "over" }` option.
+ *
+ * The final columns demonstrate font size modes:
+ * - "fixed": Labels stay constant size regardless of zoom level
+ * - "scaled": Labels scale with zoom level using zoomToSizeRatioFunction
  */
 import Graph from "graphology";
 import Sigma from "sigma";
@@ -36,47 +40,51 @@ export default () => {
   const NODE_SIZE = 12;
   const EDGE_SIZE = 6;
 
+  // Colors
+  const EDGE_COLOR = "#999999";
+  const NODE_COLOR = "#5B8FF9";
+
   // Row types (path types)
   const ROWS = [
-    { name: "line", path: pathLine() },
-    { name: "curved", path: pathCurved() },
+    { name: "Line", path: pathLine() },
+    { name: "Curved", path: pathCurved() },
     {
-      name: "step",
+      name: "Steps (auto)",
       path: pathStep({
         orientation: "automatic",
         rotateWithCamera: false,
       }),
     },
     {
-      name: "step-2",
+      name: "Steps (horizontal)",
       path: pathStep({
         orientation: "horizontal",
         rotateWithCamera: true,
       }),
     },
     {
-      name: "stepCurved",
+      name: "Curved steps (auto)",
       path: pathStepCurved({
         orientation: "automatic",
         rotateWithCamera: false,
       }),
     },
     {
-      name: "stepCurved-2",
+      name: "Curved steps (horizontal)",
       path: pathStepCurved({
         orientation: "horizontal",
         rotateWithCamera: true,
       }),
     },
     {
-      name: "curvedS",
+      name: "S-curved (auto)",
       path: pathCurvedS({
         orientation: "automatic",
         rotateWithCamera: false,
       }),
     },
     {
-      name: "curvedS-2",
+      name: "S-curved (horizontal)",
       path: pathCurvedS({
         orientation: "horizontal",
         rotateWithCamera: true,
@@ -94,7 +102,6 @@ export default () => {
       displayLabel: "Above",
       head: extremityNone(),
       tail: extremityNone(),
-      filling: fillingPlain(),
       labelPosition: "above" as const, // Used to set label.position in the program
     },
     {
@@ -102,7 +109,6 @@ export default () => {
       displayLabel: "Below",
       head: extremityNone(),
       tail: extremityNone(),
-      filling: fillingPlain(),
       labelPosition: "below" as const, // Used to set label.position in the program
     },
     {
@@ -110,38 +116,50 @@ export default () => {
       displayLabel: "Auto + arrow",
       head: extremityArrow(),
       tail: extremityNone(),
-      filling: fillingPlain(),
     },
     {
       name: "double-arrow",
       displayLabel: "Auto + both arrows",
       head: extremityArrow(),
       tail: extremityArrow(),
-      filling: fillingPlain(),
     },
     {
       name: "over-arrow",
       displayLabel: "Over + arrow",
       head: extremityArrow(),
       tail: extremityNone(),
-      filling: fillingPlain(),
       labelPosition: "over" as const,
-      textBorder: { width: 5, color: "#ffffff" },
+      textBorder: { width: 10, color: "#fff" },
+      textColor: "#000",
     },
     {
       name: "over-double",
-      displayLabel: "Over + both",
+      displayLabel: "Over + both arrows",
       head: extremityArrow(),
       tail: extremityArrow(),
-      filling: fillingPlain(),
       labelPosition: "over" as const,
-      textBorder: { width: 5, color: "#ffffff" },
+      textBorder: { width: 10, color: "#fff" },
+      textColor: "#000",
+    },
+    {
+      name: "scaled-above",
+      displayLabel: "Scaled size + above",
+      head: extremityNone(),
+      tail: extremityNone(),
+      labelPosition: "above" as const,
+      fontSizeMode: "scaled" as const,
+    },
+    {
+      name: "scaled-over",
+      displayLabel: "Scaled size + over",
+      head: extremityArrow(),
+      tail: extremityNone(),
+      labelPosition: "over" as const,
+      fontSizeMode: "scaled" as const,
+      textBorder: { width: 10, color: "#fff" },
+      textColor: "#000",
     },
   ];
-
-  // Colors
-  const EDGE_COLOR = "#999999";
-  const NODE_COLOR = "#5B8FF9";
 
   // Create edge programs for each combination
   const edgeProgramClasses: Record<string, ReturnType<typeof createEdgeProgram>> = {};
@@ -153,13 +171,19 @@ export default () => {
       // Build label options conditionally
       const colWithOptions = col as {
         labelPosition?: "over" | "above" | "below";
-        textBorder?: { width: number; color: { color: string } };
+        textBorder?: { width: number; color: string };
+        fontSizeMode?: "fixed" | "scaled";
+        textColor?: string;
       };
       const labelOptions =
-        colWithOptions.labelPosition || colWithOptions.textBorder
+        colWithOptions.labelPosition || colWithOptions.textBorder || colWithOptions.fontSizeMode
           ? {
               ...(colWithOptions.labelPosition ? { position: colWithOptions.labelPosition } : {}),
               ...(colWithOptions.textBorder ? { textBorder: colWithOptions.textBorder } : {}),
+              ...(colWithOptions.fontSizeMode ? { fontSizeMode: colWithOptions.fontSizeMode } : {}),
+              ...(colWithOptions.textColor
+                ? { color: { color: colWithOptions.textColor } }
+                : { color: { color: "#000" } }),
             }
           : undefined;
 
@@ -167,8 +191,8 @@ export default () => {
         path: row.path,
         head: col.head,
         tail: col.tail,
-        filling: col.filling,
         label: labelOptions,
+        filling: fillingPlain(),
       });
     }
   }
@@ -222,8 +246,6 @@ export default () => {
   }
 
   const renderer = new Sigma(graph, container, {
-    edgeLabelColor: { color: "#000" },
-    edgeLabelPosition: "auto",
     edgeProgramClasses,
     nodeProgramClasses: {
       diamond: createNodeProgram({
@@ -240,7 +262,8 @@ export default () => {
     defaultEdgeType: "line-no-extremity",
     // Enable edge labels
     renderEdgeLabels: true,
-    edgeLabelSize: 12,
+    edgeLabelSize: 16,
+    edgeLabelPosition: "auto",
     // Use positions-based sizing for a clean grid appearance
     itemSizesReference: "positions",
     autoRescale: true,

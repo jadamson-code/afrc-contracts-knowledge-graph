@@ -19,6 +19,7 @@ export type {
   EdgeFilling,
   EdgeProgramOptions,
   EdgeLabelOptions,
+  EdgeLabelColorSpecification,
   EdgeContextFields,
   EdgeLifecycleContext,
   EdgeLifecycleHooks,

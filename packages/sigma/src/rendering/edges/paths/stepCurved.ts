@@ -285,79 +285,6 @@ vec2 path_stepCurved_position(float t, vec2 source, vec2 target) {
 }
 
 // ============================================================================
-// TANGENT - Direction along rounded path
-// ============================================================================
-vec2 path_stepCurved_tangent(float t, vec2 source, vec2 target) {
-  vec2 src = source;
-  vec2 tgt = target;
-  if (!STEPC_ROTATE_WITH_CAMERA) {
-    src = stepC_rotate(source, -u_cameraAngle);
-    tgt = stepC_rotate(target, -u_cameraAngle);
-  }
-
-  vec2 delta = tgt - src;
-  if (abs(delta.x) < 0.0001 || abs(delta.y) < 0.0001) {
-    vec2 tang = normalize(delta);
-    if (!STEPC_ROTATE_WITH_CAMERA) {
-      tang = stepC_rotate(tang, u_cameraAngle);
-    }
-    return tang;
-  }
-
-  vec2 c1, c2;
-  float r;
-  getStepCSegmentPoints(src, tgt, c1, c2, r);
-
-  vec2 dir1 = normalize(c1 - src);
-  vec2 dir2 = normalize(c2 - c1);
-  vec2 dir3 = normalize(tgt - c2);
-
-  vec2 seg1_end = c1 - dir1 * r;
-  vec2 corner1_end = c1 + dir2 * r;
-  vec2 seg2_end = c2 - dir2 * r;
-  vec2 corner2_end = c2 + dir3 * r;
-
-  float L1 = length(seg1_end - src);
-  float arc1 = stepC_bezierLength(seg1_end, c1, corner1_end);
-  float L2 = length(seg2_end - corner1_end);
-  float arc2 = stepC_bezierLength(seg2_end, c2, corner2_end);
-  float L3 = length(tgt - corner2_end);
-  float totalLen = L1 + arc1 + L2 + arc2 + L3;
-
-  float dist = t * totalLen;
-  vec2 tang;
-
-  if (dist <= L1) {
-    tang = dir1;
-  } else if (dist <= L1 + arc1) {
-    float localDist = dist - L1;
-    float localT = localDist / max(arc1, 0.0001);
-    tang = stepC_bezierTangent(seg1_end, c1, corner1_end, localT);
-  } else if (dist <= L1 + arc1 + L2) {
-    tang = dir2;
-  } else if (dist <= L1 + arc1 + L2 + arc2) {
-    float localDist = dist - L1 - arc1 - L2;
-    float localT = localDist / max(arc2, 0.0001);
-    tang = stepC_bezierTangent(seg2_end, c2, corner2_end, localT);
-  } else {
-    tang = dir3;
-  }
-
-  if (!STEPC_ROTATE_WITH_CAMERA) {
-    tang = stepC_rotate(tang, u_cameraAngle);
-  }
-  return tang;
-}
-
-// ============================================================================
-// NORMAL - Perpendicular to tangent
-// ============================================================================
-vec2 path_stepCurved_normal(float t, vec2 source, vec2 target) {
-  vec2 tang = path_stepCurved_tangent(t, source, target);
-  return vec2(-tang.y, tang.x);
-}
-
-// ============================================================================
 // T_AT_DISTANCE - Find t for given arc distance
 // ============================================================================
 float path_stepCurved_t_at_distance(float d, vec2 source, vec2 target) {
@@ -392,8 +319,17 @@ float path_stepCurved_closest_t(vec2 p, vec2 source, vec2 target) {
 float path_stepCurved_distance(vec2 p, vec2 source, vec2 target) {
   float closestT = path_stepCurved_closest_t(p, source, target);
   vec2 closest = path_stepCurved_position(closestT, source, target);
-  vec2 normal = path_stepCurved_normal(closestT, source, target);
   vec2 diff = p - closest;
+
+  // Compute normal inline using numerical tangent (perpendicular)
+  float epsilon = 0.001;
+  float t1 = max(0.0, closestT - epsilon);
+  float t2 = min(1.0, closestT + epsilon);
+  vec2 p1 = path_stepCurved_position(t1, source, target);
+  vec2 p2 = path_stepCurved_position(t2, source, target);
+  vec2 tangent = normalize(p2 - p1);
+  vec2 normal = vec2(-tangent.y, tangent.x);
+
   return length(diff) * sign(dot(diff, normal));
 }
 `;

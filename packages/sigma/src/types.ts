@@ -204,6 +204,13 @@ export type LabelPosition = "right" | "left" | "above" | "below" | "over";
 export type EdgeLabelPosition = "over" | "above" | "below" | "auto";
 
 /**
+ * Font size mode for edge labels.
+ * - "fixed": Constant pixel size regardless of zoom (default)
+ * - "scaled": Scales with zoom level using zoomToSizeRatioFunction from settings
+ */
+export type EdgeLabelFontSizeMode = "fixed" | "scaled";
+
+/**
  * Display data for a label, computed during processing.
  */
 export interface LabelDisplayData {

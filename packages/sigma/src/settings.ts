@@ -15,7 +15,14 @@ import {
   NodeCircleProgram,
   NodeProgramType,
 } from "./rendering";
-import { AtLeastOne, EdgeDisplayData, EdgeLabelPosition, LabelPosition, NodeDisplayData } from "./types";
+import {
+  AtLeastOne,
+  EdgeDisplayData,
+  EdgeLabelFontSizeMode,
+  EdgeLabelPosition,
+  LabelPosition,
+  NodeDisplayData,
+} from "./types";
 import { assign } from "./utils";
 
 /**
@@ -49,6 +56,7 @@ export interface Settings<
   edgeLabelColor: { attribute: string; color?: string } | { color: string; attribute?: undefined };
   edgeLabelPosition: EdgeLabelPosition;
   edgeLabelMargin: number;
+  edgeLabelFontSizeMode: EdgeLabelFontSizeMode;
   stagePadding: number;
   minEdgeThickness: number;
   antiAliasingFeather: number;
@@ -133,6 +141,7 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
   edgeLabelColor: { color: "#000" },
   edgeLabelPosition: "over",
   edgeLabelMargin: 3,
+  edgeLabelFontSizeMode: "fixed",
   stagePadding: 30,
   minEdgeThickness: 1.7,
   antiAliasingFeather: 1,

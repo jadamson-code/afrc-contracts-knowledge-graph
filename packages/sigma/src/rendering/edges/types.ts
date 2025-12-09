@@ -11,8 +11,8 @@
 import { Attributes } from "graphology-types";
 
 import Sigma from "../../sigma";
-import { EdgeLabelPosition, LabelPosition } from "../../types";
-import { AttributeSpecification, LabelFontOptions, UniformSpecification } from "../nodes";
+import { EdgeLabelFontSizeMode, EdgeLabelPosition } from "../../types";
+import { AttributeSpecification, UniformSpecification } from "../nodes";
 
 export type { AttributeSpecification, UniformSpecification } from "../nodes/types";
 
@@ -21,12 +21,13 @@ export type { AttributeSpecification, UniformSpecification } from "../nodes/type
  *
  * Each path type must provide GLSL functions for:
  * - Position at parameter t
- * - Tangent at parameter t
- * - Normal at parameter t
  * - Total path length
  * - Distance from point to path
  * - Parameter t at a given arc distance
  * - Closest t for a given point
+ *
+ * Tangent and normal functions are auto-generated via numerical differentiation
+ * from the position function, so path authors don't need to implement them.
  */
 export interface EdgePath {
   /**
@@ -46,15 +47,24 @@ export interface EdgePath {
    * GLSL code defining the path computation functions.
    *
    * Required functions (replace {name} with the path name):
-   * - vec2 path_{name}_position(float t, vec2 source, vec2 target, ...)
-   * - vec2 path_{name}_tangent(float t, vec2 source, vec2 target, ...)
-   * - vec2 path_{name}_normal(float t, vec2 source, vec2 target, ...)
-   * - float path_{name}_length(vec2 source, vec2 target, ...)
-   * - float path_{name}_distance(vec2 p, vec2 source, vec2 target, ...)
-   * - float path_{name}_t_at_distance(float d, vec2 source, vec2 target, ...)
-   * - float path_{name}_closest_t(vec2 p, vec2 source, vec2 target, ...)
+   * - vec2 path_{name}_position(float t, vec2 source, vec2 target)
+   *     Position at parameter t ∈ [0, 1]
+   * - float path_{name}_length(vec2 source, vec2 target)
+   *     Total arc length of the path
+   * - float path_{name}_distance(vec2 p, vec2 source, vec2 target)
+   *     Signed distance from point p to the path
+   * - float path_{name}_t_at_distance(float d, vec2 source, vec2 target)
+   *     Parameter t for a given arc distance d
+   * - float path_{name}_closest_t(vec2 p, vec2 source, vec2 target)
+   *     Parameter t of the closest point on path to point p
    *
-   * The ... represents path-specific parameters (e.g., curvature for Bezier).
+   * Auto-generated functions (from position via numerical differentiation):
+   * - vec2 path_{name}_tangent(float t, vec2 source, vec2 target)
+   *     Unit tangent vector at t (computed via finite differences)
+   * - vec2 path_{name}_normal(float t, vec2 source, vec2 target)
+   *     Unit normal vector at t (perpendicular to tangent)
+   *
+   * Path functions can access per-edge attributes directly (e.g., a_curvature).
    */
   glsl: string;
 
@@ -103,6 +113,19 @@ export interface EdgePath {
   minBodyLengthRatio?: number;
 
   /**
+   * Optional GLSL code for analytical tangent computation.
+   * When provided, this is used instead of auto-generated numerical tangent
+   * (which uses finite differences on the position function).
+   *
+   * Should define: vec2 path_{name}_tangent(float t, vec2 source, vec2 target)
+   *
+   * Useful for paths with discontinuities (corners) where numerical
+   * differentiation produces incorrect results due to averaging across
+   * perpendicular directions.
+   */
+  analyticalTangentGlsl?: string;
+
+  /**
    * Whether the path parameter t maps linearly to arc distance.
    *
    * - true: For straight and piecewise-linear paths where arcDistance = t * totalLength.
@@ -118,6 +141,36 @@ export interface EdgePath {
    * accurate distances at custom geometry (e.g., miter corners in taxi paths).
    */
   linearParameterization?: boolean;
+
+  /**
+   * Whether this path has sharp corners that need special handling for
+   * above/below label positioning.
+   *
+   * When true, the label shader will use `cornerSkipGlsl` to skip inner
+   * corners, preventing character overlap at concave bends.
+   */
+  hasSharpCorners?: boolean;
+
+  /**
+   * GLSL code for handling corner skipping in above/below label positioning.
+   *
+   * Required when `hasSharpCorners` is true. Should define functions for:
+   * - Detecting which corners are concave relative to the label position
+   * - Computing skip distances to create gaps at inner corners
+   *
+   * The skip distance prevents characters from bunching up at concave corners
+   * where the inner arc length approaches zero.
+   */
+  cornerSkipGlsl?: string;
+
+  /**
+   * Skip factor for inner corners when labels are positioned above/below.
+   * The gap at inner corners = innerCornerSkipFactor * fontSize (in screen pixels).
+   *
+   * Only used when `hasSharpCorners` is true.
+   * Default: 1.0
+   */
+  innerCornerSkipFactor?: number;
 }
 
 /**
@@ -346,35 +399,36 @@ export interface EdgeContextFields {
 }
 
 /**
- * Options for edge label rendering.
+ * Color specification for edge labels - either a fixed color string or attribute-based.
+ *
+ * This type follows the same pattern as `settings.edgeLabelColor`:
+ * - Fixed color: `"#ff0000"` or `{ color: "#ff0000" }`
+ * - Attribute-based: `{ attribute: "labelColor" }` with optional fallback `color`
+ *
+ * Examples:
+ * - `"#ff0000"` - Fixed red color
+ * - `{ attribute: "labelColor" }` - Read from edge attribute
+ * - `{ attribute: "labelColor", color: "#000" }` - Attribute with fallback
+ */
+export type EdgeLabelColorSpecification =
+  | string
+  | { attribute: string; color?: string }
+  | { color: string; attribute?: undefined };
+
+/**
+ * Options for edge label styling.
+ * Used both in EdgeProgramOptions.label and CreateEdgeLabelProgramOptions.
+ *
+ * Note: Property names here (color, position, margin, fontSizeMode) are shorter than
+ * the corresponding settings (edgeLabelColor, edgeLabelPosition, etc.) since these
+ * are already in an edge label context.
  */
 export interface EdgeLabelOptions {
-  /**
-   * Label positioning mode:
-   * - "midpoint": Label placed at edge midpoint, rotated to match edge angle
-   * - "curve-following": Characters positioned individually along the path
-   *
-   * Default: "midpoint" for straight edges, "curve-following" for curved edges
-   */
-  mode?: "midpoint" | "curve-following";
-
-  /**
-   * Perpendicular offset from edge centerline in pixels.
-   * Positive values offset above/left of the edge direction.
-   * Default: half the edge thickness + small margin
-   */
-  offset?: number;
-
-  /**
-   * Font configuration for labels.
-   */
-  font?: LabelFontOptions;
-
   /**
    * Label color configuration. Can specify either a fixed color or an attribute name.
    * Default: uses settings.edgeLabelColor
    */
-  color?: { attribute: string; color?: string } | { color: string; attribute?: undefined };
+  color?: EdgeLabelColorSpecification;
 
   /**
    * Label position relative to edge path.
@@ -406,8 +460,30 @@ export interface EdgeLabelOptions {
      * - `{ attribute: "borderColor" }` - Read from edge attribute
      * - `{ attribute: "borderColor", defaultColor: "#fff" }` - Attribute with fallback
      */
-    color: string | { attribute: string; defaultColor?: string };
+    color: EdgeLabelColorSpecification;
   };
+
+  /**
+   * Font size mode for edge labels.
+   * - "fixed": Constant pixel size regardless of zoom (default)
+   * - "scaled": Scales with zoom level using zoomToSizeRatioFunction from settings
+   * Default: uses settings.edgeLabelFontSizeMode
+   */
+  fontSizeMode?: EdgeLabelFontSizeMode;
+
+  /**
+   * Minimum label visibility ratio to render (0-1).
+   * Labels with less visible content are hidden entirely.
+   * Default: 0.5
+   */
+  minVisibilityThreshold?: number;
+
+  /**
+   * Visibility ratio at which labels reach full opacity (0-1).
+   * Between minVisibilityThreshold and this value, labels fade in gradually.
+   * Default: 0.6
+   */
+  fullVisibilityThreshold?: number;
 }
 
 /**

@@ -19,7 +19,12 @@
  * @module
  */
 import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../../shapes";
-import { generateFindSourceClampT, generateFindTargetClampT } from "../shared-glsl";
+import { numberToGLSLFloat } from "../../utils";
+import {
+  generateFindSourceClampT,
+  generateFindTargetClampT,
+  generateNumericalTangentNormal,
+} from "../shared-glsl";
 import { EdgePath } from "../types";
 
 // ============================================================================
@@ -37,6 +42,12 @@ export interface EdgeLabelShaderOptions {
   path: EdgePath;
   /** Whether to render text border (outline) */
   hasBorder?: boolean;
+  /** Font size mode: "fixed" or "scaled" */
+  fontSizeMode?: "fixed" | "scaled";
+  /** Minimum visibility ratio to show label (default: 0.5) */
+  minVisibilityThreshold?: number;
+  /** Visibility ratio for full opacity (default: 0.6) */
+  fullVisibilityThreshold?: number;
 }
 
 // ============================================================================
@@ -68,8 +79,15 @@ export interface EdgeLabelShaderOptions {
  *    f. Apply perpendicular offset (for above/below positioning - Milestone 3)
  */
 export function generateEdgeLabelVertexShader(options: EdgeLabelShaderOptions): string {
-  const { path, hasBorder = false } = options;
+  const {
+    path,
+    hasBorder = false,
+    fontSizeMode = "fixed",
+    minVisibilityThreshold = 0.5,
+    fullVisibilityThreshold = 0.6,
+  } = options;
   const pathName = path.name;
+  const isScaledMode = fontSizeMode === "scaled";
 
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es
@@ -124,6 +142,7 @@ uniform float u_cameraAngle;    // Required by node shape SDFs
 uniform float u_sdfBufferPixels; // SDF buffer size in atlas font size pixels
 uniform vec2 u_resolution;
 uniform vec2 u_atlasSize;
+${isScaledMode ? "uniform float u_zoomSizeRatio;  // Zoom-based size ratio from zoomToSizeRatioFunction" : ""}
 
 // ============================================================================
 // Varyings
@@ -133,6 +152,7 @@ out vec2 v_texCoord;
 out vec4 v_color;
 ${hasBorder ? "out vec4 v_borderColor;" : ""}
 out float v_edgeFade;  // 0 = fully visible, 1 = fully faded (outside body)
+out float v_alphaModifier;  // 0-1 based on label visibility ratio
 
 // ============================================================================
 // Constants
@@ -140,6 +160,8 @@ out float v_edgeFade;  // 0 = fully visible, 1 = fully faded (outside body)
 
 const float bias = 255.0 / 254.0;
 const float FADE_WIDTH_PIXELS = 15.0;  // Width of fade gradient in pixels
+const float MIN_VISIBILITY_THRESHOLD = ${numberToGLSLFloat(minVisibilityThreshold)};
+const float FULL_VISIBILITY_THRESHOLD = ${numberToGLSLFloat(fullVisibilityThreshold)};
 
 // ============================================================================
 // Node Shape SDFs (for binary search)
@@ -155,6 +177,12 @@ ${generateShapeSelectorGLSL()}
 // ============================================================================
 
 ${path.glsl}
+
+// Tangent/normal functions: use analytical if provided, otherwise numerical
+${path.analyticalTangentGlsl || generateNumericalTangentNormal(pathName)}
+
+// Corner skip helpers (for paths with sharp corners like step/taxi)
+${path.cornerSkipGlsl || ""}
 
 // ============================================================================
 // Binary Search Functions (from shared-glsl.ts)
@@ -188,6 +216,15 @@ void main() {
   vec2 charSize = a_charDims.xy;
   vec2 charOffset = a_charDims.zw;
   float margin = a_labelParams.x;
+
+  // -------------------------------------------------------------------------
+  // Compute pixel-to-graph conversion (for fixed font size mode)
+  // -------------------------------------------------------------------------
+  // This converts screen pixels to graph units such that N pixels on screen
+  // becomes N pixels regardless of zoom level.
+  // matrixScaleX is how much the matrix scales graph units to clip space
+  float matrixScaleX = length(vec2(u_matrix[0][0], u_matrix[1][0]));
+  float pixelToGraph = 2.0 / (matrixScaleX * u_resolution.x);
 
   // -------------------------------------------------------------------------
   // Step 1: Convert thickness to WebGL units
@@ -226,32 +263,66 @@ void main() {
   // -------------------------------------------------------------------------
   // Step 3: Compute font scale and text dimensions
   // -------------------------------------------------------------------------
-  // For Milestone 1, font size is fixed (no zoom scaling)
-  float fontScale = baseFontSize / 64.0; // 64 = atlas font size
-
-  // Convert glyph-unit metrics to WebGL units
-  // Text dimensions need to be in the same coordinate system as the path
+  // Font size modes:
+  // - "fixed": Constant pixel size regardless of zoom, using pixelToGraph conversion
+  // - "scaled": Scales with zoom using zoomToSizeRatioFunction
+  ${
+    isScaledMode
+      ? `// Scaled mode: font scales with zoom
+  float fontScale = baseFontSize / 64.0 * u_zoomSizeRatio; // 64 = atlas font size
+  // Convert glyph-unit metrics to WebGL units (scales with zoom)
   float textWidthWebGL = totalTextWidth * fontScale * u_correctionRatio / u_sizeRatio;
   float charOffsetWebGL = charTextOffset * fontScale * u_correctionRatio / u_sizeRatio;
-  float charAdvanceWebGL = charAdvance * fontScale * u_correctionRatio / u_sizeRatio;
+  float charAdvanceWebGL = charAdvance * fontScale * u_correctionRatio / u_sizeRatio;`
+      : `// Fixed mode: font stays constant in screen pixels
+  float fontScale = baseFontSize / 64.0; // 64 = atlas font size, pure pixel scale
+  // Convert glyph-unit metrics to graph units using pixelToGraph (zoom-independent)
+  float textWidthWebGL = totalTextWidth * fontScale * pixelToGraph;
+  float charOffsetWebGL = charTextOffset * fontScale * pixelToGraph;
+  float charAdvanceWebGL = charAdvance * fontScale * pixelToGraph;`
+  }
 
   // -------------------------------------------------------------------------
-  // Step 4: Compute character center offset (truncation check moved to after curvature adjustment)
+  // Step 4: Compute visibility ratio and alpha modifier
+  // -------------------------------------------------------------------------
+  // Visibility ratio: how much of the label fits in the body
+  float visibilityRatio = textWidthWebGL > 0.0001 ? min(bodyLength / textWidthWebGL, 1.0) : 1.0;
+
+  // Compute alpha modifier based on visibility thresholds:
+  // - Below MIN_VISIBILITY_THRESHOLD: hidden (alpha = 0)
+  // - Between thresholds: gradual fade in
+  // - Above FULL_VISIBILITY_THRESHOLD: full opacity (alpha = 1)
+  float alphaModifier;
+  if (visibilityRatio < MIN_VISIBILITY_THRESHOLD) {
+    alphaModifier = 0.0;
+  } else if (visibilityRatio < FULL_VISIBILITY_THRESHOLD) {
+    alphaModifier = (visibilityRatio - MIN_VISIBILITY_THRESHOLD) / (FULL_VISIBILITY_THRESHOLD - MIN_VISIBILITY_THRESHOLD);
+  } else {
+    alphaModifier = 1.0;
+  }
+
+  // -------------------------------------------------------------------------
+  // Step 5: Compute character center offset (truncation check moved to after curvature adjustment)
   // -------------------------------------------------------------------------
   // Character center position relative to label center (on centerline, before curvature adjustment)
   float charCenterOffset = charOffsetWebGL + charAdvanceWebGL * 0.5 - textWidthWebGL * 0.5;
 
   // -------------------------------------------------------------------------
-  // Step 5: Compute perpendicular offset based on position mode
+  // Step 6: Compute perpendicular offset based on position mode
   // -------------------------------------------------------------------------
   // Position modes: 0=over, 1=above, 2=below, 3=auto
   // We need to compute this early for curvature-adaptive spacing
   float halfThickness = webGLThickness * 0.5;
-  float marginWebGL = margin * u_correctionRatio / u_sizeRatio;
-  // Half text height to center the label visually on the offset line
-  // Using 0.35 factor (not 0.5) because the visual center of mixed-case text
-  // is typically below the midpoint between baseline and cap height
-  float halfTextHeight = baseFontSize * 0.35 * u_correctionRatio / u_sizeRatio;
+  ${
+    isScaledMode
+      ? `// Scaled mode: margin and text height scale with zoom (same factor as font)
+  // Use u_zoomSizeRatio so margin scales consistently with the font
+  float marginWebGL = margin * u_zoomSizeRatio * u_correctionRatio / u_sizeRatio;
+  float halfTextHeight = baseFontSize * 0.35 * u_zoomSizeRatio * u_correctionRatio / u_sizeRatio;`
+      : `// Fixed mode: margin and text height stay constant in screen pixels
+  float marginWebGL = margin * pixelToGraph;
+  float halfTextHeight = baseFontSize * 0.35 * pixelToGraph;`
+  }
   float perpOffset = 0.0;
 
   if (positionMode == 1.0) {
@@ -274,53 +345,159 @@ void main() {
   // else positionMode == 0.0 ("over"): perpOffset stays 0
 
   // -------------------------------------------------------------------------
-  // Step 6: Position character on path with curvature-adaptive spacing
+  // Step 7: Position character on path using offset path traversal
   // -------------------------------------------------------------------------
   // Body center in arc distance
   float bodyCenterDist = (bodyStartDist + bodyEndDist) * 0.5;
 
-  // Base character position on centerline
-  float baseCharArcDist = bodyCenterDist + charCenterOffset;
-  float charT = path_${pathName}_t_at_distance(baseCharArcDist, source, target);
+  // For "over" mode (perpOffset = 0), use simple centerline placement
+  // For above/below modes, walk along the offset path to find correct position
+  float charT;
 
-  // For above/below modes, apply curvature-adaptive spacing
-  // When offset from the centerline, the arc length on the offset path differs.
-  // We need to compute the CUMULATIVE arc difference from the label center to this character.
-  if (perpOffset != 0.0) {
-    // Get the t value at body center for reference
+  if (perpOffset == 0.0) {
+    // Simple case: place on centerline
+    float charArcDist = bodyCenterDist + charCenterOffset;
+    charT = path_${pathName}_t_at_distance(charArcDist, source, target);
+  } else {
+    // Offset path traversal: walk along the offset curve to find character position
+    // This ensures even character spacing regardless of curvature
+
+    // Start from body center on offset path
     float centerT = path_${pathName}_t_at_distance(bodyCenterDist, source, target);
-    vec2 tangentAtCenter = path_${pathName}_tangent(centerT, source, target);
-    float angleAtCenter = atan(tangentAtCenter.y, tangentAtCenter.x);
 
-    // Iterative refinement: the adjustment changes the character position,
-    // which changes the angle, which changes the adjustment. For paths with
-    // concentrated curvature (like taxiRounded corners), we need to iterate.
-    float adjustedCharArcDist = baseCharArcDist;
-    for (int iter = 0; iter < 3; iter++) {
-      // Compute angle at current character position
-      vec2 tangentAtChar = path_${pathName}_tangent(charT, source, target);
-      float angleAtChar = atan(tangentAtChar.y, tangentAtChar.x);
+    ${
+      path.hasSharpCorners
+        ? `// -----------------------------------------------------------------------
+    // Corner skip setup for step/taxi edges with above/below labels
+    // -----------------------------------------------------------------------
+    // At concave corners (inner side of the bend), characters would bunch up
+    // because the offset path has near-zero arc length. We detect corner
+    // crossings during the offset path traversal and add skip distance.
 
-      // Handle angle wraparound
-      float totalAngleChange = angleAtChar - angleAtCenter;
-      if (totalAngleChange > 3.14159) totalAngleChange -= 6.28318;
-      if (totalAngleChange < -3.14159) totalAngleChange += 6.28318;
+    // Get corner t values and concavity
+    vec2 cornerTs = path_${pathName}_getCornerTs(source, target);
+    vec2 concavity = path_${pathName}_getCornerConcavity(source, target, perpOffset);
 
-      // The arc length difference on the offset path is: perpOffset * totalAngleChange
-      // This is exact for any curve: integral of (1 + curvature * offset) ds = s + offset * delta_angle
-      // We apply a 2x scale factor because the visual offset includes both the perpendicular offset
-      // from centerline AND the curvature effect on the character positioning itself
-      float arcAdjustment = perpOffset * totalAngleChange;
-
-      // Apply the adjustment to get the corrected arc distance
-      adjustedCharArcDist = baseCharArcDist + arcAdjustment;
-      charT = path_${pathName}_t_at_distance(adjustedCharArcDist, source, target);
+    // Skip distance in graph units, proportional to on-screen font size
+    // For fixed mode: use pixelToGraph so gap stays constant regardless of zoom
+    // For scaled mode: use the same conversion as text width
+    ${
+      isScaledMode
+        ? `float skipDistGraph = STEP_INNER_CORNER_SKIP_FACTOR * baseFontSize * u_zoomSizeRatio * u_correctionRatio / u_sizeRatio;`
+        : `float skipDistGraph = STEP_INNER_CORNER_SKIP_FACTOR * baseFontSize * pixelToGraph;`
     }
 
-    // Store adjusted offset for edge fade calculation
-    charCenterOffset = adjustedCharArcDist - bodyCenterDist;
+    // Corner t values for detecting crossings during traversal
+    float corner1T = cornerTs.x;
+    float corner2T = cornerTs.y;
+    bool corner1IsConcave = concavity.x > 0.5;
+    bool corner2IsConcave = concavity.y > 0.5;`
+        : ``
+    }
+
+    // Target distance along offset path from center
+    float targetOffsetDist = abs(charCenterOffset);
+
+    // Handle center character (charCenterOffset ≈ 0) - no search needed
+    if (targetOffsetDist < 0.0001) {
+      charT = centerT;
+    } else {
+      vec2 centerPos = path_${pathName}_position(centerT, source, target);
+      vec2 centerNormal = path_${pathName}_normal(centerT, source, target);
+      vec2 offsetCenter = centerPos + centerNormal * perpOffset;
+
+      float searchDir = charCenterOffset > 0.0 ? 1.0 : -1.0;
+
+      // Search bounds (t values for body start and end)
+      float tBodyStart = path_${pathName}_t_at_distance(bodyStartDist, source, target);
+      float tBodyEnd = path_${pathName}_t_at_distance(bodyEndDist, source, target);
+
+      // Walk along offset path to find character position
+      float accumDist = 0.0;
+      vec2 prevOffsetPos = offsetCenter;
+      float prevT = centerT;
+      float foundT = centerT;
+
+      // Search range depends on direction
+      float tSearchEnd = searchDir > 0.0 ? tBodyEnd : tBodyStart;
+
+      ${
+        path.hasSharpCorners
+          ? `// Track which concave corners we've crossed to add skip distance
+      bool crossedCorner1 = false;
+      bool crossedCorner2 = false;
+      float effectiveTargetDist = targetOffsetDist;`
+          : ``
+      }
+
+      const int STEPS = 32;
+      for (int i = 1; i <= STEPS; i++) {
+        // Step along centerline t, from center toward target
+        float stepT = centerT + searchDir * float(i) * abs(tSearchEnd - centerT) / float(STEPS);
+
+        ${
+          path.hasSharpCorners
+            ? `// Check for concave corner crossings and add skip distance
+        // Corner 1 crossing check
+        if (corner1IsConcave && !crossedCorner1) {
+          bool crossingCorner1 = (searchDir > 0.0)
+            ? (prevT < corner1T && stepT >= corner1T)
+            : (prevT > corner1T && stepT <= corner1T);
+          if (crossingCorner1) {
+            crossedCorner1 = true;
+            effectiveTargetDist += skipDistGraph;
+          }
+        }
+
+        // Corner 2 crossing check
+        if (corner2IsConcave && !crossedCorner2) {
+          bool crossingCorner2 = (searchDir > 0.0)
+            ? (prevT < corner2T && stepT >= corner2T)
+            : (prevT > corner2T && stepT <= corner2T);
+          if (crossingCorner2) {
+            crossedCorner2 = true;
+            effectiveTargetDist += skipDistGraph;
+          }
+        }`
+            : ``
+        }
+
+        // Compute offset position at this t
+        vec2 stepPos = path_${pathName}_position(stepT, source, target);
+        vec2 stepNormal = path_${pathName}_normal(stepT, source, target);
+        vec2 offsetPos = stepPos + stepNormal * perpOffset;
+
+        // Distance along offset path
+        float segDist = length(offsetPos - prevOffsetPos);
+
+        ${
+          path.hasSharpCorners
+            ? `if (accumDist + segDist >= effectiveTargetDist) {
+          // Interpolate within segment to find exact t
+          float remaining = effectiveTargetDist - accumDist;
+          float segT = remaining / max(segDist, 0.0001);
+          foundT = mix(prevT, stepT, segT);
+          break;
+        }`
+            : `if (accumDist + segDist >= targetOffsetDist) {
+          // Interpolate within segment to find exact t
+          float remaining = targetOffsetDist - accumDist;
+          float segT = remaining / max(segDist, 0.0001);
+          foundT = mix(prevT, stepT, segT);
+          break;
+        }`
+        }
+
+        accumDist += segDist;
+        prevOffsetPos = offsetPos;
+        prevT = stepT;
+        // Update foundT to last valid position in case loop exhausts without finding target
+        foundT = stepT;
+      }
+
+      charT = foundT;
+    }
   }
-  // For "over" mode, charCenterOffset is already set correctly
 
   // Get position and tangent at final character position
   vec2 pathPos = path_${pathName}_position(charT, source, target);
@@ -333,7 +510,7 @@ void main() {
   vec2 offsetPathPos = pathPos + perpDir * perpOffset;
 
   // -------------------------------------------------------------------------
-  // Step 7: Build character quad
+  // Step 8: Build character quad
   // -------------------------------------------------------------------------
   // Character size in screen pixels
   vec2 charSizePixels = charSize * fontScale;
@@ -371,14 +548,18 @@ void main() {
   quadPos.y -= verticalCenterOffset;
 
   // -------------------------------------------------------------------------
-  // Step 8: Rotate quad to align with tangent
+  // Step 9: Rotate quad to align with tangent
   // -------------------------------------------------------------------------
   // Rotation matrix from tangent
   // tangent = (cos(angle), sin(angle)), so we can build rotation directly
   mat2 rotation = mat2(tangent.x, tangent.y, -tangent.y, tangent.x);
 
   // Convert pixel offset to WebGL units for rotation
-  vec2 quadPosWebGL = quadPos * u_correctionRatio / u_sizeRatio;
+  ${
+    isScaledMode
+      ? `vec2 quadPosWebGL = quadPos * u_correctionRatio / u_sizeRatio; // Scaled mode`
+      : `vec2 quadPosWebGL = quadPos * pixelToGraph; // Fixed mode: use pixelToGraph for zoom-independent size`
+  }
 
   // Rotate around character center on path
   vec2 rotatedOffset = rotation * quadPosWebGL;
@@ -387,30 +568,35 @@ void main() {
   vec2 worldPos = offsetPathPos + rotatedOffset;
 
   // -------------------------------------------------------------------------
-  // Step 9: Transform to clip space
+  // Step 10: Transform to clip space
   // -------------------------------------------------------------------------
   vec3 clipPos = u_matrix * vec3(worldPos, 1.0);
   gl_Position = vec4(clipPos.xy, 0.0, 1.0);
 
   // -------------------------------------------------------------------------
-  // Step 10: Texture coordinates
+  // Step 11: Texture coordinates
   // -------------------------------------------------------------------------
   // Flip Y for texture coordinates (texture Y goes down, quad Y goes up)
   vec2 texCorner = vec2(a_quadCorner.x, 1.0 - a_quadCorner.y);
   v_texCoord = (a_texCoords.xy + texCorner * a_texCoords.zw) / u_atlasSize;
 
   // -------------------------------------------------------------------------
-  // Step 11: Pass color and border color
+  // Step 12: Pass color, border color, and alpha modifier
   // -------------------------------------------------------------------------
   v_color = a_color;
   v_color.a *= bias;
 ${hasBorder ? "  v_borderColor = a_borderColor;\n  v_borderColor.a *= bias;" : ""}
+  v_alphaModifier = alphaModifier;
 
   // -------------------------------------------------------------------------
-  // Step 12: Compute edge fade for soft truncation
+  // Step 13: Compute edge fade for soft truncation
   // -------------------------------------------------------------------------
   // Convert fade width from pixels to WebGL units
-  float fadeWidthWebGL = FADE_WIDTH_PIXELS * u_correctionRatio / u_sizeRatio;
+  ${
+    isScaledMode
+      ? `float fadeWidthWebGL = FADE_WIDTH_PIXELS * u_correctionRatio / u_sizeRatio;`
+      : `float fadeWidthWebGL = FADE_WIDTH_PIXELS * pixelToGraph;`
+  }
 
   // Compute the arc position of THIS VERTEX (not just character center)
   // The quad extends from charCenter - advance/2 to charCenter + advance/2
@@ -458,6 +644,7 @@ in vec2 v_texCoord;
 in vec4 v_color;
 ${hasBorder ? "in vec4 v_borderColor;" : ""}
 in float v_edgeFade;  // 0 = fully visible, 1 = fully faded
+in float v_alphaModifier;  // 0-1 based on label visibility ratio
 
 uniform sampler2D u_atlas;
 uniform float u_gamma;
@@ -479,7 +666,8 @@ void main() {
   float aaWidth = u_gamma / u_pixelRatio;
 
   // Apply edge fade for soft truncation at body boundaries
-  float edgeAlpha = 1.0 - v_edgeFade;
+  // Also apply visibility-based alpha modifier for short edge labels
+  float edgeAlpha = (1.0 - v_edgeFade) * v_alphaModifier;
 
 ${
   hasBorder
@@ -524,7 +712,11 @@ ${
 // Uniform Collection
 // ============================================================================
 
-export function collectEdgeLabelUniforms(path: EdgePath, hasBorder = false): string[] {
+export function collectEdgeLabelUniforms(
+  path: EdgePath,
+  hasBorder = false,
+  fontSizeMode: "fixed" | "scaled" = "fixed",
+): string[] {
   const uniforms = [
     "u_matrix",
     "u_sizeRatio",
@@ -538,6 +730,11 @@ export function collectEdgeLabelUniforms(path: EdgePath, hasBorder = false): str
     "u_gamma",
     "u_sdfBuffer",
   ];
+
+  // Add zoom size ratio uniform for scaled font size mode
+  if (fontSizeMode === "scaled") {
+    uniforms.push("u_zoomSizeRatio");
+  }
 
   // Add border width uniform if border is enabled
   if (hasBorder) {
@@ -559,10 +756,10 @@ export function collectEdgeLabelUniforms(path: EdgePath, hasBorder = false): str
 // ============================================================================
 
 export function generateEdgeLabelShaders(options: EdgeLabelShaderOptions): GeneratedEdgeLabelShaders {
-  const { hasBorder = false } = options;
+  const { hasBorder = false, fontSizeMode = "fixed" } = options;
   return {
     vertexShader: generateEdgeLabelVertexShader(options),
     fragmentShader: generateEdgeLabelFragmentShader({ hasBorder }),
-    uniforms: collectEdgeLabelUniforms(options.path, hasBorder),
+    uniforms: collectEdgeLabelUniforms(options.path, hasBorder, fontSizeMode),
   };
 }

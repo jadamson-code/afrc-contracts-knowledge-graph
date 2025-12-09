@@ -35,20 +35,6 @@ vec2 path_line_position(float t, vec2 source, vec2 target) {
   return mix(source, target, t);
 }
 
-// Unit tangent (constant along straight line)
-vec2 path_line_tangent(float t, vec2 source, vec2 target) {
-  vec2 delta = target - source;
-  float len = length(delta);
-  if (len < 0.0001) return vec2(1.0, 0.0);
-  return delta / len;
-}
-
-// Unit normal (perpendicular to tangent, constant along straight line)
-vec2 path_line_normal(float t, vec2 source, vec2 target) {
-  vec2 tang = path_line_tangent(t, source, target);
-  return vec2(-tang.y, tang.x);
-}
-
 // Total length of the path
 float path_line_length(vec2 source, vec2 target) {
   return length(target - source);

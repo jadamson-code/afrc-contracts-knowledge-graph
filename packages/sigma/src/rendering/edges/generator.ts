@@ -10,7 +10,11 @@
  */
 import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../shapes/registry";
 import { numberToGLSLFloat } from "../utils";
-import { generateFindSourceClampT, generateFindTargetClampT } from "./shared-glsl";
+import {
+  generateFindSourceClampT,
+  generateFindTargetClampT,
+  generateNumericalTangentNormal,
+} from "./shared-glsl";
 import { AttributeSpecification, EdgeExtremity, EdgeFilling, EdgePath, GeneratedEdgeShaders } from "./types";
 
 const { FLOAT, UNSIGNED_BYTE } = WebGL2RenderingContext;
@@ -306,6 +310,9 @@ ${generateShapeSelectorGLSL()}
 // Path functions
 ${path.glsl}
 
+// Auto-generated tangent/normal (numerical differentiation from position)
+${generateNumericalTangentNormal(pathName)}
+
 // Custom vertex processing (if any)
 ${path.vertexGlsl || ""}
 
@@ -588,6 +595,9 @@ EdgeContext context;
 
 // Path functions
 ${path.glsl}
+
+// Auto-generated tangent/normal (numerical differentiation from position)
+${generateNumericalTangentNormal(pathName)}
 
 // Extremity SDF functions
 ${head.glsl}

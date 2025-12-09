@@ -76,26 +76,12 @@ vec2 path_curved_position(float t, vec2 source, vec2 target) {
   return u * u * source + 2.0 * u * t * control + t * t * target;
 }
 
-// Derivative of quadratic Bezier (for tangent computation)
+// Derivative of quadratic Bezier (for efficient arc length computation)
 vec2 path_curved_derivative(float t, vec2 source, vec2 target) {
   float curvature = a_curvature;
   vec2 control = computeControlPoint(source, target, curvature);
   // B'(t) = 2(1-t)(P1-P0) + 2t(P2-P1)
   return 2.0 * (1.0 - t) * (control - source) + 2.0 * t * (target - control);
-}
-
-// Unit tangent at parameter t
-vec2 path_curved_tangent(float t, vec2 source, vec2 target) {
-  vec2 d = path_curved_derivative(t, source, target);
-  float len = length(d);
-  if (len < 0.0001) return normalize(target - source);
-  return d / len;
-}
-
-// Unit normal at parameter t (perpendicular to tangent)
-vec2 path_curved_normal(float t, vec2 source, vec2 target) {
-  vec2 tang = path_curved_tangent(t, source, target);
-  return vec2(-tang.y, tang.x);
 }
 
 // Approximate arc length using 5-point Gauss-Legendre quadrature
@@ -200,7 +186,11 @@ float path_curved_distance(vec2 p, vec2 source, vec2 target) {
   float dist = length(diff);
 
   // Determine sign based on which side of the curve
-  vec2 normal = path_curved_normal(closestT, source, target);
+  // Compute normal inline (perpendicular to tangent via derivative)
+  vec2 deriv = path_curved_derivative(closestT, source, target);
+  float len = length(deriv);
+  vec2 tangent = len > 0.0001 ? deriv / len : normalize(target - source);
+  vec2 normal = vec2(-tangent.y, tangent.x);
   return dist * sign(dot(diff, normal));
 }
 `;

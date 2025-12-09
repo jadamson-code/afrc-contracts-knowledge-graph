@@ -7,6 +7,7 @@
  * - Binary search to find where path exits/enters nodes
  * - Thickness conversion between coordinate systems
  * - Extremity length computation
+ * - Numerical tangent/normal computation from position
  *
  * @module
  */
@@ -143,5 +144,36 @@ export function generateExtremityLengthComputation(): string {
   float bodyStartDist = tStart * pathLength + tailLength;
   float bodyEndDist = tEnd * pathLength - headLength;
   float bodyLength = max(bodyEndDist - bodyStartDist, 0.0);
+`;
+}
+
+/**
+ * Generates GLSL code for numerical tangent and normal computation.
+ * Uses finite differences on the position function to derive tangent,
+ * then perpendicular rotation to derive normal.
+ *
+ * This allows path authors to only implement the position function,
+ * and get tangent/normal for free.
+ *
+ * @param pathName - Name of the path (e.g., "line", "curved")
+ * @returns GLSL function definitions for tangent and normal
+ */
+export function generateNumericalTangentNormal(pathName: string): string {
+  return `
+// Auto-generated numerical tangent (from position via finite differences)
+vec2 path_${pathName}_tangent(float t, vec2 source, vec2 target) {
+  float epsilon = 0.001;
+  float t1 = max(0.0, t - epsilon);
+  float t2 = min(1.0, t + epsilon);
+  vec2 p1 = path_${pathName}_position(t1, source, target);
+  vec2 p2 = path_${pathName}_position(t2, source, target);
+  return normalize(p2 - p1);
+}
+
+// Auto-generated normal (perpendicular to tangent)
+vec2 path_${pathName}_normal(float t, vec2 source, vec2 target) {
+  vec2 tangent = path_${pathName}_tangent(t, source, target);
+  return vec2(-tangent.y, tangent.x);
+}
 `;
 }

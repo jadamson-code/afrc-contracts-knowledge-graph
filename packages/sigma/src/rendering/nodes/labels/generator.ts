@@ -285,7 +285,9 @@ void main() {
   // The AA band extends from (threshold - gamma) to (threshold + gamma)
   float alpha = smoothstep(edgeThreshold - gamma, edgeThreshold + gamma, sdfValue);
 
-  fragColor = vec4(v_color.rgb, v_color.a * alpha);
+  // Premultiplied alpha output for correct blending
+  float finalAlpha = v_color.a * alpha;
+  fragColor = vec4(v_color.rgb * finalAlpha, finalAlpha);
   fragPicking = v_color;
 }
 `;

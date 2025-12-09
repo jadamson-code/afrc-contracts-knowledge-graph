@@ -764,8 +764,8 @@ void main() {
   if (alpha < 0.01) discard;
 
   vec4 color = filling_${filling.name}(context);
-  color.a *= alpha;
-  fragColor = color;
+  // Mix with transparent to fade both color AND alpha (pre-multiplied alpha for correct blending)
+  fragColor = mix(vec4(0.0), color, alpha);
   fragPicking = finalSDF > 0.0 ? transparent : v_id;
 }
 `;

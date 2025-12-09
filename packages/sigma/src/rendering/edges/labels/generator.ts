@@ -18,6 +18,7 @@
  *
  * @module
  */
+import { DEFAULT_SDF_ATLAS_OPTIONS } from "../../../core/sdf-atlas";
 import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../../shapes";
 import { numberToGLSLFloat } from "../../utils";
 import {
@@ -26,6 +27,13 @@ import {
   generateNumericalTangentNormal,
 } from "../shared-glsl";
 import { EdgePath } from "../types";
+
+// Atlas font size constant - used for converting glyph units to screen pixels
+const ATLAS_FONT_SIZE = DEFAULT_SDF_ATLAS_OPTIONS.fontSize;
+
+// Vertical center offset ratio: the distance from baseline to visual center,
+// as a fraction of the atlas font size. This is approximately 0.265 (17/64).
+const VERTICAL_CENTER_RATIO = 17 / 64;
 
 // ============================================================================
 // Types
@@ -76,7 +84,7 @@ export interface EdgeLabelShaderOptions {
  *    c. Convert arc distance to parameter t
  *    d. Get position and tangent at that t
  *    e. Rotate character quad to align with tangent
- *    f. Apply perpendicular offset (for above/below positioning - Milestone 3)
+ *    f. Apply perpendicular offset (for above/below positioning)
  */
 export function generateEdgeLabelVertexShader(options: EdgeLabelShaderOptions): string {
   const {
@@ -162,6 +170,8 @@ const float bias = 255.0 / 254.0;
 const float FADE_WIDTH_PIXELS = 15.0;  // Width of fade gradient in pixels
 const float MIN_VISIBILITY_THRESHOLD = ${numberToGLSLFloat(minVisibilityThreshold)};
 const float FULL_VISIBILITY_THRESHOLD = ${numberToGLSLFloat(fullVisibilityThreshold)};
+const float ATLAS_FONT_SIZE = ${numberToGLSLFloat(ATLAS_FONT_SIZE)};  // Base font size used in SDF atlas
+const float VERTICAL_CENTER_RATIO = ${numberToGLSLFloat(VERTICAL_CENTER_RATIO)};  // Baseline to visual center ratio
 
 // ============================================================================
 // Node Shape SDFs (for binary search)
@@ -269,13 +279,13 @@ void main() {
   ${
     isScaledMode
       ? `// Scaled mode: font scales with zoom
-  float fontScale = baseFontSize / 64.0 * u_zoomSizeRatio; // 64 = atlas font size
+  float fontScale = baseFontSize / ATLAS_FONT_SIZE * u_zoomSizeRatio;
   // Convert glyph-unit metrics to WebGL units (scales with zoom)
   float textWidthWebGL = totalTextWidth * fontScale * u_correctionRatio / u_sizeRatio;
   float charOffsetWebGL = charTextOffset * fontScale * u_correctionRatio / u_sizeRatio;
   float charAdvanceWebGL = charAdvance * fontScale * u_correctionRatio / u_sizeRatio;`
       : `// Fixed mode: font stays constant in screen pixels
-  float fontScale = baseFontSize / 64.0; // 64 = atlas font size, pure pixel scale
+  float fontScale = baseFontSize / ATLAS_FONT_SIZE;
   // Convert glyph-unit metrics to graph units using pixelToGraph (zoom-independent)
   float textWidthWebGL = totalTextWidth * fontScale * pixelToGraph;
   float charOffsetWebGL = charTextOffset * fontScale * pixelToGraph;
@@ -542,9 +552,8 @@ void main() {
   quadPos.y = -charOffsetPixels.y + sdfBufferOffset - charSizePixels.y * (1.0 - a_quadCorner.y);
 
   // Center vertically on the path by offsetting by half the visual text height
-  // The offset should scale linearly with font size (not quadratically)
-  // 17.0 is approximately the distance from baseline to visual center in atlas units (64px base)
-  float verticalCenterOffset = 17.0 * fontScale;
+  // VERTICAL_CENTER_RATIO is the distance from baseline to visual center as a ratio of atlas font size
+  float verticalCenterOffset = VERTICAL_CENTER_RATIO * ATLAS_FONT_SIZE * fontScale;
   quadPos.y -= verticalCenterOffset;
 
   // -------------------------------------------------------------------------

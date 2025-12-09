@@ -11,6 +11,7 @@
  *
  * @module
  */
+import { generateRotate2D } from "../shared-glsl";
 import { numberToGLSLFloat } from "../../utils";
 import { EdgePath } from "../types";
 
@@ -103,14 +104,7 @@ const float STEP_FIXED_ANGLE = ${numberToGLSLFloat(fixedAngle)};
 const bool STEP_ROTATE_WITH_CAMERA = ${rotateWithCamera ? "true" : "false"};
 const float STEP_SQRT2 = 1.41421356237;
 
-// ============================================================================
-// HELPER: Rotate a 2D vector by angle (counter-clockwise)
-// ============================================================================
-vec2 step_rotate(vec2 v, float angle) {
-  float c = cos(angle);
-  float s = sin(angle);
-  return vec2(c * v.x - s * v.y, s * v.x + c * v.y);
-}
+${generateRotate2D("step")}
 
 // ============================================================================
 // HELPER: Get step segment points (source, corner1, corner2, target)

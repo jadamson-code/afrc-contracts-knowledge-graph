@@ -140,18 +140,9 @@ export function createEdgeLabelProgram<
   let generated: GeneratedEdgeLabelShaders | null = null;
 
   // Uniform type for TypeScript
-  type EdgeLabelUniform =
-    | "u_matrix"
-    | "u_sizeRatio"
-    | "u_correctionRatio"
-    | "u_pixelRatio"
-    | "u_resolution"
-    | "u_atlasSize"
-    | "u_atlas"
-    | "u_gamma"
-    | "u_sdfBuffer"
-    | "u_borderWidth"
-    | string;
+  // Note: We use `string` as a fallback to allow path-specific uniforms that aren't known at compile time.
+  // The explicit union members serve as documentation of the standard uniforms used by edge labels.
+  type EdgeLabelUniform = string;
 
   // -------------------------------------------------------------------------
   // Return the EdgeLabelProgram class

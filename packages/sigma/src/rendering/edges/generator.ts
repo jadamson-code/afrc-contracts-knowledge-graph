@@ -19,6 +19,84 @@ import { AttributeSpecification, EdgeExtremity, EdgeFilling, EdgePath, Generated
 
 const { FLOAT, UNSIGNED_BYTE } = WebGL2RenderingContext;
 
+// ============================================================================
+// Attribute GLSL Generation Helpers
+// ============================================================================
+
+/**
+ * Collects all custom attributes from path, head, tail, and filling.
+ */
+function collectAllCustomAttributes(
+  path: EdgePath,
+  head: EdgeExtremity,
+  tail: EdgeExtremity,
+  filling: EdgeFilling,
+): AttributeSpecification[] {
+  return [...path.attributes, ...head.attributes, ...tail.attributes, ...filling.attributes];
+}
+
+/**
+ * Converts attribute size to GLSL type.
+ */
+function sizeToGlslType(size: number): string {
+  return size === 1 ? "float" : `vec${size}`;
+}
+
+/**
+ * Ensures attribute name has "a_" prefix.
+ */
+function ensureAttrPrefix(name: string): string {
+  return name.startsWith("a_") ? name : `a_${name}`;
+}
+
+/**
+ * Gets base name without "a_" prefix.
+ */
+function getBaseName(name: string): string {
+  return name.startsWith("a_") ? name.slice(2) : name;
+}
+
+/**
+ * Generates GLSL input declarations for custom attributes.
+ */
+function generateAttributeDeclarations(attributes: AttributeSpecification[]): string {
+  return attributes
+    .map((a) => `in ${sizeToGlslType(a.size)} ${ensureAttrPrefix(a.name)};`)
+    .join("\n");
+}
+
+/**
+ * Generates GLSL output varying declarations for custom attributes.
+ */
+function generateVaryingDeclarations(attributes: AttributeSpecification[], direction: "in" | "out"): string {
+  return attributes
+    .map((a) => `${direction} ${sizeToGlslType(a.size)} v_${getBaseName(a.name)};`)
+    .join("\n");
+}
+
+/**
+ * Generates GLSL assignments from attributes to varyings.
+ */
+function generateVaryingAssignments(attributes: AttributeSpecification[]): string {
+  return attributes
+    .map((a) => `  v_${getBaseName(a.name)} = ${ensureAttrPrefix(a.name)};`)
+    .join("\n");
+}
+
+/**
+ * Generates #define statements to map a_* attributes to v_* varyings.
+ * This allows the same path GLSL to work in both vertex and fragment shaders.
+ */
+function generateAttributeDefines(attributes: AttributeSpecification[]): string {
+  return attributes
+    .map((a) => `#define ${ensureAttrPrefix(a.name)} v_${getBaseName(a.name)}`)
+    .join("\n");
+}
+
+// ============================================================================
+// Types
+// ============================================================================
+
 export interface EdgeShaderGenerationOptions {
   path: EdgePath;
   head: EdgeExtremity;
@@ -192,32 +270,11 @@ function generateVertexShader(
     .map((u) => `uniform ${u.type} ${u.name};`)
     .join("\n");
 
-  // Collect custom attributes
-  const customAttributes = [...path.attributes, ...head.attributes, ...tail.attributes, ...filling.attributes]
-    .map((a) => {
-      const glslType = a.size === 1 ? "float" : `vec${a.size}`;
-      const name = a.name.startsWith("a_") ? a.name : `a_${a.name}`;
-      return `in ${glslType} ${name};`;
-    })
-    .join("\n");
-
-  // Generate varyings for custom attributes
-  const customVaryings = [...path.attributes, ...head.attributes, ...tail.attributes, ...filling.attributes]
-    .map((a) => {
-      const glslType = a.size === 1 ? "float" : `vec${a.size}`;
-      const baseName = a.name.startsWith("a_") ? a.name.slice(2) : a.name;
-      return `out ${glslType} v_${baseName};`;
-    })
-    .join("\n");
-
-  // Generate varying assignments
-  const varyingAssignments = [...path.attributes, ...head.attributes, ...tail.attributes, ...filling.attributes]
-    .map((a) => {
-      const baseName = a.name.startsWith("a_") ? a.name.slice(2) : a.name;
-      const attrName = a.name.startsWith("a_") ? a.name : `a_${a.name}`;
-      return `  v_${baseName} = ${attrName};`;
-    })
-    .join("\n");
+  // Collect all custom attributes and generate GLSL code
+  const allCustomAttributes = collectAllCustomAttributes(path, head, tail, filling);
+  const customAttributes = generateAttributeDeclarations(allCustomAttributes);
+  const customVaryings = generateVaryingDeclarations(allCustomAttributes, "out");
+  const varyingAssignments = generateVaryingAssignments(allCustomAttributes);
 
   // Get head/tail margin values
   const headMargin =
@@ -509,24 +566,10 @@ function generateFragmentShader(
     .map((u) => `uniform ${u.type} ${u.name};`)
     .join("\n");
 
-  // Collect custom varyings
-  const customVaryings = [...path.attributes, ...head.attributes, ...tail.attributes, ...filling.attributes]
-    .map((a) => {
-      const glslType = a.size === 1 ? "float" : `vec${a.size}`;
-      const baseName = a.name.startsWith("a_") ? a.name.slice(2) : a.name;
-      return `in ${glslType} v_${baseName};`;
-    })
-    .join("\n");
-
-  // Generate #define statements to map a_* attributes to v_* varyings in fragment shader
-  // This allows the same path GLSL to work in both vertex and fragment shaders
-  const attributeDefines = [...path.attributes, ...head.attributes, ...tail.attributes, ...filling.attributes]
-    .map((a) => {
-      const attrName = a.name.startsWith("a_") ? a.name : `a_${a.name}`;
-      const baseName = a.name.startsWith("a_") ? a.name.slice(2) : a.name;
-      return `#define ${attrName} v_${baseName}`;
-    })
-    .join("\n");
+  // Collect all custom attributes and generate GLSL code
+  const allCustomAttributes = collectAllCustomAttributes(path, head, tail, filling);
+  const customVaryings = generateVaryingDeclarations(allCustomAttributes, "in");
+  const attributeDefines = generateAttributeDefines(allCustomAttributes);
 
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es

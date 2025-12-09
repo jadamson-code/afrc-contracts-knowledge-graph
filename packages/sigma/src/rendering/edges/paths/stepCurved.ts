@@ -7,6 +7,7 @@
  *
  * @module
  */
+import { generateRotate2D } from "../shared-glsl";
 import { numberToGLSLFloat } from "../../utils";
 import { EdgePath } from "../types";
 
@@ -94,14 +95,7 @@ const float STEPC_FIXED_ANGLE = ${numberToGLSLFloat(fixedAngle)};
 const bool STEPC_ROTATE_WITH_CAMERA = ${rotateWithCamera ? "true" : "false"};
 const float STEPC_CORNER_RATIO = ${numberToGLSLFloat(cornerRadius)};
 
-// ============================================================================
-// HELPER: Rotate a 2D vector by angle
-// ============================================================================
-vec2 stepC_rotate(vec2 v, float angle) {
-  float c = cos(angle);
-  float s = sin(angle);
-  return vec2(c * v.x - s * v.y, s * v.x + c * v.y);
-}
+${generateRotate2D("stepC")}
 
 // ============================================================================
 // HELPER: Get taxi segment points with corner radius info

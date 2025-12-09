@@ -5,9 +5,8 @@
  * Common GLSL code generation functions shared between edge shaders and
  * edge label shaders. These functions generate GLSL code for:
  * - Binary search to find where path exits/enters nodes
- * - Thickness conversion between coordinate systems
- * - Extremity length computation
  * - Numerical tangent/normal computation from position
+ * - 2D rotation helper
  *
  * @module
  */
@@ -79,75 +78,6 @@ float findTargetClampT(vec2 source, vec2 target, float targetSize, int targetSha
 }
 
 /**
- * Generates GLSL code for converting thickness from graph units to WebGL units.
- * This is used both in edge shaders and edge label shaders.
- *
- * Required uniforms: u_minEdgeThickness, u_sizeRatio, u_correctionRatio
- * Required attribute: a_thickness
- *
- * Outputs:
- * - pixelsThickness: thickness in pixels
- * - webGLThickness: thickness in WebGL units
- *
- * @returns GLSL code snippet
- */
-export function generateThicknessConversion(): string {
-  return /*glsl*/ `
-  // Convert thickness to WebGL units
-  float minThickness = u_minEdgeThickness;
-  float pixelsThickness = max(a_thickness, minThickness * u_sizeRatio);
-  float webGLThickness = pixelsThickness * u_correctionRatio / u_sizeRatio;
-`;
-}
-
-/**
- * Generates GLSL code for computing extremity lengths and handling short edges.
- * Produces bodyStartDist, bodyEndDist, and bodyLength in world units (WebGL coordinates).
- *
- * Required inputs:
- * - tStart, tEnd: clamped t values from findSourceClampT/findTargetClampT
- * - webGLThickness: from generateThicknessConversion
- * - pathLength: from path_{name}_length
- *
- * Required parameters (passed to the function):
- * - headLengthRatio, tailLengthRatio: extremity length as ratio of thickness
- * - minBodyLengthRatio: minimum body length as ratio of thickness
- *
- * Outputs:
- * - bodyStartDist: arc distance where body starts (after tail)
- * - bodyEndDist: arc distance where body ends (before head)
- * - bodyLength: length of the body in world units
- * - extremityScale: scale factor applied to extremities for short edges
- *
- * @returns GLSL code snippet
- */
-export function generateExtremityLengthComputation(): string {
-  return /*glsl*/ `
-  // Compute path length and visible length
-  float visibleLength = pathLength * (tEnd - tStart);
-
-  // Compute extremity lengths in world units
-  float headLength = headLengthRatio * webGLThickness;
-  float tailLength = tailLengthRatio * webGLThickness;
-  float minBodyLength = minBodyLengthRatio * webGLThickness;
-
-  // Handle short edges: scale down extremities if needed
-  float totalNeededLength = headLength + tailLength + minBodyLength;
-  float extremityScale = 1.0;
-  if (totalNeededLength > visibleLength && totalNeededLength > 0.0001) {
-    extremityScale = visibleLength / totalNeededLength;
-    headLength *= extremityScale;
-    tailLength *= extremityScale;
-  }
-
-  // Compute body bounds in arc distance (world units)
-  float bodyStartDist = tStart * pathLength + tailLength;
-  float bodyEndDist = tEnd * pathLength - headLength;
-  float bodyLength = max(bodyEndDist - bodyStartDist, 0.0);
-`;
-}
-
-/**
  * Generates GLSL code for numerical tangent and normal computation.
  * Uses finite differences on the position function to derive tangent,
  * then perpendicular rotation to derive normal.
@@ -174,6 +104,24 @@ vec2 path_${pathName}_tangent(float t, vec2 source, vec2 target) {
 vec2 path_${pathName}_normal(float t, vec2 source, vec2 target) {
   vec2 tangent = path_${pathName}_tangent(t, source, target);
   return vec2(-tangent.y, tangent.x);
+}
+`;
+}
+
+/**
+ * Generates GLSL code for 2D rotation.
+ * This helper is used by step-based paths that need camera rotation handling.
+ *
+ * @param prefix - Prefix for the function name to avoid conflicts (e.g., "step", "stepC")
+ * @returns GLSL function definition for rotation
+ */
+export function generateRotate2D(prefix: string): string {
+  return /*glsl*/ `
+// Rotate a 2D vector by angle (counter-clockwise)
+vec2 ${prefix}_rotate(vec2 v, float angle) {
+  float c = cos(angle);
+  float s = sin(angle);
+  return vec2(c * v.x - s * v.y, s * v.x + c * v.y);
 }
 `;
 }

@@ -672,10 +672,14 @@ uniform float u_sdfBuffer;
 uniform float u_pixelRatio;
 ${hasBorder ? "uniform float u_borderWidth;  // Border width in SDF units (normalized)" : ""}
 
-layout(location = 0) out vec4 fragColor;
-layout(location = 1) out vec4 fragPicking;
+// Fragment output (single target - picking handled via separate pass)
+out vec4 fragColor;
 
 void main() {
+  #ifdef PICKING_MODE
+    // Edge labels are not pickable - discard all fragments in picking mode
+    discard;
+  #else
   // SDF stores normalized distance: 0.5 = on edge, >0.5 = inside glyph
   float sdfValue = texture(u_atlas, v_texCoord).a;
 
@@ -719,9 +723,7 @@ ${
   float finalAlpha = v_color.a * alpha * edgeAlpha;
   fragColor = vec4(v_color.rgb * finalAlpha, finalAlpha);`
 }
-
-  // Edge labels are not pickable
-  fragPicking = vec4(0.0);
+  #endif
 }
 `;
 

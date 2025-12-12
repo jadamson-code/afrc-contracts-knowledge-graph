@@ -148,10 +148,9 @@ export default class Sigma<
   private elements: PlainObject<HTMLElement> = {};
   private canvasContexts: PlainObject<CanvasRenderingContext2D> = {};
   private webGLContext: WebGL2RenderingContext | null = null;
-  private mrtFrameBuffer: WebGLFramebuffer | null = null;
-  private mrtColorTexture: WebGLTexture | null = null;
-  private mrtPickingTexture: WebGLTexture | null = null;
-  private mrtDepthBuffer: WebGLRenderbuffer | null = null;
+  private pickingFrameBuffer: WebGLFramebuffer | null = null;
+  private pickingTexture: WebGLTexture | null = null;
+  private pickingDepthBuffer: WebGLRenderbuffer | null = null;
   private activeListeners: PlainObject<Listener> = {};
   private labelGrid: LabelGrid = new LabelGrid();
   private nodeDataCache: Record<string, NodeDisplayData> = {};
@@ -488,78 +487,45 @@ export default class Sigma<
   }
 
   /**
-   * Method (re)binding WebGL textures and buffers for MRT (picking + visual).
+   * Method (re)binding WebGL textures and buffers for the picking framebuffer.
+   * The picking framebuffer can be at reduced resolution for performance.
    *
    * @return {Sigma}
    */
   private resetWebGLTexture(): this {
     const gl = this.webGLContext!;
 
-    if (!this.mrtFrameBuffer) return this;
+    if (!this.pickingFrameBuffer) return this;
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.mrtFrameBuffer);
+    // Calculate picking texture size (can be reduced for performance)
+    const pickingWidth = Math.ceil((this.width * this.pixelRatio) / this.settings.pickingDownSizingRatio);
+    const pickingHeight = Math.ceil((this.height * this.pixelRatio) / this.settings.pickingDownSizingRatio);
 
-    // Update color texture (visual output)
-    if (this.mrtColorTexture) gl.deleteTexture(this.mrtColorTexture);
-    const colorTexture = gl.createTexture();
-    if (colorTexture) {
-      gl.bindTexture(gl.TEXTURE_2D, colorTexture);
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA,
-        this.width * this.pixelRatio,
-        this.height * this.pixelRatio,
-        0,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        null,
-      );
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, colorTexture, 0);
-      this.mrtColorTexture = colorTexture;
-    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.pickingFrameBuffer);
 
-    // Update picking texture (IDs)
-    if (this.mrtPickingTexture) gl.deleteTexture(this.mrtPickingTexture);
+    // Update picking texture
+    if (this.pickingTexture) gl.deleteTexture(this.pickingTexture);
     const pickingTexture = gl.createTexture();
     if (pickingTexture) {
       gl.bindTexture(gl.TEXTURE_2D, pickingTexture);
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA,
-        this.width * this.pixelRatio,
-        this.height * this.pixelRatio,
-        0,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        null,
-      );
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, pickingWidth, pickingHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, pickingTexture, 0);
-      this.mrtPickingTexture = pickingTexture;
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pickingTexture, 0);
+      this.pickingTexture = pickingTexture;
     }
 
     // Update depth buffer
-    if (this.mrtDepthBuffer) gl.deleteRenderbuffer(this.mrtDepthBuffer);
+    if (this.pickingDepthBuffer) gl.deleteRenderbuffer(this.pickingDepthBuffer);
     const depthBuffer = gl.createRenderbuffer();
     if (depthBuffer) {
       gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
-      gl.renderbufferStorage(
-        gl.RENDERBUFFER,
-        gl.DEPTH_COMPONENT16,
-        this.width * this.pixelRatio,
-        this.height * this.pixelRatio,
-      );
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, pickingWidth, pickingHeight);
       gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuffer);
-      this.mrtDepthBuffer = depthBuffer;
+      this.pickingDepthBuffer = depthBuffer;
     }
 
-    // Re-enable MRT
-    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     return this;
   }
@@ -596,11 +562,10 @@ export default class Sigma<
     const { x, y } = position;
     const gl = this.webGLContext!;
 
-    // Read from picking attachment (COLOR_ATTACHMENT1)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.mrtFrameBuffer);
-    gl.readBuffer(gl.COLOR_ATTACHMENT1);
+    // Read from picking framebuffer (scaled by downSizingRatio)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.pickingFrameBuffer);
 
-    const color = getPixelColor(gl, this.mrtFrameBuffer, x, y, this.pixelRatio, 1);
+    const color = getPixelColor(gl, this.pickingFrameBuffer, x, y, this.pixelRatio, this.settings.pickingDownSizingRatio);
     const index = colorToIndex(...color);
     const itemAt = this.itemIDsIndex[index];
 
@@ -916,11 +881,10 @@ export default class Sigma<
   private getEdgeAtPoint(x: number, y: number): string | null {
     const gl = this.webGLContext!;
 
-    // Read from picking attachment (COLOR_ATTACHMENT1)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.mrtFrameBuffer);
-    gl.readBuffer(gl.COLOR_ATTACHMENT1);
+    // Read from picking framebuffer (scaled by downSizingRatio)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.pickingFrameBuffer);
 
-    const color = getPixelColor(gl, this.mrtFrameBuffer, x, y, this.pixelRatio, 1);
+    const color = getPixelColor(gl, this.pickingFrameBuffer, x, y, this.pixelRatio, this.settings.pickingDownSizingRatio);
     const index = colorToIndex(...color);
     const itemAt = this.itemIDsIndex[index];
 
@@ -1086,7 +1050,7 @@ export default class Sigma<
 
   /**
    * Pre-generate glyphs for all labels.
-   * Actual label processing happens per-frame in renderWebGLLabelsToMRT.
+   * Actual label processing happens per-frame in renderWebGLLabels.
    * @private
    */
   private processWebGLLabels(nodes: string[]): void {
@@ -1274,7 +1238,7 @@ export default class Sigma<
    *
    * @param params - Render parameters
    */
-  private renderWebGLLabelsToMRT(params: RenderParams): void {
+  private renderWebGLLabels(params: RenderParams): void {
     const cameraState = this.camera.getState();
 
     // Compute viewport bounds in framed graph coordinates for early rejection
@@ -1411,41 +1375,41 @@ export default class Sigma<
       characterOffsets[labelType] = offset + charsProcessed;
     }
 
-    // Render WebGL labels (MRT framebuffer is already bound by caller)
+    // Render WebGL labels (programs handle two-pass rendering internally)
     for (const type in this.labelPrograms) {
       this.labelPrograms[type].render(params);
     }
   }
 
   /**
-   * Method used to render edge labels to the MRT framebuffer.
+   * Method used to render edge labels using WebGL.
    * Called from render() before nodes are drawn, so edge labels appear under nodes.
    *
    * @private
    */
-  private renderEdgeLabelsToMRT(): void {
-    this.renderEdgeLabelsInternal();
+  private renderEdgeLabelsWebGL(params: RenderParams): void {
+    this.renderEdgeLabelsInternal(params);
   }
 
   /**
    * Method used to render edge labels using WebGL (SDF-based),
    * based on which node labels were rendered.
-   * Now just a no-op since edge labels are rendered in renderEdgeLabelsToMRT.
+   * Now just a no-op since edge labels are rendered in renderEdgeLabelsWebGL.
    *
    * @return {Sigma}
    */
   private renderEdgeLabels(): this {
-    // Edge labels are now rendered in renderEdgeLabelsToMRT() before the blit
+    // Edge labels are now rendered in renderEdgeLabelsWebGL() in the render loop
     return this;
   }
 
   /**
    * Internal method that does the actual edge label rendering.
-   * Called by renderEdgeLabelsToMRT when the MRT framebuffer is bound.
+   * Called by renderEdgeLabelsWebGL.
    *
    * @private
    */
-  private renderEdgeLabelsInternal(): void {
+  private renderEdgeLabelsInternal(params: RenderParams): void {
     if (!this.settings.renderEdgeLabels) return;
 
     const edgeLabelsToDisplay = edgeLabelsToDisplayFromNodes({
@@ -1460,7 +1424,6 @@ export default class Sigma<
     context.clearRect(0, 0, this.width, this.height);
 
     const displayedLabels = new Set<string>();
-    const params = this.getRenderParams();
 
     // Count characters per edge label program type
     const charactersPerProgram: Record<string, number> = {};
@@ -1593,6 +1556,9 @@ export default class Sigma<
     if (nodesToRender.length === 0) return;
 
     const renderParams = this.getRenderParams();
+    // Highlighted nodes don't need to be in the picking buffer (they're already picked)
+    // This also prevents visual artifacts when DEBUG_displayPickingLayer is enabled
+    renderParams.pickingFrameBuffer = null;
 
     // 2. Prepare hover data with label dimensions
     const hoverDataByType: Record<string, HoverDisplayData[]> = {};
@@ -1810,19 +1776,26 @@ export default class Sigma<
 
     const params: RenderParams = this.getRenderParams();
 
-    // Bind MRT framebuffer for rendering
     const gl = this.webGLContext!;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.mrtFrameBuffer);
+
+    // Clear the picking framebuffer (two-pass rendering: programs render to picking first, then to screen)
+    const pickingWidth = Math.ceil((this.width * this.pixelRatio) / this.settings.pickingDownSizingRatio);
+    const pickingHeight = Math.ceil((this.height * this.pixelRatio) / this.settings.pickingDownSizingRatio);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.pickingFrameBuffer);
+    gl.viewport(0, 0, pickingWidth, pickingHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // Ensure MRT draw buffers are enabled (may be reset by clear)
-    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    // Clear the main canvas
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.width * this.pixelRatio, this.height * this.pixelRatio);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // Upload and bind node data texture (shared by node and edge programs)
     this.nodeDataTexture!.upload();
     this.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
 
     // Drawing edges first (so nodes render on top for picking priority)
+    // Programs handle two-pass rendering internally (picking then visual)
     if (!this.settings.hideEdgesOnMove || !moving) {
       for (const type in this.edgePrograms) {
         const program = this.edgePrograms[type];
@@ -1833,38 +1806,38 @@ export default class Sigma<
     // Drawing edge labels (after edges, before nodes, so they appear under nodes)
     // Edge labels are WebGL-rendered like node labels
     if (this.settings.renderEdgeLabels && (!this.settings.hideLabelsOnMove || !moving)) {
-      this.renderEdgeLabelsToMRT();
+      this.renderEdgeLabelsWebGL(params);
     }
 
-    // Drawing nodes
+    // Drawing nodes (programs handle two-pass rendering internally)
     for (const type in this.nodePrograms) {
       const program = this.nodePrograms[type];
       program.render(params);
     }
 
-    // Drawing WebGL labels (before blit, so they're included in the MRT)
+    // Drawing WebGL labels (programs handle two-pass rendering internally)
     // WebGL labels are GPU-accelerated, so they can render during camera movement
     if (this.settings.renderLabels) {
-      this.renderWebGLLabelsToMRT(params);
+      this.renderWebGLLabels(params);
     }
 
-    // Blit visual output (COLOR_ATTACHMENT0) or picking layer (COLOR_ATTACHMENT1) to screen
-    const attachmentToBlit = this.settings.DEBUG_displayPickingLayer ? gl.COLOR_ATTACHMENT1 : gl.COLOR_ATTACHMENT0;
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.mrtFrameBuffer);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-    gl.readBuffer(attachmentToBlit);
-    gl.blitFramebuffer(
-      0,
-      0,
-      this.width * this.pixelRatio,
-      this.height * this.pixelRatio,
-      0,
-      0,
-      this.width * this.pixelRatio,
-      this.height * this.pixelRatio,
-      gl.COLOR_BUFFER_BIT,
-      gl.NEAREST,
-    );
+    // If DEBUG_displayPickingLayer is enabled, blit picking framebuffer to screen
+    if (this.settings.DEBUG_displayPickingLayer) {
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.pickingFrameBuffer);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+      gl.blitFramebuffer(
+        0,
+        0,
+        pickingWidth,
+        pickingHeight,
+        0,
+        0,
+        this.width * this.pixelRatio,
+        this.height * this.pixelRatio,
+        gl.COLOR_BUFFER_BIT,
+        gl.NEAREST,
+      );
+    }
 
     // Do not display labels on move per setting
     if (this.settings.hideLabelsOnMove && moving) return exitRender();
@@ -2177,11 +2150,12 @@ export default class Sigma<
       cameraAngle: this.camera.angle,
       sizeRatio: 1 / this.scaleSize(),
       correctionRatio: this.correctionRatio,
-      downSizingRatio: 1,
+      downSizingRatio: this.settings.pickingDownSizingRatio,
       minEdgeThickness: this.settings.minEdgeThickness,
       antiAliasingFeather: this.settings.antiAliasingFeather,
       nodeDataTextureUnit: NODE_DATA_TEXTURE_UNIT,
       nodeDataTextureWidth: this.nodeDataTexture!.getTextureWidth(),
+      pickingFrameBuffer: this.pickingFrameBuffer,
     };
   }
 
@@ -2316,54 +2290,42 @@ export default class Sigma<
     // Blending:
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-    // Prepare MRT frame buffer for rendering + picking:
+    // Create picking framebuffer for two-pass rendering
     if (options.picking) {
       const frameBuffer = gl.createFramebuffer();
-      if (!frameBuffer) throw new Error(`Sigma: cannot create a new frame buffer for layer ${id}`);
+      if (!frameBuffer) throw new Error(`Sigma: cannot create picking frame buffer`);
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
 
-      // Create color texture for visual output (COLOR_ATTACHMENT0)
-      const colorTexture = gl.createTexture();
-      if (!colorTexture) throw new Error(`Sigma: cannot create color texture`);
-      gl.bindTexture(gl.TEXTURE_2D, colorTexture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, colorTexture, 0);
-
-      // Create picking texture for IDs (COLOR_ATTACHMENT1)
+      // Create picking texture for IDs (single attachment, no blending needed)
       const pickingTexture = gl.createTexture();
       if (!pickingTexture) throw new Error(`Sigma: cannot create picking texture`);
       gl.bindTexture(gl.TEXTURE_2D, pickingTexture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      // NEAREST filtering for exact pixel reads (no interpolation)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, pickingTexture, 0);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pickingTexture, 0);
 
-      // Create depth buffer
+      // Create depth buffer for proper depth testing during picking
       const depthBuffer = gl.createRenderbuffer();
-      if (!depthBuffer) throw new Error(`Sigma: cannot create depth buffer`);
+      if (!depthBuffer) throw new Error(`Sigma: cannot create picking depth buffer`);
       gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
       gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 1, 1);
       gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuffer);
 
-      // Enable MRT
-      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-
       // Verify framebuffer is complete
       if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-        throw new Error(`Sigma: MRT framebuffer is not complete`);
+        throw new Error(`Sigma: picking framebuffer is not complete`);
       }
 
-      this.mrtFrameBuffer = frameBuffer;
-      this.mrtColorTexture = colorTexture;
-      this.mrtPickingTexture = pickingTexture;
-      this.mrtDepthBuffer = depthBuffer;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+      this.pickingFrameBuffer = frameBuffer;
+      this.pickingTexture = pickingTexture;
+      this.pickingDepthBuffer = depthBuffer;
     }
 
     return gl;

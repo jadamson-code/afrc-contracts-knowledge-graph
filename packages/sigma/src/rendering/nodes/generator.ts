@@ -260,12 +260,10 @@ ${layerUniforms}
 // Layer varyings
 ${layerVaryings}
 
-// Multiple Render Targets outputs
-layout(location = 0) out vec4 fragColor;   // Visual rendering
-layout(location = 1) out vec4 fragPicking; // Picking
+// Fragment output (single target - picking handled via separate pass)
+out vec4 fragColor;
 
 const float bias = 255.0 / 254.0;
-const vec4 transparent = vec4(0.0, 0.0, 0.0, 0.0);
 
 // LayerContext struct - provides rendering context to all layers
 struct LayerContext {
@@ -316,23 +314,18 @@ void main() {
 
 ${layerCalls}
 
-  // 4. Apply antialiasing at shape boundary
-  // smoothstep provides smooth transition from opaque to transparent
-  float alpha = smoothstep(context.aaWidth, -context.aaWidth, context.sdf);
-  // Mix with transparent to fade both color AND alpha together (avoids bright halo)
-  color = mix(vec4(0.0), color, alpha);
-
-  // 5. Output to both render targets
-  // Output 0: Visual rendering with antialiasing
-  fragColor = color;
-
-  // Output 1: Picking (with hard cutoff, no antialiasing)
-  if (context.sdf > 0.0) {
-    fragPicking = transparent;
-  } else {
-    fragPicking = v_id;
-    fragPicking.a *= bias;
-  }
+  #ifdef PICKING_MODE
+    // Picking pass: output node ID for pixels inside shape
+    if (context.sdf > 0.0) discard;
+    fragColor = v_id;
+    fragColor.a *= bias;
+  #else
+    // Visual pass: apply antialiasing at shape boundary
+    // smoothstep provides smooth transition from opaque to transparent
+    float alpha = smoothstep(context.aaWidth, -context.aaWidth, context.sdf);
+    // Mix with transparent to fade both color AND alpha together (avoids bright halo)
+    fragColor = mix(vec4(0.0), color, alpha);
+  #endif
 }
 `;
 

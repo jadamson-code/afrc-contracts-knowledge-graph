@@ -279,29 +279,33 @@ uniform float u_gamma;
 uniform float u_sdfBuffer;
 uniform float u_pixelRatio;
 
-layout(location = 0) out vec4 fragColor;
-layout(location = 1) out vec4 fragPicking;
+// Fragment output (single target - picking handled via separate pass)
+out vec4 fragColor;
 
 void main() {
-  // Sample SDF value from atlas (high = inside glyph, low = outside)
-  float sdfValue = texture(u_atlas, v_texCoord).a;
+  #ifdef PICKING_MODE
+    // Labels are not pickable - discard all fragments in picking mode
+    discard;
+  #else
+    // Sample SDF value from atlas (high = inside glyph, low = outside)
+    float sdfValue = texture(u_atlas, v_texCoord).a;
 
-  // Edge threshold: 1.0 - cutoff = 0.75 for default cutoff=0.25
-  // This is where the glyph edge is located in the SDF
-  float edgeThreshold = 1.0 - u_sdfBuffer;
+    // Edge threshold: 1.0 - cutoff = 0.75 for default cutoff=0.25
+    // This is where the glyph edge is located in the SDF
+    float edgeThreshold = 1.0 - u_sdfBuffer;
 
-  // Gamma controls the anti-aliasing band width
-  // Scale by pixel ratio for HiDPI support (sharper on high-DPI)
-  float gamma = u_gamma / u_pixelRatio;
+    // Gamma controls the anti-aliasing band width
+    // Scale by pixel ratio for HiDPI support (sharper on high-DPI)
+    float gamma = u_gamma / u_pixelRatio;
 
-  // Pure gamma-based anti-aliasing using smoothstep
-  // The AA band extends from (threshold - gamma) to (threshold + gamma)
-  float alpha = smoothstep(edgeThreshold - gamma, edgeThreshold + gamma, sdfValue);
+    // Pure gamma-based anti-aliasing using smoothstep
+    // The AA band extends from (threshold - gamma) to (threshold + gamma)
+    float alpha = smoothstep(edgeThreshold - gamma, edgeThreshold + gamma, sdfValue);
 
-  // Premultiplied alpha output for correct blending
-  float finalAlpha = v_color.a * alpha;
-  fragColor = vec4(v_color.rgb * finalAlpha, finalAlpha);
-  fragPicking = v_color;
+    // Premultiplied alpha output for correct blending
+    float finalAlpha = v_color.a * alpha;
+    fragColor = vec4(v_color.rgb * finalAlpha, finalAlpha);
+  #endif
 }
 `;
 

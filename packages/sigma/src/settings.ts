@@ -40,6 +40,7 @@ export interface Settings<
   renderLabels: boolean;
   renderEdgeLabels: boolean;
   enableEdgeEvents: boolean;
+  pickingDownSizingRatio: number;
 
   // Component rendering
   defaultNodeColor: string;
@@ -125,6 +126,7 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
   renderLabels: true,
   renderEdgeLabels: false,
   enableEdgeEvents: false,
+  pickingDownSizingRatio: 2,
 
   // Component rendering
   defaultNodeColor: "#999",

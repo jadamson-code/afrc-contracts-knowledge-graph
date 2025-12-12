@@ -630,11 +630,8 @@ uniform float u_cameraAngle;
 // Custom uniforms
 ${customUniforms}
 
-// Multiple Render Targets outputs
-layout(location = 0) out vec4 fragColor;
-layout(location = 1) out vec4 fragPicking;
-
-const vec4 transparent = vec4(0.0, 0.0, 0.0, 0.0);
+// Fragment output (single target - picking handled via separate pass)
+out vec4 fragColor;
 
 // EdgeContext struct
 struct EdgeContext {
@@ -777,14 +774,19 @@ void main() {
     }
   }
 
-  // Anti-aliasing via smoothstep on SDF
-  float alpha = smoothstep(aaWidthWebGL, -aaWidthWebGL, finalSDF);
-  if (alpha < 0.01) discard;
+  #ifdef PICKING_MODE
+    // Picking pass: output edge ID for pixels inside edge
+    if (finalSDF > 0.0) discard;
+    fragColor = v_id;
+  #else
+    // Visual pass: anti-aliased edge with filling
+    float alpha = smoothstep(aaWidthWebGL, -aaWidthWebGL, finalSDF);
+    if (alpha < 0.01) discard;
 
-  vec4 color = filling_${filling.name}(context);
-  // Mix with transparent to fade both color AND alpha (pre-multiplied alpha for correct blending)
-  fragColor = mix(vec4(0.0), color, alpha);
-  fragPicking = finalSDF > 0.0 ? transparent : v_id;
+    vec4 color = filling_${filling.name}(context);
+    // Mix with transparent to fade both color AND alpha (pre-multiplied alpha for correct blending)
+    fragColor = mix(vec4(0.0), color, alpha);
+  #endif
 }
 `;
 

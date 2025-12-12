@@ -104,6 +104,7 @@ export interface RenderParams {
   antiAliasingFeather: number;
   nodeDataTextureUnit: number;
   nodeDataTextureWidth: number;
+  pickingFrameBuffer: WebGLFramebuffer | null;
 }
 
 /**

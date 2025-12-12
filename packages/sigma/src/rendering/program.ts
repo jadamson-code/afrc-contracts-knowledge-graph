@@ -33,6 +33,21 @@ const SIZE_FACTOR_PER_ATTRIBUTE_TYPE: Record<number, number> = {
   [WebGL2RenderingContext.FLOAT]: 4,
 };
 
+/**
+ * Inserts PICKING_MODE define after the #version directive.
+ * GLSL requires #version to be the first non-comment line.
+ */
+function insertPickingModeDefine(shaderSource: string): string {
+  // Find the end of the #version line
+  const versionMatch = shaderSource.match(/^(#version[^\n]*\n)/);
+  if (versionMatch) {
+    // Insert #define after #version line
+    return versionMatch[1] + "#define PICKING_MODE\n" + shaderSource.slice(versionMatch[1].length);
+  }
+  // Fallback: prepend if no #version found (shouldn't happen with WebGL2)
+  return "#define PICKING_MODE\n" + shaderSource;
+}
+
 export abstract class AbstractProgram<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
@@ -71,6 +86,7 @@ export abstract class Program<
   verticesCount = 0;
 
   normalProgram: ProgramInfo;
+  pickProgram: ProgramInfo | null = null;
 
   isInstanced: boolean;
 
@@ -97,6 +113,16 @@ export abstract class Program<
     // Members
     this.renderer = renderer;
     this.normalProgram = this.getProgramInfo("normal", gl, def.VERTEX_SHADER_SOURCE, def.FRAGMENT_SHADER_SOURCE, null);
+
+    // Create picking program with PICKING_MODE define inserted after #version
+    // This enables separate rendering pass with blending disabled for picking
+    this.pickProgram = this.getProgramInfo(
+      "pick",
+      gl,
+      insertPickingModeDefine(def.VERTEX_SHADER_SOURCE),
+      insertPickingModeDefine(def.FRAGMENT_SHADER_SOURCE),
+      null,
+    );
 
     // For instanced programs:
     if (this.isInstanced) {
@@ -125,6 +151,7 @@ export abstract class Program<
 
   kill() {
     killProgram(this.normalProgram);
+    if (this.pickProgram) killProgram(this.pickProgram);
   }
 
   protected getProgramInfo(
@@ -320,15 +347,15 @@ export abstract class Program<
   abstract setUniforms(params: RenderParams, programInfo: ProgramInfo): void;
 
   protected renderProgram(params: RenderParams, programInfo: ProgramInfo): void {
-    const { gl, program } = programInfo;
+    const { gl, program, isPicking } = programInfo;
 
-    // With the current fix for #1397, the alpha blending is enabled for the
-    // picking layer:
-    gl.enable(gl.BLEND);
-
-    // Original code:
-    // if (!isPicking) gl.enable(gl.BLEND);
-    // else gl.disable(gl.BLEND);
+    // Disable blending for picking pass (critical for performance!)
+    // Enable blending for normal pass (needed for anti-aliasing)
+    if (isPicking) {
+      gl.disable(gl.BLEND);
+    } else {
+      gl.enable(gl.BLEND);
+    }
 
     gl.useProgram(program);
     this.setUniforms(params, programInfo);
@@ -338,15 +365,30 @@ export abstract class Program<
   render(params: RenderParams): void {
     if (this.hasNothingToRender()) return;
 
-    this.normalProgram.gl.viewport(0, 0, params.width * params.pixelRatio, params.height * params.pixelRatio);
+    const gl = this.normalProgram.gl;
+
+    // Pass 1: Render to picking framebuffer (with blending disabled)
+    if (this.pickProgram && params.pickingFrameBuffer) {
+      const pickingWidth = Math.ceil((params.width * params.pixelRatio) / params.downSizingRatio);
+      const pickingHeight = Math.ceil((params.height * params.pixelRatio) / params.downSizingRatio);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, params.pickingFrameBuffer);
+      gl.viewport(0, 0, pickingWidth, pickingHeight);
+      this.bindProgram(this.pickProgram);
+      this.renderProgram(params, this.pickProgram);
+      this.unbindProgram(this.pickProgram);
+    }
+
+    // Pass 2: Render to screen (with blending enabled)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, params.width * params.pixelRatio, params.height * params.pixelRatio);
     this.bindProgram(this.normalProgram);
     this.renderProgram(params, this.normalProgram);
     this.unbindProgram(this.normalProgram);
   }
 
   drawWebGL(method: number /* GLenum */, { gl }: ProgramInfo): void {
-    // Framebuffer is already bound by the caller (sigma.ts render loop)
-    // Do not rebind here - it would override the MRT framebuffer binding
+    // Framebuffer is already bound by render() for either picking or visual pass
     if (!this.isInstanced) {
       gl.drawArrays(method, 0, this.verticesCount);
     } else {

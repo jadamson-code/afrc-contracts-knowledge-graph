@@ -32,8 +32,7 @@ export * from "./edges";
 // Shape registry
 export * from "./shapes";
 
-// Node data texture
+// Data textures
+export { DataTexture } from "./data-texture";
 export { NodeDataTexture } from "./node-data-texture";
-
-// Edge data texture
 export { EdgeDataTexture } from "./edge-data-texture";

@@ -1803,12 +1803,12 @@ export default class Sigma<
     gl.viewport(0, 0, this.width * this.pixelRatio, this.height * this.pixelRatio);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // Upload and bind node data texture (shared by node and edge programs)
+    // Upload data textures (must upload both before binding to avoid texture unit conflicts)
     this.nodeDataTexture!.upload();
-    this.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
-
-    // Upload and bind edge data texture (shared by edge and edge label programs)
     this.edgeDataTexture!.upload();
+
+    // Bind data textures to their respective texture units
+    this.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
     this.edgeDataTexture!.bind(EDGE_DATA_TEXTURE_UNIT);
 
     // Drawing edges first (so nodes render on top for picking priority)

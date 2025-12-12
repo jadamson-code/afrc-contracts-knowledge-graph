@@ -169,6 +169,8 @@ function collectUniforms(path: EdgePath, head: EdgeExtremity, tail: EdgeExtremit
     "u_minEdgeThickness",
     "u_nodeDataTexture",
     "u_nodeDataTextureWidth",
+    "u_edgeDataTexture",
+    "u_edgeDataTextureWidth",
   ]);
 
   const uniforms = new Set<string>(standardUniforms);
@@ -188,8 +190,8 @@ function collectUniforms(path: EdgePath, head: EdgeExtremity, tail: EdgeExtremit
 
 /**
  * Collects all attributes needed for edge rendering.
- * Note: Source/target positions, sizes, and shape IDs are now fetched from the
- * node data texture using node indices, reducing per-edge buffer size.
+ * Note: Edge data (source/target node indices, thickness, curvature) is now fetched
+ * from the edge data texture using edge index, reducing per-edge buffer size.
  */
 function collectAttributes(
   path: EdgePath,
@@ -197,38 +199,38 @@ function collectAttributes(
   tail: EdgeExtremity,
   filling: EdgeFilling,
 ): AttributeSpecification[] {
+  // Attributes that are now in the edge data texture (filtered out from path/extremity attributes)
+  const textureAttributes = new Set(["a_curvature", "a_sourceNodeIndex", "a_targetNodeIndex", "a_thickness"]);
+
   const attributes: AttributeSpecification[] = [
-    // Standard edge attributes
-    // Node data (position, size, shapeId) is fetched from texture via indices
-    { name: "a_sourceNodeIndex", size: 1, type: FLOAT },
-    { name: "a_targetNodeIndex", size: 1, type: FLOAT },
-    { name: "a_thickness", size: 1, type: FLOAT },
+    // Edge index for texture lookup (replaces sourceNodeIndex, targetNodeIndex, thickness)
+    { name: "a_edgeIndex", size: 1, type: FLOAT },
     { name: "a_color", size: 4, type: UNSIGNED_BYTE, normalized: true },
     { name: "a_id", size: 4, type: UNSIGNED_BYTE, normalized: true },
   ];
 
-  // Add path-specific attributes
+  // Add path-specific attributes (except those now in texture)
   path.attributes.forEach((attr) => {
     const name = attr.name.startsWith("a_") ? attr.name : `a_${attr.name}`;
-    if (!attributes.find((a) => a.name === name)) {
+    if (!textureAttributes.has(name) && !attributes.find((a) => a.name === name)) {
       attributes.push({ ...attr, name });
     }
   });
 
-  // Add extremity attributes
+  // Add extremity attributes (except those now in texture)
   [head, tail].forEach((extremity) => {
     extremity.attributes.forEach((attr) => {
       const name = attr.name.startsWith("a_") ? attr.name : `a_${attr.name}`;
-      if (!attributes.find((a) => a.name === name)) {
+      if (!textureAttributes.has(name) && !attributes.find((a) => a.name === name)) {
         attributes.push({ ...attr, name });
       }
     });
   });
 
-  // Add filling attributes
+  // Add filling attributes (except those now in texture)
   filling.attributes.forEach((attr) => {
     const name = attr.name.startsWith("a_") ? attr.name : `a_${attr.name}`;
-    if (!attributes.find((a) => a.name === name)) {
+    if (!textureAttributes.has(name) && !attributes.find((a) => a.name === name)) {
       attributes.push({ ...attr, name });
     }
   });
@@ -308,14 +310,13 @@ function generateVertexShader(
 ${constantAttrDeclarations}
 
 // Per-edge attributes
-// Node data (position, size, shapeId) is fetched from texture via indices
-in float a_sourceNodeIndex; // Index into node data texture for source node
-in float a_targetNodeIndex; // Index into node data texture for target node
-in float a_thickness;   // Edge thickness
+// Edge data (source/target indices, thickness, curvature, extremity ratios)
+// is fetched from edge data texture via edge index
+in float a_edgeIndex;   // Index into edge data texture
 in vec4 a_color;        // Edge color
 in vec4 a_id;           // Edge ID for picking
 
-// Custom attributes
+// Custom attributes (path-specific, except those in edge texture)
 ${customAttributes}
 
 // Standard uniforms
@@ -328,6 +329,8 @@ uniform float u_cameraAngle;
 uniform float u_minEdgeThickness;
 uniform sampler2D u_nodeDataTexture;
 uniform int u_nodeDataTextureWidth;
+uniform sampler2D u_edgeDataTexture;
+uniform int u_edgeDataTextureWidth;
 
 // Custom uniforms
 ${customUniforms}
@@ -384,11 +387,28 @@ ${generateFindSourceClampT(pathName)}
 ${generateFindTargetClampT(pathName)}
 
 void main() {
-  // Fetch source and target node data from texture
+  // Fetch edge data from edge texture (2 texels per edge)
+  // Texel 0: sourceNodeIndex, targetNodeIndex, thickness, curvature
+  // Texel 1: headLengthRatio, tailLengthRatio, reserved, reserved
+  int edgeIdx = int(a_edgeIndex);
+  int texel0Idx = edgeIdx * 2;
+  int texel1Idx = edgeIdx * 2 + 1;
+  ivec2 edgeTexCoord0 = ivec2(texel0Idx % u_edgeDataTextureWidth, texel0Idx / u_edgeDataTextureWidth);
+  ivec2 edgeTexCoord1 = ivec2(texel1Idx % u_edgeDataTextureWidth, texel1Idx / u_edgeDataTextureWidth);
+  vec4 edgeData0 = texelFetch(u_edgeDataTexture, edgeTexCoord0, 0);
+  vec4 edgeData1 = texelFetch(u_edgeDataTexture, edgeTexCoord1, 0);
+
+  // Unpack edge data
+  int srcIdx = int(edgeData0.x);
+  int tgtIdx = int(edgeData0.y);
+  float a_thickness = edgeData0.z;
+  float a_curvature = edgeData0.w;
+  float a_headLengthRatio = edgeData1.x;
+  float a_tailLengthRatio = edgeData1.y;
+
+  // Fetch source and target node data from node texture
   // Texture format: vec4(x, y, size, shapeId)
   // 2D texture layout: texCoord = (index % width, index / width)
-  int srcIdx = int(a_sourceNodeIndex);
-  int tgtIdx = int(a_targetNodeIndex);
   ivec2 srcTexCoord = ivec2(srcIdx % u_nodeDataTextureWidth, srcIdx / u_nodeDataTextureWidth);
   ivec2 tgtTexCoord = ivec2(tgtIdx % u_nodeDataTextureWidth, tgtIdx / u_nodeDataTextureWidth);
   vec4 srcNodeData = texelFetch(u_nodeDataTexture, srcTexCoord, 0);
@@ -411,8 +431,9 @@ void main() {
   float tailMarginValue = ${tailMargin};
 
   // Extremity parameters
-  float headLengthRatio = ${numberToGLSLFloat(head.length as number)};
-  float tailLengthRatio = ${numberToGLSLFloat(tail.length as number)};
+  // Length ratios come from edge texture (per-edge), width factors from program (per-program)
+  float headLengthRatio = a_headLengthRatio;
+  float tailLengthRatio = a_tailLengthRatio;
   float headWidthFactor = ${numberToGLSLFloat(head.widthFactor)};
   float tailWidthFactor = ${numberToGLSLFloat(tail.widthFactor)};
   float minBodyLengthRatio = ${numberToGLSLFloat(path.minBodyLengthRatio || 0)};

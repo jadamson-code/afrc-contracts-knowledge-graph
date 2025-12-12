@@ -104,6 +104,8 @@ export interface RenderParams {
   antiAliasingFeather: number;
   nodeDataTextureUnit: number;
   nodeDataTextureWidth: number;
+  edgeDataTextureUnit: number;
+  edgeDataTextureWidth: number;
   pickingFrameBuffer: WebGLFramebuffer | null;
 }
 
@@ -284,6 +286,8 @@ export interface EdgeLabelDisplayData extends Omit<LabelDisplayData, "position">
   sourceNodeIndex: number;
   /** Target node index in node data texture */
   targetNodeIndex: number;
+  /** Edge index in edge data texture */
+  edgeIndex: number;
 }
 
 /**

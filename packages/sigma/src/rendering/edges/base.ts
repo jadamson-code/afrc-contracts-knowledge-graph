@@ -23,8 +23,7 @@ export abstract class AbstractEdgeProgram<
     sourceData: NodeDisplayData,
     targetData: NodeDisplayData,
     data: EdgeDisplayData,
-    sourceNodeIndex: number,
-    targetNodeIndex: number,
+    edgeTextureIndex: number,
   ): void;
 }
 
@@ -53,8 +52,7 @@ export abstract class EdgeProgram<
     sourceData: NodeDisplayData,
     targetData: NodeDisplayData,
     data: EdgeDisplayData,
-    sourceNodeIndex: number,
-    targetNodeIndex: number,
+    edgeTextureIndex: number,
   ): void {
     let i = offset * this.STRIDE;
     // NOTE: dealing with hidden items automatically
@@ -65,7 +63,7 @@ export abstract class EdgeProgram<
       return;
     }
 
-    return this.processVisibleItem(indexToColor(edgeIndex), i, sourceData, targetData, data, sourceNodeIndex, targetNodeIndex);
+    return this.processVisibleItem(indexToColor(edgeIndex), i, sourceData, targetData, data, edgeTextureIndex);
   }
 
   abstract processVisibleItem(
@@ -74,8 +72,7 @@ export abstract class EdgeProgram<
     sourceData: NodeDisplayData,
     targetData: NodeDisplayData,
     data: EdgeDisplayData,
-    sourceNodeIndex: number,
-    targetNodeIndex: number,
+    edgeTextureIndex: number,
   ): void;
 }
 
@@ -103,8 +100,7 @@ class _EdgeProgramClass<
     _sourceData: NodeDisplayData,
     _targetData: NodeDisplayData,
     _data: EdgeDisplayData,
-    _sourceNodeIndex: number,
-    _targetNodeIndex: number,
+    _edgeTextureIndex: number,
   ): void {
     return undefined;
   }
@@ -152,10 +148,9 @@ export function createEdgeCompoundProgram<
       sourceData: NodeDisplayData,
       targetData: NodeDisplayData,
       data: EdgeDisplayData,
-      sourceNodeIndex: number,
-      targetNodeIndex: number,
+      edgeTextureIndex: number,
     ): void {
-      this.programs.forEach((program) => program.process(edgeIndex, offset, sourceData, targetData, data, sourceNodeIndex, targetNodeIndex));
+      this.programs.forEach((program) => program.process(edgeIndex, offset, sourceData, targetData, data, edgeTextureIndex));
     }
 
     render(params: RenderParams): void {

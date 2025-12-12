@@ -172,22 +172,23 @@ export function createEdgeProgram<
       _sourceData: NodeDisplayData,
       _targetData: NodeDisplayData,
       data: EdgeDisplayData,
-      sourceNodeIndex: number,
-      targetNodeIndex: number,
+      edgeTextureIndex: number,
     ) {
       const array = this.array;
 
+      // Attributes that are now in the edge data texture (skip these)
+      const textureAttributes = new Set(["curvature"]);
+
       // Standard attributes
-      // Node data (position, size, shapeId) is now fetched from texture via indices
-      array[startIndex++] = sourceNodeIndex;
-      array[startIndex++] = targetNodeIndex;
-      array[startIndex++] = data.size || 1;
+      // Edge data (node indices, thickness, curvature, extremity ratios) fetched from texture via edgeIndex
+      array[startIndex++] = edgeTextureIndex;
       array[startIndex++] = floatColor(data.color);
       array[startIndex++] = edgeIndex;
 
-      // Path-specific attributes
+      // Path-specific attributes (except those now in edge texture)
       path.attributes.forEach((attr) => {
         const sourceName = attr.source || attr.name.replace(/^a_/, "");
+        if (textureAttributes.has(sourceName)) return; // Skip attributes in texture
         const value = (data as unknown as Record<string, unknown>)[sourceName];
         if (attr.size === 1) {
           array[startIndex++] = typeof value === "number" ? value : (attr.defaultValue as number) || 0;
@@ -277,6 +278,12 @@ export function createEdgeProgram<
       }
       if (uniformLocations.u_nodeDataTextureWidth) {
         gl.uniform1i(uniformLocations.u_nodeDataTextureWidth, params.nodeDataTextureWidth);
+      }
+      if (uniformLocations.u_edgeDataTexture) {
+        gl.uniform1i(uniformLocations.u_edgeDataTexture, params.edgeDataTextureUnit);
+      }
+      if (uniformLocations.u_edgeDataTextureWidth) {
+        gl.uniform1i(uniformLocations.u_edgeDataTextureWidth, params.edgeDataTextureWidth);
       }
 
       // Path-specific uniforms

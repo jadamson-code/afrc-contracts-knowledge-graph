@@ -275,9 +275,9 @@ export function createEdgeLabelProgram<
         METHOD: TRIANGLE_STRIP,
         UNIFORMS: generated!.uniforms as EdgeLabelUniform[],
         ATTRIBUTES: [
-          // Node indices for texture lookup (replaces packed sourceTarget and nodeSizes)
-          { name: "a_nodeIndices", size: 2, type: FLOAT }, // (sourceNodeIndex, targetNodeIndex)
-          { name: "a_edgeParams", size: 4, type: FLOAT }, // (thickness, headLengthRatio, tailLengthRatio, baseFontSize)
+          // Edge index for texture lookup (edge data including node indices, thickness, curvature, etc.)
+          { name: "a_edgeIndex", size: 1, type: FLOAT },
+          { name: "a_baseFontSize", size: 1, type: FLOAT }, // Base font size in pixels (per-label)
 
           // Character metrics (packed)
           { name: "a_charMetrics", size: 4, type: FLOAT }, // (charTextOffset, charAdvance, totalTextWidth, positionMode)
@@ -291,8 +291,8 @@ export function createEdgeLabelProgram<
           { name: "a_color", size: 4, type: UNSIGNED_BYTE, normalized: true },
           ...(hasBorder ? [{ name: "a_borderColor", size: 4, type: UNSIGNED_BYTE, normalized: true }] : []),
 
-          // Path-specific attributes
-          ...pathAttributes,
+          // Path-specific attributes (except those now in edge texture)
+          ...pathAttributes.filter((attr) => !["a_curvature", "curvature"].includes(attr.name)),
         ],
         // Quad corners (same for all characters)
         CONSTANT_ATTRIBUTES: [{ name: "a_quadCorner", size: 2, type: FLOAT }],
@@ -362,9 +362,9 @@ export function createEdgeLabelProgram<
      *
      * ## Attribute Layout (must match getDefinition)
      *
-     * Edge geometry (node data fetched from texture):
-     * - a_nodeIndices (2): Source and target node indices into node data texture
-     * - a_edgeParams (4): Edge thickness, head/tail length ratios, base font size
+     * Edge geometry (fetched from edge data texture via edgeIndex):
+     * - a_edgeIndex (1): Index into edge data texture
+     * - a_baseFontSize (1): Base font size in pixels
      *
      * Character metrics:
      * - a_charMetrics (4): Text offset, advance, total width, position mode
@@ -396,9 +396,6 @@ export function createEdgeLabelProgram<
       const glyph = cache.glyphs[charIndex]!;
       const xOffset = cache.xOffsets[charIndex];
 
-      // Use actual edge thickness for extremity length calculations
-      const thickness = labelData.edgeSize || 1;
-
       // Compute effective color: program-level override takes precedence
       // Program-level color can specify { color: "#xxx" } or { attribute: "attrName" }
       // For simplicity, we only support fixed color override at program level
@@ -410,15 +407,10 @@ export function createEdgeLabelProgram<
       const color = floatColor(effectiveColor);
       let i = startIndex;
 
-      // a_nodeIndices: (sourceNodeIndex, targetNodeIndex)
-      // These indices are used by the GPU to fetch node data from the texture
-      array[i++] = labelData.sourceNodeIndex;
-      array[i++] = labelData.targetNodeIndex;
+      // a_edgeIndex: Index into edge data texture (contains node indices, thickness, curvature, head/tail ratios)
+      array[i++] = labelData.edgeIndex;
 
-      // a_edgeParams: (thickness, headLengthRatio, tailLengthRatio, baseFontSize)
-      array[i++] = thickness;
-      array[i++] = GeneratedEdgeLabelProgram.headLengthRatio;
-      array[i++] = GeneratedEdgeLabelProgram.tailLengthRatio;
+      // a_baseFontSize: Base font size in pixels
       array[i++] = labelData.size;
 
       // a_charMetrics: (charTextOffset, charAdvance, totalTextWidth, positionMode)
@@ -464,17 +456,16 @@ export function createEdgeLabelProgram<
         array[i++] = floatColor(borderColorValue);
       }
 
-      // Path-specific attributes
-      // For now we only handle curvature (used by quadratic/cubic paths)
+      // Path-specific attributes (except curvature which is now in edge texture)
       for (const attr of path.attributes) {
         const attrName = attr.name.startsWith("a_") ? attr.name.slice(2) : attr.name;
+        // Skip curvature - it's fetched from edge data texture
         if (attrName === "curvature") {
-          array[i++] = labelData.curvature || 0;
-        } else {
-          // Unknown attribute - write zeros
-          for (let j = 0; j < attr.size; j++) {
-            array[i++] = 0;
-          }
+          continue;
+        }
+        // Unknown attribute - write zeros
+        for (let j = 0; j < attr.size; j++) {
+          array[i++] = 0;
         }
       }
     }
@@ -562,6 +553,14 @@ export function createEdgeLabelProgram<
       }
       if (uniformLocations.u_nodeDataTextureWidth !== undefined) {
         gl.uniform1i(uniformLocations.u_nodeDataTextureWidth, params.nodeDataTextureWidth);
+      }
+
+      // Bind edge data texture (already bound by sigma.ts to the designated unit)
+      if (uniformLocations.u_edgeDataTexture !== undefined) {
+        gl.uniform1i(uniformLocations.u_edgeDataTexture, params.edgeDataTextureUnit);
+      }
+      if (uniformLocations.u_edgeDataTextureWidth !== undefined) {
+        gl.uniform1i(uniformLocations.u_edgeDataTextureWidth, params.edgeDataTextureWidth);
       }
 
       // Border width uniform (only if border is enabled)

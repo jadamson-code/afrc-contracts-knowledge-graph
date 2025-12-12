@@ -18,6 +18,7 @@ import {
   AbstractLabelProgram,
   AbstractNodeProgram,
   BucketCollection,
+  EdgeDataTexture,
   EdgeProgramType,
   getShapeId,
   HoverDisplayData,
@@ -69,6 +70,8 @@ const Y_LABEL_MARGIN = 50;
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 // Texture unit for the shared node data texture (position, size, shapeId)
 const NODE_DATA_TEXTURE_UNIT = 3;
+// Texture unit for the shared edge data texture (source/target indices, thickness, curvature, etc.)
+const EDGE_DATA_TEXTURE_UNIT = 4;
 
 /**
  * Important functions.
@@ -213,6 +216,8 @@ export default class Sigma<
 
   // Shared texture storing node position, size, and shapeId for GPU programs
   private nodeDataTexture: NodeDataTexture | null = null;
+  // Shared texture storing edge data (source/target indices, thickness, curvature, etc.)
+  private edgeDataTexture: EdgeDataTexture | null = null;
 
   // Bucket collections for depth management (supports future item types like labels)
   private itemBuckets: Record<"nodes" | "edges", BucketCollection>;
@@ -256,6 +261,9 @@ export default class Sigma<
 
     // Initialize node data texture for sharing position/size/shape data between node and edge programs
     this.nodeDataTexture = new NodeDataTexture(this.webGLContext!);
+
+    // Initialize edge data texture for sharing edge data between edge and edge label programs
+    this.edgeDataTexture = new EdgeDataTexture(this.webGLContext!);
 
     // Loading programs
     for (const type in this.settings.nodeProgramClasses) {
@@ -1485,6 +1493,9 @@ export default class Sigma<
       const sourceNodeIndex = this.nodeDataTexture!.getNodeIndex(sourceKey);
       const targetNodeIndex = this.nodeDataTexture!.getNodeIndex(targetKey);
 
+      // Get edge texture index (already allocated in addEdgeToProgram)
+      const edgeIndex = this.edgeDataTexture!.getEdgeIndex(edge);
+
       // Build edge label display data
       const labelData: import("./types").EdgeLabelDisplayData = {
         text: edgeData.label!,
@@ -1518,6 +1529,8 @@ export default class Sigma<
         // Node texture indices for GPU-side lookup
         sourceNodeIndex,
         targetNodeIndex,
+        // Edge texture index for GPU-side lookup (shared data: thickness, curvature, head/tail ratios)
+        edgeIndex,
       };
 
       // Process label in its matching program
@@ -1794,6 +1807,10 @@ export default class Sigma<
     this.nodeDataTexture!.upload();
     this.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
 
+    // Upload and bind edge data texture (shared by edge and edge label programs)
+    this.edgeDataTexture!.upload();
+    this.edgeDataTexture!.bind(EDGE_DATA_TEXTURE_UNIT);
+
     // Drawing edges first (so nodes render on top for picking priority)
     // Programs handle two-pass rendering internally (picking then visual)
     if (!this.settings.hideEdgesOnMove || !moving) {
@@ -2015,6 +2032,8 @@ export default class Sigma<
     delete this.edgeDataCache[key];
     // Remove from programId index
     delete this.edgeProgramIndex[key];
+    // Free edge from edge data texture
+    this.edgeDataTexture!.freeEdge(key);
     // Remove from hovered
     if (this.hoveredEdge === key) this.hoveredEdge = null;
     // Remove from forced label
@@ -2121,10 +2140,33 @@ export default class Sigma<
     const extremities = this.graph.extremities(edge),
       sourceData = this.nodeDataCache[extremities[0]],
       targetData = this.nodeDataCache[extremities[1]];
+
     // Get node texture indices for source and target
     const sourceNodeIndex = this.nodeDataTexture!.getNodeIndex(extremities[0]);
     const targetNodeIndex = this.nodeDataTexture!.getNodeIndex(extremities[1]);
-    edgeProgram.process(fingerprint, position, sourceData, targetData, data, sourceNodeIndex, targetNodeIndex);
+
+    // Allocate edge in edge data texture (or get existing allocation)
+    const edgeTextureIndex = this.edgeDataTexture!.allocateEdge(edge);
+
+    // Get head/tail length ratios from the program class options
+    const edgeProgramClass = this.settings.edgeProgramClasses[data.type];
+    const programOptions = (edgeProgramClass as unknown as { programOptions?: { head?: { length?: number }; tail?: { length?: number } } }).programOptions;
+    const headLengthRatio = programOptions?.head?.length ?? 0;
+    const tailLengthRatio = programOptions?.tail?.length ?? 0;
+
+    // Update edge data texture with all edge data
+    const curvature = (data as unknown as { curvature?: number }).curvature ?? 0;
+    this.edgeDataTexture!.updateEdge(
+      edge,
+      sourceNodeIndex,
+      targetNodeIndex,
+      data.size,
+      curvature,
+      headLengthRatio,
+      tailLengthRatio,
+    );
+
+    edgeProgram.process(fingerprint, position, sourceData, targetData, data, edgeTextureIndex);
     // Saving program index
     this.edgeProgramIndex[edge] = position;
   }
@@ -2155,6 +2197,8 @@ export default class Sigma<
       antiAliasingFeather: this.settings.antiAliasingFeather,
       nodeDataTextureUnit: NODE_DATA_TEXTURE_UNIT,
       nodeDataTextureWidth: this.nodeDataTexture!.getTextureWidth(),
+      edgeDataTextureUnit: EDGE_DATA_TEXTURE_UNIT,
+      edgeDataTextureWidth: this.edgeDataTexture!.getTextureWidth(),
       pickingFrameBuffer: this.pickingFrameBuffer,
     };
   }
@@ -3021,6 +3065,12 @@ export default class Sigma<
     if (this.nodeDataTexture) {
       this.nodeDataTexture.kill();
       this.nodeDataTexture = null;
+    }
+
+    // Cleanup edge data texture
+    if (this.edgeDataTexture) {
+      this.edgeDataTexture.kill();
+      this.edgeDataTexture = null;
     }
 
     // Kill all canvas/WebGL contexts

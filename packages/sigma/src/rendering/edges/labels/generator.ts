@@ -25,6 +25,7 @@ import {
   generateFindSourceClampT,
   generateFindTargetClampT,
   generateNumericalTangentNormal,
+  generatePathFallbacks,
 } from "../shared-glsl";
 import { EdgePath } from "../types";
 
@@ -191,6 +192,9 @@ ${path.glsl}
 
 // Tangent/normal functions: use analytical if provided, otherwise numerical
 ${path.analyticalTangentGlsl || generateNumericalTangentNormal(pathName)}
+
+// Auto-generated fallbacks for any missing path functions
+${generatePathFallbacks(pathName, path.glsl)}
 
 // Corner skip helpers (for paths with sharp corners like step/taxi)
 ${path.cornerSkipGlsl || ""}

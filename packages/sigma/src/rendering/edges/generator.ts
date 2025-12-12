@@ -14,6 +14,7 @@ import {
   generateFindSourceClampT,
   generateFindTargetClampT,
   generateNumericalTangentNormal,
+  generatePathFallbacks,
 } from "./shared-glsl";
 import { AttributeSpecification, EdgeExtremity, EdgeFilling, EdgePath, GeneratedEdgeShaders } from "./types";
 
@@ -365,11 +366,14 @@ ${getAllShapeGLSL()}
 // Shape selector function
 ${generateShapeSelectorGLSL()}
 
-// Path functions
+// Path functions (user-provided)
 ${path.glsl}
 
 // Auto-generated tangent/normal (numerical differentiation from position)
 ${generateNumericalTangentNormal(pathName)}
+
+// Auto-generated fallbacks for any missing path functions
+${generatePathFallbacks(pathName, path.glsl)}
 
 // Custom vertex processing (if any)
 ${path.vertexGlsl || ""}
@@ -651,11 +655,14 @@ struct EdgeContext {
 
 EdgeContext context;
 
-// Path functions
+// Path functions (user-provided)
 ${path.glsl}
 
 // Auto-generated tangent/normal (numerical differentiation from position)
 ${generateNumericalTangentNormal(pathName)}
+
+// Auto-generated fallbacks for any missing path functions
+${generatePathFallbacks(pathName, path.glsl)}
 
 // Extremity SDF functions
 ${head.glsl}

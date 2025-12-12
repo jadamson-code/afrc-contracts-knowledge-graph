@@ -19,15 +19,15 @@ export type { AttributeSpecification, UniformSpecification } from "../nodes/type
 /**
  * EdgePath - defines the geometry of an edge via GLSL functions.
  *
- * Each path type must provide GLSL functions for:
- * - Position at parameter t
- * - Total path length
- * - Distance from point to path
- * - Parameter t at a given arc distance
- * - Closest t for a given point
+ * **Minimal Interface**: Only the `position` function is required. All other
+ * functions (length, distance, t_at_distance, closest_t, tangent, normal)
+ * are auto-generated from position if not provided.
  *
- * Tangent and normal functions are auto-generated via numerical differentiation
- * from the position function, so path authors don't need to implement them.
+ * This makes creating new path types trivial - just define how the edge
+ * curves from source to target, and the system handles the rest.
+ *
+ * For better performance, paths can optionally override the auto-generated
+ * functions with analytical or optimized implementations.
  */
 export interface EdgePath {
   /**
@@ -46,25 +46,34 @@ export interface EdgePath {
   /**
    * GLSL code defining the path computation functions.
    *
-   * Required functions (replace {name} with the path name):
+   * **REQUIRED function** (replace {name} with the path name):
    * - vec2 path_{name}_position(float t, vec2 source, vec2 target)
    *     Position at parameter t ∈ [0, 1]
-   * - float path_{name}_length(vec2 source, vec2 target)
-   *     Total arc length of the path
-   * - float path_{name}_distance(vec2 p, vec2 source, vec2 target)
-   *     Signed distance from point p to the path
-   * - float path_{name}_t_at_distance(float d, vec2 source, vec2 target)
-   *     Parameter t for a given arc distance d
-   * - float path_{name}_closest_t(vec2 p, vec2 source, vec2 target)
-   *     Parameter t of the closest point on path to point p
    *
-   * Auto-generated functions (from position via numerical differentiation):
+   * **OPTIONAL functions** (auto-generated if not provided):
+   * - float path_{name}_length(vec2 source, vec2 target)
+   *     Total arc length. Default: samples position 16 times.
+   * - float path_{name}_distance(vec2 p, vec2 source, vec2 target)
+   *     Signed distance from point p. Default: uses closest_t + normal.
+   * - float path_{name}_t_at_distance(float d, vec2 source, vec2 target)
+   *     Parameter t for arc distance d. Default: binary search.
+   * - float path_{name}_closest_t(vec2 p, vec2 source, vec2 target)
+   *     Closest t for point p. Default: coarse sample + ternary search.
+   *
+   * **AUTO-GENERATED functions** (from position via numerical differentiation):
    * - vec2 path_{name}_tangent(float t, vec2 source, vec2 target)
    *     Unit tangent vector at t (computed via finite differences)
    * - vec2 path_{name}_normal(float t, vec2 source, vec2 target)
    *     Unit normal vector at t (perpendicular to tangent)
    *
    * Path functions can access per-edge attributes directly (e.g., a_curvature).
+   *
+   * @example Minimal path (only position required):
+   * ```glsl
+   * vec2 path_myPath_position(float t, vec2 source, vec2 target) {
+   *   return mix(source, target, t * t); // Ease-in curve
+   * }
+   * ```
    */
   glsl: string;
 

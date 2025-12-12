@@ -6,6 +6,7 @@
  * edge label shaders. These functions generate GLSL code for:
  * - Binary search to find where path exits/enters nodes
  * - Numerical tangent/normal computation from position
+ * - Auto-generated path functions (length, distance, closest_t, t_at_distance)
  * - 2D rotation helper
  *
  * @module
@@ -124,4 +125,212 @@ vec2 ${prefix}_rotate(vec2 v, float angle) {
   return vec2(c * v.x - s * v.y, s * v.x + c * v.y);
 }
 `;
+}
+
+// ============================================================================
+// Auto-generated Path Functions
+// ============================================================================
+// These functions are generated as fallbacks when paths don't provide their own
+// implementations. They work with any path that defines a position function.
+
+/**
+ * Generates GLSL for auto-computed path length.
+ * Samples the position function 16 times and sums segment lengths.
+ *
+ * @param pathName - Name of the path
+ * @returns GLSL function definition, or empty string if path provides its own
+ */
+export function generateAutoLength(pathName: string): string {
+  return /*glsl*/ `
+// Auto-generated path length (samples position 16 times)
+float path_${pathName}_length(vec2 source, vec2 target) {
+  float len = 0.0;
+  vec2 prev = path_${pathName}_position(0.0, source, target);
+  for (int i = 1; i <= 16; i++) {
+    float t = float(i) / 16.0;
+    vec2 curr = path_${pathName}_position(t, source, target);
+    len += length(curr - prev);
+    prev = curr;
+  }
+  return len;
+}
+`;
+}
+
+/**
+ * Generates GLSL for auto-computed closest_t.
+ * Uses coarse sampling (10 points) followed by ternary search refinement.
+ *
+ * @param pathName - Name of the path
+ * @returns GLSL function definition, or empty string if path provides its own
+ */
+export function generateAutoClosestT(pathName: string): string {
+  return /*glsl*/ `
+// Auto-generated closest_t (coarse sample + ternary search)
+float path_${pathName}_closest_t(vec2 p, vec2 source, vec2 target) {
+  // Coarse search: find best among 10 samples
+  float bestT = 0.0;
+  float bestDist = 1e10;
+  for (int i = 0; i <= 10; i++) {
+    float t = float(i) / 10.0;
+    vec2 pos = path_${pathName}_position(t, source, target);
+    float d = length(p - pos);
+    if (d < bestDist) {
+      bestDist = d;
+      bestT = t;
+    }
+  }
+
+  // Refine with ternary search
+  float lo = max(0.0, bestT - 0.1);
+  float hi = min(1.0, bestT + 0.1);
+  for (int i = 0; i < 10; i++) {
+    float mid1 = lo + (hi - lo) / 3.0;
+    float mid2 = hi - (hi - lo) / 3.0;
+    float d1 = length(p - path_${pathName}_position(mid1, source, target));
+    float d2 = length(p - path_${pathName}_position(mid2, source, target));
+    if (d1 < d2) {
+      hi = mid2;
+    } else {
+      lo = mid1;
+    }
+  }
+  return (lo + hi) * 0.5;
+}
+`;
+}
+
+/**
+ * Generates GLSL for auto-computed signed distance.
+ * Uses closest_t to find nearest point, then computes signed distance via normal.
+ *
+ * @param pathName - Name of the path
+ * @returns GLSL function definition, or empty string if path provides its own
+ */
+export function generateAutoDistance(pathName: string): string {
+  return /*glsl*/ `
+// Auto-generated signed distance (via closest_t + normal)
+float path_${pathName}_distance(vec2 p, vec2 source, vec2 target) {
+  float closestT = path_${pathName}_closest_t(p, source, target);
+  vec2 closest = path_${pathName}_position(closestT, source, target);
+  vec2 diff = p - closest;
+  float dist = length(diff);
+  if (dist < 0.0001) return 0.0;
+
+  // Get normal at closest point
+  vec2 normal = path_${pathName}_normal(closestT, source, target);
+  return dist * sign(dot(diff, normal));
+}
+`;
+}
+
+/**
+ * Generates GLSL for auto-computed t_at_distance.
+ * Uses binary search to find the parameter t at a given arc distance.
+ *
+ * @param pathName - Name of the path
+ * @returns GLSL function definition, or empty string if path provides its own
+ */
+export function generateAutoTAtDistance(pathName: string): string {
+  return /*glsl*/ `
+// Auto-generated t_at_distance (binary search)
+float path_${pathName}_t_at_distance(float targetDist, vec2 source, vec2 target) {
+  if (targetDist <= 0.0) return 0.0;
+
+  float totalLen = path_${pathName}_length(source, target);
+  if (targetDist >= totalLen) return 1.0;
+
+  // Binary search for t
+  float lo = 0.0, hi = 1.0;
+  for (int i = 0; i < 12; i++) {
+    float mid = (lo + hi) * 0.5;
+
+    // Compute arc length from 0 to mid
+    float arcLen = 0.0;
+    vec2 prev = path_${pathName}_position(0.0, source, target);
+    for (int j = 1; j <= 8; j++) {
+      float t = mid * float(j) / 8.0;
+      vec2 curr = path_${pathName}_position(t, source, target);
+      arcLen += length(curr - prev);
+      prev = curr;
+    }
+
+    if (arcLen < targetDist) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return (lo + hi) * 0.5;
+}
+`;
+}
+
+/**
+ * Checks if a GLSL string contains a function definition.
+ *
+ * @param glsl - The GLSL code to search
+ * @param functionName - The function name to look for
+ * @returns true if the function is defined
+ */
+export function hasGlslFunction(glsl: string, functionName: string): boolean {
+  // Match function definition patterns like:
+  // float functionName(
+  // vec2 functionName(
+  // void functionName(
+  const pattern = new RegExp(`\\b(float|vec[234]|void|int|bool)\\s+${functionName}\\s*\\(`);
+  return pattern.test(glsl);
+}
+
+/**
+ * Generates fallback GLSL code for any missing path functions.
+ * This allows paths to only define the position function, with all other
+ * functions auto-generated from it.
+ *
+ * The order of generation matters:
+ * 1. length - depends only on position
+ * 2. closest_t - depends only on position
+ * 3. tangent/normal - should be generated separately via generateNumericalTangentNormal
+ * 4. distance - depends on closest_t and normal
+ * 5. t_at_distance - depends on length and position
+ *
+ * @param pathName - Name of the path
+ * @param pathGlsl - The path's GLSL code (to check for existing functions)
+ * @returns GLSL code for any missing functions
+ */
+export function generatePathFallbacks(pathName: string, pathGlsl: string): string {
+  const fallbacks: string[] = [];
+
+  // Generate length if not provided (depends only on position)
+  if (!hasGlslFunction(pathGlsl, `path_${pathName}_length`)) {
+    fallbacks.push(generateAutoLength(pathName));
+  }
+
+  // Generate closest_t if not provided (depends only on position)
+  if (!hasGlslFunction(pathGlsl, `path_${pathName}_closest_t`)) {
+    fallbacks.push(generateAutoClosestT(pathName));
+  }
+
+  // Note: tangent/normal should be generated separately via generateNumericalTangentNormal
+  // They are always generated (the path can override with analyticalTangentGlsl)
+
+  // Generate distance if not provided (depends on closest_t and normal)
+  if (!hasGlslFunction(pathGlsl, `path_${pathName}_distance`)) {
+    fallbacks.push(generateAutoDistance(pathName));
+  }
+
+  // Generate t_at_distance if not provided (depends on length and position)
+  if (!hasGlslFunction(pathGlsl, `path_${pathName}_t_at_distance`)) {
+    fallbacks.push(generateAutoTAtDistance(pathName));
+  }
+
+  if (fallbacks.length > 0) {
+    return `
+// ============================================================================
+// Auto-generated fallback functions (path only provided position)
+// ============================================================================
+${fallbacks.join("\n")}`;
+  }
+
+  return "";
 }

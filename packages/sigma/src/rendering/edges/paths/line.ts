@@ -35,39 +35,9 @@ vec2 path_line_position(float t, vec2 source, vec2 target) {
   return mix(source, target, t);
 }
 
-// Total length of the path
+// Total length of the path (analytical - more efficient than sampling)
 float path_line_length(vec2 source, vec2 target) {
   return length(target - source);
-}
-
-// Signed distance from point p to the path
-// Negative = left of path direction, Positive = right
-float path_line_distance(vec2 p, vec2 source, vec2 target) {
-  vec2 pa = p - source;
-  vec2 ba = target - source;
-  float denom = dot(ba, ba);
-  if (denom < 0.0001) return length(pa);
-  float h = clamp(dot(pa, ba) / denom, 0.0, 1.0);
-  vec2 closest = source + ba * h;
-  vec2 diff = p - closest;
-  // Sign based on which side of the line (cross product)
-  return sign(diff.x * ba.y - diff.y * ba.x) * length(diff);
-}
-
-// Find parameter t for a given arc distance from source
-float path_line_t_at_distance(float d, vec2 source, vec2 target) {
-  float totalLen = path_line_length(source, target);
-  if (totalLen < 0.0001) return 0.0;
-  return clamp(d / totalLen, 0.0, 1.0);
-}
-
-// Find closest parameter t for a given point
-float path_line_closest_t(vec2 p, vec2 source, vec2 target) {
-  vec2 pa = p - source;
-  vec2 ba = target - source;
-  float denom = dot(ba, ba);
-  if (denom < 0.0001) return 0.0;
-  return clamp(dot(pa, ba) / denom, 0.0, 1.0);
 }
 `;
 

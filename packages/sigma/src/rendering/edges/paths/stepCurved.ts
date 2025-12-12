@@ -277,55 +277,6 @@ vec2 path_stepCurved_position(float t, vec2 source, vec2 target) {
   }
   return result;
 }
-
-// ============================================================================
-// T_AT_DISTANCE - Find t for given arc distance
-// ============================================================================
-float path_stepCurved_t_at_distance(float d, vec2 source, vec2 target) {
-  float totalLen = path_stepCurved_length(source, target);
-  if (totalLen < 0.0001) return 0.0;
-  return clamp(d / totalLen, 0.0, 1.0);
-}
-
-// ============================================================================
-// CLOSEST_T - Find t for closest point
-// ============================================================================
-float path_stepCurved_closest_t(vec2 p, vec2 source, vec2 target) {
-  // Linear search for closest point
-  float bestT = 0.0;
-  float bestDist = 1e10;
-
-  for (int i = 0; i <= 20; i++) {
-    float t = float(i) / 20.0;
-    vec2 pos = path_stepCurved_position(t, source, target);
-    float d = length(p - pos);
-    if (d < bestDist) {
-      bestDist = d;
-      bestT = t;
-    }
-  }
-  return bestT;
-}
-
-// ============================================================================
-// DISTANCE - Signed distance from point to path
-// ============================================================================
-float path_stepCurved_distance(vec2 p, vec2 source, vec2 target) {
-  float closestT = path_stepCurved_closest_t(p, source, target);
-  vec2 closest = path_stepCurved_position(closestT, source, target);
-  vec2 diff = p - closest;
-
-  // Compute normal inline using numerical tangent (perpendicular)
-  float epsilon = 0.001;
-  float t1 = max(0.0, closestT - epsilon);
-  float t2 = min(1.0, closestT + epsilon);
-  vec2 p1 = path_stepCurved_position(t1, source, target);
-  vec2 p2 = path_stepCurved_position(t2, source, target);
-  vec2 tangent = normalize(p2 - p1);
-  vec2 normal = vec2(-tangent.y, tangent.x);
-
-  return length(diff) * sign(dot(diff, normal));
-}
 `;
 
   // language=GLSL

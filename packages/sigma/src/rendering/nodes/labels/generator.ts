@@ -117,12 +117,11 @@ export function generateLabelVertexShader(options: LabelShaderOptions): string {
 // ============================================================================
 
 // Per-character (instanced)
-in vec2 a_anchorPosition;    // Node center in graph space
+in float a_nodeIndex;        // Index into node data texture
 in vec2 a_charOffset;        // Character offset from label origin (pixels)
 in vec2 a_charSize;          // Character dimensions (pixels)
 in vec4 a_texCoords;         // Atlas coords: (x, y, width, height) in pixels
 in vec4 a_color;             // Text color (RGBA)
-in float a_nodeSize;         // Node size in graph coordinates
 in float a_margin;           // Gap between node edge and label (pixels)
 in float a_positionMode;     // Position: 0=right, 1=left, 2=above, 3=below, 4=over
 in float a_labelWidth;       // Total label width (pixels)
@@ -142,6 +141,8 @@ uniform float u_cameraAngle;
 uniform float u_labelAngle;
 uniform vec2 u_resolution;
 uniform vec2 u_atlasSize;
+uniform sampler2D u_nodeDataTexture;
+uniform int u_nodeDataTextureWidth;
 ${shapeUniformDeclarations}
 
 // ============================================================================
@@ -175,6 +176,18 @@ ${GLSL_GET_LABEL_DIRECTION}
 // ============================================================================
 
 void main() {
+  // -------------------------------------------------------------------------
+  // Step 0: Fetch node data from texture
+  // -------------------------------------------------------------------------
+  // Texture format: vec4(x, y, size, shapeId)
+  // 2D texture layout: texCoord = (index % width, index / width)
+  int nodeIdx = int(a_nodeIndex);
+  ivec2 texCoord = ivec2(nodeIdx % u_nodeDataTextureWidth, nodeIdx / u_nodeDataTextureWidth);
+  vec4 nodeData = texelFetch(u_nodeDataTexture, texCoord, 0);
+  vec2 a_anchorPosition = nodeData.xy;
+  float a_nodeSize = nodeData.z;
+  // shapeId available as nodeData.w if needed
+
   // -------------------------------------------------------------------------
   // Step 1: Transform node position to clip space
   // -------------------------------------------------------------------------
@@ -312,6 +325,8 @@ export function collectLabelUniforms(shape: SDFShape): string[] {
     "u_gamma",
     "u_sdfBuffer",
     "u_pixelRatio",
+    "u_nodeDataTexture",
+    "u_nodeDataTextureWidth",
   ];
 
   for (const uniform of shape.uniforms) {

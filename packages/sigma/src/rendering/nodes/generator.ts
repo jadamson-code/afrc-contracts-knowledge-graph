@@ -32,7 +32,13 @@ export interface ShaderGenerationOptions {
  */
 export function generateVertexShader(shape: SDFShape, layers: FragmentLayer[], rotateWithCamera = false): string {
   // Standard uniforms that are always declared (to avoid redefinition)
-  const standardUniforms = new Set(["u_matrix", "u_sizeRatio", "u_correctionRatio", "u_cameraAngle"]);
+  const standardUniforms = new Set([
+    "u_matrix",
+    "u_sizeRatio",
+    "u_correctionRatio",
+    "u_cameraAngle",
+    "u_nodeDataTexture",
+  ]);
 
   // Collect all uniforms from shape and layers, excluding standard ones and with deduplication
   const seenUniforms = new Set<string>();
@@ -84,8 +90,7 @@ export function generateVertexShader(shape: SDFShape, layers: FragmentLayer[], r
   const glsl = /*glsl*/ `#version 300 es
 
 // Standard node attributes (per instance)
-in vec2 a_position;    // Node center position in graph space
-in float a_size;       // Node size
+in float a_nodeIndex;  // Index into node data texture
 in vec4 a_color;       // Node color
 in vec4 a_id;          // Node ID for picking
 
@@ -100,6 +105,8 @@ uniform mat3 u_matrix;
 uniform float u_sizeRatio;
 uniform float u_correctionRatio;
 uniform float u_cameraAngle;
+uniform sampler2D u_nodeDataTexture;
+uniform int u_nodeDataTextureWidth;
 
 ${shapeUniforms}
 ${layerUniforms}
@@ -118,6 +125,15 @@ ${layerVaryings}
 const float bias = 255.0 / 254.0;
 
 void main() {
+  // Fetch node data from texture: vec4(x, y, size, shapeId)
+  // 2D texture layout: texCoord = (index % width, index / width)
+  int nodeIdx = int(a_nodeIndex);
+  ivec2 texCoord = ivec2(nodeIdx % u_nodeDataTextureWidth, nodeIdx / u_nodeDataTextureWidth);
+  vec4 nodeData = texelFetch(u_nodeDataTexture, texCoord, 0);
+  vec2 a_position = nodeData.xy;
+  float a_size = nodeData.z;
+  // shapeId available as nodeData.w if needed by layers
+
   // Calculate the actual size in pixels
   float size = a_size * u_correctionRatio / u_sizeRatio * 2.0;
 
@@ -334,6 +350,8 @@ export function collectUniforms(shape: SDFShape, layers: FragmentLayer[]): strin
   uniformNames.add("u_sizeRatio");
   uniformNames.add("u_correctionRatio");
   uniformNames.add("u_cameraAngle");
+  uniformNames.add("u_nodeDataTexture");
+  uniformNames.add("u_nodeDataTextureWidth");
 
   // Shape uniforms
   shape.uniforms.forEach((u) => uniformNames.add(u.name));
@@ -348,15 +366,17 @@ export function collectUniforms(shape: SDFShape, layers: FragmentLayer[]): strin
 
 /**
  * Collects all attributes from layers, with deduplication.
+ * Note: Position and size are now fetched from the node data texture,
+ * so only nodeIndex is needed as a per-instance attribute.
  */
 export function collectAttributes(layers: FragmentLayer[]): AttributeSpecification[] {
   const attributeMap = new Map<string, AttributeSpecification>();
 
   // Standard node attributes (always present)
+  // Position and size are fetched from texture via a_nodeIndex
   const { UNSIGNED_BYTE, FLOAT } = WebGL2RenderingContext;
 
-  attributeMap.set("a_position", { name: "a_position", size: 2, type: FLOAT });
-  attributeMap.set("a_size", { name: "a_size", size: 1, type: FLOAT });
+  attributeMap.set("a_nodeIndex", { name: "a_nodeIndex", size: 1, type: FLOAT });
   attributeMap.set("a_color", { name: "a_color", size: 4, type: UNSIGNED_BYTE, normalized: true });
   attributeMap.set("a_id", { name: "a_id", size: 4, type: UNSIGNED_BYTE, normalized: true });
 

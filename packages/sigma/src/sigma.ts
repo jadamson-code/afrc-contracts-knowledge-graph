@@ -19,9 +19,11 @@ import {
   AbstractNodeProgram,
   BucketCollection,
   EdgeProgramType,
+  getShapeId,
   HoverDisplayData,
   HoverProgramType,
   LabelProgramType,
+  NodeDataTexture,
   NodeProgramType,
 } from "./rendering";
 import { Settings, resolveSettings, validateSettings } from "./settings";
@@ -65,6 +67,8 @@ import {
 const X_LABEL_MARGIN = 150;
 const Y_LABEL_MARGIN = 50;
 const hasOwnProperty = Object.prototype.hasOwnProperty;
+// Texture unit for the shared node data texture (position, size, shapeId)
+const NODE_DATA_TEXTURE_UNIT = 3;
 
 /**
  * Important functions.
@@ -208,6 +212,9 @@ export default class Sigma<
   // WebGL Labels (SDF-based rendering)
   private sdfAtlas: SDFAtlasManager | null = null;
 
+  // Shared texture storing node position, size, and shapeId for GPU programs
+  private nodeDataTexture: NodeDataTexture | null = null;
+
   // Bucket collections for depth management (supports future item types like labels)
   private itemBuckets: Record<"nodes" | "edges", BucketCollection>;
   // Track previous zIndex to detect changes
@@ -247,6 +254,9 @@ export default class Sigma<
 
     // Initial resize
     this.resize();
+
+    // Initialize node data texture for sharing position/size/shape data between node and edge programs
+    this.nodeDataTexture = new NodeDataTexture(this.webGLContext!);
 
     // Loading programs
     for (const type in this.settings.nodeProgramClasses) {
@@ -1000,6 +1010,19 @@ export default class Sigma<
       nodesPerPrograms[type] = 0;
     }
 
+    // Update node data texture with position, size, and shape data
+    // This must happen before addNodeToProgram so texture indices are available
+    for (let i = 0, l = nodes.length; i < l; i++) {
+      const node = nodes[i];
+      const data = this.nodeDataCache[node];
+      // Allocate texture index for this node (or get existing)
+      this.nodeDataTexture!.allocateNode(node);
+      // Get shape ID from the shape slug (which encodes shape variant + params)
+      const shapeId = getShapeId(data.shape || "circle");
+      // Update texture data (x, y, size, shapeId)
+      this.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
+    }
+
     // Add data to programs using buckets (preserves zIndex ordering)
     this.itemBuckets.nodes.forEachBucketByZIndex((programType, _zIndex, bucket) => {
       const items = bucket.getItems();
@@ -1379,6 +1402,7 @@ export default class Sigma<
         parentType: "node",
         parentKey: node,
         fontKey: "", // Empty means default font
+        nodeIndex: this.nodeDataTexture!.getNodeIndex(node),
       };
 
       // Process label in its matching program
@@ -1446,6 +1470,8 @@ export default class Sigma<
       sourceData: NodeDisplayData;
       targetData: NodeDisplayData;
       edgeData: EdgeDisplayData;
+      sourceKey: string;
+      targetKey: string;
     }> = [];
 
     for (let i = 0, l = edgeLabelsToDisplay.length; i < l; i++) {
@@ -1468,7 +1494,7 @@ export default class Sigma<
       if (!this.edgeLabelPrograms[labelType]) continue;
 
       charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + edgeData.label.length;
-      edgesToProcess.push({ edge, type: labelType, sourceData, targetData, edgeData });
+      edgesToProcess.push({ edge, type: labelType, sourceData, targetData, edgeData, sourceKey: extremities[0], targetKey: extremities[1] });
       displayedLabels.add(edge);
     }
 
@@ -1479,7 +1505,7 @@ export default class Sigma<
 
     // Process each visible edge label into its matching program's buffer
     const characterOffsets: Record<string, number> = {};
-    for (const { edge, type, sourceData, targetData, edgeData } of edgesToProcess) {
+    for (const { edge, type, sourceData, targetData, edgeData, sourceKey, targetKey } of edgesToProcess) {
       const labelProgram = this.edgeLabelPrograms[type];
       if (!labelProgram) continue;
 
@@ -1492,6 +1518,10 @@ export default class Sigma<
         color = labelColor.color || "#000";
       }
 
+      // Get node texture indices for source and target nodes
+      const sourceNodeIndex = this.nodeDataTexture!.getNodeIndex(sourceKey);
+      const targetNodeIndex = this.nodeDataTexture!.getNodeIndex(targetKey);
+
       // Build edge label display data
       const labelData: import("./types").EdgeLabelDisplayData = {
         text: edgeData.label!,
@@ -1500,6 +1530,7 @@ export default class Sigma<
         size: this.settings.edgeLabelSize,
         color,
         nodeSize: 0, // Not applicable for edge labels (use sourceSize/targetSize instead)
+        nodeIndex: -1, // Not applicable for edge labels (use sourceNodeIndex/targetNodeIndex instead)
         margin: this.settings.edgeLabelMargin,
         position: this.settings.edgeLabelPosition,
         hidden: false,
@@ -1521,6 +1552,9 @@ export default class Sigma<
         edgeSize: edgeData.size,
         offset: 0, // Computed by GPU based on position mode
         curvature: (edgeData as unknown as { curvature?: number }).curvature || 0,
+        // Node texture indices for GPU-side lookup
+        sourceNodeIndex,
+        targetNodeIndex,
       };
 
       // Process label in its matching program
@@ -1653,6 +1687,7 @@ export default class Sigma<
           parentType: "node",
           parentKey: node,
           fontKey: "", // Empty means default font
+          nodeIndex: this.nodeDataTexture!.getNodeIndex(node),
         };
 
         // Process label in its matching program
@@ -1685,7 +1720,8 @@ export default class Sigma<
       // Process all nodes to render:
       nodes.forEach((node) => {
         const data = this.nodeDataCache[node];
-        this.nodeHoverPrograms[data.type].process(0, nodesPerPrograms[data.type]++, data);
+        const textureIndex = this.nodeDataTexture!.getNodeIndex(node);
+        this.nodeHoverPrograms[data.type].process(0, nodesPerPrograms[data.type]++, data, textureIndex);
       });
       // Render:
       for (const type in this.nodeHoverPrograms) {
@@ -1781,6 +1817,10 @@ export default class Sigma<
 
     // Ensure MRT draw buffers are enabled (may be reset by clear)
     gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+
+    // Upload and bind node data texture (shared by node and edge programs)
+    this.nodeDataTexture!.upload();
+    this.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
 
     // Drawing edges first (so nodes render on top for picking priority)
     if (!this.settings.hideEdgesOnMove || !moving) {
@@ -2087,7 +2127,9 @@ export default class Sigma<
     const data = this.nodeDataCache[node];
     const nodeProgram = this.nodePrograms[data.type];
     if (!nodeProgram) throw new Error(`Sigma: could not find a suitable program for node type "${data.type}"!`);
-    nodeProgram.process(fingerprint, position, data);
+    // Get the node's texture index (already allocated during processing)
+    const textureIndex = this.nodeDataTexture!.getNodeIndex(node);
+    nodeProgram.process(fingerprint, position, data, textureIndex);
     // Saving program index
     this.nodeProgramIndex[node] = position;
   }
@@ -2106,7 +2148,10 @@ export default class Sigma<
     const extremities = this.graph.extremities(edge),
       sourceData = this.nodeDataCache[extremities[0]],
       targetData = this.nodeDataCache[extremities[1]];
-    edgeProgram.process(fingerprint, position, sourceData, targetData, data);
+    // Get node texture indices for source and target
+    const sourceNodeIndex = this.nodeDataTexture!.getNodeIndex(extremities[0]);
+    const targetNodeIndex = this.nodeDataTexture!.getNodeIndex(extremities[1]);
+    edgeProgram.process(fingerprint, position, sourceData, targetData, data, sourceNodeIndex, targetNodeIndex);
     // Saving program index
     this.edgeProgramIndex[edge] = position;
   }
@@ -2135,6 +2180,8 @@ export default class Sigma<
       downSizingRatio: 1,
       minEdgeThickness: this.settings.minEdgeThickness,
       antiAliasingFeather: this.settings.antiAliasingFeather,
+      nodeDataTextureUnit: NODE_DATA_TEXTURE_UNIT,
+      nodeDataTextureWidth: this.nodeDataTexture!.getTextureWidth(),
     };
   }
 
@@ -3006,6 +3053,12 @@ export default class Sigma<
     // Cleanup SDF atlas
     if (this.sdfAtlas) {
       this.sdfAtlas = null;
+    }
+
+    // Cleanup node data texture
+    if (this.nodeDataTexture) {
+      this.nodeDataTexture.kill();
+      this.nodeDataTexture = null;
     }
 
     // Kill all canvas/WebGL contexts

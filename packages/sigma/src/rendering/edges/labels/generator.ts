@@ -104,9 +104,8 @@ export function generateEdgeLabelVertexShader(options: EdgeLabelShaderOptions): 
 // Attributes - Per Character (Instanced)
 // ============================================================================
 
-// Edge geometry (packed to reduce attribute count)
-in vec4 a_sourceTarget;     // (sourceX, sourceY, targetX, targetY)
-in vec4 a_nodeSizes;        // (sourceSize, targetSize, sourceShapeId, targetShapeId)
+// Edge geometry: node indices for texture lookup (replaces packed node data)
+in vec2 a_nodeIndices;      // (sourceNodeIndex, targetNodeIndex)
 in vec4 a_edgeParams;       // (thickness, headLengthRatio, tailLengthRatio, baseFontSize)
 
 // Character metrics (in glyph units = atlas font size pixels)
@@ -150,6 +149,8 @@ uniform float u_cameraAngle;    // Required by node shape SDFs
 uniform float u_sdfBufferPixels; // SDF buffer size in atlas font size pixels
 uniform vec2 u_resolution;
 uniform vec2 u_atlasSize;
+uniform sampler2D u_nodeDataTexture; // Shared texture with node position/size/shape data
+uniform int u_nodeDataTextureWidth;  // Width of 2D node data texture for coordinate calculation
 ${isScaledMode ? "uniform float u_zoomSizeRatio;  // Zoom-based size ratio from zoomToSizeRatioFunction" : ""}
 
 // ============================================================================
@@ -207,14 +208,24 @@ ${generateFindTargetClampT(pathName)}
 
 void main() {
   // -------------------------------------------------------------------------
-  // Unpack attributes
+  // Unpack attributes: Fetch node data from texture
   // -------------------------------------------------------------------------
-  vec2 source = a_sourceTarget.xy;
-  vec2 target = a_sourceTarget.zw;
-  float sourceSize = a_nodeSizes.x;
-  float targetSize = a_nodeSizes.y;
-  int sourceShapeId = int(a_nodeSizes.z);
-  int targetShapeId = int(a_nodeSizes.w);
+  // Texture format: vec4(x, y, size, shapeId)
+  // 2D texture layout: texCoord = (index % width, index / width)
+  int srcIdx = int(a_nodeIndices.x);
+  int tgtIdx = int(a_nodeIndices.y);
+  ivec2 srcTexCoord = ivec2(srcIdx % u_nodeDataTextureWidth, srcIdx / u_nodeDataTextureWidth);
+  ivec2 tgtTexCoord = ivec2(tgtIdx % u_nodeDataTextureWidth, tgtIdx / u_nodeDataTextureWidth);
+  vec4 srcNodeData = texelFetch(u_nodeDataTexture, srcTexCoord, 0);
+  vec4 tgtNodeData = texelFetch(u_nodeDataTexture, tgtTexCoord, 0);
+
+  vec2 source = srcNodeData.xy;
+  vec2 target = tgtNodeData.xy;
+  float sourceSize = srcNodeData.z;
+  float targetSize = tgtNodeData.z;
+  int sourceShapeId = int(srcNodeData.w);
+  int targetShapeId = int(tgtNodeData.w);
+
   float thickness = a_edgeParams.x;
   float headLengthRatio = a_edgeParams.y;
   float tailLengthRatio = a_edgeParams.z;
@@ -738,6 +749,8 @@ export function collectEdgeLabelUniforms(
     "u_atlas",
     "u_gamma",
     "u_sdfBuffer",
+    "u_nodeDataTexture",
+    "u_nodeDataTextureWidth",
   ];
 
   // Add zoom size ratio uniform for scaled font size mode

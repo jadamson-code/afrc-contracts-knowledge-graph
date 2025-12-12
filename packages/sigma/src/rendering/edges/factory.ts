@@ -12,7 +12,6 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { EdgeDisplayData, NodeDisplayData, RenderParams } from "../../types";
 import { floatColor } from "../../utils";
-import { getShapeId } from "../shapes";
 import { ProgramInfo } from "../utils";
 import { EdgeProgram as BaseEdgeProgram, EdgeProgramType } from "./base";
 import { generateEdgeShaders } from "./generator";
@@ -170,26 +169,18 @@ export function createEdgeProgram<
     processVisibleItem(
       edgeIndex: number,
       startIndex: number,
-      sourceData: NodeDisplayData,
-      targetData: NodeDisplayData,
+      _sourceData: NodeDisplayData,
+      _targetData: NodeDisplayData,
       data: EdgeDisplayData,
+      sourceNodeIndex: number,
+      targetNodeIndex: number,
     ) {
       const array = this.array;
 
-      // Get node shape IDs from registry
-      // Node shape info is populated in node data by Sigma from the node program's shape
-      const sourceShapeId = getShapeId(sourceData.shape || "circle");
-      const targetShapeId = getShapeId(targetData.shape || "circle");
-
       // Standard attributes
-      array[startIndex++] = sourceData.x;
-      array[startIndex++] = sourceData.y;
-      array[startIndex++] = targetData.x;
-      array[startIndex++] = targetData.y;
-      array[startIndex++] = sourceData.size || 1;
-      array[startIndex++] = targetData.size || 1;
-      array[startIndex++] = sourceShapeId;
-      array[startIndex++] = targetShapeId;
+      // Node data (position, size, shapeId) is now fetched from texture via indices
+      array[startIndex++] = sourceNodeIndex;
+      array[startIndex++] = targetNodeIndex;
       array[startIndex++] = data.size || 1;
       array[startIndex++] = floatColor(data.color);
       array[startIndex++] = edgeIndex;
@@ -280,6 +271,12 @@ export function createEdgeProgram<
       }
       if (uniformLocations.u_minEdgeThickness) {
         gl.uniform1f(uniformLocations.u_minEdgeThickness, params.minEdgeThickness);
+      }
+      if (uniformLocations.u_nodeDataTexture) {
+        gl.uniform1i(uniformLocations.u_nodeDataTexture, params.nodeDataTextureUnit);
+      }
+      if (uniformLocations.u_nodeDataTextureWidth) {
+        gl.uniform1i(uniformLocations.u_nodeDataTextureWidth, params.nodeDataTextureWidth);
       }
 
       // Path-specific uniforms

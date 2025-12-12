@@ -212,14 +212,13 @@ export function createNodeProgram<
       );
     }
 
-    processVisibleItem(nodeIndex: number, startIndex: number, data: NodeDisplayData) {
+    processVisibleItem(nodeIndex: number, startIndex: number, data: NodeDisplayData, textureIndex: number) {
       const array = this.array;
       const color = floatColor(data.color);
 
       // Standard attributes that all node programs have
-      array[startIndex++] = data.x; // a_position.x
-      array[startIndex++] = data.y; // a_position.y
-      array[startIndex++] = data.size; // a_size
+      // Position and size are now fetched from texture via nodeIndex
+      array[startIndex++] = textureIndex; // a_nodeIndex (index into node data texture)
       array[startIndex++] = color; // a_color
       array[startIndex++] = nodeIndex; // a_id
 
@@ -282,6 +281,12 @@ export function createNodeProgram<
       }
       if (uniformLocations.u_cameraAngle) {
         gl.uniform1f(uniformLocations.u_cameraAngle, params.cameraAngle);
+      }
+      if (uniformLocations.u_nodeDataTexture) {
+        gl.uniform1i(uniformLocations.u_nodeDataTexture, params.nodeDataTextureUnit);
+      }
+      if (uniformLocations.u_nodeDataTextureWidth) {
+        gl.uniform1i(uniformLocations.u_nodeDataTextureWidth, params.nodeDataTextureWidth);
       }
 
       // Set shape-specific uniforms

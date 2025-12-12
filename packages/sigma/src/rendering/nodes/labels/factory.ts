@@ -235,12 +235,12 @@ export function createLabelProgram<
         UNIFORMS: generatedShaders.uniforms as LabelUniform[],
         ATTRIBUTES: [
           // Per-character instance data
-          { name: "a_anchorPosition", size: 2, type: FLOAT },
+          // Node position and size are fetched from texture via a_nodeIndex
+          { name: "a_nodeIndex", size: 1, type: FLOAT },
           { name: "a_charOffset", size: 2, type: FLOAT },
           { name: "a_charSize", size: 2, type: FLOAT },
           { name: "a_texCoords", size: 4, type: FLOAT },
           { name: "a_color", size: 4, type: UNSIGNED_BYTE, normalized: true },
-          { name: "a_nodeSize", size: 1, type: FLOAT },
           { name: "a_margin", size: 1, type: FLOAT },
           { name: "a_positionMode", size: 1, type: FLOAT },
           { name: "a_labelWidth", size: 1, type: FLOAT },
@@ -372,9 +372,8 @@ export function createLabelProgram<
       const color = floatColor(labelData.color);
       let i = startIndex;
 
-      // a_anchorPosition: Node center in graph space
-      array[i++] = labelData.x;
-      array[i++] = labelData.y;
+      // a_nodeIndex: Index into node data texture (for GPU-side position/size lookup)
+      array[i++] = labelData.nodeIndex;
 
       // a_charOffset: Character position relative to label origin (pixels)
       // Include glyph bearing for proper character alignment
@@ -393,9 +392,6 @@ export function createLabelProgram<
 
       // a_color: Packed RGBA color
       array[i++] = color;
-
-      // a_nodeSize: Node size in graph coordinates (for edge detection)
-      array[i++] = labelData.nodeSize;
 
       // a_margin: Gap between node edge and label (pixels)
       array[i++] = NodeLabelProgram.labelMargin;
@@ -485,6 +481,14 @@ export function createLabelProgram<
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.atlasTexture);
       gl.uniform1i(uniformLocations.u_atlas, 0);
+
+      // Bind node data texture (already bound by sigma.ts to the designated unit)
+      if (uniformLocations.u_nodeDataTexture !== undefined) {
+        gl.uniform1i(uniformLocations.u_nodeDataTexture, params.nodeDataTextureUnit);
+      }
+      if (uniformLocations.u_nodeDataTextureWidth !== undefined) {
+        gl.uniform1i(uniformLocations.u_nodeDataTextureWidth, params.nodeDataTextureWidth);
+      }
 
       // SDF rendering parameters
       gl.uniform1f(uniformLocations.u_gamma, this.gamma);

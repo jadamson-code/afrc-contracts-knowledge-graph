@@ -23,6 +23,8 @@ export abstract class AbstractEdgeProgram<
     sourceData: NodeDisplayData,
     targetData: NodeDisplayData,
     data: EdgeDisplayData,
+    sourceNodeIndex: number,
+    targetNodeIndex: number,
   ): void;
 }
 
@@ -51,6 +53,8 @@ export abstract class EdgeProgram<
     sourceData: NodeDisplayData,
     targetData: NodeDisplayData,
     data: EdgeDisplayData,
+    sourceNodeIndex: number,
+    targetNodeIndex: number,
   ): void {
     let i = offset * this.STRIDE;
     // NOTE: dealing with hidden items automatically
@@ -61,7 +65,7 @@ export abstract class EdgeProgram<
       return;
     }
 
-    return this.processVisibleItem(indexToColor(edgeIndex), i, sourceData, targetData, data);
+    return this.processVisibleItem(indexToColor(edgeIndex), i, sourceData, targetData, data, sourceNodeIndex, targetNodeIndex);
   }
 
   abstract processVisibleItem(
@@ -70,6 +74,8 @@ export abstract class EdgeProgram<
     sourceData: NodeDisplayData,
     targetData: NodeDisplayData,
     data: EdgeDisplayData,
+    sourceNodeIndex: number,
+    targetNodeIndex: number,
   ): void;
 }
 
@@ -97,6 +103,8 @@ class _EdgeProgramClass<
     _sourceData: NodeDisplayData,
     _targetData: NodeDisplayData,
     _data: EdgeDisplayData,
+    _sourceNodeIndex: number,
+    _targetNodeIndex: number,
   ): void {
     return undefined;
   }
@@ -144,8 +152,10 @@ export function createEdgeCompoundProgram<
       sourceData: NodeDisplayData,
       targetData: NodeDisplayData,
       data: EdgeDisplayData,
+      sourceNodeIndex: number,
+      targetNodeIndex: number,
     ): void {
-      this.programs.forEach((program) => program.process(edgeIndex, offset, sourceData, targetData, data));
+      this.programs.forEach((program) => program.process(edgeIndex, offset, sourceData, targetData, data, sourceNodeIndex, targetNodeIndex));
     }
 
     render(params: RenderParams): void {

@@ -166,6 +166,8 @@ function collectUniforms(path: EdgePath, head: EdgeExtremity, tail: EdgeExtremit
     "u_pixelRatio",
     "u_cameraAngle",
     "u_minEdgeThickness",
+    "u_nodeDataTexture",
+    "u_nodeDataTextureWidth",
   ]);
 
   const uniforms = new Set<string>(standardUniforms);
@@ -185,6 +187,8 @@ function collectUniforms(path: EdgePath, head: EdgeExtremity, tail: EdgeExtremit
 
 /**
  * Collects all attributes needed for edge rendering.
+ * Note: Source/target positions, sizes, and shape IDs are now fetched from the
+ * node data texture using node indices, reducing per-edge buffer size.
  */
 function collectAttributes(
   path: EdgePath,
@@ -194,12 +198,9 @@ function collectAttributes(
 ): AttributeSpecification[] {
   const attributes: AttributeSpecification[] = [
     // Standard edge attributes
-    { name: "a_source", size: 2, type: FLOAT },
-    { name: "a_target", size: 2, type: FLOAT },
-    { name: "a_sourceSize", size: 1, type: FLOAT },
-    { name: "a_targetSize", size: 1, type: FLOAT },
-    { name: "a_sourceShapeId", size: 1, type: FLOAT },
-    { name: "a_targetShapeId", size: 1, type: FLOAT },
+    // Node data (position, size, shapeId) is fetched from texture via indices
+    { name: "a_sourceNodeIndex", size: 1, type: FLOAT },
+    { name: "a_targetNodeIndex", size: 1, type: FLOAT },
     { name: "a_thickness", size: 1, type: FLOAT },
     { name: "a_color", size: 4, type: UNSIGNED_BYTE, normalized: true },
     { name: "a_id", size: 4, type: UNSIGNED_BYTE, normalized: true },
@@ -256,6 +257,7 @@ function generateVertexShader(
     "u_pixelRatio",
     "u_cameraAngle",
     "u_minEdgeThickness",
+    "u_nodeDataTexture",
   ]);
 
   const seenUniforms = new Set<string>();
@@ -305,12 +307,9 @@ function generateVertexShader(
 ${constantAttrDeclarations}
 
 // Per-edge attributes
-in vec2 a_source;       // Source node position
-in vec2 a_target;       // Target node position
-in float a_sourceSize;  // Source node size
-in float a_targetSize;  // Target node size
-in float a_sourceShapeId; // Source node shape ID
-in float a_targetShapeId; // Target node shape ID
+// Node data (position, size, shapeId) is fetched from texture via indices
+in float a_sourceNodeIndex; // Index into node data texture for source node
+in float a_targetNodeIndex; // Index into node data texture for target node
 in float a_thickness;   // Edge thickness
 in vec4 a_color;        // Edge color
 in vec4 a_id;           // Edge ID for picking
@@ -326,6 +325,8 @@ uniform float u_zoomRatio;
 uniform float u_pixelRatio;
 uniform float u_cameraAngle;
 uniform float u_minEdgeThickness;
+uniform sampler2D u_nodeDataTexture;
+uniform int u_nodeDataTextureWidth;
 
 // Custom uniforms
 ${customUniforms}
@@ -379,6 +380,23 @@ ${generateFindSourceClampT(pathName)}
 ${generateFindTargetClampT(pathName)}
 
 void main() {
+  // Fetch source and target node data from texture
+  // Texture format: vec4(x, y, size, shapeId)
+  // 2D texture layout: texCoord = (index % width, index / width)
+  int srcIdx = int(a_sourceNodeIndex);
+  int tgtIdx = int(a_targetNodeIndex);
+  ivec2 srcTexCoord = ivec2(srcIdx % u_nodeDataTextureWidth, srcIdx / u_nodeDataTextureWidth);
+  ivec2 tgtTexCoord = ivec2(tgtIdx % u_nodeDataTextureWidth, tgtIdx / u_nodeDataTextureWidth);
+  vec4 srcNodeData = texelFetch(u_nodeDataTexture, srcTexCoord, 0);
+  vec4 tgtNodeData = texelFetch(u_nodeDataTexture, tgtTexCoord, 0);
+
+  vec2 a_source = srcNodeData.xy;
+  vec2 a_target = tgtNodeData.xy;
+  float a_sourceSize = srcNodeData.z;
+  float a_targetSize = tgtNodeData.z;
+  float a_sourceShapeId = srcNodeData.w;
+  float a_targetShapeId = tgtNodeData.w;
+
   // Convert thickness to WebGL units
   float minThickness = u_minEdgeThickness;
   float pixelsThickness = max(a_thickness, minThickness * u_sizeRatio);

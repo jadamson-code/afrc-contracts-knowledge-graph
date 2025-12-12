@@ -102,6 +102,8 @@ export interface RenderParams {
   downSizingRatio: number;
   minEdgeThickness: number;
   antiAliasingFeather: number;
+  nodeDataTextureUnit: number;
+  nodeDataTextureWidth: number;
 }
 
 /**
@@ -244,6 +246,8 @@ export interface LabelDisplayData {
   margin: number;
   /** Font key for multi-font support (references registered font in atlas) */
   fontKey: string;
+  /** Node index in node data texture (for GPU-side lookup) */
+  nodeIndex: number;
 }
 
 /**
@@ -275,6 +279,10 @@ export interface EdgeLabelDisplayData extends Omit<LabelDisplayData, "position">
   offset: number;
   /** Path curvature for curved edges (0 for straight) */
   curvature: number;
+  /** Source node index in node data texture */
+  sourceNodeIndex: number;
+  /** Target node index in node data texture */
+  targetNodeIndex: number;
 }
 
 /**

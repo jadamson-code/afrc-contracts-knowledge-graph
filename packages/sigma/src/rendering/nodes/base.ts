@@ -18,7 +18,7 @@ export abstract class AbstractNodeProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 > extends AbstractProgram<N, E, G> {
-  abstract process(nodeIndex: number, offset: number, data: NodeDisplayData): void;
+  abstract process(nodeIndex: number, offset: number, data: NodeDisplayData, textureIndex: number): void;
 }
 
 export abstract class NodeProgram<
@@ -46,7 +46,7 @@ export abstract class NodeProgram<
     super.kill();
   }
 
-  process(nodeIndex: number, offset: number, data: NodeDisplayData): void {
+  process(nodeIndex: number, offset: number, data: NodeDisplayData, textureIndex: number): void {
     let i = offset * this.STRIDE;
     // NOTE: dealing with hidden items automatically
     if (data.hidden) {
@@ -56,10 +56,10 @@ export abstract class NodeProgram<
       return;
     }
 
-    return this.processVisibleItem(indexToColor(nodeIndex), i, data);
+    return this.processVisibleItem(indexToColor(nodeIndex), i, data, textureIndex);
   }
 
-  abstract processVisibleItem(nodeIndex: number, i: number, data: NodeDisplayData): void;
+  abstract processVisibleItem(nodeIndex: number, i: number, data: NodeDisplayData, textureIndex: number): void;
 }
 
 class _NodeProgramClass<
@@ -81,7 +81,7 @@ class _NodeProgramClass<
   reallocate(_capacity: number): void {
     return undefined;
   }
-  process(_nodeIndex: number, _offset: number, _data: NodeDisplayData): void {
+  process(_nodeIndex: number, _offset: number, _data: NodeDisplayData, _textureIndex: number): void {
     return undefined;
   }
   render(_params: RenderParams): void {

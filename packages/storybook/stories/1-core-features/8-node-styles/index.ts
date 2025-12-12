@@ -113,6 +113,12 @@ export default () => {
             drawingMode: "image",
             imageAttribute: "image",
           }),
+          layerBorder({
+            borders: [
+              { size: { value: 0.2 }, color: { attribute: "color" } },
+              { size: { fill: true }, color: { value: "#ffffff00" } },
+            ],
+          }),
         ];
       case "image-border":
         return [

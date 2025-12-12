@@ -22,7 +22,6 @@ import { DEFAULT_SDF_ATLAS_OPTIONS, GlyphMetrics, SDFAtlasManager } from "../../
 import type Sigma from "../../../sigma";
 import type { EdgeLabelDisplayData, EdgeLabelPosition, RenderParams } from "../../../types";
 import { floatColor } from "../../../utils";
-import { getShapeId } from "../../shapes";
 import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
 import type { EdgeLabelOptions, EdgePath } from "../types";
 import { EdgeLabelProgram } from "./base";
@@ -276,9 +275,8 @@ export function createEdgeLabelProgram<
         METHOD: TRIANGLE_STRIP,
         UNIFORMS: generated!.uniforms as EdgeLabelUniform[],
         ATTRIBUTES: [
-          // Packed edge geometry
-          { name: "a_sourceTarget", size: 4, type: FLOAT }, // (sourceX, sourceY, targetX, targetY)
-          { name: "a_nodeSizes", size: 4, type: FLOAT }, // (sourceSize, targetSize, sourceShapeId, targetShapeId)
+          // Node indices for texture lookup (replaces packed sourceTarget and nodeSizes)
+          { name: "a_nodeIndices", size: 2, type: FLOAT }, // (sourceNodeIndex, targetNodeIndex)
           { name: "a_edgeParams", size: 4, type: FLOAT }, // (thickness, headLengthRatio, tailLengthRatio, baseFontSize)
 
           // Character metrics (packed)
@@ -364,30 +362,20 @@ export function createEdgeLabelProgram<
      *
      * ## Attribute Layout (must match getDefinition)
      *
-     * Edge geometry:
-     * - a_source (2): Source node position
-     * - a_target (2): Target node position
-     * - a_sourceSize (1): Source node size
-     * - a_targetSize (1): Target node size
-     * - a_sourceShapeId (1): Source shape ID
-     * - a_targetShapeId (1): Target shape ID
-     * - a_thickness (1): Edge thickness
-     * - a_headLengthRatio (1): Head extremity length ratio
-     * - a_tailLengthRatio (1): Tail extremity length ratio
+     * Edge geometry (node data fetched from texture):
+     * - a_nodeIndices (2): Source and target node indices into node data texture
+     * - a_edgeParams (4): Edge thickness, head/tail length ratios, base font size
      *
      * Character metrics:
-     * - a_charTextOffset (1): Cumulative advance from label start
-     * - a_charAdvance (1): This character's advance width
-     * - a_totalTextWidth (1): Total label width
-     * - a_charSize (2): Character quad dimensions
-     * - a_charOffset (2): Offset from origin to quad corner
+     * - a_charMetrics (4): Text offset, advance, total width, position mode
+     * - a_charDims (4): Character size and offset
      *
      * Atlas:
      * - a_texCoords (4): Texture coordinates
+     * - a_labelParams (2): Margin, unused
      *
      * Appearance:
      * - a_color (1): Packed RGBA color
-     * - a_baseFontSize (1): Font size in pixels
      */
     protected processCharacter(index: number, labelData: EdgeLabelDisplayData, _char: string, charIndex: number): void {
       const array = this.array;
@@ -408,10 +396,6 @@ export function createEdgeLabelProgram<
       const glyph = cache.glyphs[charIndex]!;
       const xOffset = cache.xOffsets[charIndex];
 
-      // Get node shape IDs from the shape registry
-      const sourceShapeId = getShapeId(labelData.sourceShape);
-      const targetShapeId = getShapeId(labelData.targetShape);
-
       // Use actual edge thickness for extremity length calculations
       const thickness = labelData.edgeSize || 1;
 
@@ -420,21 +404,16 @@ export function createEdgeLabelProgram<
       // For simplicity, we only support fixed color override at program level
       const programColor = GeneratedEdgeLabelProgram.labelColor;
       const effectiveColor =
-        programColor && "color" in programColor && programColor.color ? programColor.color : labelData.color;
+        programColor && typeof programColor === "object" && "color" in programColor && programColor.color
+          ? programColor.color
+          : labelData.color;
       const color = floatColor(effectiveColor);
       let i = startIndex;
 
-      // a_sourceTarget: (sourceX, sourceY, targetX, targetY)
-      array[i++] = labelData.sourceX;
-      array[i++] = labelData.sourceY;
-      array[i++] = labelData.targetX;
-      array[i++] = labelData.targetY;
-
-      // a_nodeSizes: (sourceSize, targetSize, sourceShapeId, targetShapeId)
-      array[i++] = labelData.sourceSize;
-      array[i++] = labelData.targetSize;
-      array[i++] = sourceShapeId;
-      array[i++] = targetShapeId;
+      // a_nodeIndices: (sourceNodeIndex, targetNodeIndex)
+      // These indices are used by the GPU to fetch node data from the texture
+      array[i++] = labelData.sourceNodeIndex;
+      array[i++] = labelData.targetNodeIndex;
 
       // a_edgeParams: (thickness, headLengthRatio, tailLengthRatio, baseFontSize)
       array[i++] = thickness;
@@ -473,14 +452,14 @@ export function createEdgeLabelProgram<
 
       // a_borderColor: packed RGBA (only if border is enabled)
       if (hasBorder && textBorder) {
-        // Get border color from ColorSpecification (string | { attribute, defaultColor? })
+        // Get border color from ColorSpecification (string | { attribute, color? })
         let borderColorValue: string;
         if (typeof textBorder.color === "string") {
           // Fixed color string
           borderColorValue = textBorder.color;
         } else {
           // Attribute-based color with optional default
-          borderColorValue = textBorder.color.defaultColor || "#ffffff";
+          borderColorValue = textBorder.color.color || "#ffffff";
         }
         array[i++] = floatColor(borderColorValue);
       }
@@ -572,10 +551,18 @@ export function createEdgeLabelProgram<
       gl.uniform1f(uniformLocations.u_gamma, this.gamma);
       gl.uniform1f(uniformLocations.u_sdfBuffer, this.sdfBuffer);
 
-      // Bind atlas texture
+      // Bind atlas texture to texture unit 0
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.atlasTexture);
       gl.uniform1i(uniformLocations.u_atlas, 0);
+
+      // Bind node data texture (already bound by sigma.ts to the designated unit)
+      if (uniformLocations.u_nodeDataTexture !== undefined) {
+        gl.uniform1i(uniformLocations.u_nodeDataTexture, params.nodeDataTextureUnit);
+      }
+      if (uniformLocations.u_nodeDataTextureWidth !== undefined) {
+        gl.uniform1i(uniformLocations.u_nodeDataTextureWidth, params.nodeDataTextureWidth);
+      }
 
       // Border width uniform (only if border is enabled)
       if (hasBorder && textBorder && uniformLocations.u_borderWidth !== undefined) {

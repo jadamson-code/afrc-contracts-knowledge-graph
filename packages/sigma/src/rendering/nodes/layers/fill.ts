@@ -7,7 +7,7 @@
  * @module
  */
 import { colorToGLSLString } from "../../../utils";
-import { AttributeSpecification, FragmentLayer } from "../types";
+import { FragmentLayer } from "../types";
 
 /**
  * Options for the layerFill() function.

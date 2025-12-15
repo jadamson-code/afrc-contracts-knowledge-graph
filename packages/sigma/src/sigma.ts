@@ -215,6 +215,10 @@ export default class Sigma<
   // Used to look up the local shape index for nodes that specify a 'shape' attribute
   private nodeTypeShapeMap: { [type: string]: Record<string, number> } = {};
 
+  // For multi-shape programs: maps node type to array of global shape IDs
+  // Used to convert local shape index to global ID for edge clamping
+  private nodeTypeGlobalShapeIds: { [type: string]: number[] } = {};
+
   // WebGL Labels (SDF-based rendering)
   private sdfAtlas: SDFAtlasManager | null = null;
 
@@ -339,6 +343,13 @@ export default class Sigma<
     } else {
       // Single-shape program: clear any previous mapping
       delete this.nodeTypeShapeMap[key];
+    }
+    if (programOptions?.shapeGlobalIds) {
+      // Multi-shape program: store the local index -> global shape ID mapping
+      this.nodeTypeGlobalShapeIds[key] = programOptions.shapeGlobalIds;
+    } else {
+      // Single-shape program: clear any previous mapping
+      delete this.nodeTypeGlobalShapeIds[key];
     }
 
     // Register the associated label program if the node program has one
@@ -1002,13 +1013,15 @@ export default class Sigma<
       this.nodeDataTexture!.allocateNode(node);
 
       // Get shape ID:
-      // - For multi-shape programs: use local index from shapeNameToIndex
+      // - For multi-shape programs: convert local index to global ID for edge clamping
       // - For single-shape programs: use global registry ID from slug
       let shapeId: number;
       const shapeMap = this.nodeTypeShapeMap[data.type];
-      if (shapeMap && data.shape && data.shape in shapeMap) {
-        // Multi-shape program: use local index
-        shapeId = shapeMap[data.shape];
+      const globalIds = this.nodeTypeGlobalShapeIds[data.type];
+      if (shapeMap && globalIds && data.shape && data.shape in shapeMap) {
+        // Multi-shape program: convert local index to global ID
+        const localIndex = shapeMap[data.shape];
+        shapeId = globalIds[localIndex];
       } else {
         // Single-shape program or fallback: use global registry
         shapeId = getShapeId(data.shape || "circle");
@@ -1620,15 +1633,17 @@ export default class Sigma<
         labelHeight = Math.round(labelSize + 4);
       }
 
-      // Get shapeId using the same logic as node rendering
+      // Get shapeId for hover rendering
+      // Hover programs use LOCAL indices (0, 1, 2...) in their shader switch statements,
+      // not global registry IDs. This is different from node/edge rendering which uses global IDs.
       let shapeId: number;
       const shapeMap = this.nodeTypeShapeMap[data.type];
       if (shapeMap && data.shape && data.shape in shapeMap) {
-        // Multi-shape program: use local index
+        // Multi-shape program: use local index directly
         shapeId = shapeMap[data.shape];
       } else {
-        // Single-shape program or fallback: use global registry
-        shapeId = getShapeId(data.shape || "circle");
+        // Single-shape program: always use 0 (there's only one shape)
+        shapeId = 0;
       }
 
       const hoverData: HoverDisplayData = {
@@ -2204,22 +2219,81 @@ export default class Sigma<
     // Allocate edge in edge data texture (or get existing allocation)
     const edgeTextureIndex = this.edgeDataTexture!.allocateEdge(edge);
 
-    // Get head/tail length ratios from the program class options
+    // Get program class and options
     const edgeProgramClass = this.settings.edgeProgramClasses[data.type];
-    const programOptions = (edgeProgramClass as unknown as { programOptions?: { head?: { length?: number }; tail?: { length?: number } } }).programOptions;
-    const headLengthRatio = programOptions?.head?.length ?? 0;
-    const tailLengthRatio = programOptions?.tail?.length ?? 0;
+    const programOptions = (edgeProgramClass as unknown as {
+      programOptions?: {
+        path?: { length?: number };
+        paths?: Array<{ name: string; length?: number }>;
+        head?: { length?: number };
+        heads?: Array<{ name: string; length: number }>;
+        tail?: { length?: number };
+        tails?: Array<{ name: string; length: number }>;
+      };
+      isMultiMode?: boolean;
+      pathNameToIndex?: Record<string, number>;
+      headNameToIndex?: Record<string, number>;
+      tailNameToIndex?: Record<string, number>;
+    }).programOptions;
 
-    // Update edge data texture with all edge data
-    const curvature = (data as unknown as { curvature?: number }).curvature ?? 0;
+    // Check if program supports multi-path mode
+    const isMultiMode = (edgeProgramClass as unknown as { isMultiMode?: boolean }).isMultiMode ?? false;
+    const pathNameToIndex = (edgeProgramClass as unknown as { pathNameToIndex?: Record<string, number> }).pathNameToIndex;
+    const headNameToIndex = (edgeProgramClass as unknown as { headNameToIndex?: Record<string, number> }).headNameToIndex;
+    const tailNameToIndex = (edgeProgramClass as unknown as { tailNameToIndex?: Record<string, number> }).tailNameToIndex;
+
+    // Get path/head/tail indices and length ratios
+    let pathId = 0;
+    let headId = 0;
+    let tailId = 0;
+    let headLengthRatio = programOptions?.head?.length ?? 0;
+    let tailLengthRatio = programOptions?.tail?.length ?? 0;
+
+    if (isMultiMode && pathNameToIndex && headNameToIndex && tailNameToIndex) {
+      // Multi-path mode: look up indices from edge data attributes
+      const edgeData = data as unknown as { path?: string; head?: string; tail?: string };
+      const pathName = edgeData.path;
+      const headName = edgeData.head;
+      const tailName = edgeData.tail;
+
+      // Get path index
+      if (pathName && pathNameToIndex[pathName] !== undefined) {
+        pathId = pathNameToIndex[pathName];
+      }
+
+      // Get head index and length ratio
+      if (headName && headNameToIndex[headName] !== undefined) {
+        headId = headNameToIndex[headName];
+        // Get length ratio from the corresponding head in the heads array
+        const heads = programOptions?.heads;
+        if (heads && heads[headId]) {
+          headLengthRatio = heads[headId].length;
+        }
+      }
+
+      // Get tail index and length ratio
+      if (tailName && tailNameToIndex[tailName] !== undefined) {
+        tailId = tailNameToIndex[tailName];
+        // Get length ratio from the corresponding tail in the tails array
+        const tails = programOptions?.tails;
+        if (tails && tails[tailId]) {
+          tailLengthRatio = tails[tailId].length;
+        }
+      }
+    }
+
+    // Update edge data texture with core edge data
+    // Path-specific attributes (curvature, etc.) are stored in EdgePathAttributeTexture
     this.edgeDataTexture!.updateEdge(
       edge,
       sourceNodeIndex,
       targetNodeIndex,
       data.size,
-      curvature,
       headLengthRatio,
       tailLengthRatio,
+      pathId,
+      headId,
+      tailId,
     );
 
     edgeProgram.process(fingerprint, position, sourceData, targetData, data, edgeTextureIndex);

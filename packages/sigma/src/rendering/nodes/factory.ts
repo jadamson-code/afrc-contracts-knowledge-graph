@@ -13,7 +13,7 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { NodeDisplayData, RenderParams } from "../../types";
 import { colorToArray } from "../../utils";
-import { registerShape } from "../shapes";
+import { getShapeId, registerShape } from "../shapes";
 import { ProgramInfo } from "../utils";
 import { NodeProgram, NodeProgramType } from "./base";
 import { generateShaders } from "./generator";
@@ -79,6 +79,7 @@ export function createNodeProgram<
   // Register all shapes in the global registry and build name-to-index mapping.
   // The first shape's slug is used for edge clamping (edges use this to find the shape boundary).
   const shapeNameToIndex: Record<string, number> = {};
+  const shapeGlobalIds: number[] = []; // Maps local index to global shape ID
   let primaryShapeSlug: string | undefined;
 
   shapes.forEach((shape, index) => {
@@ -86,13 +87,21 @@ export function createNodeProgram<
     if (index === 0) primaryShapeSlug = slug;
     // Map shape name to local index for GPU-side shape selection
     shapeNameToIndex[shape.name] = index;
+    // Store global shape ID for this local index (used by edge clamping)
+    shapeGlobalIds[index] = getShapeId(slug);
   });
 
   // Mutable layers array - can be regenerated
   let layers = [...options.layers];
 
   // Generate shaders and collect metadata
-  let generated = generateShaders({ shapes, layers, rotateWithCamera });
+  // Pass shapeGlobalIds for multi-shape programs to generate global→local conversion in shader
+  let generated = generateShaders({
+    shapes,
+    layers,
+    rotateWithCamera,
+    shapeGlobalIds: shapes.length > 1 ? shapeGlobalIds : undefined,
+  });
 
   // Create the label program class with all shapes (for multi-shape support)
   const LabelProgramClass = createLabelProgram({
@@ -118,6 +127,7 @@ export function createNodeProgram<
       ...options,
       shapeSlug: primaryShapeSlug,
       shapeNameToIndex: shapes.length > 1 ? shapeNameToIndex : undefined,
+      shapeGlobalIds: shapes.length > 1 ? shapeGlobalIds : undefined,
     };
 
     // Static reference to the associated LabelProgram
@@ -229,7 +239,12 @@ export function createNodeProgram<
       this.layersNeedingRegeneration.clear();
 
       // Regenerate shaders with updated layers
-      generated = generateShaders({ shapes, layers, rotateWithCamera });
+      generated = generateShaders({
+        shapes,
+        layers,
+        rotateWithCamera,
+        shapeGlobalIds: shapes.length > 1 ? shapeGlobalIds : undefined,
+      });
 
       // Rebuild WebGL program
       const gl = this.normalProgram.gl;

@@ -25,6 +25,12 @@ export interface ShaderGenerationOptions {
   shapes: SDFShape[];
   layers: FragmentLayer[];
   rotateWithCamera?: boolean;
+  /**
+   * Array mapping local shape index to global shape ID.
+   * Required for multi-shape programs to convert global IDs from node data texture
+   * to local indices for the queryNodeSDF switch statement.
+   */
+  shapeGlobalIds?: number[];
 }
 
 /**
@@ -278,11 +284,13 @@ ${varyingAssignments}
  * @param shapes - Array of SDF shapes this program supports
  * @param layers - Array of fragment layers
  * @param rotateWithCamera - Whether nodes rotate with camera
+ * @param shapeGlobalIds - Optional array mapping local shape index to global ID (for multi-shape programs)
  */
 export function generateFragmentShader(
   shapes: SDFShape[],
   layers: FragmentLayer[],
   rotateWithCamera: boolean,
+  shapeGlobalIds?: number[],
 ): string {
   // Generate layer function calls with "over" compositing
   const layerCalls = layers
@@ -345,7 +353,8 @@ export function generateFragmentShader(
   const shapeGLSL = getShapeGLSLForShapes(shapes);
 
   // Generate queryNodeSDF() function for shape selection
-  const shapeSelectorGLSL = generateNodeShapeSelectorGLSL(shapes, rotateWithCamera);
+  // Pass shapeGlobalIds for multi-shape programs to generate global→local conversion
+  const shapeSelectorGLSL = generateNodeShapeSelectorGLSL(shapes, rotateWithCamera, shapeGlobalIds);
 
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es
@@ -501,11 +510,11 @@ export function collectAttributes(_layers: FragmentLayer[]): AttributeSpecificat
  * Main generator function that produces complete shader code and metadata.
  */
 export function generateShaders(options: ShaderGenerationOptions): GeneratedShaders {
-  const { shapes, layers, rotateWithCamera = false } = options;
+  const { shapes, layers, rotateWithCamera = false, shapeGlobalIds } = options;
 
   return {
     vertexShader: generateVertexShader(shapes, layers, rotateWithCamera),
-    fragmentShader: generateFragmentShader(shapes, layers, rotateWithCamera),
+    fragmentShader: generateFragmentShader(shapes, layers, rotateWithCamera, shapeGlobalIds),
     uniforms: collectUniforms(shapes, layers),
     attributes: collectAttributes(layers),
   };

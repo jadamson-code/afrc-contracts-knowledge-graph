@@ -23,6 +23,12 @@ import type Sigma from "../../../sigma";
 import type { EdgeLabelDisplayData, EdgeLabelPosition, RenderParams } from "../../../types";
 import { floatColor } from "../../../utils";
 import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
+import { fillingPlain } from "../fillings/plain";
+import {
+  computeEdgeAttributeLayout,
+  EDGE_ATTRIBUTE_TEXTURE_UNIT,
+  EdgePathAttributeTexture,
+} from "../path-attribute-texture";
 import type { EdgeLabelOptions, EdgePath } from "../types";
 import { EdgeLabelProgram } from "./base";
 import type { EdgeLabelProgramType } from "./base";
@@ -200,6 +206,15 @@ export function createEdgeLabelProgram<
     /** Default font key */
     private defaultFontKey: string;
 
+    /** Edge path attribute texture for curvature and other path attributes */
+    private edgeAttributeTexture: EdgePathAttributeTexture | null = null;
+
+    /** Packed attribute data buffer for reuse */
+    private packedAttributeData: Float32Array;
+
+    /** Layout describing attribute positions in the texture */
+    private attributeLayout: ReturnType<typeof computeEdgeAttributeLayout>;
+
     // -----------------------------------------------------------------------
     // Constructor
     // -----------------------------------------------------------------------
@@ -217,6 +232,12 @@ export function createEdgeLabelProgram<
       }
 
       super(gl, pickingBuffer, renderer);
+
+      // Initialize edge attribute texture for path attributes (curvature, etc.)
+      const filling = fillingPlain();
+      this.attributeLayout = computeEdgeAttributeLayout([path], filling);
+      this.edgeAttributeTexture = new EdgePathAttributeTexture(gl, this.attributeLayout);
+      this.packedAttributeData = new Float32Array(this.attributeLayout.floatsPerEdge);
 
       // Initialize SDF atlas manager for glyph generation
       this.atlasManager = new SDFAtlasManager();
@@ -471,10 +492,29 @@ export function createEdgeLabelProgram<
     }
 
     /**
-     * Processes an edge label by first preparing its glyph cache.
+     * Processes an edge label by first preparing its glyph cache
+     * and updating the edge attribute texture with path-specific data.
      */
     processEdgeLabel(labelKey: string, offset: number, data: EdgeLabelDisplayData): number {
       this.prepareLabelGlyphs(labelKey, data);
+
+      // Update edge attribute texture with path-specific attributes (curvature, etc.)
+      if (this.edgeAttributeTexture && !data.hidden && data.text) {
+        // Allocate texture slot for this edge label
+        this.edgeAttributeTexture.allocate(labelKey);
+
+        // Pack curvature into the attribute data
+        const packed = this.packedAttributeData;
+        packed.fill(0);
+        const curvatureOffset = this.attributeLayout.offsets["curvature"];
+        if (curvatureOffset !== undefined) {
+          packed[curvatureOffset] = data.curvature;
+        }
+
+        // Update the texture
+        this.edgeAttributeTexture.updateAllAttributes(labelKey, packed);
+      }
+
       return super.processEdgeLabel(labelKey, offset, data);
     }
 
@@ -572,6 +612,14 @@ export function createEdgeLabelProgram<
         gl.uniform1f(uniformLocations.u_borderWidth, borderWidthNormalized);
       }
 
+      // Bind edge attribute texture (curvature and other path-specific attributes)
+      if (this.edgeAttributeTexture && uniformLocations.u_edgeAttributeTexture !== undefined) {
+        this.edgeAttributeTexture.bind(EDGE_ATTRIBUTE_TEXTURE_UNIT);
+        gl.uniform1i(uniformLocations.u_edgeAttributeTexture, EDGE_ATTRIBUTE_TEXTURE_UNIT);
+        gl.uniform1i(uniformLocations.u_edgeAttributeTextureWidth, this.edgeAttributeTexture.getTextureWidth());
+        gl.uniform1i(uniformLocations.u_edgeAttributeTexelsPerEdge, this.edgeAttributeTexture.getTexelsPerEdge());
+      }
+
       // Zoom size ratio uniform (only if scaled font size mode)
       if (fontSizeMode === "scaled" && uniformLocations.u_zoomSizeRatio !== undefined) {
         // zoomRatio is the camera ratio
@@ -641,6 +689,11 @@ export function createEdgeLabelProgram<
       if (this.atlasTexture) {
         gl.deleteTexture(this.atlasTexture);
         this.atlasTexture = null;
+      }
+
+      if (this.edgeAttributeTexture) {
+        this.edgeAttributeTexture.kill();
+        this.edgeAttributeTexture = null;
       }
 
       this.atlasManager.destroy();

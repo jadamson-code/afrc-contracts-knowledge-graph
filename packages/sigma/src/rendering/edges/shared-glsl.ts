@@ -24,7 +24,7 @@
  */
 export function generateFindSourceClampT(pathName: string): string {
   return /*glsl*/ `
-float findSourceClampT(vec2 source, float sourceSize, int sourceShapeId, vec2 target, float margin) {
+float findSourceClampT_${pathName}(vec2 source, float sourceSize, int sourceShapeId, vec2 target, float margin) {
   float lo = 0.0, hi = 0.5;
   float nodeExtent = sourceSize * u_correctionRatio / u_sizeRatio * 2.0;
   float effectiveSize = 1.0 - u_correctionRatio / nodeExtent;
@@ -57,7 +57,7 @@ float findSourceClampT(vec2 source, float sourceSize, int sourceShapeId, vec2 ta
  */
 export function generateFindTargetClampT(pathName: string): string {
   return /*glsl*/ `
-float findTargetClampT(vec2 source, vec2 target, float targetSize, int targetShapeId, float margin) {
+float findTargetClampT_${pathName}(vec2 source, vec2 target, float targetSize, int targetShapeId, float margin) {
   float lo = 0.5, hi = 1.0;
   float nodeExtent = targetSize * u_correctionRatio / u_sizeRatio * 2.0;
   float effectiveSize = 1.0 - u_correctionRatio / nodeExtent;

@@ -497,22 +497,72 @@ export interface EdgeLabelOptions {
 
 /**
  * Options for creating an edge program via createEdgeProgram().
+ *
+ * Supports both single-path mode (backward compatible) and multi-path mode:
+ *
+ * **Single-path mode** (traditional):
+ * ```typescript
+ * createEdgeProgram({
+ *   path: pathLine(),
+ *   head: extremityArrow(),
+ *   tail: extremityNone(),
+ *   filling: fillingPlain(),
+ * });
+ * ```
+ *
+ * **Multi-path mode** (new):
+ * ```typescript
+ * createEdgeProgram({
+ *   paths: [pathLine(), pathCurved(), pathStep()],
+ *   heads: [extremityNone(), extremityArrow()],
+ *   tails: [extremityNone(), extremityArrow()],
+ *   filling: fillingPlain(),
+ * });
+ * // Edges select via attributes: { path: "curved", head: "arrow", tail: "none" }
+ * ```
  */
 export interface EdgeProgramOptions {
   /**
-   * The path definition (geometry) for this edge type.
+   * Single path definition (geometry) for this edge type.
+   * Use `path` for single-path mode, `paths` for multi-path mode.
+   * Mutually exclusive with `paths`.
    */
-  path: EdgePath;
+  path?: EdgePath;
 
   /**
-   * The head extremity (target end decoration).
+   * Multiple path definitions for multi-path mode.
+   * Edges select their path via the `path` attribute (e.g., "line", "curved").
+   * Mutually exclusive with `path`.
    */
-  head: EdgeExtremity;
+  paths?: EdgePath[];
 
   /**
-   * The tail extremity (source end decoration).
+   * Single head extremity (target end decoration).
+   * Use `head` for single-extremity mode, `heads` for multi-extremity mode.
+   * Mutually exclusive with `heads`.
    */
-  tail: EdgeExtremity;
+  head?: EdgeExtremity;
+
+  /**
+   * Multiple head extremity definitions for multi-extremity mode.
+   * Edges select their head via the `head` attribute (e.g., "none", "arrow").
+   * Mutually exclusive with `head`.
+   */
+  heads?: EdgeExtremity[];
+
+  /**
+   * Single tail extremity (source end decoration).
+   * Use `tail` for single-extremity mode, `tails` for multi-extremity mode.
+   * Mutually exclusive with `tails`.
+   */
+  tail?: EdgeExtremity;
+
+  /**
+   * Multiple tail extremity definitions for multi-extremity mode.
+   * Edges select their tail via the `tail` attribute (e.g., "none", "arrow").
+   * Mutually exclusive with `tail`.
+   */
+  tails?: EdgeExtremity[];
 
   /**
    * The filling (body appearance) for this edge type.
@@ -538,12 +588,31 @@ export interface GeneratedEdgeShaders {
   uniforms: string[];
   /** List of attribute specifications */
   attributes: Array<{ name: string; size: number; type: number }>;
-  /** Number of vertices per edge instance */
+  /**
+   * Number of vertices per edge instance (single-path mode only).
+   * In multi-path mode, use vertexCountsPerCombination instead.
+   */
   verticesPerEdge: number;
-  /** Constant attribute data (for tessellation) */
+  /** Constant attribute data (for tessellation) - single-path mode */
   constantData: number[][];
   /** Constant attribute specification */
   constantAttributes: Array<{ name: string; size: number; type: number }>;
+
+  // Multi-path mode fields (optional, present when paths.length > 1)
+
+  /**
+   * Vertex counts per path/head/tail combination.
+   * Key format: "pathName:headName:tailName"
+   * Only present in multi-path mode.
+   */
+  vertexCountsPerCombination?: Map<string, number>;
+
+  /**
+   * Constant data per path/head/tail combination.
+   * Key format: "pathName:headName:tailName"
+   * Only present in multi-path mode.
+   */
+  constantDataPerCombination?: Map<string, number[][]>;
 }
 
 /**
@@ -563,6 +632,21 @@ export interface AbstractEdgeProgram {
 }
 
 /**
+ * Extended program options with runtime mappings.
+ * This extends EdgeProgramOptions with computed mappings for multi-path mode.
+ */
+export interface EdgeProgramOptionsWithMappings extends EdgeProgramOptions {
+  /** Path name to index mapping (multi-path mode only) */
+  pathNameToIndex?: Record<string, number>;
+  /** Head name to index mapping (multi-extremity mode only) */
+  headNameToIndex?: Record<string, number>;
+  /** Tail name to index mapping (multi-extremity mode only) */
+  tailNameToIndex?: Record<string, number>;
+  /** Vertex counts per combination - key: "path:head:tail" (multi-path mode only) */
+  vertexCounts?: Map<string, number>;
+}
+
+/**
  * Type for an EdgeProgram class constructor.
  */
 export type EdgeProgramType<
@@ -579,9 +663,56 @@ export type EdgeProgramType<
   /** Static reference to the generated shaders */
   readonly generatedShaders?: GeneratedEdgeShaders;
 
-  /** Static reference to the program options */
-  readonly programOptions?: EdgeProgramOptions;
+  /** Static reference to the program options with mappings */
+  readonly programOptions?: EdgeProgramOptionsWithMappings;
 
   /** Static reference to the associated LabelProgram (if labels enabled) */
   LabelProgram?: unknown;
 };
+
+// ============================================================================
+// Edge Program Options Normalization
+// ============================================================================
+
+/**
+ * Result of normalizing EdgeProgramOptions.
+ */
+export interface NormalizedEdgeProgramOptions {
+  paths: EdgePath[];
+  heads: EdgeExtremity[];
+  tails: EdgeExtremity[];
+  filling: EdgeFilling;
+  /** First path (for backward compatibility) */
+  path: EdgePath;
+  /** First head (for backward compatibility) */
+  head: EdgeExtremity;
+  /** First tail (for backward compatibility) */
+  tail: EdgeExtremity;
+  /** Whether multiple paths/heads/tails are defined */
+  isMultiMode: boolean;
+}
+
+/**
+ * Normalizes EdgeProgramOptions to always have arrays and single-item accessors.
+ * Validates that at least one path, head, and tail are provided.
+ */
+export function normalizeEdgeProgramOptions(options: EdgeProgramOptions): NormalizedEdgeProgramOptions {
+  const paths = options.paths || (options.path ? [options.path] : []);
+  const heads = options.heads || (options.head ? [options.head] : []);
+  const tails = options.tails || (options.tail ? [options.tail] : []);
+
+  if (paths.length === 0) throw new Error("At least one path is required");
+  if (heads.length === 0) throw new Error("At least one head extremity is required");
+  if (tails.length === 0) throw new Error("At least one tail extremity is required");
+
+  return {
+    paths,
+    heads,
+    tails,
+    filling: options.filling,
+    path: paths[0],
+    head: heads[0],
+    tail: tails[0],
+    isMultiMode: paths.length > 1 || heads.length > 1 || tails.length > 1,
+  };
+}

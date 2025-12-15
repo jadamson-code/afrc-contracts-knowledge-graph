@@ -1,5 +1,11 @@
 /**
  * This example demonstrates edge styles using the composable edge program system.
+ *
+ * It uses:
+ * - A single multi-shape node program (supports diamond and triangle shapes)
+ * - A single multi-path edge program (supports all path types via per-edge selection)
+ *
+ * This is more efficient than using separate programs for each shape/path type.
  */
 import Graph from "graphology";
 import Sigma from "sigma";
@@ -8,13 +14,11 @@ import {
   createNodeProgram,
   extremityArrow,
   extremityNone,
-  fillingDashed,
   fillingPlain,
   layerFill,
   pathCurved,
   pathCurvedS,
   pathLine,
-  pathStep,
   pathStepCurved,
   sdfDiamond,
   sdfTriangle,
@@ -28,203 +32,106 @@ export default () => {
   // Grid configuration
   const COL_SPACING = 120;
   const ROW_SPACING = 80;
-  const NODE_SPACING = 60; // Horizontal distance between source and target nodes
+  const NODE_SPACING = 60;
   const NODE_SIZE = 12;
   const EDGE_SIZE = 6;
-
-  // Row types (path types)
-  const ROWS = [
-    { name: "line", path: pathLine() },
-    { name: "curved", path: pathCurved() },
-    {
-      name: "step",
-      path: pathStep({
-        orientation: "automatic",
-        rotateWithCamera: false,
-      }),
-    },
-    {
-      name: "step-2",
-      path: pathStep({
-        orientation: "horizontal",
-        rotateWithCamera: true,
-      }),
-    },
-    {
-      name: "stepCurved",
-      path: pathStepCurved({
-        orientation: "automatic",
-        rotateWithCamera: false,
-      }),
-    },
-    {
-      name: "stepCurved-2",
-      path: pathStepCurved({
-        orientation: "horizontal",
-        rotateWithCamera: true,
-      }),
-    },
-    {
-      name: "curvedS",
-      path: pathCurvedS({
-        orientation: "automatic",
-        rotateWithCamera: false,
-      }),
-    },
-    {
-      name: "curvedS-2",
-      path: pathCurvedS({
-        orientation: "horizontal",
-        rotateWithCamera: true,
-        curveOffset: 0.8,
-      }),
-    },
-  ];
-
-  // Column types (extremity and filling configurations)
-  const COLS = [
-    {
-      name: "no-extremity",
-      label: "No extremity",
-      head: extremityNone(),
-      tail: extremityNone(),
-      filling: fillingPlain(),
-    },
-    {
-      name: "arrow-head",
-      label: "Arrow head",
-      head: extremityArrow(),
-      tail: extremityNone(),
-      filling: fillingPlain(),
-    },
-    {
-      name: "double-arrow",
-      label: "Both arrows",
-      head: extremityArrow(),
-      tail: extremityArrow(),
-      filling: fillingPlain(),
-    },
-    {
-      name: "arrow-margin",
-      label: "5px margin",
-      head: extremityArrow({ margin: 5 }),
-      tail: extremityNone(),
-      filling: fillingPlain(),
-    },
-    {
-      name: "dashed",
-      label: "Dashed",
-      head: extremityNone(),
-      tail: extremityNone(),
-      filling: fillingDashed({
-        dashSize: { thicknessRelative: 1 },
-        gapSize: { thicknessRelative: 1 },
-        gap: "#ffcbd1",
-      }),
-    },
-    {
-      name: "dashed-arrow",
-      label: "Dashed faded",
-      head: extremityArrow(),
-      tail: extremityNone(),
-      filling: fillingDashed({
-        dashSize: { thicknessRelative: 3 },
-        gapSize: { thicknessRelative: 1.5 },
-        solidExtremities: true,
-        solidMargin: { head: 10 },
-        gap: 0.3,
-        align: 1,
-      }),
-    },
-  ];
 
   // Colors
   const EDGE_COLOR = "#999999";
   const NODE_COLOR = "#5B8FF9";
 
-  // Create edge programs for each combination
-  const edgeProgramClasses: Record<string, ReturnType<typeof createEdgeProgram>> = {};
+  // Create a single multi-shape node program
+  // Nodes select their shape via the 'shape' attribute
+  const NodeProgram = createNodeProgram({
+    shapes: [sdfDiamond(), sdfTriangle()],
+    layers: [layerFill()],
+    rotateWithCamera: false,
+  });
 
-  for (const row of ROWS) {
-    for (const col of COLS) {
-      const edgeType = `${row.name}-${col.name}`;
-      edgeProgramClasses[edgeType] = createEdgeProgram({
-        path: row.path,
-        head: col.head,
-        tail: col.tail,
-        filling: col.filling,
-      });
-    }
-  }
+  // Create a single multi-path edge program that supports all path types
+  const EdgeProgram = createEdgeProgram({
+    // Multiple paths - each edge can select which one to use via "path" attribute
+    paths: [
+      pathLine(),
+      pathCurved(),
+      pathStepCurved({ orientation: "automatic" }),
+      pathCurvedS({ orientation: "automatic" }),
+    ],
+    // Multiple head extremities - each edge selects via "head" attribute
+    heads: [extremityNone(), extremityArrow()],
+    // Multiple tail extremities - each edge selects via "tail" attribute
+    tails: [extremityNone(), extremityArrow()],
+    // Filling applies to all edges in this program
+    filling: fillingPlain(),
+  });
 
-  // Create nodes and edges in a grid
-  for (let rowIdx = 0; rowIdx < ROWS.length; rowIdx++) {
-    const row = ROWS[rowIdx];
+  // Path names for the demo (must match the names from path factories)
+  const PATH_NAMES = ["line", "curved", "stepCurved", "curvedS"];
+  const EXTREMITY_CONFIGS = [
+    { head: "none", tail: "none" },
+    { head: "arrow", tail: "none" },
+    { head: "arrow", tail: "arrow" },
+  ];
 
-    for (let colIdx = 0; colIdx < COLS.length; colIdx++) {
-      const col = COLS[colIdx];
-      const edgeType = `${row.name}-${col.name}`;
+  // Create nodes and edges
+  for (let rowIdx = 0; rowIdx < PATH_NAMES.length; rowIdx++) {
+    const pathName = PATH_NAMES[rowIdx];
 
-      // Calculate positions for this cell
+    for (let colIdx = 0; colIdx < EXTREMITY_CONFIGS.length; colIdx++) {
+      const extConfig = EXTREMITY_CONFIGS[colIdx];
+
       const cellX = colIdx * COL_SPACING;
       const cellY = -rowIdx * ROW_SPACING;
 
-      // Source node (left side of cell)
-      const sourceId = `${edgeType}-source`;
+      const sourceId = `${pathName}-${colIdx}-source`;
       graph.addNode(sourceId, {
         x: cellX - NODE_SPACING / 2,
         y: cellY,
         size: NODE_SIZE,
         color: NODE_COLOR,
-        label: "",
-        type: "diamond",
+        shape: "diamond", // Source nodes are diamonds
       });
 
-      // Target node (right side of cell)
-      const targetId = `${edgeType}-target`;
+      const targetId = `${pathName}-${colIdx}-target`;
       graph.addNode(targetId, {
         x: cellX + NODE_SPACING / 2,
         y: cellY + NODE_SPACING / 2,
         size: NODE_SIZE,
         color: NODE_COLOR,
-        label: "",
-        type: "triangle",
+        shape: "triangle", // Target nodes are triangles
       });
 
-      // Edge connecting them
+      // Edges use per-edge path and extremity selection
       graph.addEdge(sourceId, targetId, {
-        type: edgeType,
         size: EDGE_SIZE,
         color: EDGE_COLOR,
-        // Curvature for curved edges
-        curvature: row.name === "curved" ? 0.3 : 0,
+        curvature: pathName === "curved" ? 0.3 : 0,
+        path: pathName,
+        head: extConfig.head,
+        tail: extConfig.tail,
       });
     }
   }
 
   const renderer = new Sigma(graph, container, {
     edgeLabelColor: { color: "#000" },
-    edgeProgramClasses,
-    nodeProgramClasses: {
-      diamond: createNodeProgram({
-        shape: sdfDiamond(),
-        layers: [layerFill()],
-        rotateWithCamera: false,
-      }),
-      triangle: createNodeProgram({
-        shape: sdfTriangle(),
-        layers: [layerFill()],
-        rotateWithCamera: false,
-      }),
+    edgeProgramClasses: {
+      edge: EdgeProgram,
     },
-    defaultEdgeType: "line-no-extremity",
-    // Enable edge labels
+    nodeProgramClasses: {
+      node: NodeProgram,
+    },
+    defaultEdgeType: "edge",
+    defaultNodeType: "node",
     renderEdgeLabels: true,
     edgeLabelSize: 12,
-    // Use positions-based sizing for a clean grid appearance
     itemSizesReference: "positions",
     autoRescale: true,
   });
+
+  setInterval(() => {
+    renderer.getCamera().updateState(({ angle }) => ({ angle: angle + 0.005 }));
+  }, 30);
 
   return () => {
     renderer.kill();

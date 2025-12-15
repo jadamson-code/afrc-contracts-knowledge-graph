@@ -21,6 +21,8 @@
 import { DEFAULT_SDF_ATLAS_OPTIONS } from "../../../core/sdf-atlas";
 import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../../shapes";
 import { numberToGLSLFloat } from "../../utils";
+import { fillingPlain } from "../fillings/plain";
+import { computeEdgeAttributeLayout, generateEdgeAttributeTextureFetch } from "../path-attribute-texture";
 import {
   generateFindSourceClampT,
   generateFindTargetClampT,
@@ -98,6 +100,11 @@ export function generateEdgeLabelVertexShader(options: EdgeLabelShaderOptions): 
   const pathName = path.name;
   const isScaledMode = fontSizeMode === "scaled";
 
+  // Compute attribute layout for path attributes (labels need curvature for curved paths)
+  const filling = fillingPlain(); // Use empty filling for labels
+  const attributeLayout = computeEdgeAttributeLayout([path], filling);
+  const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
+
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es
 
@@ -149,6 +156,9 @@ uniform sampler2D u_edgeDataTexture; // Shared texture with edge data
 uniform int u_edgeDataTextureWidth;  // Width of 2D edge data texture for coordinate calculation
 ${isScaledMode ? "uniform float u_zoomSizeRatio;  // Zoom-based size ratio from zoomToSizeRatioFunction" : ""}
 
+// Edge path attribute texture uniforms (for curvature and other path attributes)
+${textureFetch.uniformDeclarations}
+
 // ============================================================================
 // Varyings
 // ============================================================================
@@ -169,6 +179,13 @@ const float MIN_VISIBILITY_THRESHOLD = ${numberToGLSLFloat(minVisibilityThreshol
 const float FULL_VISIBILITY_THRESHOLD = ${numberToGLSLFloat(fullVisibilityThreshold)};
 const float ATLAS_FONT_SIZE = ${numberToGLSLFloat(ATLAS_FONT_SIZE)};  // Base font size used in SDF atlas
 const float VERTICAL_CENTER_RATIO = ${numberToGLSLFloat(VERTICAL_CENTER_RATIO)};  // Baseline to visual center ratio
+
+// ============================================================================
+// Path Attribute Variables (set in main, used by path functions)
+// ============================================================================
+// Path attributes are fetched from the edge attribute texture and stored in
+// variables with v_ prefix (e.g., v_curvature) for path functions to access.
+${textureFetch.vertexVaryingDeclarations.replace(/out /g, "")}
 
 // ============================================================================
 // Node Shape SDFs (for binary search)
@@ -209,8 +226,8 @@ void main() {
   // -------------------------------------------------------------------------
   // Fetch edge data from edge texture (2 texels per edge)
   // -------------------------------------------------------------------------
-  // Texel 0: sourceNodeIndex, targetNodeIndex, thickness, curvature
-  // Texel 1: headLengthRatio, tailLengthRatio, reserved, reserved
+  // Texel 0: sourceNodeIndex, targetNodeIndex, thickness, reserved
+  // Texel 1: headLengthRatio, tailLengthRatio, pathId, extremityIds
   int edgeIdx = int(a_edgeIndex);
   int texel0Idx = edgeIdx * 2;
   int texel1Idx = edgeIdx * 2 + 1;
@@ -223,10 +240,16 @@ void main() {
   int srcIdx = int(edgeData0.x);
   int tgtIdx = int(edgeData0.y);
   float thickness = edgeData0.z;
-  float a_curvature = edgeData0.w;
+  // edgeData0.w is reserved
   float headLengthRatio = edgeData1.x;
   float tailLengthRatio = edgeData1.y;
   float baseFontSize = a_baseFontSize;
+
+  // -------------------------------------------------------------------------
+  // Fetch path attributes from edge attribute texture
+  // -------------------------------------------------------------------------
+${textureFetch.fetchCode}
+${textureFetch.varyingAssignments}
 
   // -------------------------------------------------------------------------
   // Fetch node data from node texture
@@ -271,8 +294,8 @@ void main() {
   // -------------------------------------------------------------------------
   // Always find where path exits source node and enters target node
   // This ensures labels are truncated at node boundaries, not node centers
-  float tStart = findSourceClampT(source, sourceSize, sourceShapeId, target, 0.0);
-  float tEnd = findTargetClampT(source, target, targetSize, targetShapeId, 0.0);
+  float tStart = findSourceClampT_${pathName}(source, sourceSize, sourceShapeId, target, 0.0);
+  float tEnd = findTargetClampT_${pathName}(source, target, targetSize, targetShapeId, 0.0);
 
   // Compute path length
   float pathLength = path_${pathName}_length(source, target);
@@ -769,6 +792,10 @@ export function collectEdgeLabelUniforms(
     "u_nodeDataTextureWidth",
     "u_edgeDataTexture",
     "u_edgeDataTextureWidth",
+    // Edge path attribute texture uniforms
+    "u_edgeAttributeTexture",
+    "u_edgeAttributeTextureWidth",
+    "u_edgeAttributeTexelsPerEdge",
   ];
 
   // Add zoom size ratio uniform for scaled font size mode

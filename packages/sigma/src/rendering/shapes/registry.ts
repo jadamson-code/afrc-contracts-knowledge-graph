@@ -303,11 +303,21 @@ export function getShapeGLSLForShapes(shapes: SDFShape[]): string {
  * - Sets both context.sdf and context.inradiusFactor
  * - Does NOT apply counter-rotation (vertex shader handles that)
  *
+ * For multi-shape programs, the node data texture stores GLOBAL shape IDs
+ * (for edge clamping compatibility), but this function uses LOCAL indices
+ * in its switch statement. When shapeGlobalIds is provided, a conversion
+ * function is generated to map global IDs back to local indices.
+ *
  * @param shapes - Array of shapes this program supports
  * @param rotatesWithCamera - Whether nodes rotate with camera
+ * @param shapeGlobalIds - Optional array mapping local index to global ID (for multi-shape programs)
  * @returns GLSL code for the queryNodeSDF() function
  */
-export function generateNodeShapeSelectorGLSL(shapes: SDFShape[], _rotatesWithCamera: boolean): string {
+export function generateNodeShapeSelectorGLSL(
+  shapes: SDFShape[],
+  _rotatesWithCamera: boolean,
+  shapeGlobalIds?: number[],
+): string {
   if (shapes.length === 0) {
     // Default fallback - circle
     return /*glsl*/ `
@@ -371,9 +381,31 @@ void queryNodeSDF(int shapeId, vec2 uv, float size) {
       ? `sdf_${defaultShape.name}(uv, size)`
       : `sdf_${defaultShape.name}(uv, size, ${defaultParamValues.join(", ")})`;
 
-  return /*glsl*/ `
+  // Generate global→local conversion function if shapeGlobalIds is provided
+  // This is needed because node data texture stores global IDs (for edge clamping)
+  // but the switch statement uses local indices
+  let globalToLocalFunction = "";
+  let shapeIdExpr = "shapeId";
+
+  if (shapeGlobalIds && shapeGlobalIds.length > 1) {
+    const conversionCases = shapeGlobalIds
+      .map((globalId, localIndex) => `    case ${globalId}: return ${localIndex}; // ${shapes[localIndex].name}`)
+      .join("\n");
+
+    globalToLocalFunction = /*glsl*/ `
+int globalToLocalShapeId(int globalId) {
+  switch (globalId) {
+${conversionCases}
+    default: return 0; // Default to first shape
+  }
+}
+`;
+    shapeIdExpr = "globalToLocalShapeId(shapeId)";
+  }
+
+  return /*glsl*/ `${globalToLocalFunction}
 void queryNodeSDF(int shapeId, vec2 uv, float size) {
-  switch (shapeId) {
+  switch (${shapeIdExpr}) {
 ${cases}
     default: // Default to first shape (${defaultShape.name})
       context.sdf = ${defaultSdfCall};

@@ -8,7 +8,9 @@
  *
  * @module
  */
-import { generateFindEdgeDistance, GLSL_GET_LABEL_DIRECTION } from "../../glsl";
+import { GLSL_GET_LABEL_DIRECTION, generateFindEdgeDistance } from "../../glsl";
+import { getShapeGLSLForShapes } from "../../shapes";
+import { numberToGLSLFloat } from "../../utils";
 import { SDFShape } from "../types";
 
 // ============================================================================
@@ -22,7 +24,7 @@ export interface GeneratedLabelShaders {
 }
 
 export interface LabelShaderOptions {
-  shape: SDFShape;
+  shapes: SDFShape[];
   rotateWithCamera?: boolean;
   angle?: number;
 }
@@ -42,19 +44,106 @@ export interface LabelShaderOptions {
  * - **SDF space**: Shape coordinates, Y-up, normalized to size 1.0
  */
 export function generateLabelVertexShader(options: LabelShaderOptions): string {
-  const { shape, rotateWithCamera = false } = options;
+  const { shapes, rotateWithCamera = false } = options;
 
-  const shapeFunctionName = `sdf_${shape.name}`;
-  const shapeUniformDeclarations = shape.uniforms.map((u) => `uniform ${u.type} ${u.name};`).join("\n");
-  const shapeUniformParams = shape.uniforms.map((u) => u.name).join(", ");
-  const shapeCall = shapeUniformParams
-    ? `${shapeFunctionName}(uv, size, ${shapeUniformParams})`
-    : `${shapeFunctionName}(uv, size)`;
+  // Get all shape SDF functions (deduplicated)
+  const shapeGLSL = getShapeGLSLForShapes(shapes);
 
-  // Generate findEdgeDistance function using shared utility
-  // Note: labels don't rotate with camera themselves, but they need to query the SDF
-  // in the correct orientation when the shape rotates with camera
-  const findEdgeDistanceCode = generateFindEdgeDistance(shapeCall, false);
+  // Collect all shape uniforms (deduplicated)
+  const seenUniforms = new Set<string>();
+  const shapeUniformDeclarations = shapes
+    .flatMap((shape) => shape.uniforms)
+    .filter((u) => {
+      if (seenUniforms.has(u.name)) return false;
+      seenUniforms.add(u.name);
+      return true;
+    })
+    .map((u) => `uniform ${u.type} ${u.name};`)
+    .join("\n");
+
+  // Generate shape selector function for findEdgeDistance
+  // For single shape, use simple call; for multiple shapes, use switch
+  let findEdgeDistanceCode: string;
+
+  if (shapes.length === 1) {
+    const shape = shapes[0];
+    const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{
+      name: string;
+      type: "float";
+      value: number;
+    }>;
+    const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+    const shapeCall =
+      paramValues.length > 0 ? `sdf_${shape.name}(uv, size, ${paramValues.join(", ")})` : `sdf_${shape.name}(uv, size)`;
+    findEdgeDistanceCode = generateFindEdgeDistance(shapeCall, false);
+  } else {
+    // Multi-shape: generate switch-based SDF query
+    const cases = shapes
+      .map((shape, index) => {
+        const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{
+          name: string;
+          type: "float";
+          value: number;
+        }>;
+        const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+        const sdfCall =
+          paramValues.length > 0
+            ? `sdf_${shape.name}(uv, size, ${paramValues.join(", ")})`
+            : `sdf_${shape.name}(uv, size)`;
+        return `    case ${index}: return ${sdfCall};`;
+      })
+      .join("\n");
+
+    // Default to first shape
+    const defaultShape = shapes[0];
+    const defaultFloatUniforms = defaultShape.uniforms.filter((u) => u.type === "float") as Array<{
+      name: string;
+      type: "float";
+      value: number;
+    }>;
+    const defaultParams = defaultFloatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+    const defaultCall =
+      defaultParams.length > 0
+        ? `sdf_${defaultShape.name}(uv, size, ${defaultParams.join(", ")})`
+        : `sdf_${defaultShape.name}(uv, size)`;
+
+    // Generate queryShapeSDF function
+    const queryShapeSDF = /*glsl*/ `
+float queryShapeSDF(int shapeId, vec2 uv, float size) {
+  switch (shapeId) {
+${cases}
+    default: return ${defaultCall};
+  }
+}
+`;
+
+    // Generate findEdgeDistance that uses queryShapeSDF with global shapeId
+    findEdgeDistanceCode =
+      queryShapeSDF +
+      /*glsl*/ `
+
+// Global shape ID set by main() before calling findEdgeDistance
+int g_shapeId;
+
+float findEdgeDistance(vec2 direction, float size) {
+  float low = 0.0;
+  float high = 2.0;
+
+  for (int i = 0; i < 8; i++) {
+    float mid = (low + high) * 0.5;
+    vec2 uv = direction * mid;
+    float d = queryShapeSDF(g_shapeId, uv, size);
+    if (d < 0.0) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+
+  return (low + high) * 0.5;
+}
+`;
+  }
 
   // Step 3 computes label offset from node center using the shape's SDF.
   // The offset direction accounts for label angle, and for rotateWithCamera=true,
@@ -159,10 +248,10 @@ out vec4 v_color;
 const float bias = 255.0 / 254.0;
 
 // ============================================================================
-// Shape SDF Function
+// Shape SDF Functions
 // ============================================================================
 
-${shape.glsl}
+${shapeGLSL}
 
 // ============================================================================
 // Helper Functions
@@ -186,7 +275,7 @@ void main() {
   vec4 nodeData = texelFetch(u_nodeDataTexture, texCoord, 0);
   vec2 a_anchorPosition = nodeData.xy;
   float a_nodeSize = nodeData.z;
-  // shapeId available as nodeData.w if needed
+  ${shapes.length > 1 ? "g_shapeId = int(nodeData.w);  // Set global shape ID for multi-shape mode" : "// Single-shape mode - shapeId not used"}
 
   // -------------------------------------------------------------------------
   // Step 1: Transform node position to clip space
@@ -316,7 +405,7 @@ void main() {
 // Uniform Collection
 // ============================================================================
 
-export function collectLabelUniforms(shape: SDFShape): string[] {
+export function collectLabelUniforms(shapes: SDFShape[]): string[] {
   const uniforms = [
     "u_matrix",
     "u_sizeRatio",
@@ -333,9 +422,11 @@ export function collectLabelUniforms(shape: SDFShape): string[] {
     "u_nodeDataTextureWidth",
   ];
 
-  for (const uniform of shape.uniforms) {
-    if (!uniforms.includes(uniform.name)) {
-      uniforms.push(uniform.name);
+  for (const shape of shapes) {
+    for (const uniform of shape.uniforms) {
+      if (!uniforms.includes(uniform.name)) {
+        uniforms.push(uniform.name);
+      }
     }
   }
 
@@ -350,6 +441,6 @@ export function generateLabelShaders(options: LabelShaderOptions): GeneratedLabe
   return {
     vertexShader: generateLabelVertexShader(options),
     fragmentShader: generateLabelFragmentShader(),
-    uniforms: collectLabelUniforms(options.shape),
+    uniforms: collectLabelUniforms(options.shapes),
   };
 }

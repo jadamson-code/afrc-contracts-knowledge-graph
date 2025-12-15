@@ -121,6 +121,9 @@ function generateBorderGLSL(borders: LayerBorderOptions["borders"]): string {
   // Combine all params with proper formatting
   const allParams = [...attributeParams, ...uniformParams].join(", ");
 
+  // Check if the first border uses an attribute (dynamic size)
+  const firstBorderUsesAttribute = "attribute" in borders[0].size;
+
   // Build the complete GLSL function
   // Context (sdf, shapeSize, aaWidth, pixelSize) accessed via global context struct
   // language=GLSL
@@ -130,7 +133,16 @@ vec4 layer_border(${allParams}) {
 
   // Calculate border sizes (using context.shapeSize and context.pixelSize)
 ${sizeCalculations}
-
+${
+  firstBorderUsesAttribute
+    ? `
+  // Early return if first border size is effectively zero (layer disabled)
+  if (borderSize_1 <= context.aaWidth) {
+    return vec4(0.0);
+  }
+`
+    : ""
+}
   // Calculate fill border size (distribute remaining space)
   // Use inradiusFactor to get actual shape depth from the bounding size
   // For circle/square (inradiusFactor=1.0), this equals shapeSize

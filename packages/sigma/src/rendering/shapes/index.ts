@@ -13,6 +13,8 @@ export {
   getRegisteredShapeSlugs,
   getShapeGLSL,
   getAllShapeGLSL,
+  getShapeGLSLForShapes,
   generateShapeSelectorGLSL,
+  generateNodeShapeSelectorGLSL,
   clearShapeRegistry,
 } from "./registry";

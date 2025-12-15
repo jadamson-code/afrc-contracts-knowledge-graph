@@ -16,6 +16,8 @@ import {
   POSITION_MODE_MAP,
   generateFindEdgeDistance,
 } from "../../glsl";
+import { getShapeGLSLForShapes } from "../../shapes";
+import { numberToGLSLFloat } from "../../utils";
 import { SDFShape } from "../types";
 
 export { POSITION_MODE_MAP };
@@ -27,27 +29,107 @@ export interface GeneratedHoverShaders {
 }
 
 export interface HoverShaderOptions {
-  shape: SDFShape;
+  shapes: SDFShape[];
   rotateWithCamera?: boolean;
 }
 
 export function generateHoverVertexShader(options: HoverShaderOptions): string {
-  const { shape, rotateWithCamera = false } = options;
+  const { shapes, rotateWithCamera = false } = options;
 
-  const shapeFunctionName = `sdf_${shape.name}`;
-  const shapeUniformDeclarations = shape.uniforms.map((u) => `uniform ${u.type} ${u.name};`).join("\n");
-  const shapeUniformParams = shape.uniforms.map((u) => u.name).join(", ");
-  const shapeCall = shapeUniformParams
-    ? `${shapeFunctionName}(uv, size, ${shapeUniformParams})`
-    : `${shapeFunctionName}(uv, size)`;
+  // Get all shape SDF functions (deduplicated)
+  const shapeGLSL = getShapeGLSLForShapes(shapes);
 
-  const findEdgeDistanceCode = generateFindEdgeDistance(shapeCall, rotateWithCamera);
+  // Collect all shape uniforms (deduplicated)
+  const seenUniforms = new Set<string>();
+  const shapeUniformDeclarations = shapes
+    .flatMap((shape) => shape.uniforms)
+    .filter((u) => {
+      if (seenUniforms.has(u.name)) return false;
+      seenUniforms.add(u.name);
+      return true;
+    })
+    .map((u) => `uniform ${u.type} ${u.name};`)
+    .join("\n");
+
+  // Generate shape selector function for findEdgeDistance
+  let findEdgeDistanceCode: string;
+
+  if (shapes.length === 1) {
+    const shape = shapes[0];
+    const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+    const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+    const shapeCall = paramValues.length > 0
+      ? `sdf_${shape.name}(uv, size, ${paramValues.join(", ")})`
+      : `sdf_${shape.name}(uv, size)`;
+    findEdgeDistanceCode = generateFindEdgeDistance(shapeCall, rotateWithCamera);
+  } else {
+    // Multi-shape: generate switch-based SDF query
+    const cases = shapes.map((shape, index) => {
+      const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+      const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+      const sdfCall = paramValues.length > 0
+        ? `sdf_${shape.name}(uv, size, ${paramValues.join(", ")})`
+        : `sdf_${shape.name}(uv, size)`;
+      return `    case ${index}: return ${sdfCall};`;
+    }).join("\n");
+
+    // Default to first shape
+    const defaultShape = shapes[0];
+    const defaultFloatUniforms = defaultShape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+    const defaultParams = defaultFloatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+    const defaultCall = defaultParams.length > 0
+      ? `sdf_${defaultShape.name}(uv, size, ${defaultParams.join(", ")})`
+      : `sdf_${defaultShape.name}(uv, size)`;
+
+    // Generate queryShapeSDF function
+    const queryShapeSDF = /*glsl*/ `
+float queryShapeSDF(int shapeId, vec2 uv, float size) {
+  switch (shapeId) {
+${cases}
+    default: return ${defaultCall};
+  }
+}
+`;
+
+    // Generate findEdgeDistance that uses queryShapeSDF with global shapeId
+    const cameraRotation = rotateWithCamera
+      ? `float c = cos(u_cameraAngle);
+    float s = sin(u_cameraAngle);
+    uv = mat2(c, -s, s, c) * uv;`
+      : "";
+
+    findEdgeDistanceCode = queryShapeSDF + /*glsl*/ `
+
+// Global shape ID set by main() before calling findEdgeDistance
+int g_shapeId;
+
+float findEdgeDistance(vec2 direction, float size) {
+  float low = 0.0;
+  float high = 2.0;
+
+  for (int i = 0; i < 8; i++) {
+    float mid = (low + high) * 0.5;
+    vec2 uv = direction * mid;
+    ${cameraRotation}
+    float d = queryShapeSDF(g_shapeId, uv, size);
+    if (d < 0.0) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+
+  return (low + high) * 0.5;
+}
+`;
+  }
 
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es
 
 in vec2 a_nodePosition;
 in float a_nodeSize;
+in float a_shapeId;
 in float a_labelWidth;
 in float a_labelHeight;
 in float a_positionMode;
@@ -71,12 +153,14 @@ out float v_nodeRadius;
 out vec2 v_labelCenter;
 out vec2 v_labelHalfSize;
 out float v_aaWidth;
+out float v_shapeId;
 
-${shape.glsl}
+${shapeGLSL}
 ${findEdgeDistanceCode}
 ${GLSL_GET_LABEL_DIRECTION}
 
 void main() {
+  ${shapes.length > 1 ? "g_shapeId = int(a_shapeId);  // Set global shape ID for multi-shape mode" : "// Single-shape mode"}
   ${GLSL_NODE_SIZE_TO_PIXELS}
   float enlargedRadius = nodeRadiusPixels + u_padding;
 
@@ -174,6 +258,7 @@ void main() {
   v_labelCenter = labelOffset;
   v_labelHalfSize = labelHalfSize;
   v_aaWidth = 1.0;
+  v_shapeId = a_shapeId;
 }
 `;
 
@@ -181,14 +266,60 @@ void main() {
 }
 
 export function generateHoverFragmentShader(options: HoverShaderOptions): string {
-  const { shape, rotateWithCamera = false } = options;
+  const { shapes, rotateWithCamera = false } = options;
 
-  const shapeFunctionName = `sdf_${shape.name}`;
-  const shapeUniformDeclarations = shape.uniforms.map((u) => `uniform ${u.type} ${u.name};`).join("\n");
-  const shapeUniformParams = shape.uniforms.map((u) => u.name).join(", ");
-  const shapeCall = shapeUniformParams
-    ? `${shapeFunctionName}(nodeUV, 1.0, ${shapeUniformParams})`
-    : `${shapeFunctionName}(nodeUV, 1.0)`;
+  // Get all shape SDF functions (deduplicated)
+  const shapeGLSL = getShapeGLSLForShapes(shapes);
+
+  // Collect all shape uniforms (deduplicated)
+  const seenUniforms = new Set<string>();
+  const shapeUniformDeclarations = shapes
+    .flatMap((shape) => shape.uniforms)
+    .filter((u) => {
+      if (seenUniforms.has(u.name)) return false;
+      seenUniforms.add(u.name);
+      return true;
+    })
+    .map((u) => `uniform ${u.type} ${u.name};`)
+    .join("\n");
+
+  // Generate shape selector for fragment shader
+  let shapeCallCode: string;
+
+  if (shapes.length === 1) {
+    const shape = shapes[0];
+    const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+    const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+    const shapeCall = paramValues.length > 0
+      ? `sdf_${shape.name}(nodeUV, 1.0, ${paramValues.join(", ")})`
+      : `sdf_${shape.name}(nodeUV, 1.0)`;
+    shapeCallCode = `float nodeSdfNormalized = ${shapeCall};`;
+  } else {
+    // Multi-shape: generate switch-based SDF query
+    const cases = shapes.map((shape, index) => {
+      const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+      const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+      const sdfCall = paramValues.length > 0
+        ? `sdf_${shape.name}(nodeUV, 1.0, ${paramValues.join(", ")})`
+        : `sdf_${shape.name}(nodeUV, 1.0)`;
+      return `    case ${index}: nodeSdfNormalized = ${sdfCall}; break;`;
+    }).join("\n");
+
+    // Default to first shape
+    const defaultShape = shapes[0];
+    const defaultFloatUniforms = defaultShape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+    const defaultParams = defaultFloatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+    const defaultCall = defaultParams.length > 0
+      ? `sdf_${defaultShape.name}(nodeUV, 1.0, ${defaultParams.join(", ")})`
+      : `sdf_${defaultShape.name}(nodeUV, 1.0)`;
+
+    shapeCallCode = `float nodeSdfNormalized;
+  int shapeId = int(v_shapeId);
+  switch (shapeId) {
+${cases}
+    default: nodeSdfNormalized = ${defaultCall};
+  }`;
+  }
 
   const nodeUVCode = rotateWithCamera
     ? `float ca_c = cos(u_cameraAngle);
@@ -207,6 +338,7 @@ in float v_nodeRadius;
 in vec2 v_labelCenter;
 in vec2 v_labelHalfSize;
 in float v_aaWidth;
+in float v_shapeId;
 
 uniform vec4 u_backgroundColor;
 uniform vec4 u_shadowColor;
@@ -220,7 +352,7 @@ ${shapeUniformDeclarations}
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec4 fragPicking;
 
-${shape.glsl}
+${shapeGLSL}
 ${GLSL_SDF_BOX}
 ${GLSL_SDF_ROTATED_BOX}
 
@@ -229,8 +361,8 @@ void main() {
   vec2 screenUV = v_uv - v_nodeCenter;
   ${nodeUVCode}
 
-  // Is the fragment in the shape behind the node?
-  float nodeSdfNormalized = ${shapeCall};
+  // Query the correct shape SDF based on shapeId
+  ${shapeCallCode}
   float nodeSdfPixels = nodeSdfNormalized * v_nodeRadius - u_padding;
 
   // Is the fragment in the white rectangle behind the label?
@@ -263,7 +395,7 @@ void main() {
   return glsl;
 }
 
-export function collectHoverUniforms(shape: SDFShape): string[] {
+export function collectHoverUniforms(shapes: SDFShape[]): string[] {
   const uniforms = [
     "u_matrix",
     "u_sizeRatio",
@@ -280,9 +412,11 @@ export function collectHoverUniforms(shape: SDFShape): string[] {
     "u_shadowBlur",
   ];
 
-  for (const uniform of shape.uniforms) {
-    if (!uniforms.includes(uniform.name)) {
-      uniforms.push(uniform.name);
+  for (const shape of shapes) {
+    for (const uniform of shape.uniforms) {
+      if (!uniforms.includes(uniform.name)) {
+        uniforms.push(uniform.name);
+      }
     }
   }
 
@@ -293,6 +427,6 @@ export function generateHoverShaders(options: HoverShaderOptions): GeneratedHove
   return {
     vertexShader: generateHoverVertexShader(options),
     fragmentShader: generateHoverFragmentShader(options),
-    uniforms: collectHoverUniforms(options.shape),
+    uniforms: collectHoverUniforms(options.shapes),
   };
 }

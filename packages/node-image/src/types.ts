@@ -22,6 +22,14 @@ export type DrawingMode = "image" | "color";
  */
 export interface LayerImageOptions {
   /**
+   * Unique name for this layer instance.
+   * When using multiple image layers in one program, each must have a unique name.
+   * The name is used for GLSL function names, attribute names, and uniform names.
+   * @default "image"
+   */
+  name: string;
+
+  /**
    * Drawing mode:
    * - "image": Image is rendered as-is (transparent pixels show through)
    * - "color": Image pixels are colorized with the node color (for pictograms)
@@ -113,6 +121,7 @@ export interface CreateNodeImageProgramOptions extends TextureManagerOptions {
  * Default layer options.
  */
 export const DEFAULT_LAYER_IMAGE_OPTIONS: LayerImageOptions = {
+  name: "image",
   drawingMode: "image",
   padding: 0,
   colorAttribute: "color",

@@ -7,7 +7,6 @@
  * useful classes as static properties.
  * @module
  */
-import EdgeCurveProgram from "@sigma/edge-curve";
 import { createNodeBorderProgram } from "@sigma/node-border";
 import { createNodeImageProgram } from "@sigma/node-image";
 import { createNodePiechartProgram } from "@sigma/node-piechart";
@@ -28,7 +27,6 @@ class Sigma extends SigmaClass {
     createNodeBorderProgram,
     createNodeImageProgram,
     createNodePiechartProgram,
-    EdgeCurveProgram,
   };
   static utils = utils;
 }

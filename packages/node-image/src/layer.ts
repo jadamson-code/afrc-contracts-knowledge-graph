@@ -23,6 +23,34 @@ import { Atlas, DEFAULT_TEXTURE_MANAGER_OPTIONS, TextureManager } from "./textur
 import { DEFAULT_LAYER_IMAGE_OPTIONS, LayerImageOptions } from "./types";
 
 /**
+ * Computes a deterministic texture unit offset based on layer name.
+ * Allows multiple image layers in the same program to use different
+ * texture units without conflicting with each other or sigma's internal textures.
+ *
+ * Layout (WebGL2 guarantees at least 32 texture units):
+ * - Units 0-5: Reserved for sigma (node data, edge data, layer attributes)
+ * - Units 6-11: Default "image" layer (6 textures max)
+ * - Units 12-17: Slot 1
+ * - Units 18-23: Slot 2
+ * - Units 24-29: Slot 3
+ */
+function getTextureUnitOffset(name: string): number {
+  const SIGMA_RESERVED_UNITS = 6;
+  const UNITS_PER_LAYER = 6; // 6 textures per layer allows 4 slots
+
+  // Default "image" layer gets the first slot after reserved units
+  if (name === "image") return SIGMA_RESERVED_UNITS;
+
+  // Hash name to deterministic slot (1, 2, or 3)
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i);
+  }
+  const slot = 1 + (Math.abs(hash) % 3);
+  return SIGMA_RESERVED_UNITS + slot * UNITS_PER_LAYER;
+}
+
+/**
  * Generates the GLSL code for the image layer function.
  * Uses the global `context` struct for context (sdf, uv, etc.).
  *
@@ -33,28 +61,41 @@ function generateImageGLSL(
   options: Omit<LayerImageOptions, "textureManager" | "textureManagerOptions">,
   texturesCount: number,
 ): string {
-  const { drawingMode, padding } = options;
+  const { name, drawingMode, padding } = options;
   const paddingRatio = numberToGLSLFloat(1.0 + 2.0 * padding);
   const effectiveTexturesCount = Math.max(1, texturesCount);
+
+  // Use layer name for unique identifiers
+  const uniformName = `u_atlas_${name}`;
+  const functionName = `layer_${name}`;
+  const textureVaryingName = `v_texture_${name}`;
+  const indexVaryingName = `v_textureIndex_${name}`;
+  const colorVaryingName = `v_color_${name}`;
 
   // Generate texture sampling code
   const textureSampling = [...new Array(effectiveTexturesCount)].map(
     (_, i) =>
-      `if (index == ${i}) texel = texture(u_atlas_image[${i}], (v_texture.xy + coordinateInTexture * v_texture.zw), -1.0);`,
+      `if (index == ${i}) texel = texture(${uniformName}[${i}], (${textureVaryingName}.xy + coordinateInTexture * ${textureVaryingName}.zw), -1.0);`,
   ).join(`
     else `);
 
   const fallbackSampling = `else {
-      texel = texture(u_atlas_image[0], (v_texture.xy + coordinateInTexture * v_texture.zw), -1.0);
+      texel = texture(${uniformName}[0], (${textureVaryingName}.xy + coordinateInTexture * ${textureVaryingName}.zw), -1.0);
       noTextureFound = true;
     }`;
+
+  // Build function signature - add color parameter only for "color" mode
+  const functionParams =
+    drawingMode === "color"
+      ? `vec4 ${textureVaryingName}, float ${indexVaryingName}, vec4 ${colorVaryingName}`
+      : `vec4 ${textureVaryingName}, float ${indexVaryingName}`;
 
   // language=GLSL
   const glsl = /*glsl*/ `
 // Texture atlas uniform - declared here because generator doesn't support sampler2D arrays
-uniform sampler2D u_atlas_image[${effectiveTexturesCount}];
+uniform sampler2D ${uniformName}[${effectiveTexturesCount}];
 
-vec4 layer_image(vec4 v_texture, float v_textureIndex) {
+vec4 ${functionName}(${functionParams}) {
   const float bias = 255.0 / 254.0;
   const float paddingRatio = ${paddingRatio};
 
@@ -64,13 +105,13 @@ vec4 layer_image(vec4 v_texture, float v_textureIndex) {
   // The UV is in [-1, 1] range, convert to [0, 1] for texture sampling
   // Note: Camera rotation is handled at the program level (vertex shader)
   vec2 coordinateInTexture = context.uv * vec2(paddingRatio, -paddingRatio) * 0.5 + vec2(0.5, 0.5);
-  int index = int(v_textureIndex + 0.5); // +0.5 to avoid rounding errors
+  int index = int(${indexVaryingName} + 0.5); // +0.5 to avoid rounding errors
 
   bool noTextureFound = false;
   vec4 texel = vec4(0.0);
 
   // No image to display - return transparent
-  if (v_texture.w <= 0.0) {
+  if (${textureVaryingName}.w <= 0.0) {
     // Return transparent when no image
   }
   // Image loaded into the texture
@@ -81,8 +122,8 @@ vec4 layer_image(vec4 v_texture, float v_textureIndex) {
     if (!noTextureFound) {
       ${
         drawingMode === "color"
-          ? `// Colorize all visible image pixels with node color
-      color = mix(vec4(0.0), v_color, texel.a);`
+          ? `// Colorize all visible image pixels with the specified color attribute
+      color = mix(vec4(0.0), ${colorVaryingName}, texel.a);`
           : `// Image mode: render image pixels as-is
       color = texel;`
       }
@@ -111,7 +152,8 @@ function createLayerDefinition(
   options: Omit<LayerImageOptions, "textureManager" | "textureManagerOptions">,
   texturesCount: number,
 ): Omit<FragmentLayer, "lifecycle"> {
-  const { FLOAT } = WebGL2RenderingContext;
+  const { name, drawingMode, colorAttribute } = options;
+  const { FLOAT, UNSIGNED_BYTE } = WebGL2RenderingContext;
 
   // Ensure minimum of 1 texture
   const effectiveTexturesCount = Math.max(1, texturesCount);
@@ -122,26 +164,37 @@ function createLayerDefinition(
   // handles this uniform manually.
   const uniforms: UniformSpecification[] = [];
 
-  // Attributes for the image layer
+  // Attributes for the image layer - use unique names based on layer name
   const attributes: AttributeSpecification[] = [
     // Texture coordinates in atlas (x, y, width, height)
     {
-      name: "texture",
+      name: `texture_${name}`,
       size: 4 as const,
       type: FLOAT,
       source: "__texture__", // Special marker - handled by lifecycle
     },
     // Texture atlas index
     {
-      name: "textureIndex",
+      name: `textureIndex_${name}`,
       size: 1 as const,
       type: FLOAT,
       source: "__textureIndex__", // Special marker - handled by lifecycle
     },
   ];
 
+  // Add color attribute only for "color" drawing mode
+  if (drawingMode === "color") {
+    attributes.push({
+      name: `color_${name}`,
+      size: 4 as const,
+      type: UNSIGNED_BYTE,
+      normalized: true,
+      source: colorAttribute,
+    });
+  }
+
   return {
-    name: "image",
+    name,
     uniforms,
     attributes,
     glsl: generateImageGLSL(options, effectiveTexturesCount),
@@ -210,8 +263,13 @@ export function layerImage(inputOptions?: Partial<LayerImageOptions>): FragmentL
       let textureImages: ImageData[] = [];
       let atlas: Atlas = {};
 
+      // Get texture unit offset for this layer (prevents conflicts with other image layers)
+      const textureUnitOffset = getTextureUnitOffset(layerOptions.name);
+
       /**
        * Bind texture data to WebGL.
+       * Uses the layer-specific texture unit offset to prevent conflicts
+       * when multiple image layers are present.
        */
       const bindTextures = () => {
         // Ensure we have enough WebGL texture objects
@@ -220,9 +278,9 @@ export function layerImage(inputOptions?: Partial<LayerImageOptions>): FragmentL
           if (texture) textures.push(texture);
         }
 
-        // Upload texture data
+        // Upload texture data to layer-specific texture units
         for (let i = 0; i < textureImages.length; i++) {
-          gl.activeTexture(gl.TEXTURE0 + i);
+          gl.activeTexture(gl.TEXTURE0 + textureUnitOffset + i);
           gl.bindTexture(gl.TEXTURE_2D, textures[i]);
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textureImages[i]);
           gl.generateMipmap(gl.TEXTURE_2D);
@@ -268,18 +326,18 @@ export function layerImage(inputOptions?: Partial<LayerImageOptions>): FragmentL
         },
 
         beforeRender: () => {
-          // Rebind textures before each render
+          // Rebind textures before each render (using pre-computed offset)
           for (let i = 0; i < textureImages.length; i++) {
-            gl.activeTexture(gl.TEXTURE0 + i);
+            gl.activeTexture(gl.TEXTURE0 + textureUnitOffset + i);
             gl.bindTexture(gl.TEXTURE_2D, textures[i]);
           }
 
-          // Set texture atlas uniform
-          const atlasLocation = context.getUniformLocation("u_atlas_image");
+          // Set texture atlas uniform (using layer-specific name and offset)
+          const atlasLocation = context.getUniformLocation(`u_atlas_${layerOptions.name}`);
           if (atlasLocation) {
             gl.uniform1iv(
               atlasLocation,
-              [...new Array(textureImages.length || 1)].map((_, i) => i),
+              [...new Array(textureImages.length || 1)].map((_, i) => textureUnitOffset + i),
             );
           }
         },

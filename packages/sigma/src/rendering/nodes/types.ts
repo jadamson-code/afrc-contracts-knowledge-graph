@@ -316,7 +316,6 @@ export interface FragmentLayer {
    * - context.pixelSize: Node diameter in screen pixels (for pixel-mode calculations)
    * - context.correctionRatio: Scaling factor for consistent rendering across zoom levels
    * - context.pixelToUV: Conversion factor from screen pixels to UV units
-   * - v_color: Node's base color (standard varying)
    *
    * The function should return a vec4 color for this layer's contribution.
    * Transparent areas (alpha < 1) let previous layers show through.
@@ -411,13 +410,29 @@ export interface LabelOptions {
 
 /**
  * Options for creating a node program via createNodeProgram().
+ *
+ * Supports two modes:
+ * - Single shape: Use `shape` for a program that renders one shape type
+ * - Multi-shape: Use `shapes` for a program that can render different shapes per node
+ *
+ * When using multi-shape mode, each node can specify which shape to use via
+ * the `shape` attribute in its display data (e.g., "circle", "square").
  */
 export interface NodeProgramOptions {
   /**
-   * The SDF shape definition to use for this program.
-   * Shape configuration (uniforms) is already set when the shape is created.
+   * Single SDF shape definition (backward compatible).
+   * Use this when all nodes in this program use the same shape.
+   * Mutually exclusive with `shapes`.
    */
-  shape: SDFShape;
+  shape?: SDFShape;
+
+  /**
+   * Array of SDF shape definitions for multi-shape programs.
+   * Nodes can select their shape via the `shape` attribute in display data.
+   * The first shape is used as the default when no shape is specified.
+   * Mutually exclusive with `shape`.
+   */
+  shapes?: SDFShape[];
 
   /**
    * Array of fragment layers to apply, in order.

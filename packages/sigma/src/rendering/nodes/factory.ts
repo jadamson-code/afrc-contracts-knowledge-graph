@@ -12,55 +12,52 @@ import { Attributes } from "graphology-types";
 
 import Sigma from "../../sigma";
 import { NodeDisplayData, RenderParams } from "../../types";
-import { floatColor } from "../../utils";
+import { colorToArray } from "../../utils";
 import { registerShape } from "../shapes";
 import { ProgramInfo } from "../utils";
 import { NodeProgram, NodeProgramType } from "./base";
 import { generateShaders } from "./generator";
 import { createHoverProgram } from "./hovers";
 import { createLabelProgram } from "./labels";
+import { computeLayerAttributeLayout, NodeLayerAttributeTexture } from "./layer-attribute-texture";
 import { FragmentLayer, LayerLifecycleContext, LayerLifecycleHooks, NodeProgramOptions } from "./types";
 
+// Texture unit for layer attribute texture (units 0-4 used by sigma, unit 5 for layer attributes)
+const LAYER_ATTRIBUTE_TEXTURE_UNIT = 5;
+
 /**
- * Creates a node program from an SDF shape and fragment layers.
- * The resulting program renders nodes as quads with the specified shape and layers.
+ * Creates a node program from SDF shape(s) and fragment layers.
+ * The resulting program renders nodes as quads with the specified shape(s) and layers.
  * It also includes a static `LabelProgram` property for rendering shape-aware labels.
+ *
+ * Supports two modes:
+ * - Single shape: Use `shape` for a program that renders one shape type
+ * - Multi-shape: Use `shapes` for a program that can render different shapes per node
  *
  * @param options - Configuration for the node program
  * @returns A NodeProgram class that can be used with Sigma
  *
  * @example
  * ```typescript
+ * // Single shape (backward compatible)
  * import { createNodeProgram, sdfCircle, layerFill } from "sigma/rendering";
  *
  * const CircleProgram = createNodeProgram({
  *   shape: sdfCircle(),
  *   layers: [layerFill()],
  * });
- *
- * const sigma = new Sigma(graph, container, {
- *   nodeProgramClasses: { circle: CircleProgram },
- *   labelProgramClasses: { circle: CircleProgram.LabelProgram },
- * });
  * ```
  *
  * @example
  * ```typescript
- * // Complex example with multiple layers and label options
- * const FancyProgram = createNodeProgram({
- *   shape: sdfSquare({ cornerRadius: 0.2 }),
- *   layers: [
- *     layerFill(),
- *     layerImage({ drawingMode: "background", padding: 2 }),
- *     layerBorder({ size: 2, color: "#000000" }),
- *   ],
- *   label: {
- *     position: "right",
- *     margin: 5,
- *     font: { family: "Arial", weight: "bold" },
- *     color: "#333333",
- *   },
+ * // Multi-shape program
+ * const MultiShapeProgram = createNodeProgram({
+ *   shapes: [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()],
+ *   layers: [layerFill(), layerBorder({ ... })],
  * });
+ *
+ * // Nodes select their shape via the 'shape' attribute
+ * graph.setNodeAttribute(node, 'shape', 'square');
  * ```
  */
 export function createNodeProgram<
@@ -68,41 +65,60 @@ export function createNodeProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: NodeProgramOptions): NodeProgramType<N, E, G> {
-  const { shape, rotateWithCamera = false, label: labelOptions = {} } = options;
+  const { rotateWithCamera = false, label: labelOptions = {} } = options;
 
-  // Register the shape variant in the global registry for edge programs to use.
-  // Returns a slug that uniquely identifies this shape variant (including params and rwc).
-  const shapeSlug = registerShape(shape, rotateWithCamera);
+  // Normalize to shapes array (support both single shape and multi-shape modes)
+  if (!options.shape && !options.shapes) {
+    throw new Error("createNodeProgram: either 'shape' or 'shapes' must be provided");
+  }
+  if (options.shape && options.shapes) {
+    throw new Error("createNodeProgram: 'shape' and 'shapes' are mutually exclusive");
+  }
+  const shapes = options.shapes || [options.shape!];
+
+  // Register all shapes in the global registry and build name-to-index mapping.
+  // The first shape's slug is used for edge clamping (edges use this to find the shape boundary).
+  const shapeNameToIndex: Record<string, number> = {};
+  let primaryShapeSlug: string | undefined;
+
+  shapes.forEach((shape, index) => {
+    const slug = registerShape(shape, rotateWithCamera);
+    if (index === 0) primaryShapeSlug = slug;
+    // Map shape name to local index for GPU-side shape selection
+    shapeNameToIndex[shape.name] = index;
+  });
 
   // Mutable layers array - can be regenerated
   let layers = [...options.layers];
 
   // Generate shaders and collect metadata
-  let generated = generateShaders({ shape, layers, rotateWithCamera });
+  let generated = generateShaders({ shapes, layers, rotateWithCamera });
 
-  // Create the label program class with the same shape
+  // Create the label program class with all shapes (for multi-shape support)
   const LabelProgramClass = createLabelProgram({
-    shape,
+    shapes,
     rotateWithCamera,
     label: labelOptions,
   });
 
-  // Create the hover program class with the same shape and label options
+  // Create the hover program class with all shapes (for multi-shape support)
   const HoverProgramClass = createHoverProgram({
-    shape,
+    shapes,
     rotateWithCamera,
     label: labelOptions,
   });
+
+  // Compute layout once for all instances (shared across nodePrograms and nodeHoverPrograms)
+  const layerAttributeLayout = computeLayerAttributeLayout(layers);
 
   // Create the node program class
   const NodeProgramClass = class extends NodeProgram<string, N, E, G> {
-    // Store program options with the computed shapeSlug for Sigma to access
-    static readonly programOptions = { ...options, shapeSlug };
-
-    // Note: generatedShaders is now a getter to always return current shaders
-    static get generatedShaders() {
-      return generated;
-    }
+    // Expose program configuration for Sigma to access (shape registry, multi-shape mapping)
+    static readonly programOptions = {
+      ...options,
+      shapeSlug: primaryShapeSlug,
+      shapeNameToIndex: shapes.length > 1 ? shapeNameToIndex : undefined,
+    };
 
     // Static reference to the associated LabelProgram
     static LabelProgram = LabelProgramClass;
@@ -110,14 +126,36 @@ export function createNodeProgram<
     // Static reference to the associated HoverProgram
     static HoverProgram = HoverProgramClass;
 
+    // Static shared texture per GL context (shared between nodePrograms and nodeHoverPrograms)
+    private static layerTextures = new WeakMap<WebGL2RenderingContext, NodeLayerAttributeTexture>();
+    private static textureRefCounts = new WeakMap<WebGL2RenderingContext, number>();
+
     // Lifecycle hooks storage (keyed by layer index for uniqueness)
     private layerLifecycles: Map<number, LayerLifecycleHooks> = new Map();
     private layersNeedingRegeneration: Set<number> = new Set();
-    private _pickingBuffer: WebGLFramebuffer | null;
+    private readonly _pickingBuffer: WebGLFramebuffer | null;
+
+    // Layer attribute texture management (instance references the shared static texture)
+    private layerAttributeTexture: NodeLayerAttributeTexture;
+    private readonly packedAttributeData: Float32Array;
 
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
       super(gl, pickingBuffer, renderer);
       this._pickingBuffer = pickingBuffer;
+
+      // Get or create shared texture for this GL context
+      let texture = NodeProgramClass.layerTextures.get(gl);
+      if (!texture) {
+        texture = new NodeLayerAttributeTexture(gl, layerAttributeLayout);
+        NodeProgramClass.layerTextures.set(gl, texture);
+      }
+      this.layerAttributeTexture = texture;
+
+      // Increment reference count
+      const refCount = NodeProgramClass.textureRefCounts.get(gl) || 0;
+      NodeProgramClass.textureRefCounts.set(gl, refCount + 1);
+
+      this.packedAttributeData = new Float32Array(layerAttributeLayout.floatsPerNode);
 
       // Initialize lifecycle hooks for each layer that has them
       layers.forEach((layer, index) => {
@@ -191,7 +229,7 @@ export function createNodeProgram<
       this.layersNeedingRegeneration.clear();
 
       // Regenerate shaders with updated layers
-      generated = generateShaders({ shape, layers, rotateWithCamera });
+      generated = generateShaders({ shapes, layers, rotateWithCamera });
 
       // Rebuild WebGL program
       const gl = this.normalProgram.gl;
@@ -212,25 +250,58 @@ export function createNodeProgram<
       );
     }
 
-    processVisibleItem(nodeIndex: number, startIndex: number, data: NodeDisplayData, textureIndex: number) {
+    /**
+     * Allocates a node in the layer attribute texture.
+     */
+    allocateNode(nodeKey: string): void {
+      this.layerAttributeTexture.allocateNode(nodeKey);
+    }
+
+    /**
+     * Frees a node from the layer attribute texture.
+     */
+    freeNode(nodeKey: string): void {
+      this.layerAttributeTexture.freeNode(nodeKey);
+    }
+
+    /**
+     * Uploads the layer attribute texture to the GPU.
+     */
+    uploadLayerTexture(): void {
+      this.layerAttributeTexture.upload();
+    }
+
+    processVisibleItem(
+      nodeIndex: number,
+      startIndex: number,
+      data: NodeDisplayData,
+      textureIndex: number,
+      nodeKey: string,
+    ) {
       const array = this.array;
-      const color = floatColor(data.color);
 
-      // Standard attributes that all node programs have
-      // Position and size are now fetched from texture via nodeIndex
-      array[startIndex++] = textureIndex; // a_nodeIndex (index into node data texture)
-      array[startIndex++] = color; // a_color
-      array[startIndex++] = nodeIndex; // a_id
+      // Buffer: only a_nodeIndex and a_id
+      // Position and size are fetched from node data texture via textureIndex
+      // Layer attributes are fetched from layer attribute texture via textureIndex
+      array[startIndex++] = textureIndex; // a_nodeIndex (index into both textures)
+      array[startIndex++] = nodeIndex; // a_id (for picking)
 
-      // Layer-specific attributes:
-      // Each layer can define additional attributes to read from NodeDisplayData.
-      // The 'source' field on the attribute specifies which node property to read from.
+      // Pack layer attributes into texture
+      const packed = this.packedAttributeData;
+      const layout = layerAttributeLayout;
+
+      // Process each layer's attributes and pack into the texture data
       layers.forEach((layer, layerIndex) => {
         const hooks = this.layerLifecycles.get(layerIndex);
 
         layer.attributes.forEach((attr) => {
           // Get the source property name (defaults to attribute name without 'a_' prefix)
-          const sourceName = attr.source || attr.name.replace(/^a_/, "");
+          const attrName = attr.name.replace(/^a_/, "");
+          const sourceName = attr.source || attrName;
+          const offset = layout.offsets[attrName];
+
+          // Skip if attribute not in layout (shouldn't happen)
+          if (offset === undefined) return;
 
           // First, check if lifecycle provides data for this source
           let value: unknown = null;
@@ -244,26 +315,32 @@ export function createNodeProgram<
           }
 
           if (attr.size === 4 && attr.normalized) {
-            // Color attribute - convert from CSS color string to packed float
-            // Use defaultValue if specified and value is missing, otherwise fall back to node color
+            // Color attribute - convert from CSS color string to RGBA floats [0,1]
             const defaultColor = typeof attr.defaultValue === "string" ? attr.defaultValue : data.color;
-            const colorValue = typeof value === "string" ? floatColor(value) : floatColor(defaultColor);
-            array[startIndex++] = colorValue;
+            const colorStr = typeof value === "string" ? value : defaultColor;
+            const [r, g, b, a] = colorToArray(colorStr);
+            packed[offset] = r / 255;
+            packed[offset + 1] = g / 255;
+            packed[offset + 2] = b / 255;
+            packed[offset + 3] = a / 255;
           } else if (attr.size === 1) {
-            // Single float value - use defaultValue if specified
+            // Single float value
             const defaultNum = typeof attr.defaultValue === "number" ? attr.defaultValue : 0;
-            array[startIndex++] = typeof value === "number" ? value : defaultNum;
+            packed[offset] = typeof value === "number" ? value : defaultNum;
           } else {
             // Multi-component value (vec2, vec3, vec4)
             const arr = Array.isArray(value) ? value : [];
             for (let i = 0; i < attr.size; i++) {
-              array[startIndex++] = arr[i] ?? 0;
+              packed[offset + i] = arr[i] ?? 0;
             }
           }
         });
       });
 
-      return;
+      // Update the layer attribute texture with packed data
+      if (layout.floatsPerNode > 0) {
+        this.layerAttributeTexture.updateAllAttributes(nodeKey, packed);
+      }
     }
 
     setUniforms(params: RenderParams, programInfo: ProgramInfo): void {
@@ -289,9 +366,23 @@ export function createNodeProgram<
         gl.uniform1i(uniformLocations.u_nodeDataTextureWidth, params.nodeDataTextureWidth);
       }
 
-      // Set shape-specific uniforms
-      shape.uniforms.forEach((uniform) => {
-        this.setTypedUniform(uniform, programInfo);
+      // Bind and set layer attribute texture uniforms
+      if (uniformLocations.u_layerAttributeTexture) {
+        this.layerAttributeTexture.bind(LAYER_ATTRIBUTE_TEXTURE_UNIT);
+        gl.uniform1i(uniformLocations.u_layerAttributeTexture, LAYER_ATTRIBUTE_TEXTURE_UNIT);
+      }
+      if (uniformLocations.u_layerAttributeTextureWidth) {
+        gl.uniform1i(uniformLocations.u_layerAttributeTextureWidth, this.layerAttributeTexture.getTextureWidth());
+      }
+      if (uniformLocations.u_layerAttributeTexelsPerNode) {
+        gl.uniform1i(uniformLocations.u_layerAttributeTexelsPerNode, this.layerAttributeTexture.getTexelsPerNode());
+      }
+
+      // Set shape-specific uniforms (from all shapes)
+      shapes.forEach((shape) => {
+        shape.uniforms.forEach((uniform) => {
+          this.setTypedUniform(uniform, programInfo);
+        });
       });
 
       // Set layer-specific uniforms
@@ -306,10 +397,19 @@ export function createNodeProgram<
       // Check for shader regeneration before rendering
       this.maybeRegenerateShaders();
 
-      // Call beforeRender hooks (for texture binding, etc.)
-      this.layerLifecycles.forEach((hooks) => {
-        hooks.beforeRender?.();
-      });
+      // Activate the program BEFORE calling beforeRender hooks
+      // (hooks may set uniforms which requires an active program)
+      const { gl, program } = programInfo;
+      gl.useProgram(program);
+
+      // Only call beforeRender hooks for the normal program (not picking)
+      // Hooks set uniforms like texture samplers that aren't needed for picking,
+      // and getUniformLocation always references normalProgram
+      if (programInfo === this.normalProgram) {
+        this.layerLifecycles.forEach((hooks) => {
+          hooks.beforeRender?.();
+        });
+      }
 
       super.renderProgram(params, programInfo);
     }
@@ -320,6 +420,19 @@ export function createNodeProgram<
         hooks.kill?.();
       });
       this.layerLifecycles.clear();
+
+      // Decrement reference count and destroy shared texture if last instance
+      const gl = this.normalProgram.gl;
+      const refCount = (NodeProgramClass.textureRefCounts.get(gl) || 1) - 1;
+
+      if (refCount <= 0) {
+        // Last instance using this texture - destroy it
+        this.layerAttributeTexture.kill();
+        NodeProgramClass.layerTextures.delete(gl);
+        NodeProgramClass.textureRefCounts.delete(gl);
+      } else {
+        NodeProgramClass.textureRefCounts.set(gl, refCount);
+      }
 
       super.kill();
     }

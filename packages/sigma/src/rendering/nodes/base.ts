@@ -18,7 +18,13 @@ export abstract class AbstractNodeProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 > extends AbstractProgram<N, E, G> {
-  abstract process(nodeIndex: number, offset: number, data: NodeDisplayData, textureIndex: number): void;
+  abstract process(nodeIndex: number, offset: number, data: NodeDisplayData, textureIndex: number, nodeKey: string): void;
+
+  // Optional methods for layer attribute texture management
+  // These are implemented by factory-created programs
+  allocateNode?(_nodeKey: string): void;
+  freeNode?(_nodeKey: string): void;
+  uploadLayerTexture?(): void;
 }
 
 export abstract class NodeProgram<
@@ -46,7 +52,7 @@ export abstract class NodeProgram<
     super.kill();
   }
 
-  process(nodeIndex: number, offset: number, data: NodeDisplayData, textureIndex: number): void {
+  process(nodeIndex: number, offset: number, data: NodeDisplayData, textureIndex: number, nodeKey: string): void {
     let i = offset * this.STRIDE;
     // NOTE: dealing with hidden items automatically
     if (data.hidden) {
@@ -56,10 +62,16 @@ export abstract class NodeProgram<
       return;
     }
 
-    return this.processVisibleItem(indexToColor(nodeIndex), i, data, textureIndex);
+    return this.processVisibleItem(indexToColor(nodeIndex), i, data, textureIndex, nodeKey);
   }
 
-  abstract processVisibleItem(nodeIndex: number, i: number, data: NodeDisplayData, textureIndex: number): void;
+  abstract processVisibleItem(
+    nodeIndex: number,
+    i: number,
+    data: NodeDisplayData,
+    textureIndex: number,
+    nodeKey: string,
+  ): void;
 }
 
 class _NodeProgramClass<
@@ -81,7 +93,7 @@ class _NodeProgramClass<
   reallocate(_capacity: number): void {
     return undefined;
   }
-  process(_nodeIndex: number, _offset: number, _data: NodeDisplayData, _textureIndex: number): void {
+  process(_nodeIndex: number, _offset: number, _data: NodeDisplayData, _textureIndex: number, _nodeKey: string): void {
     return undefined;
   }
   render(_params: RenderParams): void {

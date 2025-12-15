@@ -7,7 +7,7 @@
  * @module
  */
 import { colorToGLSLString } from "../../../utils";
-import { FragmentLayer } from "../types";
+import { AttributeSpecification, FragmentLayer } from "../types";
 
 /**
  * Options for the layerFill() function.
@@ -16,8 +16,17 @@ export interface LayerFillOptions {
   /**
    * Optional fixed color value (CSS color string).
    * If provided, this color is used instead of the node's color attribute.
+   * Takes precedence over colorAttribute.
    */
   value?: string;
+
+  /**
+   * Name of the node attribute to read the fill color from.
+   * If not specified, uses the default node "color" attribute.
+   * Ignored if value is specified.
+   * @default "color"
+   */
+  colorAttribute?: string;
 }
 
 /**
@@ -40,21 +49,55 @@ export interface LayerFillOptions {
  *   shape: sdfCircle(),
  *   layers: [layerFill({ value: "#ff0000" })],
  * });
+ *
+ * // Use a custom attribute
+ * const customProgram = createNodeProgram({
+ *   shape: sdfCircle(),
+ *   layers: [layerFill({ colorAttribute: "fillColor" })],
+ * });
  * ```
  */
-export function layerFill({ value }: Partial<LayerFillOptions> = {}): FragmentLayer {
+export function layerFill({ value, colorAttribute }: Partial<LayerFillOptions> = {}): FragmentLayer {
+  const { UNSIGNED_BYTE } = WebGL2RenderingContext;
+
+  // If a fixed value is provided, no attributes needed
+  if (value) {
+    // language=GLSL
+    const glsl = `
+vec4 layer_fill() {
+  return ${colorToGLSLString(value)};
+}
+`;
+    return {
+      name: "fill",
+      uniforms: [],
+      attributes: [],
+      glsl,
+    };
+  }
+
+  // Use attribute-based color (either custom or default "color")
+  const source = colorAttribute || "color";
+
   // language=GLSL
   const glsl = `
-vec4 layer_fill() {
-  // Return the node's base color (v_color is a standard varying) or the fixed value if given
-  return ${value ? colorToGLSLString(value) : `v_color`};
+vec4 layer_fill(vec4 v_fillColor) {
+  return v_fillColor;
 }
 `;
 
   return {
     name: "fill",
     uniforms: [],
-    attributes: [],
+    attributes: [
+      {
+        name: "fillColor",
+        size: 4 as const,
+        type: UNSIGNED_BYTE,
+        normalized: true,
+        source,
+      },
+    ],
     glsl,
   };
 }

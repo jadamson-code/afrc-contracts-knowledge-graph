@@ -211,6 +211,10 @@ export default class Sigma<
   // The slug encodes shape name, params, and rotateWithCamera flag
   private nodeTypeShapeCache: { [type: string]: string } = {};
 
+  // For multi-shape programs: maps node type to { shapeName -> localIndex }
+  // Used to look up the local shape index for nodes that specify a 'shape' attribute
+  private nodeTypeShapeMap: { [type: string]: Record<string, number> } = {};
+
   // WebGL Labels (SDF-based rendering)
   private sdfAtlas: SDFAtlasManager | null = null;
 
@@ -322,12 +326,19 @@ export default class Sigma<
     // Register program type with bucket collection (stride will be set properly when used)
     this.itemBuckets.nodes.registerProgram(key, 1);
 
-    // Cache the shape slug for edge clamping
-    // The slug encodes shape name, uniform values, and rotateWithCamera flag
+    // Cache shape information for this node type
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const programOptions = (NodeProgramClass as any).programOptions;
     if (programOptions?.shapeSlug) {
+      // Primary shape slug for edge clamping (uses first shape for multi-shape programs)
       this.nodeTypeShapeCache[key] = programOptions.shapeSlug;
+    }
+    if (programOptions?.shapeNameToIndex) {
+      // Multi-shape program: store the shape name -> local index mapping
+      this.nodeTypeShapeMap[key] = programOptions.shapeNameToIndex;
+    } else {
+      // Single-shape program: clear any previous mapping
+      delete this.nodeTypeShapeMap[key];
     }
 
     // Register the associated label program if the node program has one
@@ -989,8 +1000,20 @@ export default class Sigma<
       const data = this.nodeDataCache[node];
       // Allocate texture index for this node (or get existing)
       this.nodeDataTexture!.allocateNode(node);
-      // Get shape ID from the shape slug (which encodes shape variant + params)
-      const shapeId = getShapeId(data.shape || "circle");
+
+      // Get shape ID:
+      // - For multi-shape programs: use local index from shapeNameToIndex
+      // - For single-shape programs: use global registry ID from slug
+      let shapeId: number;
+      const shapeMap = this.nodeTypeShapeMap[data.type];
+      if (shapeMap && data.shape && data.shape in shapeMap) {
+        // Multi-shape program: use local index
+        shapeId = shapeMap[data.shape];
+      } else {
+        // Single-shape program or fallback: use global registry
+        shapeId = getShapeId(data.shape || "circle");
+      }
+
       // Update texture data (x, y, size, shapeId)
       this.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
     }
@@ -998,10 +1021,14 @@ export default class Sigma<
     // Add data to programs using buckets (preserves zIndex ordering)
     this.itemBuckets.nodes.forEachBucketByZIndex((programType, _zIndex, bucket) => {
       const items = bucket.getItems();
+      const nodeProgram = this.nodePrograms[programType];
       for (const node of items) {
         nodeIndices[node] = incrID;
         itemIDsIndex[nodeIndices[node]] = { type: "node", id: node };
         incrID++;
+
+        // Allocate node in the program's layer attribute texture
+        nodeProgram.allocateNode?.(node);
 
         this.addNodeToProgram(node, nodeIndices[node], nodesPerPrograms[programType]++);
       }
@@ -1593,6 +1620,17 @@ export default class Sigma<
         labelHeight = Math.round(labelSize + 4);
       }
 
+      // Get shapeId using the same logic as node rendering
+      let shapeId: number;
+      const shapeMap = this.nodeTypeShapeMap[data.type];
+      if (shapeMap && data.shape && data.shape in shapeMap) {
+        // Multi-shape program: use local index
+        shapeId = shapeMap[data.shape];
+      } else {
+        // Single-shape program or fallback: use global registry
+        shapeId = getShapeId(data.shape || "circle");
+      }
+
       const hoverData: HoverDisplayData = {
         key: node,
         x: data.x,
@@ -1602,6 +1640,7 @@ export default class Sigma<
         labelWidth,
         labelHeight,
         type: data.type,
+        shapeId,
       };
 
       if (!hoverDataByType[data.type]) {
@@ -1700,11 +1739,12 @@ export default class Sigma<
       nodes.forEach((node) => {
         const data = this.nodeDataCache[node];
         const textureIndex = this.nodeDataTexture!.getNodeIndex(node);
-        this.nodeHoverPrograms[data.type].process(0, nodesPerPrograms[data.type]++, data, textureIndex);
+        this.nodeHoverPrograms[data.type].process(0, nodesPerPrograms[data.type]++, data, textureIndex, node);
       });
-      // Render:
+      // Upload layer textures and render:
       for (const type in this.nodeHoverPrograms) {
         const program = this.nodeHoverPrograms[type];
+        program.uploadLayerTexture?.();
         program.render(renderParams);
       }
     };
@@ -1807,6 +1847,11 @@ export default class Sigma<
     this.nodeDataTexture!.upload();
     this.edgeDataTexture!.upload();
 
+    // Upload layer attribute textures for all node programs
+    for (const type in this.nodePrograms) {
+      this.nodePrograms[type].uploadLayerTexture?.();
+    }
+
     // Bind data textures to their respective texture units
     this.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
     this.edgeDataTexture!.bind(EDGE_DATA_TEXTURE_UNIT);
@@ -1883,9 +1928,20 @@ export default class Sigma<
     if (this.settings.nodeReducer) attr = this.settings.nodeReducer(key, attr as N);
     const data = applyNodeDefaults(this.settings, key, attr);
 
-    // Set shape slug from node type for edge clamping
-    // The slug is used by edge programs to look up the correct shape variant
-    if (this.nodeTypeShapeCache[data.type]) {
+    // Set shape for edge clamping and multi-shape program selection
+    // For multi-shape programs: preserve user-specified shape attribute if it's valid
+    // For single-shape programs: set to the program's shape slug
+    const shapeMap = this.nodeTypeShapeMap[data.type];
+    if (shapeMap) {
+      // Multi-shape program: use user-specified shape if valid, otherwise use first shape
+      if (!data.shape || !(data.shape in shapeMap)) {
+        // Default to first shape name (the first key in shapeNameToIndex)
+        data.shape = Object.keys(shapeMap)[0];
+      }
+      // For edge clamping, we also need the slug for the shape registry lookup
+      // Use the primary slug (first shape) for now - edges will use this for clamping
+    } else if (this.nodeTypeShapeCache[data.type]) {
+      // Single-shape program: use the program's shape slug
       data.shape = this.nodeTypeShapeCache[data.type];
     }
 
@@ -2121,7 +2177,7 @@ export default class Sigma<
     if (!nodeProgram) throw new Error(`Sigma: could not find a suitable program for node type "${data.type}"!`);
     // Get the node's texture index (already allocated during processing)
     const textureIndex = this.nodeDataTexture!.getNodeIndex(node);
-    nodeProgram.process(fingerprint, position, data, textureIndex);
+    nodeProgram.process(fingerprint, position, data, textureIndex, node);
     // Saving program index
     this.nodeProgramIndex[node] = position;
   }

@@ -55,8 +55,15 @@ export interface CreateLabelProgramOptions {
   /**
    * The SDF shape definition for edge detection.
    * Must match the shape used by the corresponding node program.
+   * Use this for single-shape programs.
    */
-  shape: SDFShape;
+  shape?: SDFShape;
+
+  /**
+   * Array of SDF shape definitions for multi-shape programs.
+   * The label will use the correct shape based on each node's shapeId.
+   */
+  shapes?: SDFShape[];
 
   /**
    * Whether nodes rotate with the camera.
@@ -112,13 +119,19 @@ export function createLabelProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: CreateLabelProgramOptions): LabelProgramType<N, E, G> {
-  const { shape, rotateWithCamera = false, label: labelOptions = {} } = options;
+  const { rotateWithCamera = false, label: labelOptions = {} } = options;
   const labelAngle = labelOptions.angle ?? 0;
   const labelPosition = labelOptions.position ?? "right";
   const labelMargin = labelOptions.margin ?? 1;
 
+  // Normalize to shapes array (support both single shape and multi-shape modes)
+  const shapes = options.shapes || (options.shape ? [options.shape] : []);
+  if (shapes.length === 0) {
+    throw new Error("createLabelProgram: either 'shape' or 'shapes' must be provided");
+  }
+
   // Generate shaders at factory creation time (not per-instance)
-  const shaderOptions: LabelShaderOptions = { shape, rotateWithCamera, angle: labelAngle };
+  const shaderOptions: LabelShaderOptions = { shapes, rotateWithCamera, angle: labelAngle };
   const generatedShaders = generateLabelShaders(shaderOptions);
 
   // Uniform type for TypeScript
@@ -496,8 +509,15 @@ export function createLabelProgram<
       gl.uniform1f(uniformLocations.u_pixelRatio, params.pixelRatio);
 
       // Shape-specific uniforms (for SDF edge detection)
-      for (const uniform of shape.uniforms) {
-        this.setTypedUniform(uniform, programInfo);
+      // Deduplicate uniforms across all shapes
+      const seenUniforms = new Set<string>();
+      for (const shape of shapes) {
+        for (const uniform of shape.uniforms) {
+          if (!seenUniforms.has(uniform.name)) {
+            seenUniforms.add(uniform.name);
+            this.setTypedUniform(uniform, programInfo);
+          }
+        }
       }
     }
 

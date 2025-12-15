@@ -23,6 +23,7 @@ export interface HoverDisplayData {
   labelWidth: number;
   labelHeight: number;
   type: string;
+  shapeId: number;
 }
 
 export abstract class AbstractHoverProgram<

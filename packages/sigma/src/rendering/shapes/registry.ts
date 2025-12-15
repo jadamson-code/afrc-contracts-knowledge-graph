@@ -259,6 +259,131 @@ ${cases}
 }
 
 /**
+ * Gets the combined GLSL code for a specific set of shapes.
+ * Used by node programs that support multiple shapes.
+ *
+ * @param shapes - Array of shapes to include
+ * @returns Combined GLSL code with all shape SDF functions
+ */
+export function getShapeGLSLForShapes(shapes: SDFShape[]): string {
+  const glslParts: string[] = [];
+  const seenHelpers = new Set<string>();
+  const seenShapes = new Set<string>();
+
+  for (const shape of shapes) {
+    // Skip if we've already included this base shape's GLSL
+    if (seenShapes.has(shape.name)) {
+      continue;
+    }
+    seenShapes.add(shape.name);
+
+    // Filter out duplicate helper functions
+    let glsl = shape.glsl;
+
+    // Check for common helpers and deduplicate
+    const rotate2DPattern = /mat2 rotate2D\(float angle\)\s*\{[^}]+\}/;
+    if (rotate2DPattern.test(glsl)) {
+      if (seenHelpers.has("rotate2D")) {
+        glsl = glsl.replace(rotate2DPattern, "");
+      } else {
+        seenHelpers.add("rotate2D");
+      }
+    }
+
+    glslParts.push(glsl);
+  }
+
+  return glslParts.join("\n");
+}
+
+/**
+ * Generates GLSL code for a node shape selector function.
+ * Unlike querySDF() for edges, this function:
+ * - Works with a specific set of shapes (not all registered shapes)
+ * - Sets both context.sdf and context.inradiusFactor
+ * - Does NOT apply counter-rotation (vertex shader handles that)
+ *
+ * @param shapes - Array of shapes this program supports
+ * @param rotatesWithCamera - Whether nodes rotate with camera
+ * @returns GLSL code for the queryNodeSDF() function
+ */
+export function generateNodeShapeSelectorGLSL(shapes: SDFShape[], _rotatesWithCamera: boolean): string {
+  if (shapes.length === 0) {
+    // Default fallback - circle
+    return /*glsl*/ `
+void queryNodeSDF(int shapeId, vec2 uv, float size) {
+  context.sdf = length(uv) - size;
+  context.inradiusFactor = 1.0;
+}
+`;
+  }
+
+  if (shapes.length === 1) {
+    // Single shape - no switch needed
+    const shape = shapes[0];
+    const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+    const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+
+    let sdfCall: string;
+    if (paramValues.length === 0) {
+      sdfCall = `sdf_${shape.name}(uv, size)`;
+    } else {
+      sdfCall = `sdf_${shape.name}(uv, size, ${paramValues.join(", ")})`;
+    }
+
+    return /*glsl*/ `
+void queryNodeSDF(int shapeId, vec2 uv, float size) {
+  context.sdf = ${sdfCall};
+  context.inradiusFactor = ${numberToGLSLFloat(shape.inradiusFactor ?? 1.0)};
+}
+`;
+  }
+
+  // Multiple shapes - generate switch statement
+  // Uses local indices (0, 1, 2, ...) matching the order in the shapes array
+  const cases = shapes
+    .map((shape, index) => {
+      const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+      const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+
+      let sdfCall: string;
+      if (paramValues.length === 0) {
+        sdfCall = `sdf_${shape.name}(uv, size)`;
+      } else {
+        sdfCall = `sdf_${shape.name}(uv, size, ${paramValues.join(", ")})`;
+      }
+
+      const inradiusFactor = numberToGLSLFloat(shape.inradiusFactor ?? 1.0);
+
+      return `    case ${index}: // ${shape.name}
+      context.sdf = ${sdfCall};
+      context.inradiusFactor = ${inradiusFactor};
+      break;`;
+    })
+    .join("\n");
+
+  // Default case uses first shape
+  const defaultShape = shapes[0];
+  const defaultFloatUniforms = defaultShape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+  const defaultParamValues = defaultFloatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+  const defaultSdfCall =
+    defaultParamValues.length === 0
+      ? `sdf_${defaultShape.name}(uv, size)`
+      : `sdf_${defaultShape.name}(uv, size, ${defaultParamValues.join(", ")})`;
+
+  return /*glsl*/ `
+void queryNodeSDF(int shapeId, vec2 uv, float size) {
+  switch (shapeId) {
+${cases}
+    default: // Default to first shape (${defaultShape.name})
+      context.sdf = ${defaultSdfCall};
+      context.inradiusFactor = ${numberToGLSLFloat(defaultShape.inradiusFactor ?? 1.0)};
+  }
+}
+`;
+}
+
+/**
  * Clears the shape registry.
  * Primarily useful for testing.
  */

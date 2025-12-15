@@ -1,13 +1,14 @@
 /**
- * This example demonstrates node styles using the node program system.
+ * This example demonstrates the unified node program system.
  * It shows a 5x4 grid of nodes where:
  * - Each column uses a different shape (circle, square, triangle, diamond)
- * - Each row uses different layers:
- *   - Row 1: Simple fill (layerFill)
- *   - Row 2: Border with external relative (%) mode and internal pixel mode
- *   - Row 3: Image (using createNodeImageProgram)
- *   - Row 4: Image with blackish 10px border outside
- *   - Row 5: Piechart with three slices
+ * - Each row uses different layer configurations, all rendered by ONE program
+ * - Layers auto-disable based on node attributes (borderSize=0, slices=0, no image)
+ *
+ * This demonstrates:
+ * 1. Multi-shape programs: One program renders 4 different shapes
+ * 2. Dynamic layer enable/disable: Layers return transparent when not needed
+ * 3. Single program architecture: 20 visual styles with 1 WebGL program
  *
  * Use the checkbox to toggle whether nodes rotate with the camera.
  */
@@ -16,16 +17,7 @@ import { layerImage } from "@sigma/node-image";
 import { layerPiechart } from "@sigma/node-piechart";
 import Graph from "graphology";
 import Sigma from "sigma";
-import {
-  LabelProgramType,
-  NodeProgramType,
-  createNodeProgram,
-  layerFill,
-  sdfCircle,
-  sdfDiamond,
-  sdfSquare,
-  sdfTriangle,
-} from "sigma/rendering";
+import { createNodeProgram, layerFill, sdfCircle, sdfDiamond, sdfSquare, sdfTriangle } from "sigma/rendering";
 
 export default () => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -40,10 +32,10 @@ export default () => {
   const ROW_COLORS = ["#5B8FF9", "#5AD8A6", "#F6BD16", "#E8684A", "#9270CA"];
 
   // Shape names for node types
-  const SHAPES = ["circle", "square", "triangle", "diamond"];
+  const SHAPES = ["circle", "square", "triangle", "diamond"] as const;
 
   // Row names for labels
-  const ROW_LABELS = ["fill", "border", "image", "image-border", "piechart"];
+  const ROW_LABELS = ["fill", "border", "image", "pictogram-border", "piechart"] as const;
 
   const COLS = SHAPES.length;
   const ROWS = ROW_LABELS.length;
@@ -62,146 +54,123 @@ export default () => {
     "https://icons.getbootstrap.com/assets/icons/database.svg",
   ];
 
-  // Create nodes in a grid
+  // Create nodes in a grid with attributes that control layer visibility
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < COLS; col++) {
       const nodeId = `${SHAPES[col]}-${ROW_LABELS[row]}`;
-      graph.addNode(nodeId, {
+      const rowType = ROW_LABELS[row];
+
+      // Base attributes for all nodes
+      const nodeAttrs: Record<string, unknown> = {
         x: col * SPACING,
         y: -row * SPACING,
         size: NODE_SIZE,
-        color: ROW_COLORS[row],
-        label: `${SHAPES[col]} / ${ROW_LABELS[row]}`,
-        type: nodeId,
-        // Border-specific attributes (for row 2 and 4)
-        borderColor: "#333333",
-        borderSize: 5, // 5 pixels for the inner border
-        // Image-specific attributes (for rows 3 and 4)
-        image: IMAGES[col],
-        pictogram: PICTOGRAMS[col],
-        // Piechart-specific attributes (for row 5)
-        slice1: 1 + col,
-        slice2: 2 + col,
-        slice3: 3 - col * 0.5,
-      });
+        backgroundColor: ROW_COLORS[row],
+        label: `${SHAPES[col]} / ${rowType}`,
+        // Shape selection for multi-shape program
+        shape: SHAPES[col],
+        // Default: all optional layers disabled
+        borderColor: "transparent",
+        innerColor: "transparent",
+        // Piechart slices:
+        slice1: 0,
+        slice2: 0,
+        slice3: 0,
+      };
+
+      // Configure layers based on row type
+      switch (rowType) {
+        case "fill":
+          // Nothing extra - just fill
+          break;
+        case "border":
+          // Enable border with attribute-based size
+          nodeAttrs.borderSize = 0.1; // 10% of shape size
+          nodeAttrs.borderColor = "#333333";
+          nodeAttrs.innerSize = 20;
+          nodeAttrs.innerColor = "white";
+          break;
+        case "image":
+          // Image with colored border frame
+          nodeAttrs.image = IMAGES[col];
+          break;
+        case "pictogram-border":
+          // Pictogram with color and border
+          nodeAttrs.pictogram = PICTOGRAMS[col];
+          nodeAttrs.borderSize = 0.2;
+          nodeAttrs.borderColor = ROW_COLORS[row];
+          nodeAttrs.backgroundColor = "white";
+          break;
+        case "piechart":
+          // Enable piechart slices
+          nodeAttrs.slice1 = 1 + col;
+          nodeAttrs.slice2 = 2 + col;
+          nodeAttrs.slice3 = 3 - col * 0.5;
+          break;
+      }
+
+      graph.addNode(nodeId, nodeAttrs);
     }
   }
 
-  // Helper to get shape SDF
-  const getShape = (shapeName: string) => {
-    switch (shapeName) {
-      case "circle":
-        return sdfCircle();
-      case "square":
-        return sdfSquare();
-      case "triangle":
-        return sdfTriangle();
-      case "diamond":
-        return sdfDiamond();
-      default:
-        return sdfCircle();
-    }
-  };
+  // Create ONE unified program for all shapes and layer combinations
+  const createUnifiedProgram = (rotateWithCamera: boolean) => {
+    return createNodeProgram({
+      // Multi-shape: supports all 4 shapes in one program
+      shapes: [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()],
+      layers: [
+        // Base fill layer (always visible)
+        layerFill({ colorAttribute: "backgroundColor" }),
 
-  // Helper to get layers for each row type (for composed programs)
-  const getLayers = (rowType: string) => {
-    switch (rowType) {
-      case "image":
-        return [
-          layerFill(),
-          layerImage({
-            drawingMode: "image",
-            imageAttribute: "image",
-          }),
-          layerBorder({
-            borders: [
-              { size: { value: 0.2 }, color: { attribute: "color" } },
-              { size: { fill: true }, color: { value: "#ffffff00" } },
-            ],
-          }),
-        ];
-      case "image-border":
-        return [
-          layerFill({ value: "#ffffff" }),
-          layerImage({
-            drawingMode: "color",
-            imageAttribute: "pictogram",
-            colorAttribute: "color",
-            padding: 0.4,
-            textureManagerOptions: {
-              size: {
-                mode: "force",
-                value: 512,
-              },
-            },
-          }),
-          layerBorder({
-            borders: [
-              { size: { value: 0.2 }, color: { attribute: "color" } },
-              { size: { fill: true }, color: { value: "#ffffff00" } },
-            ],
-          }),
-        ];
-      case "fill":
-        return [layerFill()];
-      case "border":
-        // External border (10% of shape) + internal border (20px) + fill
-        return [
-          layerBorder({
-            borders: [
-              { size: { value: 0.1 }, color: { attribute: "borderColor" } },
-              { size: { fill: true }, color: { attribute: "color" } },
-              { size: { value: 40, mode: "pixels" }, color: { value: "#ffffff" } },
-            ],
-          }),
-        ];
-      case "piechart":
-        return [
-          layerPiechart({
-            slices: [
-              { color: { value: "#E74C3C" }, value: { attribute: "slice1" } },
-              { color: { value: "#3498DB" }, value: { attribute: "slice2" } },
-              { color: { value: "#2ECC71" }, value: { attribute: "slice3" } },
-            ],
-          }),
-        ];
-      default:
-        return [layerFill()];
-    }
-  };
+        // Image layer for photo images (rows 3)
+        // Disabled when no 'image' attribute
+        layerImage({
+          name: "photo",
+          drawingMode: "image",
+          imageAttribute: "image",
+        }),
 
-  // Function to create all program combinations with a given rotateWithCamera setting
-  // Returns both node and label programs that share the same shape SDF
-  const createPrograms = (
-    rotateWithCamera: boolean,
-  ): { nodePrograms: Record<string, NodeProgramType>; labelPrograms: Record<string, LabelProgramType> } => {
-    const nodePrograms: Record<string, NodeProgramType> = {};
-    const labelPrograms: Record<string, LabelProgramType> = {};
+        // Image layer for pictograms (row 4)
+        // Disabled when no 'pictogram' attribute
+        layerImage({
+          name: "pictogram",
+          drawingMode: "color",
+          imageAttribute: "pictogram",
+          colorAttribute: "borderColor",
+          padding: 0.4,
+          textureManagerOptions: {
+            size: { mode: "force", value: 512 },
+          },
+        }),
 
-    for (const shape of SHAPES) {
-      for (const rowType of ROW_LABELS) {
-        const nodeType = `${shape}-${rowType}`;
-        const NodeProgram = createNodeProgram({
-          shape: getShape(shape),
-          layers: getLayers(rowType),
-          rotateWithCamera,
-        });
-        nodePrograms[nodeType] = NodeProgram;
-        if (NodeProgram.LabelProgram) {
-          labelPrograms[nodeType] = NodeProgram.LabelProgram;
-        }
-      }
-    }
+        // Border layer - disabled when borderSize=0
+        layerBorder({
+          borders: [
+            { size: { attribute: "borderSize", defaultValue: 0 }, color: { attribute: "borderColor" } },
+            { size: { fill: true }, color: { transparent: true } },
+            { size: { attribute: "innerSize", mode: "pixels", defaultValue: 0 }, color: { attribute: "innerColor" } },
+          ],
+        }),
 
-    return { nodePrograms, labelPrograms };
+        // Piechart layer - disabled when all slices=0
+        layerPiechart({
+          slices: [
+            { color: { value: "#E74C3C" }, value: { attribute: "slice1" } },
+            { color: { value: "#3498DB" }, value: { attribute: "slice2" } },
+            { color: { value: "#2ECC71" }, value: { attribute: "slice3" } },
+          ],
+        }),
+      ],
+      rotateWithCamera,
+    });
   };
 
   // Initial state: nodes stay upright (rotateWithCamera: false)
-  const initialPrograms = createPrograms(false);
+  const UnifiedProgram = createUnifiedProgram(false);
   const renderer = new Sigma(graph, container, {
-    nodeProgramClasses: initialPrograms.nodePrograms,
-    labelProgramClasses: initialPrograms.labelPrograms,
-    defaultNodeType: "circle-fill",
+    nodeProgramClasses: { default: UnifiedProgram },
+    labelProgramClasses: UnifiedProgram.LabelProgram ? { default: UnifiedProgram.LabelProgram } : {},
+    defaultNodeType: "default",
     // Use positions-based sizing for a clean grid appearance
     itemSizesReference: "positions",
     zoomToSizeRatioFunction: (x) => x,
@@ -215,9 +184,11 @@ export default () => {
   const checkbox = document.getElementById("rotate-with-camera") as HTMLInputElement;
   checkbox.addEventListener("change", () => {
     const rotateWithCamera = checkbox.checked;
-    const programs = createPrograms(rotateWithCamera);
-    renderer.setSetting("nodeProgramClasses", programs.nodePrograms);
-    renderer.setSetting("labelProgramClasses", programs.labelPrograms);
+    const NewProgram = createUnifiedProgram(rotateWithCamera);
+    renderer.setSetting("nodeProgramClasses", { default: NewProgram });
+    if (NewProgram.LabelProgram) {
+      renderer.setSetting("labelProgramClasses", { default: NewProgram.LabelProgram });
+    }
   });
 
   return () => {

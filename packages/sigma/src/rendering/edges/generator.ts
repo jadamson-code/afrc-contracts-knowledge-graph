@@ -112,103 +112,61 @@ function generateAllExtremitiesGLSL(extremities: EdgeExtremity[]): string {
 }
 
 /**
- * Generates a GLSL switch statement for path position lookup.
+ * Configuration for generating a path selector function.
  */
-function generatePathPositionSelector(paths: EdgePath[]): string {
+interface PathSelectorConfig {
+  /** Query function name (e.g., "queryPathPosition") */
+  queryName: string;
+  /** Path function suffix (e.g., "position") */
+  pathFunc: string;
+  /** Return type (e.g., "vec2", "float") */
+  returnType: string;
+  /** Additional parameters after pathId (e.g., "float t, vec2 source, vec2 target") */
+  params: string;
+  /** Arguments to pass to path function (e.g., "t, source, target") */
+  args: string;
+}
+
+/**
+ * Path selector configurations for all path functions.
+ */
+const PATH_SELECTOR_CONFIGS: PathSelectorConfig[] = [
+  { queryName: "queryPathPosition", pathFunc: "position", returnType: "vec2", params: "float t, vec2 source, vec2 target", args: "t, source, target" },
+  { queryName: "queryPathTangent", pathFunc: "tangent", returnType: "vec2", params: "float t, vec2 source, vec2 target", args: "t, source, target" },
+  { queryName: "queryPathNormal", pathFunc: "normal", returnType: "vec2", params: "float t, vec2 source, vec2 target", args: "t, source, target" },
+  { queryName: "queryPathLength", pathFunc: "length", returnType: "float", params: "vec2 source, vec2 target", args: "source, target" },
+  { queryName: "queryPathClosestT", pathFunc: "closest_t", returnType: "float", params: "vec2 p, vec2 source, vec2 target", args: "p, source, target" },
+];
+
+/**
+ * Generates a GLSL switch statement for a path function lookup.
+ */
+function generatePathSelector(paths: EdgePath[], config: PathSelectorConfig): string {
+  const { queryName, pathFunc, returnType, params, args } = config;
+
   if (paths.length === 1) {
-    return `vec2 queryPathPosition(int pathId, float t, vec2 source, vec2 target) {
-  return path_${paths[0].name}_position(t, source, target);
+    return `${returnType} ${queryName}(int pathId, ${params}) {
+  return path_${paths[0].name}_${pathFunc}(${args});
 }`;
   }
 
-  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_position(t, source, target);`).join("\n");
+  const cases = paths
+    .map((p, i) => `    case ${i}: return path_${p.name}_${pathFunc}(${args});`)
+    .join("\n");
 
-  return `vec2 queryPathPosition(int pathId, float t, vec2 source, vec2 target) {
+  return `${returnType} ${queryName}(int pathId, ${params}) {
   switch (pathId) {
 ${cases}
-    default: return path_${paths[0].name}_position(t, source, target);
+    default: return path_${paths[0].name}_${pathFunc}(${args});
   }
 }`;
 }
 
 /**
- * Generates a GLSL switch statement for path tangent lookup.
+ * Generates all path selector functions.
  */
-function generatePathTangentSelector(paths: EdgePath[]): string {
-  if (paths.length === 1) {
-    return `vec2 queryPathTangent(int pathId, float t, vec2 source, vec2 target) {
-  return path_${paths[0].name}_tangent(t, source, target);
-}`;
-  }
-
-  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_tangent(t, source, target);`).join("\n");
-
-  return `vec2 queryPathTangent(int pathId, float t, vec2 source, vec2 target) {
-  switch (pathId) {
-${cases}
-    default: return path_${paths[0].name}_tangent(t, source, target);
-  }
-}`;
-}
-
-/**
- * Generates a GLSL switch statement for path normal lookup.
- */
-function generatePathNormalSelector(paths: EdgePath[]): string {
-  if (paths.length === 1) {
-    return `vec2 queryPathNormal(int pathId, float t, vec2 source, vec2 target) {
-  return path_${paths[0].name}_normal(t, source, target);
-}`;
-  }
-
-  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_normal(t, source, target);`).join("\n");
-
-  return `vec2 queryPathNormal(int pathId, float t, vec2 source, vec2 target) {
-  switch (pathId) {
-${cases}
-    default: return path_${paths[0].name}_normal(t, source, target);
-  }
-}`;
-}
-
-/**
- * Generates a GLSL switch statement for path length lookup.
- */
-function generatePathLengthSelector(paths: EdgePath[]): string {
-  if (paths.length === 1) {
-    return `float queryPathLength(int pathId, vec2 source, vec2 target) {
-  return path_${paths[0].name}_length(source, target);
-}`;
-  }
-
-  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_length(source, target);`).join("\n");
-
-  return `float queryPathLength(int pathId, vec2 source, vec2 target) {
-  switch (pathId) {
-${cases}
-    default: return path_${paths[0].name}_length(source, target);
-  }
-}`;
-}
-
-/**
- * Generates a GLSL switch statement for path closest_t lookup.
- */
-function generatePathClosestTSelector(paths: EdgePath[]): string {
-  if (paths.length === 1) {
-    return `float queryPathClosestT(int pathId, vec2 p, vec2 source, vec2 target) {
-  return path_${paths[0].name}_closest_t(p, source, target);
-}`;
-  }
-
-  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_closest_t(p, source, target);`).join("\n");
-
-  return `float queryPathClosestT(int pathId, vec2 p, vec2 source, vec2 target) {
-  switch (pathId) {
-${cases}
-    default: return path_${paths[0].name}_closest_t(p, source, target);
-  }
-}`;
+function generateAllPathSelectors(paths: EdgePath[]): string {
+  return PATH_SELECTOR_CONFIGS.map((config) => generatePathSelector(paths, config)).join("\n\n");
 }
 
 /**
@@ -475,10 +433,7 @@ ${generateShapeSelectorGLSL()}
 ${generateAllPathsGLSL(paths)}
 
 // Path selector functions
-${generatePathPositionSelector(paths)}
-${generatePathTangentSelector(paths)}
-${generatePathNormalSelector(paths)}
-${generatePathLengthSelector(paths)}
+${generateAllPathSelectors(paths)}
 
 // All clamp functions
 ${generateAllClampFunctions(paths)}
@@ -782,10 +737,7 @@ vec4 blendOver(vec4 bg, vec4 fg) {
 ${generateAllPathsGLSL(paths)}
 
 // Path selector functions
-${generatePathPositionSelector(paths)}
-${generatePathTangentSelector(paths)}
-${generatePathNormalSelector(paths)}
-${generatePathClosestTSelector(paths)}
+${generateAllPathSelectors(paths)}
 
 // All extremity functions
 ${generateAllExtremitiesGLSL(extremities)}

@@ -7,11 +7,9 @@
  * for efficient shader access, eliminating the need for hardcoded global
  * variables like `a_curvature`.
  *
- * This mirrors the NodeLayerAttributeTexture architecture for node layers.
- *
  * @module
  */
-import { DataTexture } from "../data-texture";
+import { AttributeLayout, computeAttributeLayout, ItemAttributeTexture } from "../data-texture";
 import { AttributeSpecification } from "../nodes";
 import { EdgeLayer, EdgePath } from "./types";
 
@@ -28,7 +26,7 @@ export interface EdgeAttributeLayout {
   texelsPerEdge: number;
   /** Map of attribute name to float offset within the edge's texel range */
   offsets: Record<string, number>;
-  /** Map of attribute name to its specification (for type info) */
+  /** Map of attribute name to its specification (for type info in GLSL generation) */
   specs: Record<string, AttributeSpecification>;
 }
 
@@ -42,37 +40,32 @@ export interface EdgeAttributeLayout {
  * @returns Layout describing attribute positions in the texture
  */
 export function computeEdgeAttributeLayout(paths: EdgePath[], layers: EdgeLayer[]): EdgeAttributeLayout {
-  const offsets: Record<string, number> = {};
-  const specs: Record<string, AttributeSpecification> = {};
-  let offset = 0;
+  // Use the generic layout computation
+  const baseLayout = computeAttributeLayout([...paths, ...layers]);
 
+  // Build specs map (edge-specific, needed for GLSL generation)
+  const specs: Record<string, AttributeSpecification> = {};
   for (const path of paths) {
     for (const attr of path.attributes) {
-      // Normalize name: remove a_ prefix if present (we use v_ in shaders)
       const name = attr.name.replace(/^a_/, "");
-      if (!(name in offsets)) {
-        offsets[name] = offset;
+      if (!(name in specs)) {
         specs[name] = attr;
-        offset += attr.size;
       }
     }
   }
-
   for (const layer of layers) {
     for (const attr of layer.attributes) {
       const name = attr.name.replace(/^a_/, "");
-      if (!(name in offsets)) {
-        offsets[name] = offset;
+      if (!(name in specs)) {
         specs[name] = attr;
-        offset += attr.size;
       }
     }
   }
 
   return {
-    floatsPerEdge: offset,
-    texelsPerEdge: Math.max(1, Math.ceil(offset / 4)),
-    offsets,
+    floatsPerEdge: baseLayout.floatsPerItem,
+    texelsPerEdge: baseLayout.texelsPerItem,
+    offsets: baseLayout.offsets,
     specs,
   };
 }
@@ -236,42 +229,18 @@ ${extractions.join("\n")}`;
  * Edge index N maps to texels starting at:
  *   baseTexel = N * texelsPerEdge
  *   texCoord = (baseTexel % textureWidth, baseTexel / textureWidth)
- *
- * This replaces the hardcoded `a_curvature` global variable approach with a
- * clean, extensible system where any path or layer can declare any attributes.
  */
-export class EdgePathAttributeTexture extends DataTexture {
-  protected readonly TEXELS_PER_ITEM: number;
-  private readonly layout: EdgeAttributeLayout;
-
+export class EdgePathAttributeTexture extends ItemAttributeTexture {
   constructor(gl: WebGL2RenderingContext, layout: EdgeAttributeLayout, initialCapacity?: number) {
-    super(gl, initialCapacity);
-    this.layout = layout;
-    // Handle case where there are no attributes (empty layout)
-    this.TEXELS_PER_ITEM = Math.max(1, layout.texelsPerEdge);
-    this.initializeTexture();
-  }
-
-  /**
-   * Updates all attributes for an edge at once.
-   * The packedData array should contain floatsPerEdge values in the order
-   * defined by the layout offsets.
-   * Auto-allocates the edge if not already allocated.
-   */
-  updateAllAttributes(edgeKey: string, packedData: ArrayLike<number>): void {
-    let index = this.indexMap.get(edgeKey);
-    if (index === undefined) {
-      index = this.allocate(edgeKey);
-    }
-
-    const baseOffset = index * this.TEXELS_PER_ITEM * 4;
-    const length = Math.min(packedData.length, this.layout.floatsPerEdge);
-
-    for (let i = 0; i < length; i++) {
-      this.data[baseOffset + i] = packedData[i];
-    }
-
-    this.markDirty(index);
+    super(
+      gl,
+      {
+        floatsPerItem: layout.floatsPerEdge,
+        texelsPerItem: layout.texelsPerEdge,
+        offsets: layout.offsets,
+      },
+      initialCapacity,
+    );
   }
 
   /**
@@ -279,12 +248,5 @@ export class EdgePathAttributeTexture extends DataTexture {
    */
   getTexelsPerEdge(): number {
     return this.TEXELS_PER_ITEM;
-  }
-
-  /**
-   * Gets the layout describing attribute positions.
-   */
-  getLayout(): EdgeAttributeLayout {
-    return this.layout;
   }
 }

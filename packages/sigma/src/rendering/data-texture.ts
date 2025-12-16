@@ -348,3 +348,100 @@ export abstract class DataTexture {
     this.freeIndices = [];
   }
 }
+
+// ============================================================================
+// Generic Attribute Layout and Texture
+// ============================================================================
+
+/**
+ * Specification for an attribute to be stored in a texture.
+ */
+export interface AttributeSpec {
+  name: string;
+  size: 1 | 2 | 3 | 4;
+}
+
+/**
+ * Describes the memory layout of attributes in a texture.
+ */
+export interface AttributeLayout {
+  /** Total floats needed per item */
+  floatsPerItem: number;
+  /** Number of texels (4 floats each) per item */
+  texelsPerItem: number;
+  /** Map of attribute name (without a_ prefix) to float offset */
+  offsets: Record<string, number>;
+}
+
+/**
+ * Computes the memory layout for a collection of attributes.
+ * Collects all unique attributes and assigns sequential offsets.
+ *
+ * @param sources - Array of objects containing attributes arrays
+ * @returns Layout describing attribute positions in the texture
+ */
+export function computeAttributeLayout(sources: Array<{ attributes: AttributeSpec[] }>): AttributeLayout {
+  const offsets: Record<string, number> = {};
+  let offset = 0;
+
+  for (const source of sources) {
+    for (const attr of source.attributes) {
+      const name = attr.name.replace(/^a_/, "");
+      if (!(name in offsets)) {
+        offsets[name] = offset;
+        offset += attr.size;
+      }
+    }
+  }
+
+  return {
+    floatsPerItem: offset,
+    texelsPerItem: Math.max(1, Math.ceil(offset / 4)),
+    offsets,
+  };
+}
+
+/**
+ * Generic attribute texture for storing per-item attribute data.
+ * Used as base for both node layer attributes and edge path attributes.
+ */
+export class ItemAttributeTexture extends DataTexture {
+  protected readonly TEXELS_PER_ITEM: number;
+  protected readonly floatsPerItem: number;
+
+  constructor(gl: WebGL2RenderingContext, layout: AttributeLayout, initialCapacity?: number) {
+    super(gl, initialCapacity);
+    this.floatsPerItem = layout.floatsPerItem;
+    this.TEXELS_PER_ITEM = layout.texelsPerItem;
+    this.initializeTexture();
+  }
+
+  /**
+   * Updates all attributes for an item at once.
+   * The packedData array should contain floatsPerItem values in the order
+   * defined by the layout offsets.
+   * Auto-allocates the item if not already allocated.
+   */
+  updateAllAttributes(key: string, packedData: ArrayLike<number>): void {
+    let index = this.indexMap.get(key);
+    if (index === undefined) {
+      index = this.allocate(key);
+    }
+
+    const baseOffset = index * this.TEXELS_PER_ITEM * 4;
+    const length = Math.min(packedData.length, this.floatsPerItem);
+
+    for (let i = 0; i < length; i++) {
+      this.data[baseOffset + i] = packedData[i];
+    }
+
+    this.markDirty(index);
+  }
+
+  /**
+   * Gets the number of texels per item.
+   */
+  getTexelsPerItem(): number {
+    return this.TEXELS_PER_ITEM;
+  }
+}

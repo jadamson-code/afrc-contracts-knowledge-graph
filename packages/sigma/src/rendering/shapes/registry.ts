@@ -149,6 +149,44 @@ export function getShapeGLSL(slug: string): string {
 }
 
 /**
+ * Deduplicates GLSL code from multiple shapes.
+ * Removes duplicate shape definitions and common helper functions (like rotate2D).
+ *
+ * @param shapes - Iterable of SDFShape objects to process
+ * @returns Combined GLSL code with duplicates removed
+ */
+function deduplicateShapeGLSL(shapes: Iterable<SDFShape>): string {
+  const glslParts: string[] = [];
+  const seenHelpers = new Set<string>();
+  const seenShapes = new Set<string>();
+
+  // Pattern for common helper functions that may be duplicated across shapes
+  const rotate2DPattern = /mat2 rotate2D\(float angle\)\s*\{[^}]+\}/;
+
+  for (const shape of shapes) {
+    // Skip if we've already included this base shape's GLSL
+    if (seenShapes.has(shape.name)) {
+      continue;
+    }
+    seenShapes.add(shape.name);
+
+    // Filter out duplicate helper functions
+    let glsl = shape.glsl;
+    if (rotate2DPattern.test(glsl)) {
+      if (seenHelpers.has("rotate2D")) {
+        glsl = glsl.replace(rotate2DPattern, "");
+      } else {
+        seenHelpers.add("rotate2D");
+      }
+    }
+
+    glslParts.push(glsl);
+  }
+
+  return glslParts.join("\n");
+}
+
+/**
  * Gets all registered shapes' GLSL code combined.
  * Used by edge shaders to have access to all node shape SDFs.
  *
@@ -160,36 +198,8 @@ export function getShapeGLSL(slug: string): string {
  * @returns Combined GLSL code with all shape SDF functions
  */
 export function getAllShapeGLSL(): string {
-  const glslParts: string[] = [];
-  const seenHelpers = new Set<string>();
-  const seenShapes = new Set<string>();
-
-  shapeRegistry.forEach((registered) => {
-    const { shape } = registered;
-
-    // Skip if we've already included this base shape's GLSL
-    if (seenShapes.has(shape.name)) {
-      return;
-    }
-    seenShapes.add(shape.name);
-
-    // Filter out duplicate helper functions that may be included in multiple shapes
-    let glsl = shape.glsl;
-
-    // Check for common helpers and deduplicate
-    const rotate2DPattern = /mat2 rotate2D\(float angle\)\s*\{[^}]+\}/;
-    if (rotate2DPattern.test(glsl)) {
-      if (seenHelpers.has("rotate2D")) {
-        // Remove the duplicate
-        glsl = glsl.replace(rotate2DPattern, "");
-      } else {
-        seenHelpers.add("rotate2D");
-      }
-    }
-
-    glslParts.push(glsl);
-  });
-  return glslParts.join("\n");
+  const shapes = Array.from(shapeRegistry.values()).map((r) => r.shape);
+  return deduplicateShapeGLSL(shapes);
 }
 
 /**
@@ -266,34 +276,7 @@ ${cases}
  * @returns Combined GLSL code with all shape SDF functions
  */
 export function getShapeGLSLForShapes(shapes: SDFShape[]): string {
-  const glslParts: string[] = [];
-  const seenHelpers = new Set<string>();
-  const seenShapes = new Set<string>();
-
-  for (const shape of shapes) {
-    // Skip if we've already included this base shape's GLSL
-    if (seenShapes.has(shape.name)) {
-      continue;
-    }
-    seenShapes.add(shape.name);
-
-    // Filter out duplicate helper functions
-    let glsl = shape.glsl;
-
-    // Check for common helpers and deduplicate
-    const rotate2DPattern = /mat2 rotate2D\(float angle\)\s*\{[^}]+\}/;
-    if (rotate2DPattern.test(glsl)) {
-      if (seenHelpers.has("rotate2D")) {
-        glsl = glsl.replace(rotate2DPattern, "");
-      } else {
-        seenHelpers.add("rotate2D");
-      }
-    }
-
-    glslParts.push(glsl);
-  }
-
-  return glslParts.join("\n");
+  return deduplicateShapeGLSL(shapes);
 }
 
 /**

@@ -8,11 +8,12 @@
  *
  * @module
  */
-import { DataTexture } from "../data-texture";
+import { AttributeLayout, computeAttributeLayout, ItemAttributeTexture } from "../data-texture";
 import { FragmentLayer } from "./types";
 
 /**
  * Describes the memory layout of layer attributes in the texture.
+ * Alias for AttributeLayout with node-specific naming.
  */
 export interface LayerAttributeLayout {
   /** Total floats needed per node */
@@ -29,23 +30,11 @@ export interface LayerAttributeLayout {
  * Used by both the factory (for texture allocation) and generator (for GLSL code).
  */
 export function computeLayerAttributeLayout(layers: FragmentLayer[]): LayerAttributeLayout {
-  const offsets: Record<string, number> = {};
-  let offset = 0;
-
-  for (const layer of layers) {
-    for (const attr of layer.attributes) {
-      const name = attr.name.replace(/^a_/, "");
-      if (!(name in offsets)) {
-        offsets[name] = offset;
-        offset += attr.size;
-      }
-    }
-  }
-
+  const layout = computeAttributeLayout(layers);
   return {
-    floatsPerNode: offset,
-    texelsPerNode: Math.ceil(offset / 4),
-    offsets,
+    floatsPerNode: layout.floatsPerItem,
+    texelsPerNode: layout.texelsPerItem,
+    offsets: layout.offsets,
   };
 }
 
@@ -59,16 +48,17 @@ export function computeLayerAttributeLayout(layers: FragmentLayer[]): LayerAttri
  *   baseTexel = N * texelsPerNode
  *   texCoord = (baseTexel % textureWidth, baseTexel / textureWidth)
  */
-export class NodeLayerAttributeTexture extends DataTexture {
-  protected readonly TEXELS_PER_ITEM: number;
-  private readonly layout: LayerAttributeLayout;
-
+export class NodeLayerAttributeTexture extends ItemAttributeTexture {
   constructor(gl: WebGL2RenderingContext, layout: LayerAttributeLayout, initialCapacity?: number) {
-    super(gl, initialCapacity);
-    this.layout = layout;
-    // Handle case where there are no attributes (empty layout)
-    this.TEXELS_PER_ITEM = Math.max(1, layout.texelsPerNode);
-    this.initializeTexture();
+    super(
+      gl,
+      {
+        floatsPerItem: layout.floatsPerNode,
+        texelsPerItem: layout.texelsPerNode,
+        offsets: layout.offsets,
+      },
+      initialCapacity,
+    );
   }
 
   /**
@@ -102,40 +92,10 @@ export class NodeLayerAttributeTexture extends DataTexture {
   }
 
   /**
-   * Updates all attributes for a node at once.
-   * The packedData array should contain floatsPerNode values in the order
-   * defined by the layout offsets.
-   * Auto-allocates the node if not already allocated.
-   */
-  updateAllAttributes(nodeKey: string, packedData: ArrayLike<number>): void {
-    let index = this.indexMap.get(nodeKey);
-    if (index === undefined) {
-      // Auto-allocate if not already allocated
-      index = this.allocateNode(nodeKey);
-    }
-
-    const baseOffset = index * this.TEXELS_PER_ITEM * 4;
-    const length = Math.min(packedData.length, this.layout.floatsPerNode);
-
-    for (let i = 0; i < length; i++) {
-      this.data[baseOffset + i] = packedData[i];
-    }
-
-    this.markDirty(index);
-  }
-
-  /**
    * Gets the number of texels per node.
    */
   getTexelsPerNode(): number {
     return this.TEXELS_PER_ITEM;
-  }
-
-  /**
-   * Gets the layout describing attribute positions.
-   */
-  getLayout(): LayerAttributeLayout {
-    return this.layout;
   }
 
   /**

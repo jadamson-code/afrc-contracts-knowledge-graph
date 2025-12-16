@@ -39,19 +39,17 @@ export interface ArrowExtremityOptions {
  *
  * @example
  * ```typescript
- * // Default arrow
+ * // Arrow with default settings
  * const EdgeArrowProgram = createEdgeProgram({
  *   paths: [pathLine()],
- *   heads: [extremityArrow()],
- *   tails: [extremityNone()],
+ *   extremities: [extremityNone(), extremityArrow()],
  *   layers: [layerPlain()],
  * });
  *
  * // Custom arrow with margin
  * const EdgeArrowMarginProgram = createEdgeProgram({
  *   paths: [pathLine()],
- *   heads: [extremityArrow({ lengthRatio: 3, widthRatio: 2.5, margin: 5 })],
- *   tails: [extremityNone()],
+ *   extremities: [extremityNone(), extremityArrow({ lengthRatio: 3, widthRatio: 2.5, margin: 5 })],
  *   layers: [layerPlain()],
  * });
  * ```

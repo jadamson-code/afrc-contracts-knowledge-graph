@@ -502,18 +502,24 @@ export interface EdgeLabelOptions {
  *
  * @example
  * ```typescript
+ * // Simple line with no extremities
  * createEdgeProgram({
  *   paths: [pathLine()],
- *   heads: [extremityArrow()],
- *   tails: [extremityNone()],
  *   layers: [layerPlain()],
  * });
  *
- * // Multi-path mode: edges select via attributes
+ * // Arrow at head
+ * createEdgeProgram({
+ *   paths: [pathLine()],
+ *   extremities: [extremityArrow()],
+ *   layers: [layerPlain()],
+ *   defaultHead: "arrow",
+ * });
+ *
+ * // Multi-path: edges select via attributes
  * createEdgeProgram({
  *   paths: [pathLine(), pathCurved()],
- *   heads: [extremityNone(), extremityArrow()],
- *   tails: [extremityNone()],
+ *   extremities: [extremityArrow()],
  *   layers: [layerPlain()],
  * });
  * // Edges select via: { path: "curved", head: "arrow", tail: "none" }
@@ -528,18 +534,11 @@ export interface EdgeProgramOptions {
   paths: EdgePath[];
 
   /**
-   * Array of head extremity definitions (target end decoration).
-   * Edges select their head via the `head` attribute (e.g., "none", "arrow").
-   * The first head is used as the default.
+   * Optional pool of extremity definitions (head/tail decorations).
+   * The "none" extremity is always available implicitly.
+   * Edges select which extremity via `head` and `tail` attributes.
    */
-  heads: EdgeExtremity[];
-
-  /**
-   * Array of tail extremity definitions (source end decoration).
-   * Edges select their tail via the `tail` attribute (e.g., "none", "arrow").
-   * The first tail is used as the default.
-   */
-  tails: EdgeExtremity[];
+  extremities?: EdgeExtremity[];
 
   /**
    * Array of layers that composite the edge body appearance.
@@ -547,6 +546,18 @@ export interface EdgeProgramOptions {
    * At least one layer is required.
    */
   layers: EdgeLayer[];
+
+  /**
+   * Default extremity name for the head (target end).
+   * Defaults to "none" if not specified.
+   */
+  defaultHead?: string;
+
+  /**
+   * Default extremity name for the tail (source end).
+   * Defaults to "none" if not specified.
+   */
+  defaultTail?: string;
 
   /**
    * Label configuration options.
@@ -617,10 +628,8 @@ export interface AbstractEdgeProgram {
 export interface EdgeProgramOptionsWithMappings extends EdgeProgramOptions {
   /** Path name to index mapping (multi-path mode only) */
   pathNameToIndex?: Record<string, number>;
-  /** Head name to index mapping (multi-extremity mode only) */
-  headNameToIndex?: Record<string, number>;
-  /** Tail name to index mapping (multi-extremity mode only) */
-  tailNameToIndex?: Record<string, number>;
+  /** Extremity name to index mapping (multi-extremity mode only) */
+  extremityNameToIndex?: Record<string, number>;
   /** Vertex counts per combination - key: "path:head:tail" (multi-path mode only) */
   vertexCounts?: Map<string, number>;
 }
@@ -658,42 +667,40 @@ export type EdgeProgramType<
  */
 export interface NormalizedEdgeProgramOptions {
   paths: EdgePath[];
-  heads: EdgeExtremity[];
-  tails: EdgeExtremity[];
+  extremities: EdgeExtremity[];
   layers: EdgeLayer[];
   /** First path (convenience accessor) */
   path: EdgePath;
-  /** First head (convenience accessor) */
-  head: EdgeExtremity;
-  /** First tail (convenience accessor) */
-  tail: EdgeExtremity;
   /** First layer (convenience accessor) */
   layer: EdgeLayer;
-  /** Whether multiple paths/heads/tails are defined */
-  isMultiMode: boolean;
+  /** Default head extremity name */
+  defaultHead: string;
+  /** Default tail extremity name */
+  defaultTail: string;
 }
 
 /**
  * Normalizes EdgeProgramOptions and provides convenience accessors.
- * Validates that at least one path, head, tail, and layer are provided.
+ * Note: The "none" extremity is prepended by the factory, not here (to avoid circular imports).
  */
 export function normalizeEdgeProgramOptions(options: EdgeProgramOptions): NormalizedEdgeProgramOptions {
-  const { paths, heads, tails, layers } = options;
+  const { paths, layers } = options;
+  const extremities = options.extremities ?? [];
 
   if (paths.length === 0) throw new Error("At least one path is required in 'paths'");
-  if (heads.length === 0) throw new Error("At least one head extremity is required in 'heads'");
-  if (tails.length === 0) throw new Error("At least one tail extremity is required in 'tails'");
   if (layers.length === 0) throw new Error("At least one layer is required in 'layers'");
+
+  // Default head/tail to "none" (the implicit extremity)
+  const defaultHead = options.defaultHead ?? "none";
+  const defaultTail = options.defaultTail ?? "none";
 
   return {
     paths,
-    heads,
-    tails,
+    extremities,
     layers,
     path: paths[0],
-    head: heads[0],
-    tail: tails[0],
     layer: layers[0],
-    isMultiMode: paths.length > 1 || heads.length > 1 || tails.length > 1,
+    defaultHead,
+    defaultTail,
   };
 }

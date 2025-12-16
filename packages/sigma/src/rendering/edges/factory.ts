@@ -24,12 +24,37 @@ import {
   computeEdgeAttributeLayout,
 } from "./path-attribute-texture";
 import {
+  EdgeExtremity,
   EdgeLifecycleContext,
   EdgeLifecycleHooks,
   EdgeProgramOptions,
   GeneratedEdgeShaders,
   normalizeEdgeProgramOptions,
 } from "./types";
+
+/**
+ * Internal "none" extremity - no decoration at edge endpoint.
+ * This is always implicitly available in all edge programs.
+ */
+function extremityNone(): EdgeExtremity {
+  // language=GLSL
+  const glsl = /*glsl*/ `
+// No extremity - always returns positive (outside)
+float extremity_none(vec2 uv, float lengthRatio, float widthRatio) {
+  return 1.0;
+}
+`;
+
+  return {
+    name: "none",
+    glsl,
+    length: 0,
+    widthFactor: 1.0,
+    margin: 0,
+    uniforms: [],
+    attributes: [],
+  };
+}
 
 /**
  * Creates an edge program from paths, extremities, and layers.
@@ -39,35 +64,35 @@ import {
  *
  * @example
  * ```typescript
- * import { createEdgeProgram, pathLine, extremityNone, extremityArrow, layerPlain } from "sigma/rendering";
+ * import { createEdgeProgram, pathLine, pathCurved, extremityArrow, layerPlain } from "sigma/rendering";
  *
+ * // Simple line (no extremities needed - "none" is implicit)
  * const EdgeLineProgram = createEdgeProgram({
  *   paths: [pathLine()],
- *   heads: [extremityNone()],
- *   tails: [extremityNone()],
  *   layers: [layerPlain()],
  * });
  *
+ * // Arrow at head
  * const EdgeArrowProgram = createEdgeProgram({
  *   paths: [pathLine()],
- *   heads: [extremityArrow()],
- *   tails: [extremityNone()],
+ *   extremities: [extremityArrow()],
  *   layers: [layerPlain()],
+ *   defaultHead: "arrow",
  * });
  *
- * // Multi-path mode: one program supports multiple path types
+ * // Multi-path: edges select path/extremity via attributes
  * const MultiEdgeProgram = createEdgeProgram({
- *   paths: [pathLine(), pathCurved(), pathStep()],
- *   heads: [extremityNone(), extremityArrow()],
- *   tails: [extremityNone()],
+ *   paths: [pathLine(), pathCurved()],
+ *   extremities: [extremityArrow()],
  *   layers: [layerPlain()],
  * });
+ * // Edges select via: { path: "curved", head: "arrow", tail: "none" }
  *
  * const sigma = new Sigma(graph, container, {
  *   edgeProgramClasses: {
  *     line: EdgeLineProgram,
  *     arrow: EdgeArrowProgram,
- *     multi: MultiEdgeProgram, // Edges can select path via "path" attribute
+ *     multi: MultiEdgeProgram,
  *   },
  * });
  * ```
@@ -77,16 +102,22 @@ export function createEdgeProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: EdgeProgramOptions): EdgeProgramType<N, E, G> {
-  const { paths, heads, tails, layers, path, head, tail, layer, isMultiMode } = normalizeEdgeProgramOptions(options);
+  const normalized = normalizeEdgeProgramOptions(options);
+  const { paths, layers, layer, defaultHead, defaultTail } = normalized;
 
-  // Build name-to-index mappings for multi-path mode
+  // Always prepend extremityNone() so "none" is always available at index 0
+  const extremities = [extremityNone(), ...normalized.extremities];
+
+  // Build name-to-index mappings
   const pathNameToIndex: Record<string, number> = {};
-  const headNameToIndex: Record<string, number> = {};
-  const tailNameToIndex: Record<string, number> = {};
+  const extremityNameToIndex: Record<string, number> = {};
 
   paths.forEach((p, i) => (pathNameToIndex[p.name] = i));
-  heads.forEach((h, i) => (headNameToIndex[h.name] = i));
-  tails.forEach((t, i) => (tailNameToIndex[t.name] = i));
+  extremities.forEach((e, i) => (extremityNameToIndex[e.name] = i));
+
+  // Resolve default indices from names
+  const defaultHeadIndex = extremityNameToIndex[defaultHead] ?? 0;
+  const defaultTailIndex = extremityNameToIndex[defaultTail] ?? 0;
 
   // Shaders are generated lazily on first instantiation.
   // This ensures all node shapes are registered before edge shaders are compiled,
@@ -94,20 +125,22 @@ export function createEdgeProgram<
   let generated: GeneratedEdgeShaders | null = null;
 
   // Compute attribute layout once for this program configuration
-  const attributeLayout: EdgeAttributeLayout = computeEdgeAttributeLayout(isMultiMode ? paths : [path], layer);
+  const attributeLayout: EdgeAttributeLayout = computeEdgeAttributeLayout(paths, layer);
 
   // Create the edge program class
   const EdgeProgramClass = class extends BaseEdgeProgram<string, N, E, G> {
-    static readonly programOptions = options;
-    // Multi-path mappings (for sigma to look up indices from names)
+    // Store options with the prepended extremities array (for sigma to look up length ratios)
+    static readonly programOptions = { ...options, extremities };
+    // Name-to-index mappings (for sigma to look up indices from names)
     static readonly pathNameToIndex = pathNameToIndex;
-    static readonly headNameToIndex = headNameToIndex;
-    static readonly tailNameToIndex = tailNameToIndex;
-    static readonly isMultiMode = isMultiMode;
+    static readonly extremityNameToIndex = extremityNameToIndex;
+    // Default indices for head/tail when edge doesn't specify
+    static readonly defaultHeadIndex = defaultHeadIndex;
+    static readonly defaultTailIndex = defaultTailIndex;
 
     static get generatedShaders() {
       if (!generated) {
-        generated = generateEdgeShaders({ paths, heads, tails, layers });
+        generated = generateEdgeShaders({ paths, extremities, layers });
       }
       return generated;
     }
@@ -125,7 +158,7 @@ export function createEdgeProgram<
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
       // Generate shaders on first instantiation (after node shapes are registered)
       if (!generated) {
-        generated = generateEdgeShaders({ paths, heads, tails, layers });
+        generated = generateEdgeShaders({ paths, extremities, layers });
       }
 
       super(gl, pickingBuffer, renderer);
@@ -193,7 +226,7 @@ export function createEdgeProgram<
       }
 
       // Regenerate shaders
-      generated = generateEdgeShaders({ paths, heads, tails, layers: [newLayer] });
+      generated = generateEdgeShaders({ paths, extremities, layers: [newLayer] });
 
       // Rebuild WebGL program
       const gl = this.normalProgram.gl;
@@ -237,8 +270,7 @@ export function createEdgeProgram<
       const layout = this.layout;
 
       // Process path attributes
-      const pathsToProcess = isMultiMode ? paths : [path];
-      pathsToProcess.forEach((p) => {
+      paths.forEach((p) => {
         p.attributes.forEach((attr) => {
           // Get attribute name without prefix
           const name = attr.name.replace(/^a_/, "");
@@ -359,9 +391,8 @@ export function createEdgeProgram<
       // Track which uniforms we've already set to avoid duplicates
       const processedUniforms = new Set<string>();
 
-      // Path-specific uniforms - in multi-mode, iterate all paths
-      const pathsToProcess = isMultiMode ? paths : [path];
-      pathsToProcess.forEach((p) => {
+      // Path-specific uniforms
+      paths.forEach((p) => {
         p.uniforms.forEach((uniform) => {
           if (processedUniforms.has(uniform.name)) return;
           processedUniforms.add(uniform.name);
@@ -369,10 +400,9 @@ export function createEdgeProgram<
         });
       });
 
-      // Extremity uniforms - in multi-mode, iterate all heads and tails
-      const extremitiesToProcess = isMultiMode ? [...heads, ...tails] : [head, tail];
-      extremitiesToProcess.forEach((extremity) => {
-        extremity.uniforms.forEach((uniform) => {
+      // Extremity uniforms
+      extremities.forEach((ext) => {
+        ext.uniforms.forEach((uniform) => {
           if (processedUniforms.has(uniform.name)) return;
           processedUniforms.add(uniform.name);
           this.setTypedUniform(uniform, programInfo);
@@ -397,6 +427,16 @@ export function createEdgeProgram<
       super.renderProgram(params, programInfo);
     }
 
+    /**
+     * Uploads the edge path attribute texture to the GPU.
+     * Called by sigma before rendering to ensure texture data is current.
+     */
+    uploadAttributeTexture(): void {
+      if (this.edgeAttributeTexture && this.layout.floatsPerEdge > 0) {
+        this.edgeAttributeTexture.upload();
+      }
+    }
+
     kill(): void {
       // Call kill hook
       this.layerLifecycle?.kill?.();
@@ -413,11 +453,13 @@ export function createEdgeProgram<
 
   // Create and attach the label program for this edge type
   // This allows WebGL edge label rendering that follows the same path
+  const defaultHeadExtremity = extremities[defaultHeadIndex];
+  const defaultTailExtremity = extremities[defaultTailIndex];
   const LabelProgramClass = createEdgeLabelProgram({
-    path,
+    path: paths[0],
     // Pass extremity length ratios so labels know where the edge body starts/ends
-    headLengthRatio: !isAttributeSource(head.length) ? head.length : 0,
-    tailLengthRatio: !isAttributeSource(tail.length) ? tail.length : 0,
+    headLengthRatio: !isAttributeSource(defaultHeadExtremity.length) ? defaultHeadExtremity.length : 0,
+    tailLengthRatio: !isAttributeSource(defaultTailExtremity.length) ? defaultTailExtremity.length : 0,
     // Pass label styling options from EdgeProgramOptions (spread since interfaces match)
     ...options.label,
   });

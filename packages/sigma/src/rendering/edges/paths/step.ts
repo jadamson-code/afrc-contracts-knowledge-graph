@@ -70,8 +70,7 @@ export interface StepPathOptions {
  * ```typescript
  * const EdgeStepProgram = createEdgeProgram({
  *   paths: [pathStep({ orientation: "horizontal" })],
- *   heads: [extremityArrow()],
- *   tails: [extremityNone()],
+ *   extremities: [extremityNone(), extremityArrow()],
  *   layers: [layerPlain()],
  * });
  * ```

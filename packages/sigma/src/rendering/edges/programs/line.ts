@@ -6,7 +6,6 @@
  *
  * @module
  */
-import { extremityNone } from "../extremities";
 import { createEdgeProgram } from "../factory";
 import { layerPlain } from "../layers";
 import { pathLine } from "../paths";
@@ -28,8 +27,6 @@ import { pathLine } from "../paths";
  */
 export const EdgeLineProgram = createEdgeProgram({
   paths: [pathLine()],
-  heads: [extremityNone()],
-  tails: [extremityNone()],
   layers: [layerPlain()],
 });
 

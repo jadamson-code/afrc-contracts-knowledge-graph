@@ -1867,6 +1867,11 @@ export default class Sigma<
       this.nodePrograms[type].uploadLayerTexture?.();
     }
 
+    // Upload path attribute textures for all edge programs
+    for (const type in this.edgePrograms) {
+      (this.edgePrograms[type] as unknown as { uploadAttributeTexture?: () => void }).uploadAttributeTexture?.();
+    }
+
     // Bind data textures to their respective texture units
     this.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
     this.edgeDataTexture!.bind(EDGE_DATA_TEXTURE_UNIT);
@@ -2219,68 +2224,46 @@ export default class Sigma<
     // Allocate edge in edge data texture (or get existing allocation)
     const edgeTextureIndex = this.edgeDataTexture!.allocateEdge(edge);
 
-    // Get program class and options
+    // Get program class static properties
     const edgeProgramClass = this.settings.edgeProgramClasses[data.type];
-    const programOptions = (edgeProgramClass as unknown as {
-      programOptions?: {
-        path?: { length?: number };
-        paths?: Array<{ name: string; length?: number }>;
-        head?: { length?: number };
-        heads?: Array<{ name: string; length: number }>;
-        tail?: { length?: number };
-        tails?: Array<{ name: string; length: number }>;
-      };
-      isMultiMode?: boolean;
+    const programStatic = edgeProgramClass as unknown as {
+      programOptions?: { extremities?: Array<{ name: string; length: number }> };
       pathNameToIndex?: Record<string, number>;
-      headNameToIndex?: Record<string, number>;
-      tailNameToIndex?: Record<string, number>;
-    }).programOptions;
+      extremityNameToIndex?: Record<string, number>;
+      defaultHeadIndex?: number;
+      defaultTailIndex?: number;
+    };
 
-    // Check if program supports multi-path mode
-    const isMultiMode = (edgeProgramClass as unknown as { isMultiMode?: boolean }).isMultiMode ?? false;
-    const pathNameToIndex = (edgeProgramClass as unknown as { pathNameToIndex?: Record<string, number> }).pathNameToIndex;
-    const headNameToIndex = (edgeProgramClass as unknown as { headNameToIndex?: Record<string, number> }).headNameToIndex;
-    const tailNameToIndex = (edgeProgramClass as unknown as { tailNameToIndex?: Record<string, number> }).tailNameToIndex;
+    const pathNameToIndex = programStatic.pathNameToIndex;
+    const extremityNameToIndex = programStatic.extremityNameToIndex;
+    const extremitiesPool = programStatic.programOptions?.extremities;
 
-    // Get path/head/tail indices and length ratios
+    // Start with program defaults
     let pathId = 0;
-    let headId = 0;
-    let tailId = 0;
-    let headLengthRatio = programOptions?.head?.length ?? 0;
-    let tailLengthRatio = programOptions?.tail?.length ?? 0;
+    let headId = programStatic.defaultHeadIndex ?? 0;
+    let tailId = programStatic.defaultTailIndex ?? 0;
 
-    if (isMultiMode && pathNameToIndex && headNameToIndex && tailNameToIndex) {
-      // Multi-path mode: look up indices from edge data attributes
-      const edgeData = data as unknown as { path?: string; head?: string; tail?: string };
-      const pathName = edgeData.path;
-      const headName = edgeData.head;
-      const tailName = edgeData.tail;
+    // Get edge-specified path/head/tail names
+    const edgeData = data as unknown as { path?: string; head?: string; tail?: string };
 
-      // Get path index
-      if (pathName && pathNameToIndex[pathName] !== undefined) {
-        pathId = pathNameToIndex[pathName];
-      }
-
-      // Get head index and length ratio
-      if (headName && headNameToIndex[headName] !== undefined) {
-        headId = headNameToIndex[headName];
-        // Get length ratio from the corresponding head in the heads array
-        const heads = programOptions?.heads;
-        if (heads && heads[headId]) {
-          headLengthRatio = heads[headId].length;
-        }
-      }
-
-      // Get tail index and length ratio
-      if (tailName && tailNameToIndex[tailName] !== undefined) {
-        tailId = tailNameToIndex[tailName];
-        // Get length ratio from the corresponding tail in the tails array
-        const tails = programOptions?.tails;
-        if (tails && tails[tailId]) {
-          tailLengthRatio = tails[tailId].length;
-        }
-      }
+    // Override path index if edge specifies one
+    if (edgeData.path && pathNameToIndex?.[edgeData.path] !== undefined) {
+      pathId = pathNameToIndex[edgeData.path];
     }
+
+    // Override head index if edge specifies one
+    if (edgeData.head && extremityNameToIndex?.[edgeData.head] !== undefined) {
+      headId = extremityNameToIndex[edgeData.head];
+    }
+
+    // Override tail index if edge specifies one
+    if (edgeData.tail && extremityNameToIndex?.[edgeData.tail] !== undefined) {
+      tailId = extremityNameToIndex[edgeData.tail];
+    }
+
+    // Get length ratios from the resolved extremities
+    const headLengthRatio = extremitiesPool?.[headId]?.length ?? 0;
+    const tailLengthRatio = extremitiesPool?.[tailId]?.length ?? 0;
 
     // Update edge data texture with core edge data
     // Path-specific attributes (curvature, etc.) are stored in EdgePathAttributeTexture

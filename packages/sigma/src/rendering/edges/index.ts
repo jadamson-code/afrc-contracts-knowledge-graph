@@ -45,7 +45,7 @@ export {
 } from "./paths";
 
 // Extremities
-export { extremityNone, extremityArrow, type ArrowExtremityOptions } from "./extremities";
+export { extremityArrow, type ArrowExtremityOptions } from "./extremities";
 
 // Layers (edge body appearance)
 export {

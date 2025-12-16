@@ -61,8 +61,7 @@ export interface StepCurvedPathOptions {
  * ```typescript
  * const EdgeStepCurvedProgram = createEdgeProgram({
  *   paths: [pathStepCurved({ orientation: "horizontal" })],
- *   heads: [extremityArrow()],
- *   tails: [extremityNone()],
+ *   extremities: [extremityNone(), extremityArrow()],
  *   layers: [layerPlain()],
  * });
  * ```

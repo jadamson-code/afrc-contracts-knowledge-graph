@@ -43,8 +43,7 @@ export interface CurvedPathOptions {
  * ```typescript
  * const EdgeCurvedProgram = createEdgeProgram({
  *   paths: [pathCurved({ segments: 16 })],
- *   heads: [extremityArrow()],
- *   tails: [extremityNone()],
+ *   extremities: [extremityNone(), extremityArrow()],
  *   layers: [layerPlain()],
  * });
  * ```

@@ -16,7 +16,6 @@ import {
   createEdgeProgram,
   createNodeProgram,
   extremityArrow,
-  extremityNone,
   layerFill,
   layerPlain,
   pathCurved,
@@ -100,34 +99,34 @@ export default () => {
     {
       name: "above",
       displayLabel: "Above",
-      head: extremityNone(),
-      tail: extremityNone(),
+      head: "none" as const,
+      tail: "none" as const,
       labelPosition: "above" as const, // Used to set label.position in the program
     },
     {
       name: "below",
       displayLabel: "Below",
-      head: extremityNone(),
-      tail: extremityNone(),
+      head: "none" as const,
+      tail: "none" as const,
       labelPosition: "below" as const, // Used to set label.position in the program
     },
     {
       name: "arrow-head",
       displayLabel: "Auto + arrow",
-      head: extremityArrow(),
-      tail: extremityNone(),
+      head: "arrow" as const,
+      tail: "none" as const,
     },
     {
       name: "double-arrow",
       displayLabel: "Auto + both arrows",
-      head: extremityArrow(),
-      tail: extremityArrow(),
+      head: "arrow" as const,
+      tail: "arrow" as const,
     },
     {
       name: "over-arrow",
       displayLabel: "Over + arrow",
-      head: extremityArrow(),
-      tail: extremityNone(),
+      head: "arrow" as const,
+      tail: "none" as const,
       labelPosition: "over" as const,
       textBorder: { width: 10, color: "#fff" },
       textColor: "#000",
@@ -135,8 +134,8 @@ export default () => {
     {
       name: "over-double",
       displayLabel: "Over + both arrows",
-      head: extremityArrow(),
-      tail: extremityArrow(),
+      head: "arrow" as const,
+      tail: "arrow" as const,
       labelPosition: "over" as const,
       textBorder: { width: 10, color: "#fff" },
       textColor: "#000",
@@ -144,16 +143,16 @@ export default () => {
     {
       name: "scaled-above",
       displayLabel: "Scaled size + above",
-      head: extremityNone(),
-      tail: extremityNone(),
+      head: "none" as const,
+      tail: "none" as const,
       labelPosition: "above" as const,
       fontSizeMode: "scaled" as const,
     },
     {
       name: "scaled-over",
       displayLabel: "Scaled size + over",
-      head: extremityArrow(),
-      tail: extremityNone(),
+      head: "arrow" as const,
+      tail: "none" as const,
       labelPosition: "over" as const,
       fontSizeMode: "scaled" as const,
       textBorder: { width: 10, color: "#fff" },
@@ -187,10 +186,14 @@ export default () => {
             }
           : undefined;
 
+      // Only include extremityArrow() if head or tail uses it
+      const needsArrow = col.head === "arrow" || col.tail === "arrow";
+
       edgeProgramClasses[edgeType] = createEdgeProgram({
         paths: [row.path],
-        heads: [col.head],
-        tails: [col.tail],
+        extremities: needsArrow ? [extremityArrow()] : [],
+        defaultHead: col.head,
+        defaultTail: col.tail,
         label: labelOptions,
         layers: [layerPlain()],
       });
@@ -241,6 +244,9 @@ export default () => {
         forceLabel: true,
         // Curvature for curved edges
         curvature: row.name === "curved" ? 0.3 : 0,
+        // Select extremities from the shared pool
+        head: col.head,
+        tail: col.tail,
       });
     }
   }

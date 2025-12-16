@@ -13,9 +13,8 @@ import {
   createEdgeProgram,
   createNodeProgram,
   extremityArrow,
-  extremityNone,
-  layerPlain,
   layerFill,
+  layerPlain,
   pathCurved,
   pathCurvedS,
   pathLine,
@@ -57,10 +56,8 @@ export default () => {
       pathStepCurved({ orientation: "automatic" }),
       pathCurvedS({ orientation: "automatic" }),
     ],
-    // Multiple head extremities - each edge selects via "head" attribute
-    heads: [extremityNone(), extremityArrow()],
-    // Multiple tail extremities - each edge selects via "tail" attribute
-    tails: [extremityNone(), extremityArrow()],
+    // Extremity pool - "none" is always implicit, edges select via "head"/"tail" attributes
+    extremities: [extremityArrow()],
     // Layers apply to all edges in this program
     layers: [layerPlain()],
   });

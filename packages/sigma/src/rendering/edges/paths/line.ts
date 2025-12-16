@@ -21,8 +21,7 @@ import { EdgePath } from "../types";
  * ```typescript
  * const EdgeLineProgram = createEdgeProgram({
  *   paths: [pathLine()],
- *   heads: [extremityNone()],
- *   tails: [extremityNone()],
+ *   extremities: [extremityNone()],
  *   layers: [layerPlain()],
  * });
  * ```

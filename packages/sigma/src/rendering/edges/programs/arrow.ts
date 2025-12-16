@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { extremityArrow, extremityNone } from "../extremities";
+import { extremityArrow } from "../extremities";
 import { createEdgeProgram } from "../factory";
 import { layerPlain } from "../layers";
 import { pathLine } from "../paths";
@@ -29,9 +29,9 @@ import { pathLine } from "../paths";
  */
 export const EdgeArrowProgram = createEdgeProgram({
   paths: [pathLine()],
-  heads: [extremityArrow()],
-  tails: [extremityNone()],
+  extremities: [extremityArrow()],
   layers: [layerPlain()],
+  defaultHead: "arrow",
 });
 
 export default EdgeArrowProgram;

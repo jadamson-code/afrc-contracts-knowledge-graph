@@ -6,7 +6,6 @@
  *
  * @module
  */
-import { extremityNone } from "../extremities";
 import { createEdgeProgram } from "../factory";
 import { layerPlain } from "../layers";
 import { pathCurved } from "../paths";
@@ -33,8 +32,6 @@ import { pathCurved } from "../paths";
  */
 export const EdgeCurveProgram = createEdgeProgram({
   paths: [pathCurved()],
-  heads: [extremityNone()],
-  tails: [extremityNone()],
   layers: [layerPlain()],
 });
 

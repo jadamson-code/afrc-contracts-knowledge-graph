@@ -44,7 +44,7 @@ function getTextureUnitOffset(name: string): number {
   // Hash name to deterministic slot (1, 2, or 3)
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
-    hash = ((hash << 5) - hash) + name.charCodeAt(i);
+    hash = (hash << 5) - hash + name.charCodeAt(i);
   }
   const slot = 1 + (Math.abs(hash) % 3);
   return SIGMA_RESERVED_UNITS + slot * UNITS_PER_LAYER;
@@ -218,14 +218,14 @@ function createLayerDefinition(
  * ```typescript
  * // Simple usage - TextureManager created automatically
  * const Program = createNodeProgram({
- *   shape: sdfCircle(),
+ *   shapes: [sdfCircle()],
  *   layers: [layerImage({ drawingMode: "image", padding: 0.1 })],
  * });
  *
  * // Shared TextureManager across multiple programs
  * const sharedTM = new TextureManager();
  * const Program1 = createNodeProgram({
- *   shape: sdfCircle(),
+ *   shapes: [sdfCircle()],
  *   layers: [layerImage({ textureManager: sharedTM })],
  * });
  * ```

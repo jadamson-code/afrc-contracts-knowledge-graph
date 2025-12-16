@@ -3,12 +3,12 @@
  * ==================================================================
  *
  * Step path variant with rounded corners instead of sharp 90° angles.
- * Uses quadratic Bezier curves at corners for smooth transitions.
+ * Uses quadratic Bézier curves at corners for smooth transitions.
  *
  * @module
  */
-import { generateRotate2D } from "../shared-glsl";
 import { numberToGLSLFloat } from "../../utils";
+import { generateRotate2D } from "../shared-glsl";
 import { EdgePath } from "../types";
 
 /**
@@ -60,10 +60,10 @@ export interface StepCurvedPathOptions {
  * @example
  * ```typescript
  * const EdgeStepCurvedProgram = createEdgeProgram({
- *   path: pathStepCurved({ orientation: "horizontal" }),
- *   head: extremityArrow(),
- *   tail: extremityNone(),
- *   filling: fillingPlain(),
+ *   paths: [pathStepCurved({ orientation: "horizontal" })],
+ *   heads: [extremityArrow()],
+ *   tails: [extremityNone()],
+ *   layers: [layerPlain()],
  * });
  * ```
  */

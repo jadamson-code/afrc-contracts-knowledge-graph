@@ -6,29 +6,30 @@
  *
  * @module
  */
+import { ValueSource } from "sigma/rendering";
 import { NonEmptyArray } from "sigma/types";
 
 /**
  * Specifies the color of a piechart slice.
+ * - string: Fixed CSS color value (e.g., "#ff0000")
+ * - { attribute, default? }: Read from node attribute
+ * - { transparent: true }: Fully transparent
  */
-export type PiechartSliceColor =
-  | { value: string } // Fixed color value
-  | { attribute: string; defaultValue?: string } // Read from node attribute
-  | { transparent: true }; // Transparent
+export type PiechartSliceColor = ValueSource<string> | { transparent: true };
 
 /**
  * Specifies the value (size) of a piechart slice.
+ * - number: Fixed value
+ * - { attribute, default? }: Read from node attribute
  */
-export type PiechartSliceValue =
-  | { value: number } // Fixed value
-  | { attribute: string }; // Read from node attribute
+export type PiechartSliceValue = ValueSource<number>;
 
 /**
  * Specifies the offset angle of the piechart.
+ * - number: Fixed offset in radians
+ * - { attribute, default? }: Read from node attribute
  */
-export type PiechartOffset =
-  | { value: number } // Fixed offset in radians
-  | { attribute: string }; // Read from node attribute
+export type PiechartOffset = ValueSource<number>;
 
 /**
  * @deprecated Use PiechartSliceColor instead.
@@ -56,7 +57,7 @@ export interface LayerPiechartOptions {
   /**
    * Offset angle for the piechart in radians.
    * Allows rotating the starting position of the first slice.
-   * Default: { value: 0 }
+   * Default: 0
    */
   offset?: PiechartOffset;
 
@@ -69,7 +70,6 @@ export interface LayerPiechartOptions {
 
 /**
  * Options for the createNodePiechartProgram() function.
- * Maintains backward compatibility with the original API.
  */
 export interface CreateNodePiechartProgramOptions {
   /**
@@ -82,7 +82,7 @@ export interface CreateNodePiechartProgramOptions {
 
   /**
    * Offset angle for the piechart in radians.
-   * Default: { value: 0 }
+   * Default: 0
    */
   offset: PiechartOffset;
 
@@ -103,5 +103,5 @@ export const DEFAULT_COLOR = "#000000";
  */
 export const DEFAULT_CREATE_NODE_PIECHART_OPTIONS: Omit<CreateNodePiechartProgramOptions, "slices"> = {
   defaultColor: DEFAULT_COLOR,
-  offset: { value: 0 },
+  offset: 0,
 };

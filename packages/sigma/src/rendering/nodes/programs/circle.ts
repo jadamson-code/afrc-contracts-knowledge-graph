@@ -25,7 +25,7 @@ import { sdfCircle } from "../shapes";
  * ```
  */
 const NodeCircleProgram = createNodeProgram({
-  shape: sdfCircle(),
+  shapes: [sdfCircle()],
   layers: [layerFill()],
 });
 

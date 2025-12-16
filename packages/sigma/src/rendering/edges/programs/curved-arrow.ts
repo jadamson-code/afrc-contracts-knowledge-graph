@@ -8,7 +8,7 @@
  */
 import { extremityArrow, extremityNone } from "../extremities";
 import { createEdgeProgram } from "../factory";
-import { fillingPlain } from "../fillings";
+import { layerPlain } from "../layers";
 import { pathCurved } from "../paths";
 
 /**
@@ -32,10 +32,10 @@ import { pathCurved } from "../paths";
  * ```
  */
 export const EdgeCurvedArrowProgram = createEdgeProgram({
-  path: pathCurved(),
-  head: extremityArrow(),
-  tail: extremityNone(),
-  filling: fillingPlain(),
+  paths: [pathCurved()],
+  heads: [extremityArrow()],
+  tails: [extremityNone()],
+  layers: [layerPlain()],
 });
 
 export default EdgeCurvedArrowProgram;

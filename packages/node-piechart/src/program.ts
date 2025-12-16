@@ -8,7 +8,7 @@
  * @module
  */
 import { Attributes } from "graphology-types";
-import { createNodeProgram, NodeProgramType, sdfCircle } from "sigma/rendering";
+import { NodeProgramType, createNodeProgram, sdfCircle } from "sigma/rendering";
 import { PartialButFor } from "sigma/types";
 
 import { layerPiechart } from "./layer";
@@ -59,7 +59,7 @@ export function createNodePiechartProgram<
 
   // Create the node program with circle shape and piechart layer
   return createNodeProgram<N, E, G>({
-    shape: sdfCircle(),
+    shapes: [sdfCircle()],
     layers: [layerPiechart({ slices, offset, defaultColor })],
   });
 }

@@ -53,17 +53,10 @@ const POSITION_MODE_MAP: Record<LabelPosition, number> = {
  */
 export interface CreateLabelProgramOptions {
   /**
-   * The SDF shape definition for edge detection.
-   * Must match the shape used by the corresponding node program.
-   * Use this for single-shape programs.
-   */
-  shape?: SDFShape;
-
-  /**
-   * Array of SDF shape definitions for multi-shape programs.
+   * Array of SDF shape definitions.
    * The label will use the correct shape based on each node's shapeId.
    */
-  shapes?: SDFShape[];
+  shapes: SDFShape[];
 
   /**
    * Whether nodes rotate with the camera.
@@ -119,15 +112,13 @@ export function createLabelProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: CreateLabelProgramOptions): LabelProgramType<N, E, G> {
-  const { rotateWithCamera = false, label: labelOptions = {} } = options;
+  const { rotateWithCamera = false, label: labelOptions = {}, shapes } = options;
   const labelAngle = labelOptions.angle ?? 0;
   const labelPosition = labelOptions.position ?? "right";
   const labelMargin = labelOptions.margin ?? 1;
 
-  // Normalize to shapes array (support both single shape and multi-shape modes)
-  const shapes = options.shapes || (options.shape ? [options.shape] : []);
   if (shapes.length === 0) {
-    throw new Error("createLabelProgram: either 'shape' or 'shapes' must be provided");
+    throw new Error("createLabelProgram: at least one shape must be provided in 'shapes'");
   }
 
   // Generate shaders at factory creation time (not per-instance)

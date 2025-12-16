@@ -1,14 +1,14 @@
 /**
- * Sigma.js Edge Filling - Dashed
- * ===============================
+ * Sigma.js Edge Layer - Dashed
+ * ============================
  *
- * Dashed pattern filling for edges with antialiased boundaries.
+ * Dashed pattern layer for edges with antialiased boundaries.
  *
  * @module
  */
 import { parseColor } from "../../../utils";
-import { Vec3, Vec4 } from "../../nodes/types";
-import { EdgeFilling } from "../types";
+import { isAttributeSource, Vec3, Vec4, ValueSource } from "../../nodes/types";
+import { EdgeLayer } from "../types";
 
 /**
  * Represents a dash-related value that can be specified either
@@ -23,8 +23,12 @@ export type DashValue =
 
 /**
  * Specifies how gaps between dashes should be rendered.
+ * - "transparent": Fully transparent gaps
+ * - number (0-1): Same color as dash but with this opacity
+ * - string: CSS color for gaps (constant for all edges)
+ * - { attribute, default? }: Per-edge attribute name for gap color
  */
-export type GapFilling = "transparent" | number | string | { attribute: string };
+export type GapFilling = "transparent" | ValueSource<string | number>;
 
 /**
  * Specifies which extremities should be rendered solid (not dashed).
@@ -37,9 +41,9 @@ export type SolidExtremities = boolean | "head" | "tail";
 export type SolidMargin = number | { head?: number; tail?: number };
 
 /**
- * Options for the dashed filling.
+ * Options for the dashed layer.
  */
-export interface FillingDashedOptions {
+export interface LayerDashedOptions {
   /**
    * Size of each dash.
    * Can be a number (pixels) or { thicknessRelative: number } (multiple of thickness).
@@ -180,12 +184,16 @@ function parseGapOption(gap: GapFilling | undefined): {
     const b = (parsed.b / 255) * a;
     return { mode: GAP_MODE_CONSTANT_COLOR, color: [r, g, b, a], opacity: 0, attribute: null };
   }
-  // Per-edge attribute
-  return { mode: GAP_MODE_ATTRIBUTE_COLOR, color: [0, 0, 0, 0], opacity: 0, attribute: gap.attribute };
+  // Per-edge attribute (with optional default)
+  if (isAttributeSource(gap)) {
+    return { mode: GAP_MODE_ATTRIBUTE_COLOR, color: [0, 0, 0, 0], opacity: 0, attribute: gap.attribute };
+  }
+  // Shouldn't reach here, but TypeScript needs it
+  return { mode: GAP_MODE_TRANSPARENT, color: [0, 0, 0, 0], opacity: 0, attribute: null };
 }
 
 /**
- * Creates a dashed pattern filling for edges.
+ * Creates a dashed pattern layer for edges.
  *
  * The edge is rendered with a repeating dash-gap pattern. Each parameter
  * can be specified in absolute pixels or relative to the edge thickness,
@@ -193,39 +201,39 @@ function parseGapOption(gap: GapFilling | undefined): {
  * are properly antialiased.
  *
  * @param options - Configuration for dash size, gap size, offset, gap color, and alignment
- * @returns EdgeFilling definition for dashed pattern
+ * @returns EdgeLayer definition for dashed pattern
  *
  * @example
  * ```typescript
  * // Simple dashed line (10px dash, 5px gap, centered)
- * fillingDashed({ dashSize: 10, gapSize: 5 })
+ * layerDashed({ dashSize: 10, gapSize: 5 })
  *
  * // Dashes relative to thickness
- * fillingDashed({
+ * layerDashed({
  *   dashSize: { thicknessRelative: 2 },
  *   gapSize: { thicknessRelative: 1 },
  * })
  *
  * // Semi-transparent gaps
- * fillingDashed({ dashSize: 10, gapSize: 10, gap: 0.3 })
+ * layerDashed({ dashSize: 10, gapSize: 10, gap: 0.3 })
  *
  * // Colored gaps
- * fillingDashed({ dashSize: 10, gapSize: 10, gap: "#ff0000" })
+ * layerDashed({ dashSize: 10, gapSize: 10, gap: "#ff0000" })
  *
  * // Pattern aligned to start
- * fillingDashed({ dashSize: 10, gapSize: 5, align: 0 })
+ * layerDashed({ dashSize: 10, gapSize: 5, align: 0 })
  *
  * // Solid extremities (arrows stay solid, body is dashed)
- * fillingDashed({ dashSize: 10, gapSize: 5, solidExtremities: true })
+ * layerDashed({ dashSize: 10, gapSize: 5, solidExtremities: true })
  *
  * // Only head extremity solid
- * fillingDashed({ dashSize: 10, gapSize: 5, solidExtremities: "head" })
+ * layerDashed({ dashSize: 10, gapSize: 5, solidExtremities: "head" })
  *
  * // Extra solid margin at head end (5px solid before dashes)
- * fillingDashed({ dashSize: 10, gapSize: 5, solidMargin: { head: 5 } })
+ * layerDashed({ dashSize: 10, gapSize: 5, solidMargin: { head: 5 } })
  *
  * // Combine solid extremities with extra margins
- * fillingDashed({
+ * layerDashed({
  *   dashSize: 10,
  *   gapSize: 5,
  *   solidExtremities: true,
@@ -233,7 +241,7 @@ function parseGapOption(gap: GapFilling | undefined): {
  * })
  * ```
  */
-export function fillingDashed(options: FillingDashedOptions = {}): EdgeFilling {
+export function layerDashed(options: LayerDashedOptions = {}): EdgeLayer {
   const dash = parseDashValue(options.dashSize, 10);
   const gap = parseDashValue(options.gapSize, 10);
   const offset = parseDashValue(options.dashOffset, 0);
@@ -246,7 +254,7 @@ export function fillingDashed(options: FillingDashedOptions = {}): EdgeFilling {
   const sizeMode: Vec3 = [dash.isRatio ? 1.0 : 0.0, gap.isRatio ? 1.0 : 0.0, offset.isRatio ? 1.0 : 0.0];
 
   // Build uniforms list
-  const uniforms: EdgeFilling["uniforms"] = [
+  const uniforms: EdgeLayer["uniforms"] = [
     { name: "u_dashSize", type: "float", value: dash.value },
     { name: "u_gapSize", type: "float", value: gap.value },
     { name: "u_dashOffset", type: "float", value: offset.value },
@@ -266,7 +274,7 @@ export function fillingDashed(options: FillingDashedOptions = {}): EdgeFilling {
   ];
 
   // Build attributes list (only if using per-edge gap color)
-  const attributes: EdgeFilling["attributes"] = [];
+  const attributes: EdgeLayer["attributes"] = [];
   if (gapConfig.attribute) {
     attributes.push({
       name: "a_gapColor",
@@ -279,7 +287,7 @@ export function fillingDashed(options: FillingDashedOptions = {}): EdgeFilling {
 
   // language=GLSL
   const glsl = /*glsl*/ `
-// Dashed pattern filling with antialiased boundaries
+// Dashed pattern layer with antialiased boundaries
 // Uniforms:
 //   u_dashSize: size of each dash
 //   u_gapSize: size of gaps between dashes
@@ -293,7 +301,7 @@ export function fillingDashed(options: FillingDashedOptions = {}): EdgeFilling {
 //   u_solidMargin: vec2(tail, head) - extra solid margin in pixels
 ${gapConfig.attribute ? "// Varying: v_gapColor for per-edge gap color" : ""}
 
-vec4 filling_dashed(EdgeContext ctx) {
+vec4 layer_dashed(EdgeContext ctx) {
   // Check for solid zones first (extremities and margins)
   // v_zone: 0=tail extremity, 1=body, 2=head extremity
   // v_tailLengthRatio and v_headLengthRatio give extremity lengths as ratio of thickness

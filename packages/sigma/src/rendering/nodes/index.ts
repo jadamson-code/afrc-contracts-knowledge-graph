@@ -35,6 +35,9 @@ export type {
   Mat4,
 } from "./types";
 
+// Value source helper
+export { isAttributeSource } from "./types";
+
 // SDF Shapes
 export { sdfCircle, sdfSquare, sdfTriangle, sdfDiamond } from "./shapes";
 export type { SquareOptions, TriangleOptions, DiamondOptions } from "./shapes";

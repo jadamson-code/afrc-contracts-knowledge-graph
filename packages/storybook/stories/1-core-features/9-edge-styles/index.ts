@@ -14,7 +14,7 @@ import {
   createNodeProgram,
   extremityArrow,
   extremityNone,
-  fillingPlain,
+  layerPlain,
   layerFill,
   pathCurved,
   pathCurvedS,
@@ -61,8 +61,8 @@ export default () => {
     heads: [extremityNone(), extremityArrow()],
     // Multiple tail extremities - each edge selects via "tail" attribute
     tails: [extremityNone(), extremityArrow()],
-    // Filling applies to all edges in this program
-    filling: fillingPlain(),
+    // Layers apply to all edges in this program
+    layers: [layerPlain()],
   });
 
   // Path names for the demo (must match the names from path factories)

@@ -73,9 +73,9 @@ export default () => {
   const NodePiechartProgram = createNodePiechartProgram({
     defaultColor: "#BCB7C4",
     slices: [
-      { color: { value: "#F05454" }, value: { attribute: "negative" } },
-      { color: { value: "#7798FA" }, value: { attribute: "neutral" } },
-      { color: { value: "#6DDB55" }, value: { attribute: "positive" } },
+      { color: "#F05454", value: { attribute: "negative" } },
+      { color: "#7798FA", value: { attribute: "neutral" } },
+      { color: "#6DDB55", value: { attribute: "positive" } },
     ],
   });
   const renderer = new Sigma(graph, container, {

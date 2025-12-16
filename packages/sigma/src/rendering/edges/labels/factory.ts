@@ -23,11 +23,11 @@ import type Sigma from "../../../sigma";
 import type { EdgeLabelDisplayData, EdgeLabelPosition, RenderParams } from "../../../types";
 import { floatColor } from "../../../utils";
 import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
-import { fillingPlain } from "../fillings/plain";
+import { layerPlain } from "../layers";
 import {
-  computeEdgeAttributeLayout,
   EDGE_ATTRIBUTE_TEXTURE_UNIT,
   EdgePathAttributeTexture,
+  computeEdgeAttributeLayout,
 } from "../path-attribute-texture";
 import type { EdgeLabelOptions, EdgePath } from "../types";
 import { EdgeLabelProgram } from "./base";
@@ -234,8 +234,8 @@ export function createEdgeLabelProgram<
       super(gl, pickingBuffer, renderer);
 
       // Initialize edge attribute texture for path attributes (curvature, etc.)
-      const filling = fillingPlain();
-      this.attributeLayout = computeEdgeAttributeLayout([path], filling);
+      const layer = layerPlain();
+      this.attributeLayout = computeEdgeAttributeLayout([path], layer);
       this.edgeAttributeTexture = new EdgePathAttributeTexture(gl, this.attributeLayout);
       this.packedAttributeData = new Float32Array(this.attributeLayout.floatsPerEdge);
 

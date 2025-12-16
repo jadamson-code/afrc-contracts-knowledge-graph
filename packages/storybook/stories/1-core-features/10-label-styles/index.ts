@@ -86,7 +86,7 @@ export default () => {
       for (const position of LABEL_POSITIONS) {
         const nodeType = `${shape}-${position}`;
         const NodeProgram = createNodeProgram({
-          shape: getShape(shape),
+          shapes: [getShape(shape)],
           layers: [layerFill()],
           rotateWithCamera,
           label: {

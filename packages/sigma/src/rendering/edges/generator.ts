@@ -3,12 +3,13 @@
  * ===============================
  *
  * Generates GLSL shaders for composable edge programs.
- * Composes path geometry, extremities (head/tail), and fillings into
+ * Composes path geometry, extremities (head/tail), and layers into
  * single-pass WebGL shaders.
  *
  * @module
  */
-import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../shapes/registry";
+import { isAttributeSource } from "../nodes";
+import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../shapes";
 import { numberToGLSLFloat } from "../utils";
 import { computeEdgeAttributeLayout, generateEdgeAttributeTextureFetch } from "./path-attribute-texture";
 import {
@@ -20,7 +21,7 @@ import {
 import {
   AttributeSpecification,
   EdgeExtremity,
-  EdgeFilling,
+  EdgeLayer,
   EdgePath,
   EdgeProgramOptions,
   GeneratedEdgeShaders,
@@ -40,13 +41,13 @@ export type EdgeShaderGenerationOptions = EdgeProgramOptions;
 // ============================================================================
 
 /**
- * Collects all uniforms from multiple paths, heads, tails, and filling.
+ * Collects all uniforms from multiple paths, heads, tails, and layer.
  */
 function collectUniformsMulti(
   paths: EdgePath[],
   heads: EdgeExtremity[],
   tails: EdgeExtremity[],
-  filling: EdgeFilling,
+  layer: EdgeLayer,
 ): string[] {
   const standardUniforms = new Set([
     "u_matrix",
@@ -71,7 +72,7 @@ function collectUniformsMulti(
   paths.forEach((p) => p.uniforms.forEach((u) => uniforms.add(u.name)));
   heads.forEach((h) => h.uniforms.forEach((u) => uniforms.add(u.name)));
   tails.forEach((t) => t.uniforms.forEach((u) => uniforms.add(u.name)));
-  filling.uniforms.forEach((u) => uniforms.add(u.name));
+  layer.uniforms.forEach((u) => uniforms.add(u.name));
 
   return Array.from(uniforms);
 }
@@ -130,9 +131,7 @@ function generatePathPositionSelector(paths: EdgePath[]): string {
 }`;
   }
 
-  const cases = paths
-    .map((p, i) => `    case ${i}: return path_${p.name}_position(t, source, target);`)
-    .join("\n");
+  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_position(t, source, target);`).join("\n");
 
   return `vec2 queryPathPosition(int pathId, float t, vec2 source, vec2 target) {
   switch (pathId) {
@@ -152,9 +151,7 @@ function generatePathTangentSelector(paths: EdgePath[]): string {
 }`;
   }
 
-  const cases = paths
-    .map((p, i) => `    case ${i}: return path_${p.name}_tangent(t, source, target);`)
-    .join("\n");
+  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_tangent(t, source, target);`).join("\n");
 
   return `vec2 queryPathTangent(int pathId, float t, vec2 source, vec2 target) {
   switch (pathId) {
@@ -174,9 +171,7 @@ function generatePathNormalSelector(paths: EdgePath[]): string {
 }`;
   }
 
-  const cases = paths
-    .map((p, i) => `    case ${i}: return path_${p.name}_normal(t, source, target);`)
-    .join("\n");
+  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_normal(t, source, target);`).join("\n");
 
   return `vec2 queryPathNormal(int pathId, float t, vec2 source, vec2 target) {
   switch (pathId) {
@@ -196,9 +191,7 @@ function generatePathLengthSelector(paths: EdgePath[]): string {
 }`;
   }
 
-  const cases = paths
-    .map((p, i) => `    case ${i}: return path_${p.name}_length(source, target);`)
-    .join("\n");
+  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_length(source, target);`).join("\n");
 
   return `float queryPathLength(int pathId, vec2 source, vec2 target) {
   switch (pathId) {
@@ -218,9 +211,7 @@ function generatePathClosestTSelector(paths: EdgePath[]): string {
 }`;
   }
 
-  const cases = paths
-    .map((p, i) => `    case ${i}: return path_${p.name}_closest_t(p, source, target);`)
-    .join("\n");
+  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_closest_t(p, source, target);`).join("\n");
 
   return `float queryPathClosestT(int pathId, vec2 p, vec2 source, vec2 target) {
   switch (pathId) {
@@ -267,11 +258,17 @@ function generateAllClampFunctions(paths: EdgePath[]): string {
   // Generate selector functions if multi-path
   if (paths.length > 1) {
     const sourceCases = paths
-      .map((p, i) => `    case ${i}: return findSourceClampT_${p.name}(source, sourceSize, sourceShapeId, target, margin);`)
+      .map(
+        (p, i) =>
+          `    case ${i}: return findSourceClampT_${p.name}(source, sourceSize, sourceShapeId, target, margin);`,
+      )
       .join("\n");
 
     const targetCases = paths
-      .map((p, i) => `    case ${i}: return findTargetClampT_${p.name}(source, target, targetSize, targetShapeId, margin);`)
+      .map(
+        (p, i) =>
+          `    case ${i}: return findTargetClampT_${p.name}(source, target, targetSize, targetShapeId, margin);`,
+      )
       .join("\n");
 
     parts.push(`
@@ -344,9 +341,9 @@ function generateZonedConstantData(
 }
 
 /**
- * Collects all unique uniforms from path, extremities, and filling.
+ * Collects all unique uniforms from path, extremities, and layer.
  */
-function collectUniforms(path: EdgePath, head: EdgeExtremity, tail: EdgeExtremity, filling: EdgeFilling): string[] {
+function collectUniforms(path: EdgePath, head: EdgeExtremity, tail: EdgeExtremity, layer: EdgeLayer): string[] {
   const standardUniforms = new Set([
     "u_matrix",
     "u_sizeRatio",
@@ -374,24 +371,24 @@ function collectUniforms(path: EdgePath, head: EdgeExtremity, tail: EdgeExtremit
   head.uniforms.forEach((u) => uniforms.add(u.name));
   tail.uniforms.forEach((u) => uniforms.add(u.name));
 
-  // Add filling uniforms
-  filling.uniforms.forEach((u) => uniforms.add(u.name));
+  // Add layer uniforms
+  layer.uniforms.forEach((u) => uniforms.add(u.name));
 
   return Array.from(uniforms);
 }
 
 /**
  * Collects attributes for the edge vertex buffer.
- * Path/filling attributes are now stored in the edge path attribute texture,
+ * Path/layer attributes are now stored in the edge path attribute texture,
  * so only core per-edge attributes are included in the vertex buffer.
  */
 function collectAttributes(
   _path: EdgePath,
   _head: EdgeExtremity,
   _tail: EdgeExtremity,
-  _filling: EdgeFilling,
+  _layer: EdgeLayer,
 ): AttributeSpecification[] {
-  // Core per-edge attributes (path/filling attributes are in the attribute texture)
+  // Core per-edge attributes (path/layer attributes are in the attribute texture)
   return [
     // Edge index for texture lookup (used for both edge data and path attribute textures)
     { name: "a_edgeIndex", size: 1, type: FLOAT },
@@ -408,11 +405,11 @@ function generateVertexShaderMulti(
   paths: EdgePath[],
   heads: EdgeExtremity[],
   tails: EdgeExtremity[],
-  filling: EdgeFilling,
+  layer: EdgeLayer,
   constantAttributes: Array<{ name: string; size: number; type: number }>,
 ): string {
-  // Compute attribute layout for path/filling attributes from texture
-  const attributeLayout = computeEdgeAttributeLayout(paths, filling);
+  // Compute attribute layout for path/layer attributes from texture
+  const attributeLayout = computeEdgeAttributeLayout(paths, layer);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // Collect all unique uniforms
@@ -438,7 +435,7 @@ function generateVertexShaderMulti(
   paths.forEach((p) => p.uniforms.forEach(addUniform));
   heads.forEach((h) => h.uniforms.forEach(addUniform));
   tails.forEach((t) => t.uniforms.forEach(addUniform));
-  filling.uniforms.forEach(addUniform);
+  layer.uniforms.forEach(addUniform);
 
   // Generate constant attribute declarations
   const constantAttrDeclarations = constantAttributes
@@ -516,7 +513,7 @@ flat out int v_pathId;
 flat out int v_headId;
 flat out int v_tailId;
 
-// Path/filling attribute varyings (fetched from edge attribute texture)
+// Path/layer attribute varyings (fetched from edge attribute texture)
 ${textureFetch.vertexVaryingDeclarations}
 
 const float bias = 255.0 / 254.0;
@@ -567,10 +564,10 @@ void main() {
   int headId = extremityPacked >> 4;
   int tailId = extremityPacked & 15;
 
-  // Fetch path/filling attributes from edge attribute texture
+  // Fetch path/layer attributes from edge attribute texture
 ${textureFetch.fetchCode}
 
-  // Assign path/filling attribute varyings
+  // Assign path/layer attribute varyings
 ${textureFetch.varyingAssignments}
 
   // Fetch source and target node data from node texture
@@ -724,14 +721,14 @@ function generateVertexShader(
   path: EdgePath,
   head: EdgeExtremity,
   tail: EdgeExtremity,
-  filling: EdgeFilling,
+  layer: EdgeLayer,
   constantAttributes: Array<{ name: string; size: number; type: number }>,
 ): string {
   const pathName = path.name;
   const hasCustomConstantData = !!path.generateConstantData;
 
-  // Compute attribute layout for path/filling attributes from texture
-  const attributeLayout = computeEdgeAttributeLayout([path], filling);
+  // Compute attribute layout for path/layer attributes from texture
+  const attributeLayout = computeEdgeAttributeLayout([path], layer);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // Collect custom uniforms (not standard ones)
@@ -747,7 +744,7 @@ function generateVertexShader(
   ]);
 
   const seenUniforms = new Set<string>();
-  const customUniforms = [...path.uniforms, ...head.uniforms, ...tail.uniforms, ...filling.uniforms]
+  const customUniforms = [...path.uniforms, ...head.uniforms, ...tail.uniforms, ...layer.uniforms]
     .filter((u) => {
       if (standardUniforms.has(u.name) || seenUniforms.has(u.name)) {
         return false;
@@ -762,13 +759,13 @@ function generateVertexShader(
   const headMargin =
     head.margin === undefined
       ? "0.0"
-      : typeof head.margin === "number"
+      : !isAttributeSource(head.margin)
         ? numberToGLSLFloat(head.margin)
         : `a_${head.margin.attribute}`;
   const tailMargin =
     tail.margin === undefined
       ? "0.0"
-      : typeof tail.margin === "number"
+      : !isAttributeSource(tail.margin)
         ? numberToGLSLFloat(tail.margin)
         : `a_${tail.margin.attribute}`;
 
@@ -835,7 +832,7 @@ out float v_tailLengthRatio; // Tail length as ratio of thickness
 out float v_headWidthRatio;  // Head width factor
 out float v_tailWidthRatio;  // Tail width factor
 
-// Path/filling attribute varyings (fetched from edge attribute texture)
+// Path/layer attribute varyings (fetched from edge attribute texture)
 ${textureFetch.vertexVaryingDeclarations}
 
 const float bias = 255.0 / 254.0;
@@ -883,10 +880,10 @@ void main() {
   float a_headLengthRatio = edgeData1.x;
   float a_tailLengthRatio = edgeData1.y;
 
-  // Fetch path/filling attributes from edge attribute texture
+  // Fetch path/layer attributes from edge attribute texture
 ${textureFetch.fetchCode}
 
-  // Assign path/filling attribute varyings
+  // Assign path/layer attribute varyings
 ${textureFetch.varyingAssignments}
 
   // Fetch source and target node data from node texture
@@ -1062,10 +1059,10 @@ function generateFragmentShaderMulti(
   paths: EdgePath[],
   heads: EdgeExtremity[],
   tails: EdgeExtremity[],
-  filling: EdgeFilling,
+  layer: EdgeLayer,
 ): string {
-  // Compute attribute layout for path/filling attributes from texture
-  const attributeLayout = computeEdgeAttributeLayout(paths, filling);
+  // Compute attribute layout for path/layer attributes from texture
+  const attributeLayout = computeEdgeAttributeLayout(paths, layer);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // Collect all unique uniforms
@@ -1090,7 +1087,7 @@ function generateFragmentShaderMulti(
   paths.forEach((p) => p.uniforms.forEach(addUniform));
   heads.forEach((h) => h.uniforms.forEach(addUniform));
   tails.forEach((t) => t.uniforms.forEach(addUniform));
-  filling.uniforms.forEach(addUniform);
+  layer.uniforms.forEach(addUniform);
 
   // Generate base ratio arrays for extremities
   const headBaseRatios = heads.map((h) => numberToGLSLFloat(h.baseRatio ?? 0.5)).join(", ");
@@ -1128,7 +1125,7 @@ flat in int v_pathId;
 flat in int v_headId;
 flat in int v_tailId;
 
-// Path/filling attribute varyings (from vertex shader texture fetch)
+// Path/layer attribute varyings (from vertex shader texture fetch)
 ${textureFetch.fragmentVaryingDeclarations}
 
 // Standard uniforms (needed by some path types)
@@ -1180,8 +1177,8 @@ ${generateAllExtremitiesGLSL(heads, tails)}
 ${generateExtremitySdfSelector(heads, "Head")}
 ${generateExtremitySdfSelector(tails, "Tail")}
 
-// Filling function
-${filling.glsl}
+// Layer function
+${layer.glsl}
 
 // Helper: Compute arc length using path selector
 float computeArcLengthMulti(int pathId, float t0, float t1, vec2 source, vec2 target, int samples) {
@@ -1213,7 +1210,7 @@ void main() {
   float halfGeometryWidth = halfThickness * zoneWidthFactor + aaWidthWebGL;
   float distFromCenter = abs(v_side) * halfGeometryWidth;
 
-  // Populate EdgeContext (for filling function)
+  // Populate EdgeContext (for layer function)
   context.t = tNorm;
   context.sdf = distFromCenter - halfThickness;
   context.position = queryPathPosition(v_pathId, v_t, v_source, v_target);
@@ -1272,11 +1269,11 @@ void main() {
     if (finalSDF > 0.0) discard;
     fragColor = v_id;
   #else
-    // Visual pass: anti-aliased edge with filling
+    // Visual pass: anti-aliased edge with layer
     float alpha = smoothstep(aaWidthWebGL, -aaWidthWebGL, finalSDF);
     if (alpha < 0.01) discard;
 
-    vec4 color = filling_${filling.name}(context);
+    vec4 color = layer_${layer.name}(context);
     // Mix with transparent to fade both color AND alpha (pre-multiplied alpha for correct blending)
     fragColor = mix(vec4(0.0), color, alpha);
   #endif
@@ -1289,17 +1286,12 @@ void main() {
 /**
  * Generates the fragment shader for edge rendering.
  */
-function generateFragmentShader(
-  path: EdgePath,
-  head: EdgeExtremity,
-  tail: EdgeExtremity,
-  filling: EdgeFilling,
-): string {
+function generateFragmentShader(path: EdgePath, head: EdgeExtremity, tail: EdgeExtremity, layer: EdgeLayer): string {
   const pathName = path.name;
   const hasCustomConstantData = !!path.generateConstantData;
 
-  // Compute attribute layout for path/filling attributes from texture
-  const attributeLayout = computeEdgeAttributeLayout([path], filling);
+  // Compute attribute layout for path/layer attributes from texture
+  const attributeLayout = computeEdgeAttributeLayout([path], layer);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // Collect custom uniforms
@@ -1314,7 +1306,7 @@ function generateFragmentShader(
   ]);
 
   const seenUniforms = new Set<string>();
-  const customUniforms = [...path.uniforms, ...head.uniforms, ...tail.uniforms, ...filling.uniforms]
+  const customUniforms = [...path.uniforms, ...head.uniforms, ...tail.uniforms, ...layer.uniforms]
     .filter((u) => {
       if (standardUniforms.has(u.name) || seenUniforms.has(u.name)) {
         return false;
@@ -1352,7 +1344,7 @@ in float v_tailLengthRatio; // Tail length as ratio of thickness (scaled for sho
 in float v_headWidthRatio;  // Head width factor
 in float v_tailWidthRatio;  // Tail width factor
 
-// Path/filling attribute varyings (from vertex shader texture fetch)
+// Path/layer attribute varyings (from vertex shader texture fetch)
 ${textureFetch.fragmentVaryingDeclarations}
 
 // Standard uniforms (needed by some path types)
@@ -1397,8 +1389,8 @@ ${generatePathFallbacks(pathName, path.glsl)}
 ${head.glsl}
 ${head.name !== tail.name ? tail.glsl : "// (tail uses same extremity as head)"}
 
-// Filling function
-${filling.glsl}
+// Layer function
+${layer.glsl}
 
 ${
   !path.linearParameterization
@@ -1438,7 +1430,7 @@ void main() {
   float halfGeometryWidth = halfThickness * zoneWidthFactor + aaWidthWebGL;
   float distFromCenter = abs(v_side) * halfGeometryWidth;
 
-  // Populate EdgeContext (for filling function)
+  // Populate EdgeContext (for layer function)
   context.t = tNorm;
   context.sdf = distFromCenter - halfThickness;
   context.position = path_${pathName}_position(v_t, v_source, v_target);
@@ -1515,11 +1507,11 @@ void main() {
     if (finalSDF > 0.0) discard;
     fragColor = v_id;
   #else
-    // Visual pass: anti-aliased edge with filling
+    // Visual pass: anti-aliased edge with layer
     float alpha = smoothstep(aaWidthWebGL, -aaWidthWebGL, finalSDF);
     if (alpha < 0.01) discard;
 
-    vec4 color = filling_${filling.name}(context);
+    vec4 color = layer_${layer.name}(context);
     // Mix with transparent to fade both color AND alpha (pre-multiplied alpha for correct blending)
     fragColor = mix(vec4(0.0), color, alpha);
   #endif
@@ -1541,8 +1533,8 @@ function getConstantDataForCombination(
   attributes: Array<{ name: string; size: number; type: number }>;
   verticesPerEdge: number;
 } {
-  const hasHead = typeof head.length === "number" ? head.length > 0 : true;
-  const hasTail = typeof tail.length === "number" ? tail.length > 0 : true;
+  const hasHead = !isAttributeSource(head.length) ? head.length > 0 : true;
+  const hasTail = !isAttributeSource(tail.length) ? tail.length > 0 : true;
 
   if (path.generateConstantData) {
     const custom = path.generateConstantData();
@@ -1561,7 +1553,7 @@ function getConstantDataForCombination(
  * Supports both single-path mode (backward compatible) and multi-path mode.
  */
 export function generateEdgeShaders(options: EdgeShaderGenerationOptions): GeneratedEdgeShaders {
-  const { paths, heads, tails, filling, isMultiMode: multiMode } = normalizeEdgeProgramOptions(options);
+  const { paths, heads, tails, layers: _layers, layer, isMultiMode: multiMode } = normalizeEdgeProgramOptions(options);
 
   if (multiMode) {
     // Multi-path mode: use selectors and generate per-combination metadata
@@ -1607,10 +1599,10 @@ export function generateEdgeShaders(options: EdgeShaderGenerationOptions): Gener
     ];
 
     return {
-      vertexShader: generateVertexShaderMulti(paths, heads, tails, filling, multiModeConstantAttributes),
-      fragmentShader: generateFragmentShaderMulti(paths, heads, tails, filling),
-      uniforms: collectUniformsMulti(paths, heads, tails, filling),
-      attributes: collectAttributesMulti(paths, heads, tails, filling),
+      vertexShader: generateVertexShaderMulti(paths, heads, tails, layer, multiModeConstantAttributes),
+      fragmentShader: generateFragmentShaderMulti(paths, heads, tails, layer),
+      uniforms: collectUniformsMulti(paths, heads, tails, layer),
+      attributes: collectAttributesMulti(paths, heads, tails, layer),
       // In multi-path mode, use max vertices to accommodate all path types
       verticesPerEdge: maxVerticesPerEdge,
       constantData: maxConstantData,
@@ -1626,8 +1618,8 @@ export function generateEdgeShaders(options: EdgeShaderGenerationOptions): Gener
     const tail = tails[0];
 
     // Determine if extremities are present (length > 0)
-    const hasHead = typeof head.length === "number" ? head.length > 0 : true;
-    const hasTail = typeof tail.length === "number" ? tail.length > 0 : true;
+    const hasHead = !isAttributeSource(head.length) ? head.length > 0 : true;
+    const hasTail = !isAttributeSource(tail.length) ? tail.length > 0 : true;
 
     // Use custom constant data generator if provided, otherwise use zone-based default
     let constantData: {
@@ -1649,10 +1641,10 @@ export function generateEdgeShaders(options: EdgeShaderGenerationOptions): Gener
     }
 
     return {
-      vertexShader: generateVertexShader(path, head, tail, filling, constantData.attributes),
-      fragmentShader: generateFragmentShader(path, head, tail, filling),
-      uniforms: collectUniforms(path, head, tail, filling),
-      attributes: collectAttributes(path, head, tail, filling),
+      vertexShader: generateVertexShader(path, head, tail, layer, constantData.attributes),
+      fragmentShader: generateFragmentShader(path, head, tail, layer),
+      uniforms: collectUniforms(path, head, tail, layer),
+      attributes: collectAttributes(path, head, tail, layer),
       verticesPerEdge: constantData.verticesPerEdge,
       constantData: constantData.data,
       constantAttributes: constantData.attributes,
@@ -1662,16 +1654,16 @@ export function generateEdgeShaders(options: EdgeShaderGenerationOptions): Gener
 
 /**
  * Collects all attributes needed for multi-path edge rendering.
- * Path/filling attributes are now stored in the edge path attribute texture,
+ * Path/layer attributes are now stored in the edge path attribute texture,
  * so only core per-edge attributes are included in the vertex buffer.
  */
 function collectAttributesMulti(
   _paths: EdgePath[],
   _heads: EdgeExtremity[],
   _tails: EdgeExtremity[],
-  _filling: EdgeFilling,
+  _layer: EdgeLayer,
 ): Array<{ name: string; size: number; type: number; normalized?: boolean }> {
-  // Core per-edge attributes (path/filling attributes are in the attribute texture)
+  // Core per-edge attributes (path/layer attributes are in the attribute texture)
   return [
     // Edge index for texture lookup (used for both edge data and path attribute textures)
     { name: "a_edgeIndex", size: 1, type: FLOAT },

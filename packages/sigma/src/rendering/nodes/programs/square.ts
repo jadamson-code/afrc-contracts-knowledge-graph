@@ -24,7 +24,7 @@ import { sdfSquare } from "../shapes";
  * ```
  */
 const NodeSquareProgram = createNodeProgram({
-  shape: sdfSquare(),
+  shapes: [sdfSquare()],
   layers: [layerFill()],
 });
 

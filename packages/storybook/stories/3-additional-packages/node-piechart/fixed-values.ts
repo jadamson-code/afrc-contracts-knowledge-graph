@@ -72,8 +72,8 @@ export default () => {
   const nodeProgramClasses = { ...DEFAULT_NODE_PROGRAM_CLASSES };
 
   for (let i = 2; i <= maxCount; i++) {
-    const slices: CreateNodePiechartProgramOptions["slices"] = [{ color: { attribute: "color" }, value: { value: 1 } }];
-    for (let j = 1; j < i; j++) slices.push({ color: { attribute: `color-${j}` }, value: { value: 1 } });
+    const slices: CreateNodePiechartProgramOptions["slices"] = [{ color: { attribute: "color" }, value: 1 }];
+    for (let j = 1; j < i; j++) slices.push({ color: { attribute: `color-${j}` }, value: 1 });
     nodeProgramClasses[`pie-${i}`] = createNodePiechartProgram({
       slices,
     });

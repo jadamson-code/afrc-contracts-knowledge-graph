@@ -21,7 +21,7 @@
 import { DEFAULT_SDF_ATLAS_OPTIONS } from "../../../core/sdf-atlas";
 import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../../shapes";
 import { numberToGLSLFloat } from "../../utils";
-import { fillingPlain } from "../fillings/plain";
+import { layerPlain } from "../layers";
 import { computeEdgeAttributeLayout, generateEdgeAttributeTextureFetch } from "../path-attribute-texture";
 import {
   generateFindSourceClampT,
@@ -101,8 +101,8 @@ export function generateEdgeLabelVertexShader(options: EdgeLabelShaderOptions): 
   const isScaledMode = fontSizeMode === "scaled";
 
   // Compute attribute layout for path attributes (labels need curvature for curved paths)
-  const filling = fillingPlain(); // Use empty filling for labels
-  const attributeLayout = computeEdgeAttributeLayout([path], filling);
+  const layer = layerPlain(); // Use empty layer for labels
+  const attributeLayout = computeEdgeAttributeLayout([path], layer);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // language=GLSL

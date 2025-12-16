@@ -7,30 +7,24 @@
  * @module
  */
 import { colorToGLSLString } from "../../../utils";
-import { FragmentLayer } from "../types";
+import { FragmentLayer, ValueSource, isAttributeSource } from "../types";
 
 /**
  * Options for the layerFill() function.
  */
 export interface LayerFillOptions {
   /**
-   * Optional fixed color value (CSS color string).
-   * If provided, this color is used instead of the node's color attribute.
-   * Takes precedence over colorAttribute.
+   * Color source: either a fixed CSS color string or an attribute reference.
+   * - String: Fixed color value (e.g., "#ff0000")
+   * - Object with `attribute`: Read from node attribute (e.g., { attribute: "fillColor" })
+   *
+   * @default { attribute: "color" }
    */
-  value?: string;
-
-  /**
-   * Name of the node attribute to read the fill color from.
-   * If not specified, uses the default node "color" attribute.
-   * Ignored if value is specified.
-   * @default "color"
-   */
-  colorAttribute?: string;
+  color?: ValueSource<string>;
 }
 
 /**
- * Creates a fill layer that fills the shape with the node's color.
+ * Creates a fill layer that fills the shape with a color.
  * This is typically the base layer for most node programs.
  *
  * @param options - Optional configuration
@@ -40,32 +34,35 @@ export interface LayerFillOptions {
  * ```typescript
  * // Use node color (default)
  * const program = createNodeProgram({
- *   shape: sdfCircle(),
+ *   shapes: [sdfCircle()],
  *   layers: [layerFill()],
  * });
  *
  * // Use fixed color
  * const redProgram = createNodeProgram({
- *   shape: sdfCircle(),
- *   layers: [layerFill({ value: "#ff0000" })],
+ *   shapes: [sdfCircle()],
+ *   layers: [layerFill({ color: "#ff0000" })],
  * });
  *
  * // Use a custom attribute
  * const customProgram = createNodeProgram({
- *   shape: sdfCircle(),
- *   layers: [layerFill({ colorAttribute: "fillColor" })],
+ *   shapes: [sdfCircle()],
+ *   layers: [layerFill({ color: { attribute: "fillColor" } })],
  * });
  * ```
  */
-export function layerFill({ value, colorAttribute }: Partial<LayerFillOptions> = {}): FragmentLayer {
+export function layerFill({ color }: LayerFillOptions = {}): FragmentLayer {
   const { UNSIGNED_BYTE } = WebGL2RenderingContext;
 
+  // Default to reading from "color" attribute
+  const colorSource: ValueSource<string> = color ?? { attribute: "color" };
+
   // If a fixed value is provided, no attributes needed
-  if (value) {
+  if (!isAttributeSource(colorSource)) {
     // language=GLSL
     const glsl = `
 vec4 layer_fill() {
-  return ${colorToGLSLString(value)};
+  return ${colorToGLSLString(colorSource)};
 }
 `;
     return {
@@ -76,8 +73,8 @@ vec4 layer_fill() {
     };
   }
 
-  // Use attribute-based color (either custom or default "color")
-  const source = colorAttribute || "color";
+  // Use attribute-based color
+  const source = colorSource.attribute;
 
   // language=GLSL
   const glsl = `

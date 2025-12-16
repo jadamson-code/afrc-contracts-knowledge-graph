@@ -18,10 +18,10 @@ import { EdgeExtremity } from "../types";
  * @example
  * ```typescript
  * const EdgeLineProgram = createEdgeProgram({
- *   path: pathLine(),
- *   head: extremityNone(),
- *   tail: extremityNone(),
- *   filling: fillingPlain(),
+ *   paths: [pathLine()],
+ *   heads: [extremityNone()],
+ *   tails: [extremityNone()],
+ *   layers: [layerPlain()],
  * });
  * ```
  */

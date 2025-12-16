@@ -11,8 +11,8 @@
  *
  * @module
  */
-import { generateRotate2D } from "../shared-glsl";
 import { numberToGLSLFloat } from "../../utils";
+import { generateRotate2D } from "../shared-glsl";
 import { EdgePath } from "../types";
 
 /**
@@ -69,10 +69,10 @@ export interface StepPathOptions {
  * @example
  * ```typescript
  * const EdgeStepProgram = createEdgeProgram({
- *   path: pathStep({ orientation: "horizontal" }),
- *   head: extremityArrow(),
- *   tail: extremityNone(),
- *   filling: fillingPlain(),
+ *   paths: [pathStep({ orientation: "horizontal" })],
+ *   heads: [extremityArrow()],
+ *   tails: [extremityNone()],
+ *   layers: [layerPlain()],
  * });
  * ```
  */

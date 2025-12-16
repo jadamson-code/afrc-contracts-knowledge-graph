@@ -6,6 +6,7 @@
  *
  * @module
  */
+import { ValueSource } from "sigma/rendering";
 
 /**
  * Mode for border size specification.
@@ -17,19 +18,22 @@ export const DEFAULT_BORDER_SIZE_MODE: BorderSizeMode = "relative";
 
 /**
  * Specifies the color of a border.
+ * - string: Fixed CSS color value (e.g., "#ff0000")
+ * - { attribute, default? }: Read from node attribute
+ * - { transparent: true }: Fully transparent
  */
-export type BorderColor =
-  | { value: string } // Fixed color value
-  | { attribute: string; defaultValue?: string } // Read from node attribute
-  | { transparent: true }; // Transparent
+export type BorderColor = ValueSource<string> | { transparent: true };
 
 /**
  * Specifies the size of a border.
+ * - { value, mode? }: Fixed pixel value
+ * - { attribute, default?, mode? }: Read from node attribute
+ * - { fill: true }: Fill remaining space
  */
 export type BorderSize =
-  | { value: number; mode?: BorderSizeMode } // Fixed size
-  | { attribute: string; defaultValue: number; mode?: BorderSizeMode } // Read from node attribute
-  | { fill: true }; // Fill remaining space
+  | { value: number; mode?: BorderSizeMode }
+  | { attribute: string; default?: number; mode?: BorderSizeMode }
+  | { fill: true };
 
 /**
  * Options for the layerBorder() function.
@@ -47,7 +51,6 @@ export interface LayerBorderOptions {
 
 /**
  * Options for the createNodeBorderProgram() function.
- * Maintains backward compatibility with the original API.
  */
 export interface CreateNodeBorderProgramOptions {
   /**

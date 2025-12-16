@@ -120,7 +120,7 @@ export default () => {
       shapes: [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()],
       layers: [
         // Base fill layer (always visible)
-        layerFill({ colorAttribute: "backgroundColor" }),
+        layerFill({ color: { attribute: "backgroundColor" } }),
 
         // Image layer for photo images (rows 3)
         // Disabled when no 'image' attribute
@@ -146,18 +146,18 @@ export default () => {
         // Border layer - disabled when borderSize=0
         layerBorder({
           borders: [
-            { size: { attribute: "borderSize", defaultValue: 0 }, color: { attribute: "borderColor" } },
+            { size: { attribute: "borderSize", default: 0 }, color: { attribute: "borderColor" } },
             { size: { fill: true }, color: { transparent: true } },
-            { size: { attribute: "innerSize", mode: "pixels", defaultValue: 0 }, color: { attribute: "innerColor" } },
+            { size: { attribute: "innerSize", mode: "pixels", default: 0 }, color: { attribute: "innerColor" } },
           ],
         }),
 
         // Piechart layer - disabled when all slices=0
         layerPiechart({
           slices: [
-            { color: { value: "#E74C3C" }, value: { attribute: "slice1" } },
-            { color: { value: "#3498DB" }, value: { attribute: "slice2" } },
-            { color: { value: "#2ECC71" }, value: { attribute: "slice3" } },
+            { color: "#E74C3C", value: { attribute: "slice1" } },
+            { color: "#3498DB", value: { attribute: "slice2" } },
+            { color: "#2ECC71", value: { attribute: "slice3" } },
           ],
         }),
       ],

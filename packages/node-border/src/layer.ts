@@ -10,7 +10,7 @@
 import { AttributeSpecification, FragmentLayer, UniformSpecification, Vec4, numberToGLSLFloat } from "sigma/rendering";
 import { colorToArray } from "sigma/utils";
 
-import { BorderSize, DEFAULT_BORDER_SIZE_MODE, LayerBorderOptions } from "./types";
+import { BorderColor, BorderSize, LayerBorderOptions } from "./types";
 
 /**
  * Converts a CSS color string to a Vec4 (normalized RGBA).
@@ -21,26 +21,61 @@ function colorToVec4(color: string): Vec4 {
 }
 
 /**
+ * Type guards for BorderColor variants
+ */
+function isTransparentColor(color: BorderColor): color is { transparent: true } {
+  return typeof color === "object" && "transparent" in color;
+}
+
+function isFixedColor(color: BorderColor): color is string {
+  return typeof color === "string";
+}
+
+function isAttributeColor(color: BorderColor): color is { attribute: string; default?: string } {
+  return typeof color === "object" && "attribute" in color;
+}
+
+/**
+ * Type guards for BorderSize variants
+ */
+function isFillSize(size: BorderSize): size is { fill: true } {
+  return typeof size === "object" && "fill" in size;
+}
+
+function isAttributeSize(
+  size: BorderSize,
+): size is { attribute: string; default?: number; mode?: "relative" | "pixels" } {
+  return typeof size === "object" && "attribute" in size;
+}
+
+/**
  * Generates the GLSL code for the border layer function.
  * Uses the global `context` struct for context (sdf, shapeSize, aaWidth, pixelSize).
  */
 function generateBorderGLSL(borders: LayerBorderOptions["borders"]): string {
-  const fillCount = borders.filter(({ size }) => "fill" in size).length;
+  const fillCount = borders.filter(({ size }) => isFillSize(size)).length;
   const fillCountGLSL = numberToGLSLFloat(fillCount || 1); // Avoid division by zero
 
   // Generate size calculation code (using context.shapeSize and context.pixelSize)
   const sizeCalculations = borders
     .flatMap(({ size }, i) => {
-      if ("fill" in size) return [];
+      if (isFillSize(size)) return [];
 
-      size = size as Exclude<BorderSize, { fill: true }>;
-      const value = "attribute" in size ? `v_borderSize_${i + 1}` : numberToGLSLFloat(size.value);
-      // For relative mode: multiply by context.shapeSize (size is a fraction 0-1 of the shape)
+      // Determine value and mode based on size type
+      let value: string;
+      let isPixelMode: boolean;
+
+      if (isAttributeSize(size)) {
+        value = `v_borderSize_${i + 1}`;
+        isPixelMode = size.mode === "pixels";
+      } else {
+        value = numberToGLSLFloat(size.value);
+        isPixelMode = size.mode === "pixels";
+      }
+
+      // For relative mode: multiply by context.shapeHalfSize (size is a fraction 0-1 of the shape)
       // For pixels mode: convert pixels to UV space using context.pixelToUV
-      //   - context.pixelToUV converts screen pixels to UV units
-      //   - Multiply by 2.0 because pixel values are interpreted as radius (distance from boundary)
-      const mode = size.mode || DEFAULT_BORDER_SIZE_MODE;
-      if (mode === "pixels") {
+      if (isPixelMode) {
         return [`  float borderSize_${i + 1} = ${value} * context.pixelToUV;`];
       } else {
         return [`  float borderSize_${i + 1} = context.shapeHalfSize * ${value};`];
@@ -49,12 +84,12 @@ function generateBorderGLSL(borders: LayerBorderOptions["borders"]): string {
     .join("\n");
 
   // Generate non-fill size sum for fill calculation
-  const nonFillSizes = borders.flatMap(({ size }, i) => (!("fill" in size) ? [`borderSize_${i + 1}`] : [])).join(" + ");
+  const nonFillSizes = borders.flatMap(({ size }, i) => (!isFillSize(size) ? [`borderSize_${i + 1}`] : [])).join(" + ");
   const nonFillSizesExpr = nonFillSizes || "0.0";
 
   // Generate fill border sizes
   const fillSizeCalculations = borders
-    .flatMap(({ size }, i) => ("fill" in size ? [`  float borderSize_${i + 1} = fillBorderSize;`] : []))
+    .flatMap(({ size }, i) => (isFillSize(size) ? [`  float borderSize_${i + 1} = fillBorderSize;`] : []))
     .join("\n");
 
   // Generate cumulative boundary calculations (from outside to inside)
@@ -66,11 +101,12 @@ function generateBorderGLSL(borders: LayerBorderOptions["borders"]): string {
   // Generate color assignments
   const colorAssignments = borders
     .map(({ color }, i) => {
-      if ("attribute" in color) {
-        return `  vec4 borderColor_${i + 1} = v_borderColor_${i + 1};`;
-      } else if ("transparent" in color) {
+      if (isTransparentColor(color)) {
         return `  vec4 borderColor_${i + 1} = vec4(0.0, 0.0, 0.0, 0.0);`;
+      } else if (isAttributeColor(color)) {
+        return `  vec4 borderColor_${i + 1} = v_borderColor_${i + 1};`;
       } else {
+        // Fixed color string - use uniform
         return `  vec4 borderColor_${i + 1} = u_borderColor_${i + 1};`;
       }
     })
@@ -112,17 +148,17 @@ function generateBorderGLSL(borders: LayerBorderOptions["borders"]): string {
   // Build function parameters: attributes first (as varyings), then uniforms
   // This order must match what the generator produces in generator.ts
   const attributeParams = [
-    ...borders.flatMap(({ color }, i) => ("attribute" in color ? [`vec4 v_borderColor_${i + 1}`] : [])),
-    ...borders.flatMap(({ size }, i) => ("attribute" in size ? [`float v_borderSize_${i + 1}`] : [])),
+    ...borders.flatMap(({ color }, i) => (isAttributeColor(color) ? [`vec4 v_borderColor_${i + 1}`] : [])),
+    ...borders.flatMap(({ size }, i) => (isAttributeSize(size) ? [`float v_borderSize_${i + 1}`] : [])),
   ];
 
-  const uniformParams = borders.flatMap(({ color }, i) => ("value" in color ? [`vec4 u_borderColor_${i + 1}`] : []));
+  const uniformParams = borders.flatMap(({ color }, i) => (isFixedColor(color) ? [`vec4 u_borderColor_${i + 1}`] : []));
 
   // Combine all params with proper formatting
   const allParams = [...attributeParams, ...uniformParams].join(", ");
 
   // Check if the first border uses an attribute (dynamic size)
-  const firstBorderUsesAttribute = "attribute" in borders[0].size;
+  const firstBorderUsesAttribute = isAttributeSize(borders[0].size);
 
   // Build the complete GLSL function
   // Context (sdf, shapeSize, aaWidth, pixelSize) accessed via global context struct
@@ -183,14 +219,14 @@ ${colorAdjustments}
  * // Simple border with fill
  * const borderLayer = layerBorder({
  *   borders: [
- *     { size: { value: 0.1 }, color: { attribute: "borderColor" } },
+ *     { size: 0.1, color: { attribute: "borderColor" } },
  *     { size: { fill: true }, color: { attribute: "color" } },
  *   ],
  * });
  *
  * // Use with createNodeProgram
  * const program = createNodeProgram({
- *   shape: sdfSquare({ cornerRadius: 0.1 }),
+ *   shapes: [sdfSquare({ cornerRadius: 0.1 })],
  *   layers: [borderLayer],
  * });
  * ```
@@ -199,21 +235,15 @@ export function layerBorder(options: LayerBorderOptions): FragmentLayer {
   const { borders } = options;
   const { UNSIGNED_BYTE, FLOAT } = WebGL2RenderingContext;
 
-  // Generate uniforms for fixed-value colors
-  const uniforms: UniformSpecification[] = [
-    // Always include u_correctionRatio for pixel-mode borders
-    // (it's also in standard uniforms, but we need access in the layer)
-    ...borders.flatMap(({ color }, i) =>
-      "value" in color
-        ? [{ name: `u_borderColor_${i + 1}`, type: "vec4" as const, value: colorToVec4(color.value) }]
-        : [],
-    ),
-  ];
+  // Generate uniforms for fixed-value colors (direct string values)
+  const uniforms: UniformSpecification[] = borders.flatMap(({ color }, i) =>
+    isFixedColor(color) ? [{ name: `u_borderColor_${i + 1}`, type: "vec4" as const, value: colorToVec4(color) }] : [],
+  );
 
   // Generate attributes for attribute-based colors/sizes
   const attributes: AttributeSpecification[] = [
     ...borders.flatMap(({ color }, i) =>
-      "attribute" in color
+      isAttributeColor(color)
         ? [
             {
               name: `borderColor_${i + 1}`,
@@ -226,14 +256,14 @@ export function layerBorder(options: LayerBorderOptions): FragmentLayer {
         : [],
     ),
     ...borders.flatMap(({ size }, i) =>
-      "attribute" in size
+      isAttributeSize(size)
         ? [
             {
               name: `borderSize_${i + 1}`,
               size: 1 as const,
               type: FLOAT,
               source: size.attribute,
-              defaultValue: size.defaultValue,
+              defaultValue: size.default,
             },
           ]
         : [],

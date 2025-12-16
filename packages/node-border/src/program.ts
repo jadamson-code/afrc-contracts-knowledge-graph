@@ -8,7 +8,7 @@
  * @module
  */
 import { Attributes } from "graphology-types";
-import { createNodeProgram, NodeProgramType, sdfCircle } from "sigma/rendering";
+import { NodeProgramType, createNodeProgram, sdfCircle } from "sigma/rendering";
 
 import { layerBorder } from "./layer";
 import { CreateNodeBorderProgramOptions, DEFAULT_CREATE_NODE_BORDER_OPTIONS } from "./types";
@@ -60,7 +60,7 @@ export function createNodeBorderProgram<
 
   // Create the node program with circle shape and border layer
   return createNodeProgram<N, E, G>({
-    shape: sdfCircle(),
+    shapes: [sdfCircle()],
     layers: [layerBorder({ borders })],
   });
 }

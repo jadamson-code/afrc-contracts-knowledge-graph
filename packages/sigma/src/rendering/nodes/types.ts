@@ -212,7 +212,18 @@ export type ValueSource<T> =
        * Name of the node attribute to read from (e.g., "borderSize").
        */
       attribute: string;
+      /**
+       * Default value when the attribute is missing or undefined.
+       */
+      default?: T;
     };
+
+/**
+ * Type guard to check if a ValueSource is an attribute reference.
+ */
+export function isAttributeSource<T>(source: ValueSource<T>): source is { attribute: string; default?: T } {
+  return typeof source === "object" && source !== null && "attribute" in source;
+}
 
 /**
  * Context provided to layer lifecycle hooks.
@@ -420,19 +431,11 @@ export interface LabelOptions {
  */
 export interface NodeProgramOptions {
   /**
-   * Single SDF shape definition (backward compatible).
-   * Use this when all nodes in this program use the same shape.
-   * Mutually exclusive with `shapes`.
-   */
-  shape?: SDFShape;
-
-  /**
-   * Array of SDF shape definitions for multi-shape programs.
+   * Array of SDF shape definitions.
    * Nodes can select their shape via the `shape` attribute in display data.
    * The first shape is used as the default when no shape is specified.
-   * Mutually exclusive with `shape`.
    */
-  shapes?: SDFShape[];
+  shapes: SDFShape[];
 
   /**
    * Array of fragment layers to apply, in order.

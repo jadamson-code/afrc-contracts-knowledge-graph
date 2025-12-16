@@ -67,10 +67,10 @@ export interface CurvedSPathOptions {
  * @example
  * ```typescript
  * const EdgeCurvedSProgram = createEdgeProgram({
- *   path: pathCurvedS({ curveOffset: 0.4 }),
- *   head: extremityArrow(),
- *   tail: extremityNone(),
- *   filling: fillingPlain(),
+ *   paths: [pathCurvedS({ curveOffset: 0.4 })],
+ *   heads: [extremityArrow()],
+ *   tails: [extremityNone()],
+ *   layers: [layerPlain()],
  * });
  * ```
  */

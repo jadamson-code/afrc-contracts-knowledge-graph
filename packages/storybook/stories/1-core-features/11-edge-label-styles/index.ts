@@ -17,8 +17,8 @@ import {
   createNodeProgram,
   extremityArrow,
   extremityNone,
-  fillingPlain,
   layerFill,
+  layerPlain,
   pathCurved,
   pathCurvedS,
   pathLine,
@@ -93,7 +93,7 @@ export default () => {
     },
   ];
 
-  // Column types (extremity and filling configurations)
+  // Column types (extremity and layer configurations)
   // The first three columns use the default "auto" label position from settings.
   // The last two columns override with "over" position via the `label` option.
   const COLS = [
@@ -188,11 +188,11 @@ export default () => {
           : undefined;
 
       edgeProgramClasses[edgeType] = createEdgeProgram({
-        path: row.path,
-        head: col.head,
-        tail: col.tail,
+        paths: [row.path],
+        heads: [col.head],
+        tails: [col.tail],
         label: labelOptions,
-        filling: fillingPlain(),
+        layers: [layerPlain()],
       });
     }
   }
@@ -249,12 +249,12 @@ export default () => {
     edgeProgramClasses,
     nodeProgramClasses: {
       diamond: createNodeProgram({
-        shape: sdfDiamond(),
+        shapes: [sdfDiamond()],
         layers: [layerFill()],
         rotateWithCamera: false,
       }),
       triangle: createNodeProgram({
-        shape: sdfTriangle(),
+        shapes: [sdfTriangle()],
         layers: [layerFill()],
         rotateWithCamera: false,
       }),

@@ -83,7 +83,7 @@ export function createNodeImageProgram<
 
   // Create the node program with image layer
   const BaseProgram = createNodeProgram<N, E, G>({
-    shape: shapeFactory(),
+    shapes: [shapeFactory()],
     layers: [
       backgroundLayerFactory(),
       layerImage({

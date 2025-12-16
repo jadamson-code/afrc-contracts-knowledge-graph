@@ -19,7 +19,7 @@ import { NodeProgram, NodeProgramType } from "./base";
 import { generateShaders } from "./generator";
 import { createHoverProgram } from "./hovers";
 import { createLabelProgram } from "./labels";
-import { computeLayerAttributeLayout, NodeLayerAttributeTexture } from "./layer-attribute-texture";
+import { NodeLayerAttributeTexture, computeLayerAttributeLayout } from "./layer-attribute-texture";
 import { FragmentLayer, LayerLifecycleContext, LayerLifecycleHooks, NodeProgramOptions } from "./types";
 
 // Texture unit for layer attribute texture (units 0-4 used by sigma, unit 5 for layer attributes)
@@ -65,16 +65,11 @@ export function createNodeProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: NodeProgramOptions): NodeProgramType<N, E, G> {
-  const { rotateWithCamera = false, label: labelOptions = {} } = options;
+  const { rotateWithCamera = false, label: labelOptions = {}, shapes } = options;
 
-  // Normalize to shapes array (support both single shape and multi-shape modes)
-  if (!options.shape && !options.shapes) {
-    throw new Error("createNodeProgram: either 'shape' or 'shapes' must be provided");
+  if (shapes.length === 0) {
+    throw new Error("createNodeProgram: at least one shape must be provided in 'shapes'");
   }
-  if (options.shape && options.shapes) {
-    throw new Error("createNodeProgram: 'shape' and 'shapes' are mutually exclusive");
-  }
-  const shapes = options.shapes || [options.shape!];
 
   // Register all shapes in the global registry and build name-to-index mapping.
   // The first shape's slug is used for edge clamping (edges use this to find the shape boundary).

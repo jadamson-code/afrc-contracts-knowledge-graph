@@ -3,7 +3,7 @@
  * ==========================================
  *
  * Types and interfaces for the composable edge program architecture.
- * This system separates path geometry, extremities (head/tail), and filling
+ * This system separates path geometry, extremities (head/tail), and layer
  * to enable flexible edge rendering with single-pass WebGL drawing.
  *
  * @module
@@ -12,9 +12,9 @@ import { Attributes } from "graphology-types";
 
 import Sigma from "../../sigma";
 import { EdgeLabelFontSizeMode, EdgeLabelPosition } from "../../types";
-import { AttributeSpecification, UniformSpecification } from "../nodes";
+import { AttributeSpecification, UniformSpecification, ValueSource } from "../nodes";
 
-export type { AttributeSpecification, UniformSpecification } from "../nodes/types";
+export type { AttributeSpecification, UniformSpecification, ValueSource } from "../nodes/types";
 
 /**
  * EdgePath - defines the geometry of an edge via GLSL functions.
@@ -216,7 +216,7 @@ export interface EdgeExtremity {
    * For example, an arrow with lengthRatio=2.5 extends 2.5 * thickness
    * beyond where the edge body ends.
    */
-  length: number | { attribute: string };
+  length: ValueSource<number>;
 
   /**
    * Width factor of the extremity relative to edge thickness.
@@ -232,7 +232,7 @@ export interface EdgeExtremity {
    * The edge (including extremity) stops this many pixels away from the node.
    * Can be a constant or read from a per-edge attribute.
    */
-  margin?: number | { attribute: string };
+  margin?: ValueSource<number>;
 
   /**
    * Ratio of the extremity length (from base toward tip) where the body SDF
@@ -280,7 +280,7 @@ export interface EdgeLifecycleContext {
 }
 
 /**
- * Lifecycle hooks for edge fillings that need async resources.
+ * Lifecycle hooks for edge layers that need async resources.
  */
 export interface EdgeLifecycleHooks {
   /**
@@ -294,9 +294,9 @@ export interface EdgeLifecycleHooks {
   beforeRender?: () => void;
 
   /**
-   * Called when the filling's shader needs regeneration.
+   * Called when the layer's shader needs regeneration.
    */
-  regenerate?: () => EdgeFilling;
+  regenerate?: () => EdgeLayer;
 
   /**
    * Called when the program is destroyed.
@@ -310,24 +310,26 @@ export interface EdgeLifecycleHooks {
 }
 
 /**
- * EdgeFilling - defines the appearance of the edge body.
+ * EdgeLayer - defines a visual layer for the edge body.
  *
- * Fillings determine how the edge body is colored/textured.
- * The simplest filling is plain solid color; more complex fillings
+ * Layers determine how the edge body is colored/textured.
+ * The simplest layer is plain solid color; more complex layers
  * can implement dashes, gradients, or textures.
+ *
+ * Multiple layers can be composited using alpha blending (TO BE DONE).
  */
-export interface EdgeFilling {
+export interface EdgeLayer {
   /**
-   * Unique identifier for this filling type (e.g., "plain", "dashed", "gradient").
-   * Used to generate GLSL function names: filling_{name}
+   * Unique identifier for this layer type (e.g., "plain", "dashed", "gradient").
+   * Used to generate GLSL function names: layer_{name}
    */
   name: string;
 
   /**
-   * GLSL code defining the filling color function.
+   * GLSL code defining the layer color function.
    *
    * Function signature:
-   *   vec4 filling_{name}(EdgeContext ctx)
+   *   vec4 layer_{name}(EdgeContext ctx)
    *
    * The EdgeContext provides information about the current fragment:
    * - t: position along path [0, 1]
@@ -341,17 +343,17 @@ export interface EdgeFilling {
   glsl: string;
 
   /**
-   * Additional uniforms required by this filling.
+   * Additional uniforms required by this layer.
    */
   uniforms: UniformSpecification[];
 
   /**
-   * Additional per-edge attributes required by this filling.
+   * Additional per-edge attributes required by this layer.
    */
   attributes: AttributeSpecification[];
 
   /**
-   * Optional lifecycle factory for fillings that need async resources.
+   * Optional lifecycle factory for layers that need async resources.
    */
   lifecycle?: (context: EdgeLifecycleContext) => EdgeLifecycleHooks;
 }
@@ -498,76 +500,53 @@ export interface EdgeLabelOptions {
 /**
  * Options for creating an edge program via createEdgeProgram().
  *
- * Supports both single-path mode (backward compatible) and multi-path mode:
- *
- * **Single-path mode** (traditional):
+ * @example
  * ```typescript
  * createEdgeProgram({
- *   path: pathLine(),
- *   head: extremityArrow(),
- *   tail: extremityNone(),
- *   filling: fillingPlain(),
+ *   paths: [pathLine()],
+ *   heads: [extremityArrow()],
+ *   tails: [extremityNone()],
+ *   layers: [layerPlain()],
  * });
- * ```
  *
- * **Multi-path mode** (new):
- * ```typescript
+ * // Multi-path mode: edges select via attributes
  * createEdgeProgram({
- *   paths: [pathLine(), pathCurved(), pathStep()],
+ *   paths: [pathLine(), pathCurved()],
  *   heads: [extremityNone(), extremityArrow()],
- *   tails: [extremityNone(), extremityArrow()],
- *   filling: fillingPlain(),
+ *   tails: [extremityNone()],
+ *   layers: [layerPlain()],
  * });
- * // Edges select via attributes: { path: "curved", head: "arrow", tail: "none" }
+ * // Edges select via: { path: "curved", head: "arrow", tail: "none" }
  * ```
  */
 export interface EdgeProgramOptions {
   /**
-   * Single path definition (geometry) for this edge type.
-   * Use `path` for single-path mode, `paths` for multi-path mode.
-   * Mutually exclusive with `paths`.
-   */
-  path?: EdgePath;
-
-  /**
-   * Multiple path definitions for multi-path mode.
+   * Array of path definitions (geometry).
    * Edges select their path via the `path` attribute (e.g., "line", "curved").
-   * Mutually exclusive with `path`.
+   * The first path is used as the default.
    */
-  paths?: EdgePath[];
+  paths: EdgePath[];
 
   /**
-   * Single head extremity (target end decoration).
-   * Use `head` for single-extremity mode, `heads` for multi-extremity mode.
-   * Mutually exclusive with `heads`.
-   */
-  head?: EdgeExtremity;
-
-  /**
-   * Multiple head extremity definitions for multi-extremity mode.
+   * Array of head extremity definitions (target end decoration).
    * Edges select their head via the `head` attribute (e.g., "none", "arrow").
-   * Mutually exclusive with `head`.
+   * The first head is used as the default.
    */
-  heads?: EdgeExtremity[];
+  heads: EdgeExtremity[];
 
   /**
-   * Single tail extremity (source end decoration).
-   * Use `tail` for single-extremity mode, `tails` for multi-extremity mode.
-   * Mutually exclusive with `tails`.
-   */
-  tail?: EdgeExtremity;
-
-  /**
-   * Multiple tail extremity definitions for multi-extremity mode.
+   * Array of tail extremity definitions (source end decoration).
    * Edges select their tail via the `tail` attribute (e.g., "none", "arrow").
-   * Mutually exclusive with `tail`.
+   * The first tail is used as the default.
    */
-  tails?: EdgeExtremity[];
+  tails: EdgeExtremity[];
 
   /**
-   * The filling (body appearance) for this edge type.
+   * Array of layers that composite the edge body appearance.
+   * Layers are rendered in order and alpha-blended together.
+   * At least one layer is required.
    */
-  filling: EdgeFilling;
+  layers: EdgeLayer[];
 
   /**
    * Label configuration options.
@@ -681,38 +660,40 @@ export interface NormalizedEdgeProgramOptions {
   paths: EdgePath[];
   heads: EdgeExtremity[];
   tails: EdgeExtremity[];
-  filling: EdgeFilling;
-  /** First path (for backward compatibility) */
+  layers: EdgeLayer[];
+  /** First path (convenience accessor) */
   path: EdgePath;
-  /** First head (for backward compatibility) */
+  /** First head (convenience accessor) */
   head: EdgeExtremity;
-  /** First tail (for backward compatibility) */
+  /** First tail (convenience accessor) */
   tail: EdgeExtremity;
+  /** First layer (convenience accessor) */
+  layer: EdgeLayer;
   /** Whether multiple paths/heads/tails are defined */
   isMultiMode: boolean;
 }
 
 /**
- * Normalizes EdgeProgramOptions to always have arrays and single-item accessors.
- * Validates that at least one path, head, and tail are provided.
+ * Normalizes EdgeProgramOptions and provides convenience accessors.
+ * Validates that at least one path, head, tail, and layer are provided.
  */
 export function normalizeEdgeProgramOptions(options: EdgeProgramOptions): NormalizedEdgeProgramOptions {
-  const paths = options.paths || (options.path ? [options.path] : []);
-  const heads = options.heads || (options.head ? [options.head] : []);
-  const tails = options.tails || (options.tail ? [options.tail] : []);
+  const { paths, heads, tails, layers } = options;
 
-  if (paths.length === 0) throw new Error("At least one path is required");
-  if (heads.length === 0) throw new Error("At least one head extremity is required");
-  if (tails.length === 0) throw new Error("At least one tail extremity is required");
+  if (paths.length === 0) throw new Error("At least one path is required in 'paths'");
+  if (heads.length === 0) throw new Error("At least one head extremity is required in 'heads'");
+  if (tails.length === 0) throw new Error("At least one tail extremity is required in 'tails'");
+  if (layers.length === 0) throw new Error("At least one layer is required in 'layers'");
 
   return {
     paths,
     heads,
     tails,
-    filling: options.filling,
+    layers,
     path: paths[0],
     head: heads[0],
     tail: tails[0],
+    layer: layers[0],
     isMultiMode: paths.length > 1 || heads.length > 1 || tails.length > 1,
   };
 }

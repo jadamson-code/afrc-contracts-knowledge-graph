@@ -28,8 +28,7 @@ export interface HoverStyleOptions {
 }
 
 export interface CreateHoverProgramOptions {
-  shape?: SDFShape;
-  shapes?: SDFShape[];
+  shapes: SDFShape[];
   rotateWithCamera?: boolean;
   label?: LabelOptions;
   hover?: HoverStyleOptions;
@@ -40,12 +39,10 @@ export function createHoverProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: CreateHoverProgramOptions): HoverProgramType<N, E, G> {
-  const { rotateWithCamera = false, label: labelOptions = {}, hover: hoverOptions = {} } = options;
+  const { rotateWithCamera = false, label: labelOptions = {}, hover: hoverOptions = {}, shapes } = options;
 
-  // Normalize to shapes array (support both single shape and multi-shape modes)
-  const shapes = options.shapes || (options.shape ? [options.shape] : []);
   if (shapes.length === 0) {
-    throw new Error("createHoverProgram: either 'shape' or 'shapes' must be provided");
+    throw new Error("createHoverProgram: at least one shape must be provided in 'shapes'");
   }
 
   const labelPosition: LabelPosition = labelOptions.position ?? "right";

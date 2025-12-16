@@ -3,7 +3,7 @@
  * ==================================
  *
  * Composable edge program architecture for Sigma.js v4.
- * Edges are composed from path, extremities (head/tail), and filling components.
+ * Edges are composed of path, extremities (head/tail), and layer components.
  *
  * @module
  */
@@ -16,7 +16,7 @@ export type { EdgeProgramType } from "./base";
 export type {
   EdgePath,
   EdgeExtremity,
-  EdgeFilling,
+  EdgeLayer,
   EdgeProgramOptions,
   EdgeLabelOptions,
   EdgeLabelColorSpecification,
@@ -47,16 +47,16 @@ export {
 // Extremities
 export { extremityNone, extremityArrow, type ArrowExtremityOptions } from "./extremities";
 
-// Fillings
+// Layers (edge body appearance)
 export {
-  fillingDashed,
-  fillingPlain,
+  layerDashed,
+  layerPlain,
   type DashValue,
-  type FillingDashedOptions,
+  type LayerDashedOptions,
   type GapFilling,
   type SolidExtremities,
   type SolidMargin,
-} from "./fillings";
+} from "./layers";
 
 // Built-in programs
 export { EdgeLineProgram, EdgeArrowProgram, EdgeCurveProgram, EdgeCurvedArrowProgram } from "./programs";

@@ -2,7 +2,7 @@
  * Sigma.js Edge Program Factory
  * ==============================
  *
- * Factory function that creates an EdgeProgram from path, extremities, and filling.
+ * Factory function that creates an EdgeProgram from paths, extremities, and layers.
  * The resulting program renders edges as composable components with single-pass WebGL.
  *
  * @module
@@ -12,15 +12,16 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { EdgeDisplayData, NodeDisplayData, RenderParams } from "../../types";
 import { floatColor } from "../../utils";
+import { isAttributeSource } from "../nodes";
 import { ProgramInfo } from "../utils";
 import { EdgeProgram as BaseEdgeProgram, EdgeProgramType } from "./base";
 import { generateEdgeShaders } from "./generator";
 import { type EdgeLabelProgramType, createEdgeLabelProgram } from "./labels";
 import {
-  computeEdgeAttributeLayout,
   EDGE_ATTRIBUTE_TEXTURE_UNIT,
   EdgeAttributeLayout,
   EdgePathAttributeTexture,
+  computeEdgeAttributeLayout,
 } from "./path-attribute-texture";
 import {
   EdgeLifecycleContext,
@@ -31,27 +32,27 @@ import {
 } from "./types";
 
 /**
- * Creates an edge program from path, extremities, and filling components.
+ * Creates an edge program from paths, extremities, and layers.
  *
  * @param options - Configuration for the edge program
  * @returns An EdgeProgram class that can be used with Sigma
  *
  * @example
  * ```typescript
- * import { createEdgeProgram, pathLine, extremityNone, extremityArrow, fillingPlain } from "sigma/rendering";
+ * import { createEdgeProgram, pathLine, extremityNone, extremityArrow, layerPlain } from "sigma/rendering";
  *
  * const EdgeLineProgram = createEdgeProgram({
- *   path: pathLine(),
- *   head: extremityNone(),
- *   tail: extremityNone(),
- *   filling: fillingPlain(),
+ *   paths: [pathLine()],
+ *   heads: [extremityNone()],
+ *   tails: [extremityNone()],
+ *   layers: [layerPlain()],
  * });
  *
  * const EdgeArrowProgram = createEdgeProgram({
- *   path: pathLine(),
- *   head: extremityArrow(),
- *   tail: extremityNone(),
- *   filling: fillingPlain(),
+ *   paths: [pathLine()],
+ *   heads: [extremityArrow()],
+ *   tails: [extremityNone()],
+ *   layers: [layerPlain()],
  * });
  *
  * // Multi-path mode: one program supports multiple path types
@@ -59,7 +60,7 @@ import {
  *   paths: [pathLine(), pathCurved(), pathStep()],
  *   heads: [extremityNone(), extremityArrow()],
  *   tails: [extremityNone()],
- *   filling: fillingPlain(),
+ *   layers: [layerPlain()],
  * });
  *
  * const sigma = new Sigma(graph, container, {
@@ -76,7 +77,7 @@ export function createEdgeProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: EdgeProgramOptions): EdgeProgramType<N, E, G> {
-  const { paths, heads, tails, path, head, tail, filling, isMultiMode } = normalizeEdgeProgramOptions(options);
+  const { paths, heads, tails, layers, path, head, tail, layer, isMultiMode } = normalizeEdgeProgramOptions(options);
 
   // Build name-to-index mappings for multi-path mode
   const pathNameToIndex: Record<string, number> = {};
@@ -93,7 +94,7 @@ export function createEdgeProgram<
   let generated: GeneratedEdgeShaders | null = null;
 
   // Compute attribute layout once for this program configuration
-  const attributeLayout: EdgeAttributeLayout = computeEdgeAttributeLayout(isMultiMode ? paths : [path], filling);
+  const attributeLayout: EdgeAttributeLayout = computeEdgeAttributeLayout(isMultiMode ? paths : [path], layer);
 
   // Create the edge program class
   const EdgeProgramClass = class extends BaseEdgeProgram<string, N, E, G> {
@@ -106,19 +107,17 @@ export function createEdgeProgram<
 
     static get generatedShaders() {
       if (!generated) {
-        generated = isMultiMode
-          ? generateEdgeShaders({ paths, heads, tails, filling })
-          : generateEdgeShaders({ path, head, tail, filling });
+        generated = generateEdgeShaders({ paths, heads, tails, layers });
       }
       return generated;
     }
 
     // Lifecycle hooks storage
-    private fillingLifecycle: EdgeLifecycleHooks | null = null;
+    private layerLifecycle: EdgeLifecycleHooks | null = null;
     private needsShaderRegeneration = false;
     private _pickingBuffer: WebGLFramebuffer | null;
 
-    // Edge path attribute texture for storing path/filling attributes
+    // Edge path attribute texture for storing path/layer attributes
     private edgeAttributeTexture: EdgePathAttributeTexture | null = null;
     private packedAttributeData: Float32Array;
     private readonly layout: EdgeAttributeLayout = attributeLayout;
@@ -126,20 +125,18 @@ export function createEdgeProgram<
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
       // Generate shaders on first instantiation (after node shapes are registered)
       if (!generated) {
-        generated = isMultiMode
-          ? generateEdgeShaders({ paths, heads, tails, filling })
-          : generateEdgeShaders({ path, head, tail, filling });
+        generated = generateEdgeShaders({ paths, heads, tails, layers });
       }
 
       super(gl, pickingBuffer, renderer);
       this._pickingBuffer = pickingBuffer;
 
-      // Create edge attribute texture for path/filling attributes
+      // Create edge attribute texture for path/layer attributes
       this.edgeAttributeTexture = new EdgePathAttributeTexture(gl, this.layout);
       this.packedAttributeData = new Float32Array(this.layout.floatsPerEdge);
 
-      // Initialize filling lifecycle if present
-      if (filling.lifecycle) {
+      // Initialize layer lifecycle if present
+      if (layer.lifecycle) {
         const context: EdgeLifecycleContext = {
           gl,
           renderer: { refresh: () => renderer.refresh() },
@@ -153,11 +150,11 @@ export function createEdgeProgram<
             renderer.refresh();
           },
         };
-        this.fillingLifecycle = filling.lifecycle(context);
+        this.layerLifecycle = layer.lifecycle(context);
       }
 
       // Call init hook
-      this.fillingLifecycle?.init?.();
+      this.layerLifecycle?.init?.();
     }
 
     getDefinition() {
@@ -182,23 +179,21 @@ export function createEdgeProgram<
     }
 
     /**
-     * Regenerate shaders if filling requested it.
+     * Regenerate shaders if layer requested it.
      */
     private maybeRegenerateShaders(): void {
       if (!this.needsShaderRegeneration) return;
 
       this.needsShaderRegeneration = false;
 
-      // If filling has regenerate hook, get new filling definition
-      let newFilling = filling;
-      if (this.fillingLifecycle?.regenerate) {
-        newFilling = this.fillingLifecycle.regenerate();
+      // If layer has regenerate hook, get new layer definition
+      let newLayer = layer;
+      if (this.layerLifecycle?.regenerate) {
+        newLayer = this.layerLifecycle.regenerate();
       }
 
       // Regenerate shaders
-      generated = isMultiMode
-        ? generateEdgeShaders({ paths, heads, tails, filling: newFilling })
-        : generateEdgeShaders({ path, head, tail, filling: newFilling });
+      generated = generateEdgeShaders({ paths, heads, tails, layers: [newLayer] });
 
       // Rebuild WebGL program
       const gl = this.normalProgram.gl;
@@ -235,7 +230,7 @@ export function createEdgeProgram<
       array[startIndex++] = floatColor(data.color);
       array[startIndex++] = edgeIndex;
 
-      // Pack path/filling attributes into the edge attribute texture
+      // Pack path/layer attributes into the edge attribute texture
       const packed = this.packedAttributeData;
       packed.fill(0);
 
@@ -264,38 +259,40 @@ export function createEdgeProgram<
         });
       });
 
-      // Process filling attributes
-      filling.attributes.forEach((attr) => {
-        // Get attribute name without prefix
-        const name = attr.name.replace(/^a_/, "");
-        const offset = layout.offsets[name];
-        if (offset === undefined) return; // Not in layout
+      // Process layer attributes
+      layer.attributes.forEach(
+        (attr: { name: string; source?: string; size: number; normalized?: boolean; defaultValue?: unknown }) => {
+          // Get attribute name without prefix
+          const name = attr.name.replace(/^a_/, "");
+          const offset = layout.offsets[name];
+          if (offset === undefined) return; // Not in layout
 
-        const sourceName = attr.source || name;
+          const sourceName = attr.source || name;
 
-        // Check if lifecycle provides the data
-        let value: unknown = null;
-        if (this.fillingLifecycle?.getAttributeData) {
-          value = this.fillingLifecycle.getAttributeData(data as unknown as Record<string, unknown>, sourceName);
-        }
-
-        // Fall back to edge data
-        if (value === null) {
-          value = (data as unknown as Record<string, unknown>)[sourceName];
-        }
-
-        if (attr.size === 4 && attr.normalized) {
-          // Color value - pack as float
-          packed[offset] = typeof value === "string" ? floatColor(value) : floatColor(data.color);
-        } else if (attr.size === 1) {
-          packed[offset] = typeof value === "number" ? value : (attr.defaultValue as number) || 0;
-        } else {
-          const arr = Array.isArray(value) ? value : [];
-          for (let i = 0; i < attr.size; i++) {
-            packed[offset + i] = arr[i] ?? 0;
+          // Check if lifecycle provides the data
+          let value: unknown = null;
+          if (this.layerLifecycle?.getAttributeData) {
+            value = this.layerLifecycle.getAttributeData(data as unknown as Record<string, unknown>, sourceName);
           }
-        }
-      });
+
+          // Fall back to edge data
+          if (value === null) {
+            value = (data as unknown as Record<string, unknown>)[sourceName];
+          }
+
+          if (attr.size === 4 && attr.normalized) {
+            // Color value - pack as float
+            packed[offset] = typeof value === "string" ? floatColor(value) : floatColor(data.color);
+          } else if (attr.size === 1) {
+            packed[offset] = typeof value === "number" ? value : (attr.defaultValue as number) || 0;
+          } else {
+            const arr = Array.isArray(value) ? value : [];
+            for (let i = 0; i < attr.size; i++) {
+              packed[offset + i] = arr[i] ?? 0;
+            }
+          }
+        },
+      );
 
       // Update the texture with packed attributes
       // Use edgeTextureIndex as the key for consistent allocation
@@ -382,8 +379,8 @@ export function createEdgeProgram<
         });
       });
 
-      // Filling uniforms
-      filling.uniforms.forEach((uniform) => {
+      // Layer uniforms
+      layer.uniforms.forEach((uniform) => {
         if (processedUniforms.has(uniform.name)) return;
         processedUniforms.add(uniform.name);
         this.setTypedUniform(uniform, programInfo);
@@ -395,14 +392,14 @@ export function createEdgeProgram<
       this.maybeRegenerateShaders();
 
       // Call beforeRender hook
-      this.fillingLifecycle?.beforeRender?.();
+      this.layerLifecycle?.beforeRender?.();
 
       super.renderProgram(params, programInfo);
     }
 
     kill(): void {
       // Call kill hook
-      this.fillingLifecycle?.kill?.();
+      this.layerLifecycle?.kill?.();
 
       // Clean up attribute texture
       if (this.edgeAttributeTexture) {
@@ -419,8 +416,8 @@ export function createEdgeProgram<
   const LabelProgramClass = createEdgeLabelProgram({
     path,
     // Pass extremity length ratios so labels know where the edge body starts/ends
-    headLengthRatio: typeof head.length === "number" ? head.length : 0,
-    tailLengthRatio: typeof tail.length === "number" ? tail.length : 0,
+    headLengthRatio: !isAttributeSource(head.length) ? head.length : 0,
+    tailLengthRatio: !isAttributeSource(tail.length) ? tail.length : 0,
     // Pass label styling options from EdgeProgramOptions (spread since interfaces match)
     ...options.label,
   });

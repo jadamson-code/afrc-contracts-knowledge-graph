@@ -34,7 +34,7 @@ export type { Atlas, ImageType, TextureManagerOptions } from "./texture";
 export const NodeImageProgram: NodeProgramType = createNodeImageProgram();
 export const NodePictogramProgram: NodeProgramType = createNodeImageProgram({
   shapeFactory: sdfSquare,
-  backgroundLayerFactory: () => layerFill({ value: "#ffffff00" }),
+  backgroundLayerFactory: () => layerFill({ color: "#ffffff00" }),
   size: { mode: "force", value: 256 },
   drawingMode: "color",
   correctCentering: true,

@@ -41,18 +41,18 @@ export interface ArrowExtremityOptions {
  * ```typescript
  * // Default arrow
  * const EdgeArrowProgram = createEdgeProgram({
- *   path: pathLine(),
- *   head: extremityArrow(),
- *   tail: extremityNone(),
- *   filling: fillingPlain(),
+ *   paths: [pathLine()],
+ *   heads: [extremityArrow()],
+ *   tails: [extremityNone()],
+ *   layers: [layerPlain()],
  * });
  *
  * // Custom arrow with margin
  * const EdgeArrowMarginProgram = createEdgeProgram({
- *   path: pathLine(),
- *   head: extremityArrow({ lengthRatio: 3, widthRatio: 2.5, margin: 5 }),
- *   tail: extremityNone(),
- *   filling: fillingPlain(),
+ *   paths: [pathLine()],
+ *   heads: [extremityArrow({ lengthRatio: 3, widthRatio: 2.5, margin: 5 })],
+ *   tails: [extremityNone()],
+ *   layers: [layerPlain()],
  * });
  * ```
  */

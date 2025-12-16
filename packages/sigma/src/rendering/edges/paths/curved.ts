@@ -42,10 +42,10 @@ export interface CurvedPathOptions {
  * @example
  * ```typescript
  * const EdgeCurvedProgram = createEdgeProgram({
- *   path: pathCurved({ segments: 16 }),
- *   head: extremityArrow(),
- *   tail: extremityNone(),
- *   filling: fillingPlain(),
+ *   paths: [pathCurved({ segments: 16 })],
+ *   heads: [extremityArrow()],
+ *   tails: [extremityNone()],
+ *   layers: [layerPlain()],
  * });
  * ```
  */
@@ -112,8 +112,6 @@ float path_curved_length(vec2 source, vec2 target) {
     glsl,
     vertexGlsl: "", // Uses the standard tessellation from generator
     uniforms: [],
-    attributes: [
-      { name: "curvature", size: 1, type: WebGL2RenderingContext.FLOAT },
-    ],
+    attributes: [{ name: "curvature", size: 1, type: WebGL2RenderingContext.FLOAT }],
   };
 }

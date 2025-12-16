@@ -8,7 +8,7 @@
  */
 import { extremityArrow, extremityNone } from "../extremities";
 import { createEdgeProgram } from "../factory";
-import { fillingPlain } from "../fillings";
+import { layerPlain } from "../layers";
 import { pathLine } from "../paths";
 
 /**
@@ -28,10 +28,10 @@ import { pathLine } from "../paths";
  * ```
  */
 export const EdgeArrowProgram = createEdgeProgram({
-  path: pathLine(),
-  head: extremityArrow(),
-  tail: extremityNone(),
-  filling: fillingPlain(),
+  paths: [pathLine()],
+  heads: [extremityArrow()],
+  tails: [extremityNone()],
+  layers: [layerPlain()],
 });
 
 export default EdgeArrowProgram;

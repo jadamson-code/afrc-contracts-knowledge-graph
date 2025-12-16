@@ -2,8 +2,8 @@
  * Sigma.js Edge Path Attribute Texture
  * =====================================
  *
- * Manages a GPU texture containing per-edge path and filling attribute data.
- * This texture stores all attributes declared by EdgePath and EdgeFilling
+ * Manages a GPU texture containing per-edge path and layer attribute data.
+ * This texture stores all attributes declared by EdgePath and EdgeLayer
  * for efficient shader access, eliminating the need for hardcoded global
  * variables like `a_curvature`.
  *
@@ -12,14 +12,14 @@
  * @module
  */
 import { DataTexture } from "../data-texture";
-import { AttributeSpecification } from "../nodes/types";
-import { EdgeFilling, EdgePath } from "./types";
+import { AttributeSpecification } from "../nodes";
+import { EdgeLayer, EdgePath } from "./types";
 
 /** WebGL texture unit used for edge path attribute texture */
 export const EDGE_ATTRIBUTE_TEXTURE_UNIT = 6;
 
 /**
- * Describes the memory layout of path/filling attributes in the texture.
+ * Describes the memory layout of path/layer attributes in the texture.
  */
 export interface EdgeAttributeLayout {
   /** Total floats needed per edge */
@@ -33,15 +33,15 @@ export interface EdgeAttributeLayout {
 }
 
 /**
- * Computes the memory layout for edge path/filling attributes.
- * Collects all unique attributes from all paths and the filling, assigns sequential offsets.
+ * Computes the memory layout for edge path/layer attributes.
+ * Collects all unique attributes from all paths and the layer, assigns sequential offsets.
  * Used by both the factory (for texture allocation) and generator (for GLSL code).
  *
  * @param paths - Array of EdgePath definitions (all paths in multi-path mode)
- * @param filling - The EdgeFilling definition
+ * @param layer - The EdgeLayer definition
  * @returns Layout describing attribute positions in the texture
  */
-export function computeEdgeAttributeLayout(paths: EdgePath[], filling: EdgeFilling): EdgeAttributeLayout {
+export function computeEdgeAttributeLayout(paths: EdgePath[], layer: EdgeLayer): EdgeAttributeLayout {
   const offsets: Record<string, number> = {};
   const specs: Record<string, AttributeSpecification> = {};
   let offset = 0;
@@ -58,7 +58,7 @@ export function computeEdgeAttributeLayout(paths: EdgePath[], filling: EdgeFilli
     }
   }
 
-  for (const attr of filling.attributes) {
+  for (const attr of layer.attributes) {
     const name = attr.name.replace(/^a_/, "");
     if (!(name in offsets)) {
       offsets[name] = offset;
@@ -87,10 +87,10 @@ function sizeToGlslType(size: number): string {
 }
 
 /**
- * Generates GLSL code to fetch path/filling attributes from the edge attribute texture.
+ * Generates GLSL code to fetch path/layer attributes from the edge attribute texture.
  * This replaces the hardcoded `a_curvature` global variable with a clean texture-based system.
  *
- * @param layout - The attribute layout computed from paths and filling
+ * @param layout - The attribute layout computed from paths and layer
  * @returns Object containing uniforms, fetch code, and varying declarations
  */
 export function generateEdgeAttributeTextureFetch(layout: EdgeAttributeLayout): {
@@ -122,11 +122,7 @@ uniform sampler2D u_edgeAttributeTexture;
 uniform int u_edgeAttributeTextureWidth;
 uniform int u_edgeAttributeTexelsPerEdge;`;
 
-  const uniformNames = [
-    "u_edgeAttributeTexture",
-    "u_edgeAttributeTextureWidth",
-    "u_edgeAttributeTexelsPerEdge",
-  ];
+  const uniformNames = ["u_edgeAttributeTexture", "u_edgeAttributeTextureWidth", "u_edgeAttributeTexelsPerEdge"];
 
   // Generate varying declarations for vertex shader (out) and fragment shader (in)
   const varyingLines: string[] = [];
@@ -165,10 +161,14 @@ uniform int u_edgeAttributeTexelsPerEdge;`;
       // vec2: extract two components
       if (componentOffset <= 2) {
         // Can use swizzle from same texel
-        extractions.push(`  vec2 fetched_${name} = attrTexel${texelIndex}.${components[componentOffset]}${components[componentOffset + 1]};`);
+        extractions.push(
+          `  vec2 fetched_${name} = attrTexel${texelIndex}.${components[componentOffset]}${components[componentOffset + 1]};`,
+        );
       } else {
         // Spans two texels
-        extractions.push(`  vec2 fetched_${name} = vec2(attrTexel${texelIndex}.${components[componentOffset]}, attrTexel${texelIndex + 1}.r);`);
+        extractions.push(
+          `  vec2 fetched_${name} = vec2(attrTexel${texelIndex}.${components[componentOffset]}, attrTexel${texelIndex + 1}.r);`,
+        );
       }
     } else if (spec.size === 3) {
       // vec3: extract three components
@@ -182,7 +182,9 @@ uniform int u_edgeAttributeTexelsPerEdge;`;
         const fromNext = 3 - remaining;
         const first = components.slice(componentOffset, 4).join("");
         const second = components.slice(0, fromNext).join("");
-        extractions.push(`  vec3 fetched_${name} = vec3(attrTexel${texelIndex}.${first}, attrTexel${texelIndex + 1}.${second});`);
+        extractions.push(
+          `  vec3 fetched_${name} = vec3(attrTexel${texelIndex}.${first}, attrTexel${texelIndex + 1}.${second});`,
+        );
       }
     } else if (spec.size === 4) {
       // vec4: extract four components
@@ -194,13 +196,15 @@ uniform int u_edgeAttributeTexelsPerEdge;`;
         const fromNext = 4 - remaining;
         const first = components.slice(componentOffset, 4).join("");
         const second = components.slice(0, fromNext).join("");
-        extractions.push(`  vec4 fetched_${name} = vec4(attrTexel${texelIndex}.${first}, attrTexel${texelIndex + 1}.${second});`);
+        extractions.push(
+          `  vec4 fetched_${name} = vec4(attrTexel${texelIndex}.${first}, attrTexel${texelIndex + 1}.${second});`,
+        );
       }
     }
   }
 
   const fetchCode = `
-  // Fetch path/filling attributes from edge attribute texture
+  // Fetch path/layer attributes from edge attribute texture
   int attrBaseTexel = edgeIdx * u_edgeAttributeTexelsPerEdge;
 ${texelFetches.join("\n")}
 
@@ -222,7 +226,7 @@ ${extractions.join("\n")}`;
 }
 
 /**
- * Manages a GPU texture storing path/filling attribute data for edges.
+ * Manages a GPU texture storing path/layer attribute data for edges.
  *
  * The texture is a 2D RGBA32F texture where each edge uses `texelsPerEdge` texels.
  * Attributes are packed sequentially and can span multiple texels.
@@ -232,7 +236,7 @@ ${extractions.join("\n")}`;
  *   texCoord = (baseTexel % textureWidth, baseTexel / textureWidth)
  *
  * This replaces the hardcoded `a_curvature` global variable approach with a
- * clean, extensible system where any path or filling can declare any attributes.
+ * clean, extensible system where any path or layer can declare any attributes.
  */
 export class EdgePathAttributeTexture extends DataTexture {
   protected readonly TEXELS_PER_ITEM: number;

@@ -19,7 +19,6 @@ import {
   generatePathFallbacks,
 } from "./shared-glsl";
 import {
-  AttributeSpecification,
   EdgeExtremity,
   EdgeLayer,
   EdgePath,
@@ -41,12 +40,12 @@ export type EdgeShaderGenerationOptions = EdgeProgramOptions;
 // ============================================================================
 
 /**
- * Collects all uniforms from multiple paths, extremities, and layer.
+ * Collects all uniforms from multiple paths, extremities, and layers.
  */
 function collectUniformsMulti(
   paths: EdgePath[],
   extremities: EdgeExtremity[],
-  layer: EdgeLayer,
+  layers: EdgeLayer[],
 ): string[] {
   const standardUniforms = new Set([
     "u_matrix",
@@ -70,7 +69,7 @@ function collectUniformsMulti(
 
   paths.forEach((p) => p.uniforms.forEach((u) => uniforms.add(u.name)));
   extremities.forEach((e) => e.uniforms.forEach((u) => uniforms.add(u.name)));
-  layer.uniforms.forEach((u) => uniforms.add(u.name));
+  layers.forEach((layer) => layer.uniforms.forEach((u) => uniforms.add(u.name)));
 
   return Array.from(uniforms);
 }
@@ -353,11 +352,11 @@ function generateZonedConstantData(
 function generateVertexShaderMulti(
   paths: EdgePath[],
   extremities: EdgeExtremity[],
-  layer: EdgeLayer,
+  layers: EdgeLayer[],
   constantAttributes: Array<{ name: string; size: number; type: number }>,
 ): string {
   // Compute attribute layout for path/layer attributes from texture
-  const attributeLayout = computeEdgeAttributeLayout(paths, layer);
+  const attributeLayout = computeEdgeAttributeLayout(paths, layers);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // Collect all unique uniforms
@@ -382,7 +381,7 @@ function generateVertexShaderMulti(
   };
   paths.forEach((p) => p.uniforms.forEach(addUniform));
   extremities.forEach((e) => e.uniforms.forEach(addUniform));
-  layer.uniforms.forEach(addUniform);
+  layers.forEach((layer) => layer.uniforms.forEach(addUniform));
 
   // Generate constant attribute declarations
   const constantAttrDeclarations = constantAttributes
@@ -661,14 +660,15 @@ ${textureFetch.varyingAssignments}
 /**
  * Generates the fragment shader for multi-path edge rendering.
  * Uses query functions (selectors) for path and extremity operations.
+ * Supports multiple layers with "over" alpha compositing.
  */
 function generateFragmentShaderMulti(
   paths: EdgePath[],
   extremities: EdgeExtremity[],
-  layer: EdgeLayer,
+  layers: EdgeLayer[],
 ): string {
   // Compute attribute layout for path/layer attributes from texture
-  const attributeLayout = computeEdgeAttributeLayout(paths, layer);
+  const attributeLayout = computeEdgeAttributeLayout(paths, layers);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // Collect all unique uniforms
@@ -692,10 +692,18 @@ function generateFragmentShaderMulti(
   };
   paths.forEach((p) => p.uniforms.forEach(addUniform));
   extremities.forEach((e) => e.uniforms.forEach(addUniform));
-  layer.uniforms.forEach(addUniform);
+  layers.forEach((layer) => layer.uniforms.forEach(addUniform));
 
   // Generate base ratio array for extremities (shared pool for head/tail)
   const extremityBaseRatios = extremities.map((e) => numberToGLSLFloat(e.baseRatio ?? 0.5)).join(", ");
+
+  // Generate layer function calls with "over" compositing (like node layers)
+  const layerCalls = layers
+    .map((layer, index) => {
+      return `  // Layer ${index + 1}: ${layer.name}
+  color = blendOver(color, layer_${layer.name}(context));`;
+    })
+    .join("\n\n");
 
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es
@@ -764,6 +772,12 @@ struct EdgeContext {
 
 EdgeContext context;
 
+// Alpha "over" compositing for layer blending
+vec4 blendOver(vec4 bg, vec4 fg) {
+  float a = fg.a;
+  return vec4(mix(bg.rgb, fg.rgb, a), bg.a + a * (1.0 - bg.a));
+}
+
 // All path functions
 ${generateAllPathsGLSL(paths)}
 
@@ -779,8 +793,8 @@ ${generateAllExtremitiesGLSL(extremities)}
 // Extremity SDF selector (shared pool for head/tail)
 ${generateExtremitySdfSelector(extremities)}
 
-// Layer function
-${layer.glsl}
+// Layer functions
+${layers.map((layer) => layer.glsl).join("\n\n")}
 
 // Helper: Compute arc length using path selector
 float computeArcLengthMulti(int pathId, float t0, float t1, vec2 source, vec2 target, int samples) {
@@ -812,7 +826,7 @@ void main() {
   float halfGeometryWidth = halfThickness * zoneWidthFactor + aaWidthWebGL;
   float distFromCenter = abs(v_side) * halfGeometryWidth;
 
-  // Populate EdgeContext (for layer function)
+  // Populate EdgeContext (for layer functions)
   context.t = tNorm;
   context.sdf = distFromCenter - halfThickness;
   context.position = queryPathPosition(v_pathId, v_t, v_source, v_target);
@@ -871,11 +885,15 @@ void main() {
     if (finalSDF > 0.0) discard;
     fragColor = v_id;
   #else
-    // Visual pass: anti-aliased edge with layer
+    // Visual pass: anti-aliased edge with layers
     float alpha = smoothstep(aaWidthWebGL, -aaWidthWebGL, finalSDF);
     if (alpha < 0.01) discard;
 
-    vec4 color = layer_${layer.name}(context);
+    // Apply layers sequentially with "over" compositing
+    vec4 color = vec4(0.0);
+
+${layerCalls}
+
     // Mix with transparent to fade both color AND alpha (pre-multiplied alpha for correct blending)
     fragColor = mix(vec4(0.0), color, alpha);
   #endif
@@ -917,7 +935,7 @@ function getConstantDataForCombination(
  * Always generates unified shaders that support per-edge path/extremity selection.
  */
 export function generateEdgeShaders(options: EdgeShaderGenerationOptions): GeneratedEdgeShaders {
-  const { paths, extremities, layer } = normalizeEdgeProgramOptions(options);
+  const { paths, extremities, layers } = normalizeEdgeProgramOptions(options);
 
   // Generate constant data for all combinations (any extremity can be head or tail)
   const vertexCountsPerCombination = new Map<string, number>();
@@ -959,10 +977,10 @@ export function generateEdgeShaders(options: EdgeShaderGenerationOptions): Gener
   ];
 
   return {
-    vertexShader: generateVertexShaderMulti(paths, extremities, layer, constantAttributes),
-    fragmentShader: generateFragmentShaderMulti(paths, extremities, layer),
-    uniforms: collectUniformsMulti(paths, extremities, layer),
-    attributes: collectAttributesMulti(paths, extremities, layer),
+    vertexShader: generateVertexShaderMulti(paths, extremities, layers, constantAttributes),
+    fragmentShader: generateFragmentShaderMulti(paths, extremities, layers),
+    uniforms: collectUniformsMulti(paths, extremities, layers),
+    attributes: collectAttributesMulti(paths, extremities, layers),
     verticesPerEdge: maxVerticesPerEdge,
     constantData: maxConstantData,
     constantAttributes,
@@ -979,7 +997,7 @@ export function generateEdgeShaders(options: EdgeShaderGenerationOptions): Gener
 function collectAttributesMulti(
   _paths: EdgePath[],
   _extremities: EdgeExtremity[],
-  _layer: EdgeLayer,
+  _layers: EdgeLayer[],
 ): Array<{ name: string; size: number; type: number; normalized?: boolean }> {
   // Core per-edge attributes (path/layer attributes are in the attribute texture)
   return [

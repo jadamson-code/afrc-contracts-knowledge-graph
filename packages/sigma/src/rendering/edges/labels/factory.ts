@@ -235,7 +235,7 @@ export function createEdgeLabelProgram<
 
       // Initialize edge attribute texture for path attributes (curvature, etc.)
       const layer = layerPlain();
-      this.attributeLayout = computeEdgeAttributeLayout([path], layer);
+      this.attributeLayout = computeEdgeAttributeLayout([path], [layer]);
       this.edgeAttributeTexture = new EdgePathAttributeTexture(gl, this.attributeLayout);
       this.packedAttributeData = new Float32Array(this.attributeLayout.floatsPerEdge);
 

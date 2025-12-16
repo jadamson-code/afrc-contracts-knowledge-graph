@@ -1,3 +1,5 @@
+import { Vec4 } from "../rendering";
+
 export const HTML_COLORS: Record<string, string> = {
   black: "#000000",
   silver: "#C0C0C0",
@@ -208,6 +210,14 @@ export function parseColor(val: string): RGBAColor {
   }
 
   return { r, g, b, a };
+}
+
+export function colorToVec4(val: string, premultipliedAlpha = false): Vec4 {
+  const { r, g, b, a } = parseColor(val);
+
+  if (premultipliedAlpha) return [(r / 255) * a, (g / 255) * a, (b / 255) * a, a];
+
+  return [r / 255, g / 255, b / 255, a];
 }
 
 const FLOAT_COLOR_CACHE: { [key: string]: number } = {};

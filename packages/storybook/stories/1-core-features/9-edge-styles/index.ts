@@ -1,11 +1,12 @@
 /**
- * This example demonstrates edge styles using the composable edge program system.
+ * This example demonstrates edge styles using the composable edge program system,
+ * including multi-layer support.
  *
  * It uses:
  * - A single multi-shape node program (supports diamond and triangle shapes)
- * - A single multi-path edge program (supports all path types via per-edge selection)
+ * - A single multi-path, multi-layer edge program showcasing composed layers
  *
- * This is more efficient than using separate programs for each shape/path type.
+ * All edges use the same program with plain + dashed layers composited together.
  */
 import Graph from "graphology";
 import Sigma from "sigma";
@@ -13,6 +14,7 @@ import {
   createEdgeProgram,
   createNodeProgram,
   extremityArrow,
+  layerDashed,
   layerFill,
   layerPlain,
   pathCurved,
@@ -35,47 +37,58 @@ export default () => {
   const NODE_SIZE = 12;
   const EDGE_SIZE = 6;
 
-  // Colors
-  const EDGE_COLOR = "#999999";
+  // Row colors (one per path type)
+  const ROW_COLORS = ["#5B8FF9", "#61DDAA", "#F6903D", "#E8684A"];
   const NODE_COLOR = "#5B8FF9";
 
   // Create a single multi-shape node program
-  // Nodes select their shape via the 'shape' attribute
   const NodeProgram = createNodeProgram({
     shapes: [sdfDiamond(), sdfTriangle()],
     layers: [layerFill()],
     rotateWithCamera: false,
   });
 
-  // Create a single multi-path edge program that supports all path types
+  // Create a single multi-path, multi-layer edge program
+  // All edges use this program with plain + dashed layers composited
   const EdgeProgram = createEdgeProgram({
-    // Multiple paths - each edge can select which one to use via "path" attribute
     paths: [
       pathLine(),
       pathCurved(),
       pathStepCurved({ orientation: "automatic" }),
       pathCurvedS({ orientation: "automatic" }),
     ],
-    // Extremity pool - "none" is always implicit, edges select via "head"/"tail" attributes
     extremities: [extremityArrow()],
-    // Layers apply to all edges in this program
-    layers: [layerPlain()],
+    layers: [
+      layerPlain(),
+      layerDashed({
+        dashColor: { attribute: "dashColor" },
+        dashSize: { attribute: "dashSize", default: 0, mode: "pixels" },
+        gapColor: 0,
+        gapSize: { value: 10, mode: "pixels" },
+      }),
+    ],
   });
 
-  // Path names for the demo (must match the names from path factories)
+  // Path names for the demo
   const PATH_NAMES = ["line", "curved", "stepCurved", "curvedS"];
-  const EXTREMITY_CONFIGS = [
-    { head: "none", tail: "none" },
-    { head: "arrow", tail: "none" },
+
+  // Column configurations: extremity settings
+  // Last column (4) has arrows and dashes aligned to end
+  const COLUMN_CONFIGS = [
+    {},
+    { head: "arrow" },
     { head: "arrow", tail: "arrow" },
+    { dashSize: 5, backgroundColor: "white" },
+    { head: "arrow", dashSize: 10, dashColor: "blue" },
   ];
 
   // Create nodes and edges
   for (let rowIdx = 0; rowIdx < PATH_NAMES.length; rowIdx++) {
     const pathName = PATH_NAMES[rowIdx];
+    const rowColor = ROW_COLORS[rowIdx];
 
-    for (let colIdx = 0; colIdx < EXTREMITY_CONFIGS.length; colIdx++) {
-      const extConfig = EXTREMITY_CONFIGS[colIdx];
+    for (let colIdx = 0; colIdx < COLUMN_CONFIGS.length; colIdx++) {
+      const colConfig = COLUMN_CONFIGS[colIdx];
 
       const cellX = colIdx * COL_SPACING;
       const cellY = -rowIdx * ROW_SPACING;
@@ -86,7 +99,7 @@ export default () => {
         y: cellY,
         size: NODE_SIZE,
         color: NODE_COLOR,
-        shape: "diamond", // Source nodes are diamonds
+        shape: "diamond",
       });
 
       const targetId = `${pathName}-${colIdx}-target`;
@@ -95,17 +108,18 @@ export default () => {
         y: cellY + NODE_SPACING / 2,
         size: NODE_SIZE,
         color: NODE_COLOR,
-        shape: "triangle", // Target nodes are triangles
+        shape: "triangle",
       });
 
-      // Edges use per-edge path and extremity selection
       graph.addEdge(sourceId, targetId, {
         size: EDGE_SIZE,
-        color: EDGE_COLOR,
+        color: colConfig.backgroundColor || rowColor,
+        dashColor: colConfig.dashColor || rowColor,
+        dashSize: colConfig.dashSize,
         curvature: pathName === "curved" ? 0.3 : 0,
         path: pathName,
-        head: extConfig.head,
-        tail: extConfig.tail,
+        head: colConfig.head,
+        tail: colConfig.tail,
       });
     }
   }
@@ -125,10 +139,6 @@ export default () => {
     itemSizesReference: "positions",
     autoRescale: true,
   });
-
-  setInterval(() => {
-    renderer.getCamera().updateState(({ angle }) => ({ angle: angle + 0.005 }));
-  }, 30);
 
   return () => {
     renderer.kill();

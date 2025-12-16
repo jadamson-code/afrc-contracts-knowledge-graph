@@ -34,14 +34,14 @@ export interface EdgeAttributeLayout {
 
 /**
  * Computes the memory layout for edge path/layer attributes.
- * Collects all unique attributes from all paths and the layer, assigns sequential offsets.
+ * Collects all unique attributes from all paths and all layers, assigns sequential offsets.
  * Used by both the factory (for texture allocation) and generator (for GLSL code).
  *
  * @param paths - Array of EdgePath definitions (all paths in multi-path mode)
- * @param layer - The EdgeLayer definition
+ * @param layers - Array of EdgeLayer definitions (all layers for multi-layer support)
  * @returns Layout describing attribute positions in the texture
  */
-export function computeEdgeAttributeLayout(paths: EdgePath[], layer: EdgeLayer): EdgeAttributeLayout {
+export function computeEdgeAttributeLayout(paths: EdgePath[], layers: EdgeLayer[]): EdgeAttributeLayout {
   const offsets: Record<string, number> = {};
   const specs: Record<string, AttributeSpecification> = {};
   let offset = 0;
@@ -58,12 +58,14 @@ export function computeEdgeAttributeLayout(paths: EdgePath[], layer: EdgeLayer):
     }
   }
 
-  for (const attr of layer.attributes) {
-    const name = attr.name.replace(/^a_/, "");
-    if (!(name in offsets)) {
-      offsets[name] = offset;
-      specs[name] = attr;
-      offset += attr.size;
+  for (const layer of layers) {
+    for (const attr of layer.attributes) {
+      const name = attr.name.replace(/^a_/, "");
+      if (!(name in offsets)) {
+        offsets[name] = offset;
+        specs[name] = attr;
+        offset += attr.size;
+      }
     }
   }
 

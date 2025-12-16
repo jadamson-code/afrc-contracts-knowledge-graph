@@ -11,7 +11,7 @@ import { Attributes } from "graphology-types";
 
 import Sigma from "../../sigma";
 import { EdgeDisplayData, NodeDisplayData, RenderParams } from "../../types";
-import { floatColor } from "../../utils";
+import { colorToArray, floatColor } from "../../utils";
 import { isAttributeSource } from "../nodes";
 import { ProgramInfo } from "../utils";
 import { EdgeProgram as BaseEdgeProgram, EdgeProgramType } from "./base";
@@ -103,7 +103,7 @@ export function createEdgeProgram<
   G extends Attributes = Attributes,
 >(options: EdgeProgramOptions): EdgeProgramType<N, E, G> {
   const normalized = normalizeEdgeProgramOptions(options);
-  const { paths, layers, layer, defaultHead, defaultTail } = normalized;
+  const { paths, layers, defaultHead, defaultTail } = normalized;
 
   // Always prepend extremityNone() so "none" is always available at index 0
   const extremities = [extremityNone(), ...normalized.extremities];
@@ -124,8 +124,8 @@ export function createEdgeProgram<
   // since generateShapeSelectorGLSL() reads from the shape registry.
   let generated: GeneratedEdgeShaders | null = null;
 
-  // Compute attribute layout once for this program configuration
-  const attributeLayout: EdgeAttributeLayout = computeEdgeAttributeLayout(paths, layer);
+  // Compute attribute layout once for this program configuration (all layers)
+  const attributeLayout: EdgeAttributeLayout = computeEdgeAttributeLayout(paths, layers);
 
   // Create the edge program class
   const EdgeProgramClass = class extends BaseEdgeProgram<string, N, E, G> {
@@ -145,8 +145,8 @@ export function createEdgeProgram<
       return generated;
     }
 
-    // Lifecycle hooks storage
-    private layerLifecycle: EdgeLifecycleHooks | null = null;
+    // Lifecycle hooks storage for all layers
+    private layerLifecycles: Map<number, EdgeLifecycleHooks> = new Map();
     private needsShaderRegeneration = false;
     private _pickingBuffer: WebGLFramebuffer | null;
 
@@ -168,26 +168,28 @@ export function createEdgeProgram<
       this.edgeAttributeTexture = new EdgePathAttributeTexture(gl, this.layout);
       this.packedAttributeData = new Float32Array(this.layout.floatsPerEdge);
 
-      // Initialize layer lifecycle if present
-      if (layer.lifecycle) {
-        const context: EdgeLifecycleContext = {
-          gl,
-          renderer: { refresh: () => renderer.refresh() },
-          getUniformLocation: (name: string) => {
-            return gl.getUniformLocation(this.normalProgram.program, name);
-          },
-          requestShaderRegeneration: () => {
-            this.needsShaderRegeneration = true;
-          },
-          requestRefresh: () => {
-            renderer.refresh();
-          },
-        };
-        this.layerLifecycle = layer.lifecycle(context);
-      }
+      // Initialize layer lifecycles for all layers
+      layers.forEach((layer, index) => {
+        if (layer.lifecycle) {
+          const context: EdgeLifecycleContext = {
+            gl,
+            renderer: { refresh: () => renderer.refresh() },
+            getUniformLocation: (name: string) => {
+              return gl.getUniformLocation(this.normalProgram.program, name);
+            },
+            requestShaderRegeneration: () => {
+              this.needsShaderRegeneration = true;
+            },
+            requestRefresh: () => {
+              renderer.refresh();
+            },
+          };
+          this.layerLifecycles.set(index, layer.lifecycle(context));
+        }
+      });
 
-      // Call init hook
-      this.layerLifecycle?.init?.();
+      // Call init hook for all layers
+      this.layerLifecycles.forEach((hooks) => hooks.init?.());
     }
 
     getDefinition() {
@@ -212,21 +214,24 @@ export function createEdgeProgram<
     }
 
     /**
-     * Regenerate shaders if layer requested it.
+     * Regenerate shaders if any layer requested it.
      */
     private maybeRegenerateShaders(): void {
       if (!this.needsShaderRegeneration) return;
 
       this.needsShaderRegeneration = false;
 
-      // If layer has regenerate hook, get new layer definition
-      let newLayer = layer;
-      if (this.layerLifecycle?.regenerate) {
-        newLayer = this.layerLifecycle.regenerate();
-      }
+      // Regenerate layers that have regenerate hooks
+      const newLayers = layers.map((layer, index) => {
+        const hooks = this.layerLifecycles.get(index);
+        if (hooks?.regenerate) {
+          return hooks.regenerate();
+        }
+        return layer;
+      });
 
-      // Regenerate shaders
-      generated = generateEdgeShaders({ paths, extremities, layers: [newLayer] });
+      // Regenerate shaders with potentially updated layers
+      generated = generateEdgeShaders({ paths, extremities, layers: newLayers });
 
       // Rebuild WebGL program
       const gl = this.normalProgram.gl;
@@ -291,40 +296,50 @@ export function createEdgeProgram<
         });
       });
 
-      // Process layer attributes
-      layer.attributes.forEach(
-        (attr: { name: string; source?: string; size: number; normalized?: boolean; defaultValue?: unknown }) => {
-          // Get attribute name without prefix
-          const name = attr.name.replace(/^a_/, "");
-          const offset = layout.offsets[name];
-          if (offset === undefined) return; // Not in layout
+      // Process attributes from all layers
+      layers.forEach((layer, layerIndex) => {
+        const layerHooks = this.layerLifecycles.get(layerIndex);
 
-          const sourceName = attr.source || name;
+        layer.attributes.forEach(
+          (attr: { name: string; source?: string; size: number; normalized?: boolean; defaultValue?: unknown }) => {
+            // Get attribute name without prefix
+            const name = attr.name.replace(/^a_/, "");
+            const offset = layout.offsets[name];
+            if (offset === undefined) return; // Not in layout
 
-          // Check if lifecycle provides the data
-          let value: unknown = null;
-          if (this.layerLifecycle?.getAttributeData) {
-            value = this.layerLifecycle.getAttributeData(data as unknown as Record<string, unknown>, sourceName);
-          }
+            const sourceName = attr.source || name;
 
-          // Fall back to edge data
-          if (value === null) {
-            value = (data as unknown as Record<string, unknown>)[sourceName];
-          }
-
-          if (attr.size === 4 && attr.normalized) {
-            // Color value - pack as float
-            packed[offset] = typeof value === "string" ? floatColor(value) : floatColor(data.color);
-          } else if (attr.size === 1) {
-            packed[offset] = typeof value === "number" ? value : (attr.defaultValue as number) || 0;
-          } else {
-            const arr = Array.isArray(value) ? value : [];
-            for (let i = 0; i < attr.size; i++) {
-              packed[offset + i] = arr[i] ?? 0;
+            // Check if lifecycle provides the data
+            let value: unknown = null;
+            if (layerHooks?.getAttributeData) {
+              value = layerHooks.getAttributeData(data as unknown as Record<string, unknown>, sourceName);
             }
-          }
-        },
-      );
+
+            // Fall back to edge data
+            if (value === null) {
+              value = (data as unknown as Record<string, unknown>)[sourceName];
+            }
+
+            if (attr.size === 4 && attr.normalized) {
+              // Color attribute - convert from CSS color string to RGBA floats [0,1]
+              const defaultColor = typeof attr.defaultValue === "string" ? attr.defaultValue : data.color;
+              const colorStr = typeof value === "string" ? value : defaultColor;
+              const [r, g, b, a] = colorToArray(colorStr);
+              packed[offset] = r / 255;
+              packed[offset + 1] = g / 255;
+              packed[offset + 2] = b / 255;
+              packed[offset + 3] = a / 255;
+            } else if (attr.size === 1) {
+              packed[offset] = typeof value === "number" ? value : (attr.defaultValue as number) || 0;
+            } else {
+              const arr = Array.isArray(value) ? value : [];
+              for (let i = 0; i < attr.size; i++) {
+                packed[offset + i] = arr[i] ?? 0;
+              }
+            }
+          },
+        );
+      });
 
       // Update the texture with packed attributes
       // Use edgeTextureIndex as the key for consistent allocation
@@ -409,11 +424,13 @@ export function createEdgeProgram<
         });
       });
 
-      // Layer uniforms
-      layer.uniforms.forEach((uniform) => {
-        if (processedUniforms.has(uniform.name)) return;
-        processedUniforms.add(uniform.name);
-        this.setTypedUniform(uniform, programInfo);
+      // Layer uniforms (from all layers)
+      layers.forEach((layer) => {
+        layer.uniforms.forEach((uniform) => {
+          if (processedUniforms.has(uniform.name)) return;
+          processedUniforms.add(uniform.name);
+          this.setTypedUniform(uniform, programInfo);
+        });
       });
     }
 
@@ -421,8 +438,8 @@ export function createEdgeProgram<
       // Check for shader regeneration
       this.maybeRegenerateShaders();
 
-      // Call beforeRender hook
-      this.layerLifecycle?.beforeRender?.();
+      // Call beforeRender hook for all layers
+      this.layerLifecycles.forEach((hooks) => hooks.beforeRender?.());
 
       super.renderProgram(params, programInfo);
     }
@@ -438,8 +455,8 @@ export function createEdgeProgram<
     }
 
     kill(): void {
-      // Call kill hook
-      this.layerLifecycle?.kill?.();
+      // Call kill hook for all layers
+      this.layerLifecycles.forEach((hooks) => hooks.kill?.());
 
       // Clean up attribute texture
       if (this.edgeAttributeTexture) {

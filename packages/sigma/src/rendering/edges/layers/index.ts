@@ -6,5 +6,5 @@
  */
 
 export { layerDashed } from "./dashed";
-export type { DashValue, LayerDashedOptions, GapFilling, SolidExtremities, SolidMargin } from "./dashed";
+export type { DashSize, DashSizeMode, LayerDashedOptions, GapFilling, SolidExtremities, SolidMargin } from "./dashed";
 export { layerPlain } from "./plain";

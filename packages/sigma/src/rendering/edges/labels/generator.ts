@@ -102,7 +102,7 @@ export function generateEdgeLabelVertexShader(options: EdgeLabelShaderOptions): 
 
   // Compute attribute layout for path attributes (labels need curvature for curved paths)
   const layer = layerPlain(); // Use empty layer for labels
-  const attributeLayout = computeEdgeAttributeLayout([path], layer);
+  const attributeLayout = computeEdgeAttributeLayout([path], [layer]);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // language=GLSL

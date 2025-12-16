@@ -51,7 +51,8 @@ export { extremityArrow, type ArrowExtremityOptions } from "./extremities";
 export {
   layerDashed,
   layerPlain,
-  type DashValue,
+  type DashSize,
+  type DashSizeMode,
   type LayerDashedOptions,
   type GapFilling,
   type SolidExtremities,

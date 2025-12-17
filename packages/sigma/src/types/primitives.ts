@@ -335,7 +335,7 @@ export interface NodePrimitives {
    * Available shapes for nodes.
    * Default: ["circle"]
    */
-  shapes?: NodeShapeSpec[];
+  shapes?: readonly NodeShapeSpec[] | NodeShapeSpec[];
 
   /**
    * Custom graphic variables exposed by layers.
@@ -348,7 +348,7 @@ export interface NodePrimitives {
    * Rendered in order (first = bottom, last = top).
    * Default: ["fill"]
    */
-  layers?: NodeLayerSpec[];
+  layers?: readonly NodeLayerSpec[] | NodeLayerSpec[];
 }
 
 // =============================================================================
@@ -364,14 +364,14 @@ export interface EdgePrimitives {
    * Available paths for edges.
    * Default: ["straight"]
    */
-  paths?: EdgePathSpec[];
+  paths?: readonly EdgePathSpec[] | EdgePathSpec[];
 
   /**
    * Available extremities for edge heads/tails.
    * "none" is always implicitly available.
    * Default: ["none"]
    */
-  extremities?: EdgeExtremitySpec[];
+  extremities?: readonly EdgeExtremitySpec[] | EdgeExtremitySpec[];
 
   /**
    * Custom graphic variables exposed by layers.
@@ -384,7 +384,7 @@ export interface EdgePrimitives {
    * Rendered in order (first = bottom, last = top).
    * Default: ["plain"]
    */
-  layers?: EdgeLayerSpec[];
+  layers?: readonly EdgeLayerSpec[] | EdgeLayerSpec[];
 }
 
 // =============================================================================

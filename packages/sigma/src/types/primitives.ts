@@ -9,10 +9,6 @@
  * @module
  */
 
-// =============================================================================
-// PART 1: GRAPHIC VARIABLE DEFINITIONS
-// =============================================================================
-
 /**
  * Supported types for graphic variables.
  */
@@ -33,10 +29,6 @@ export interface GraphicVariableDefinition<T = unknown> {
  */
 export type VariablesDefinition = Record<string, GraphicVariableDefinition>;
 
-// =============================================================================
-// PART 2: NODE SHAPES
-// =============================================================================
-
 /**
  * Built-in node shape names.
  *
@@ -44,6 +36,55 @@ export type VariablesDefinition = Record<string, GraphicVariableDefinition>;
  * Deduce this type from the actual shapes exported from ../rendering/nodes/shapes
  */
 export type BuiltInNodeShape = "circle" | "square" | "triangle" | "diamond";
+
+/**
+ * Circle shape configuration.
+ * Circle has no configurable variables.
+ */
+export interface CircleShapeConfig {
+  type: "circle";
+}
+
+/**
+ * Square shape configuration (declarative).
+ * Allows configuring corner radius and rotation via variable references.
+ */
+export interface SquareShapeConfig {
+  type: "square";
+  /** Variable name for corner radius (0-1), or fixed value. Defaults to 0. */
+  cornerRadius?: string | number;
+  /** Variable name for rotation in radians, or fixed value. Defaults to 0. */
+  rotation?: string | number;
+}
+
+/**
+ * Triangle shape configuration (declarative).
+ * Allows configuring corner radius and rotation via variable references.
+ */
+export interface TriangleShapeConfig {
+  type: "triangle";
+  /** Variable name for corner radius (0-1), or fixed value. Defaults to 0. */
+  cornerRadius?: string | number;
+  /** Variable name for rotation in radians, or fixed value. Defaults to 0. */
+  rotation?: string | number;
+}
+
+/**
+ * Diamond shape configuration (declarative).
+ * Allows configuring corner radius and rotation via variable references.
+ */
+export interface DiamondShapeConfig {
+  type: "diamond";
+  /** Variable name for corner radius (0-1), or fixed value. Defaults to 0. */
+  cornerRadius?: string | number;
+  /** Variable name for rotation in radians, or fixed value. Defaults to 0. */
+  rotation?: string | number;
+}
+
+/**
+ * Declarative node shape configuration.
+ */
+export type DeclarativeNodeShape = CircleShapeConfig | SquareShapeConfig | TriangleShapeConfig | DiamondShapeConfig;
 
 /**
  * Custom shape definition (for advanced users).
@@ -59,13 +100,9 @@ export interface CustomNodeShape {
 }
 
 /**
- * Shape specification: built-in name or custom shape.
+ * Shape specification: built-in name, declarative config, or custom shape.
  */
-export type NodeShapeSpec = BuiltInNodeShape | CustomNodeShape;
-
-// =============================================================================
-// PART 3: NODE LAYERS
-// =============================================================================
+export type NodeShapeSpec = BuiltInNodeShape | DeclarativeNodeShape | CustomNodeShape;
 
 /**
  * Built-in node layer type names.
@@ -198,10 +235,6 @@ export interface CustomNodeLayer {
  */
 export type NodeLayerSpec = BuiltInNodeLayerType | DeclarativeNodeLayer | CustomNodeLayer;
 
-// =============================================================================
-// PART 4: EDGE PATHS
-// =============================================================================
-
 /**
  * Built-in edge path names.
  *
@@ -209,6 +242,83 @@ export type NodeLayerSpec = BuiltInNodeLayerType | DeclarativeNodeLayer | Custom
  * Deduce this type from the actual paths exported from ../rendering/edges/paths
  */
 export type BuiltInEdgePath = "straight" | "curved" | "step" | "step-curved";
+
+/**
+ * Straight path configuration.
+ * Straight paths have no configurable variables.
+ */
+export interface StraightPathConfig {
+  type: "straight";
+}
+
+/**
+ * Curved path configuration (declarative).
+ * Allows configuring curvature via variable reference.
+ */
+export interface CurvedPathConfig {
+  type: "curved";
+  /**
+   * Variable name for curvature, or fixed value.
+   * Curvature determines how much the curve bends away from the straight line.
+   * 0 = straight line, 0.25 = moderate curve (default), 0.5+ = strong curve.
+   */
+  curvature?: string | number;
+}
+
+/**
+ * Step path orientation preference.
+ */
+export type StepPathOrientation = "horizontal" | "vertical" | "automatic";
+
+/**
+ * Step path configuration (declarative).
+ * Orthogonal path with right-angle connections.
+ */
+export interface StepPathConfig {
+  type: "step";
+  /**
+   * Path orientation preference.
+   * - "horizontal": Always go horizontal first (H→V→H)
+   * - "vertical": Always go vertical first (V→H→V)
+   * - "automatic": Choose based on which delta is larger
+   * Default: "automatic"
+   */
+  orientation?: StepPathOrientation;
+  /**
+   * Position of the middle segment as ratio [0-1].
+   * 0 = at source, 0.5 = centered, 1 = at target.
+   * Default: 0.5
+   */
+  offset?: number;
+}
+
+/**
+ * Step-curved path configuration (declarative).
+ * Step path with rounded corners.
+ */
+export interface StepCurvedPathConfig {
+  type: "step-curved";
+  /**
+   * Path orientation preference.
+   * Default: "automatic"
+   */
+  orientation?: StepPathOrientation;
+  /**
+   * Position of the middle segment as ratio [0-1].
+   * Default: 0.5
+   */
+  offset?: number;
+  /**
+   * Variable name for corner radius, or fixed value.
+   * Default: 0.5
+   */
+  cornerRadius?: string | number;
+}
+
+/**
+ * Declarative edge path configuration.
+ */
+export type DeclarativeEdgePath = StraightPathConfig | CurvedPathConfig | StepPathConfig | StepCurvedPathConfig;
 
 /**
  * Custom path definition (for advanced users).
@@ -225,13 +335,9 @@ export interface CustomEdgePath {
 }
 
 /**
- * Edge path specification: built-in name or custom path.
+ * Edge path specification: built-in name, declarative config, or custom path.
  */
-export type EdgePathSpec = BuiltInEdgePath | CustomEdgePath;
-
-// =============================================================================
-// PART 5: EDGE EXTREMITIES
-// =============================================================================
+export type EdgePathSpec = BuiltInEdgePath | DeclarativeEdgePath | CustomEdgePath;
 
 /**
  * Built-in edge extremity names.
@@ -259,10 +365,6 @@ export interface CustomEdgeExtremity {
  * Edge extremity specification: built-in name or custom extremity.
  */
 export type EdgeExtremitySpec = BuiltInEdgeExtremity | CustomEdgeExtremity;
-
-// =============================================================================
-// PART 6: EDGE LAYERS
-// =============================================================================
 
 /**
  * Built-in edge layer type names.
@@ -322,10 +424,6 @@ export interface CustomEdgeLayer {
  */
 export type EdgeLayerSpec = BuiltInEdgeLayerType | DeclarativeEdgeLayer | CustomEdgeLayer;
 
-// =============================================================================
-// PART 7: NODE PRIMITIVES
-// =============================================================================
-
 /**
  * Node primitives declaration.
  * Defines available shapes, layers, and custom graphic variables.
@@ -350,10 +448,6 @@ export interface NodePrimitives {
    */
   layers?: readonly NodeLayerSpec[] | NodeLayerSpec[];
 }
-
-// =============================================================================
-// PART 8: EDGE PRIMITIVES
-// =============================================================================
 
 /**
  * Edge primitives declaration.
@@ -387,10 +481,6 @@ export interface EdgePrimitives {
   layers?: readonly EdgeLayerSpec[] | EdgeLayerSpec[];
 }
 
-// =============================================================================
-// PART 9: COMPLETE PRIMITIVES DECLARATION
-// =============================================================================
-
 /**
  * Complete primitives declaration.
  * Defines all rendering capabilities for the sigma instance.
@@ -413,10 +503,6 @@ export interface PrimitivesDeclaration {
    */
   layers?: string[];
 }
-
-// =============================================================================
-// PART 10: TYPE GUARDS
-// =============================================================================
 
 /**
  * Type guard: checks if a node layer spec is a string shorthand.
@@ -460,9 +546,260 @@ export function isCustomEdgeLayer(spec: EdgeLayerSpec): spec is CustomEdgeLayer 
   return typeof spec === "object" && "glsl" in spec;
 }
 
-// =============================================================================
-// PART 11: DEFAULT VALUES
-// =============================================================================
+/**
+ * Built-in variable names that should not be extracted from layers.
+ * These are always available and don't need to be inferred.
+ */
+type BuiltInVariableNames = "color" | "size" | "opacity" | "x" | "y" | "label";
+
+/**
+ * Helper to check if a string is a custom variable name (not built-in).
+ */
+type IsCustomVariable<S> = S extends BuiltInVariableNames ? false : S extends string ? true : false;
+
+/**
+ * Extracts variables from a FillLayerConfig.
+ * Fill layers can reference a custom color variable.
+ */
+type ExtractFillLayerVariables<L extends FillLayerConfig> = L["color"] extends string
+  ? IsCustomVariable<L["color"]> extends true
+    ? { [K in L["color"]]: string }
+    : object
+  : object;
+
+/**
+ * Extracts variables from a BorderLayerConfig.
+ * Border layers can reference size (number) and color (string) variables.
+ */
+type ExtractBorderLayerVariables<L extends BorderLayerConfig> = (L["size"] extends string
+  ? IsCustomVariable<L["size"]> extends true
+    ? { [K in L["size"]]: number }
+    : object
+  : object) &
+  (L["color"] extends string
+    ? IsCustomVariable<L["color"]> extends true
+      ? { [K in L["color"]]: string }
+      : object
+    : object);
+
+/**
+ * Extracts variables from an ImageLayerConfig.
+ * Image layers can reference url (string) and color (string) variables.
+ */
+type ExtractImageLayerVariables<L extends ImageLayerConfig> = (L["url"] extends string
+  ? IsCustomVariable<L["url"]> extends true
+    ? { [K in L["url"]]: string }
+    : object
+  : object) &
+  (L["color"] extends string
+    ? IsCustomVariable<L["color"]> extends true
+      ? { [K in L["color"]]: string }
+      : object
+    : object);
+
+/**
+ * Extracts variables from a PlainEdgeLayerConfig.
+ */
+type ExtractPlainEdgeLayerVariables<L extends PlainEdgeLayerConfig> = L["color"] extends string
+  ? IsCustomVariable<L["color"]> extends true
+    ? { [K in L["color"]]: string }
+    : object
+  : object;
+
+/**
+ * Extracts variables from a DashedEdgeLayerConfig.
+ * Dashed layers reference dashSize (number), gapSize (number), and optionally dashColor (string).
+ */
+type ExtractDashedEdgeLayerVariables<L extends DashedEdgeLayerConfig> = (L["dashSize"] extends string
+  ? IsCustomVariable<L["dashSize"]> extends true
+    ? { [K in L["dashSize"]]: number }
+    : object
+  : object) &
+  (L["gapSize"] extends string
+    ? IsCustomVariable<L["gapSize"]> extends true
+      ? { [K in L["gapSize"]]: number }
+      : object
+    : object) &
+  (L["dashColor"] extends string
+    ? IsCustomVariable<L["dashColor"]> extends true
+      ? { [K in L["dashColor"]]: string }
+      : object
+    : object);
+
+/**
+ * Extracts variables from any node layer spec.
+ */
+type ExtractNodeLayerVariables<L extends NodeLayerSpec> = L extends FillLayerConfig
+  ? ExtractFillLayerVariables<L>
+  : L extends BorderLayerConfig
+    ? ExtractBorderLayerVariables<L>
+    : L extends ImageLayerConfig
+      ? ExtractImageLayerVariables<L>
+      : object;
+
+/**
+ * Extracts variables from any edge layer spec.
+ */
+type ExtractEdgeLayerVariables<L extends EdgeLayerSpec> = L extends PlainEdgeLayerConfig
+  ? ExtractPlainEdgeLayerVariables<L>
+  : L extends DashedEdgeLayerConfig
+    ? ExtractDashedEdgeLayerVariables<L>
+    : object;
+
+/**
+ * Recursively extracts variables from an array of node layer specs.
+ */
+type ExtractNodeLayersVariables<Layers extends readonly NodeLayerSpec[]> = Layers extends readonly [
+  infer First extends NodeLayerSpec,
+  ...infer Rest extends NodeLayerSpec[],
+]
+  ? ExtractNodeLayerVariables<First> & ExtractNodeLayersVariables<Rest>
+  : object;
+
+/**
+ * Recursively extracts variables from an array of edge layer specs.
+ */
+type ExtractEdgeLayersVariables<Layers extends readonly EdgeLayerSpec[]> = Layers extends readonly [
+  infer First extends EdgeLayerSpec,
+  ...infer Rest extends EdgeLayerSpec[],
+]
+  ? ExtractEdgeLayerVariables<First> & ExtractEdgeLayersVariables<Rest>
+  : object;
+
+/**
+ * Extracts variables from a SquareShapeConfig.
+ */
+type ExtractSquareShapeVariables<S extends SquareShapeConfig> = (S["cornerRadius"] extends string
+  ? IsCustomVariable<S["cornerRadius"]> extends true
+    ? { [K in S["cornerRadius"]]: number }
+    : object
+  : object) &
+  (S["rotation"] extends string
+    ? IsCustomVariable<S["rotation"]> extends true
+      ? { [K in S["rotation"]]: number }
+      : object
+    : object);
+
+/**
+ * Extracts variables from a TriangleShapeConfig.
+ */
+type ExtractTriangleShapeVariables<S extends TriangleShapeConfig> = (S["cornerRadius"] extends string
+  ? IsCustomVariable<S["cornerRadius"]> extends true
+    ? { [K in S["cornerRadius"]]: number }
+    : object
+  : object) &
+  (S["rotation"] extends string
+    ? IsCustomVariable<S["rotation"]> extends true
+      ? { [K in S["rotation"]]: number }
+      : object
+    : object);
+
+/**
+ * Extracts variables from a DiamondShapeConfig.
+ */
+type ExtractDiamondShapeVariables<S extends DiamondShapeConfig> = (S["cornerRadius"] extends string
+  ? IsCustomVariable<S["cornerRadius"]> extends true
+    ? { [K in S["cornerRadius"]]: number }
+    : object
+  : object) &
+  (S["rotation"] extends string
+    ? IsCustomVariable<S["rotation"]> extends true
+      ? { [K in S["rotation"]]: number }
+      : object
+    : object);
+
+/**
+ * Extracts variables from any node shape spec.
+ */
+type ExtractNodeShapeVariables<S extends NodeShapeSpec> = S extends SquareShapeConfig
+  ? ExtractSquareShapeVariables<S>
+  : S extends TriangleShapeConfig
+    ? ExtractTriangleShapeVariables<S>
+    : S extends DiamondShapeConfig
+      ? ExtractDiamondShapeVariables<S>
+      : object;
+
+/**
+ * Recursively extracts variables from an array of node shape specs.
+ */
+type ExtractNodeShapesVariables<Shapes extends readonly NodeShapeSpec[]> = Shapes extends readonly [
+  infer First extends NodeShapeSpec,
+  ...infer Rest extends NodeShapeSpec[],
+]
+  ? ExtractNodeShapeVariables<First> & ExtractNodeShapesVariables<Rest>
+  : object;
+
+/**
+ * Extracts variables from a CurvedPathConfig.
+ */
+type ExtractCurvedPathVariables<P extends CurvedPathConfig> = P["curvature"] extends string
+  ? IsCustomVariable<P["curvature"]> extends true
+    ? { [K in P["curvature"]]: number }
+    : object
+  : object;
+
+/**
+ * Extracts variables from a StepCurvedPathConfig.
+ */
+type ExtractStepCurvedPathVariables<P extends StepCurvedPathConfig> = P["cornerRadius"] extends string
+  ? IsCustomVariable<P["cornerRadius"]> extends true
+    ? { [K in P["cornerRadius"]]: number }
+    : object
+  : object;
+
+/**
+ * Extracts variables from any edge path spec.
+ */
+type ExtractEdgePathVariables<P extends EdgePathSpec> = P extends CurvedPathConfig
+  ? ExtractCurvedPathVariables<P>
+  : P extends StepCurvedPathConfig
+    ? ExtractStepCurvedPathVariables<P>
+    : object;
+
+/**
+ * Recursively extracts variables from an array of edge path specs.
+ */
+type ExtractEdgePathsVariables<Paths extends readonly EdgePathSpec[]> = Paths extends readonly [
+  infer First extends EdgePathSpec,
+  ...infer Rest extends EdgePathSpec[],
+]
+  ? ExtractEdgePathVariables<First> & ExtractEdgePathsVariables<Rest>
+  : object;
+
+/**
+ * Extracts all variables from a NodePrimitives declaration.
+ * Combines explicitly declared variables with variables inferred from shapes and layers.
+ */
+export type ExtractAllNodeVariables<N extends NodePrimitives> = (N["variables"] extends VariablesDefinition
+  ? VariablesDefinitionToType<N["variables"]>
+  : object) &
+  (N["shapes"] extends readonly NodeShapeSpec[] ? ExtractNodeShapesVariables<N["shapes"]> : object) &
+  (N["layers"] extends readonly NodeLayerSpec[] ? ExtractNodeLayersVariables<N["layers"]> : object);
+
+/**
+ * Extracts all variables from an EdgePrimitives declaration.
+ * Combines explicitly declared variables with variables inferred from paths and layers.
+ */
+export type ExtractAllEdgeVariables<E extends EdgePrimitives> = (E["variables"] extends VariablesDefinition
+  ? VariablesDefinitionToType<E["variables"]>
+  : object) &
+  (E["paths"] extends readonly EdgePathSpec[] ? ExtractEdgePathsVariables<E["paths"]> : object) &
+  (E["layers"] extends readonly EdgeLayerSpec[] ? ExtractEdgeLayersVariables<E["layers"]> : object);
+
+/**
+ * Converts a VariablesDefinition to a typed object.
+ */
+type VariablesDefinitionToType<V extends VariablesDefinition> = {
+  [K in keyof V]: V[K]["type"] extends "number"
+    ? number
+    : V[K]["type"] extends "color"
+      ? string
+      : V[K]["type"] extends "string"
+        ? string
+        : V[K]["type"] extends "boolean"
+          ? boolean
+          : unknown;
+};
 
 /**
  * Default node primitives.

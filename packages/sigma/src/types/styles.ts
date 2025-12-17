@@ -9,10 +9,6 @@
  */
 import { AbstractGraph } from "graphology-types";
 
-// =============================================================================
-// PART 1: FOUNDATION TYPES
-// =============================================================================
-
 /**
  * Generic attributes type (user-defined).
  */
@@ -57,10 +53,6 @@ export interface BaseGraphState {
   hasHighlighted: boolean;
 }
 
-// =============================================================================
-// PART 2: PREDICATES
-// =============================================================================
-
 /**
  * State predicate for conditional styling.
  * Used in both inline conditionals and array-form rules.
@@ -75,10 +67,6 @@ export type StatePredicate<A extends Attributes = Attributes, S = BaseNodeState 
   | (keyof S)[]
   | Partial<S>
   | ((attributes: A, state: S, graphState: GS, graph: AbstractGraph) => boolean);
-
-// =============================================================================
-// PART 3: VALUE TYPES
-// =============================================================================
 
 /**
  * Direct attribute binding - reads value directly from an attribute.
@@ -168,10 +156,6 @@ export type GraphicValue<A extends Attributes, S, GS, T> =
   | ValueFunction<A, S, GS, T>
   | InlineConditional<A, S, GS, T>;
 
-// =============================================================================
-// PART 4: TYPE GUARDS
-// =============================================================================
-
 /**
  * Type guard: checks if a value is an attribute binding.
  */
@@ -194,10 +178,6 @@ export function isInlineConditional<A extends Attributes, S, GS, T>(
 ): value is InlineConditional<A, S, GS, T> {
   return typeof value === "object" && value !== null && "when" in value && "then" in value;
 }
-
-// =============================================================================
-// PART 5: NODE GRAPHIC VARIABLES
-// =============================================================================
 
 /**
  * Built-in graphic variables for nodes.
@@ -272,10 +252,6 @@ export type NodeStyleProperties<
     [K in keyof ProgramVariables]?: GraphicValue<NA, NS, GS, ProgramVariables[K]>;
   };
 
-// =============================================================================
-// PART 6: EDGE GRAPHIC VARIABLES
-// =============================================================================
-
 /**
  * Built-in graphic variables for edges.
  * These are always available regardless of program declaration.
@@ -347,10 +323,6 @@ export type EdgeStyleProperties<
     [K in keyof ProgramVariables]?: GraphicValue<EA, ES, GS, ProgramVariables[K]>;
   };
 
-// =============================================================================
-// PART 7: STYLE RULES (ARRAY FORM)
-// =============================================================================
-
 /**
  * Relative value function for rules.
  * Receives the current computed value and can modify it.
@@ -420,10 +392,6 @@ export type EdgeStyleRule<
     }
   | InlineConditional<NA, NS, GS, EdgeStyleProperties<NA, NS, GS, ProgramVariables>>;
 
-// =============================================================================
-// PART 8: STYLESHEET STRUCTURE
-// =============================================================================
-
 /**
  * Node styles declaration.
  * Can be either:
@@ -474,10 +442,6 @@ export interface StylesDeclaration<
   nodes?: NodeStyles<NA, NS, GS, NodeProgramVariables>;
   edges?: EdgeStyles<EA, ES, GS, EdgeProgramVariables>;
 }
-
-// =============================================================================
-// PART 9: DEFAULT VALUES
-// =============================================================================
 
 /**
  * Default values for built-in node graphic variables.

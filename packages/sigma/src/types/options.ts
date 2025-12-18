@@ -27,7 +27,7 @@ import {
   NodePrimitives,
   NodeShapeSpec,
   PrimitivesDeclaration,
-} from "./primitives";
+} from "../primitives/types";
 import {
   BaseEdgeState,
   BaseGraphState,

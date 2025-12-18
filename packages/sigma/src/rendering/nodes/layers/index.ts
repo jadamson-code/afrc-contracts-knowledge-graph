@@ -8,3 +8,4 @@
  */
 
 export { layerFill } from "./fill";
+export { registerNodeLayerFactory, type NodeLayerFactory } from "./factory";

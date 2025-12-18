@@ -11,9 +11,22 @@
  *
  * @module
  */
+import { defineEdgePath } from "./factory";
 import { numberToGLSLFloat } from "../../utils";
 import { generateRotate2D } from "../shared-glsl";
 import { EdgePath } from "../types";
+
+/**
+ * Schema for step path options (empty - options have complex union types).
+ */
+export const stepSchema = {} as const;
+
+// Register the step path schema for type inference
+declare module "../../../primitives/schema" {
+  interface EdgePathSchemaRegistry {
+    step: typeof stepSchema;
+  }
+}
 
 /**
  * Options for step path creation.
@@ -58,25 +71,11 @@ export interface StepPathOptions {
 }
 
 /**
- * Creates a step (orthogonal) edge path with sharp corners.
- *
- * The path consists of 3 segments with 2 90° corners, forming a Z-shape or
- * step pattern depending on the orientation. Corners have perfect miter joins.
- *
- * @param options - Path configuration
- * @returns EdgePath definition for step paths
- *
- * @example
- * ```typescript
- * const EdgeStepProgram = createEdgeProgram({
- *   paths: [pathStep({ orientation: "horizontal" })],
- *   extremities: [extremityNone(), extremityArrow()],
- *   layers: [layerPlain()],
- * });
- * ```
+ * Step path definition with schema.
  */
-export function pathStep(options: StepPathOptions = {}): EdgePath {
-  const { orientation = "automatic", rotateWithCamera = false, offset = 0.5, innerCornerSkipFactor = 1.0 } = options;
+export const stepDefinition = defineEdgePath("step", stepSchema, (options?: StepPathOptions): EdgePath => {
+  const { orientation = "automatic", rotateWithCamera = false, offset = 0.5, innerCornerSkipFactor = 1.0 } =
+    options ?? {};
 
   // Determine orientation mode:
   // 0 = automatic, 1 = horizontal, 2 = vertical, 3 = fixed angle
@@ -606,4 +605,24 @@ vec2 path_step_getCornerConcavity(vec2 source, vec2 target, float perpOffset) {
     attributes: [],
     generateConstantData,
   };
-}
+});
+
+/**
+ * Creates a step (orthogonal) edge path with sharp corners.
+ *
+ * The path consists of 3 segments with 2 90° corners, forming a Z-shape or
+ * step pattern depending on the orientation. Corners have perfect miter joins.
+ *
+ * @param options - Path configuration
+ * @returns EdgePath definition for step paths
+ *
+ * @example
+ * ```typescript
+ * const EdgeStepProgram = createEdgeProgram({
+ *   paths: [pathStep({ orientation: "horizontal" })],
+ *   extremities: [extremityNone(), extremityArrow()],
+ *   layers: [layerPlain()],
+ * });
+ * ```
+ */
+export const pathStep = stepDefinition.factory;

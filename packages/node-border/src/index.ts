@@ -11,9 +11,13 @@
  *
  * @module
  */
-import { NodeProgramType } from "sigma/rendering";
+import { NodeProgramType, registerNodeLayerFactory } from "sigma/rendering";
 
+import { layerBorder } from "./layer";
 import { createNodeBorderProgram } from "./program";
+
+// Register the runtime factory
+registerNodeLayerFactory("border", layerBorder);
 
 // Layer factory
 export { layerBorder } from "./layer";

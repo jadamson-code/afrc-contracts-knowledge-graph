@@ -13,7 +13,7 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { NodeDisplayData, RenderParams } from "../../types";
 import { colorToArray } from "../../utils";
-import { getShapeId, registerShape } from "../shapes";
+import { getShapeId, registerShapeInstance } from "../shapes";
 import { ProgramInfo } from "../utils";
 import { NodeProgram, NodeProgramType } from "./base";
 import { generateShaders } from "./generator";
@@ -78,7 +78,7 @@ export function createNodeProgram<
   let primaryShapeSlug: string | undefined;
 
   shapes.forEach((shape, index) => {
-    const slug = registerShape(shape, rotateWithCamera);
+    const slug = registerShapeInstance(shape, rotateWithCamera);
     if (index === 0) primaryShapeSlug = slug;
     // Map shape name to local index for GPU-side shape selection
     shapeNameToIndex[shape.name] = index;

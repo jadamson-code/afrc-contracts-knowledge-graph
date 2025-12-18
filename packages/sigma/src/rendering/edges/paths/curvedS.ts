@@ -8,8 +8,21 @@
  *
  * @module
  */
+import { defineEdgePath } from "./factory";
 import { numberToGLSLFloat } from "../../utils";
 import { EdgePath } from "../types";
+
+/**
+ * Schema for curvedS path options (empty - options have complex union types).
+ */
+export const curvedSSchema = {} as const;
+
+// Register the curvedS path schema for type inference
+declare module "../../../primitives/schema" {
+  interface EdgePathSchemaRegistry {
+    curvedS: typeof curvedSSchema;
+  }
+}
 
 /**
  * Options for S-curve path creation.
@@ -56,31 +69,19 @@ export interface CurvedSPathOptions {
 }
 
 /**
- * Creates an S-curve edge path using cubic Bézier.
- *
- * The path is a cubic Bézier curve with control points positioned to create
- * smooth S-shaped transitions similar to step paths but without sharp corners.
- *
- * @param options - Path configuration
- * @returns EdgePath definition for S-curve paths
- *
- * @example
- * ```typescript
- * const EdgeCurvedSProgram = createEdgeProgram({
- *   paths: [pathCurvedS({ curveOffset: 0.4 })],
- *   extremities: [extremityNone(), extremityArrow()],
- *   layers: [layerPlain()],
- * });
- * ```
+ * CurvedS path definition with schema.
  */
-export function pathCurvedS(options: CurvedSPathOptions = {}): EdgePath {
-  const {
-    segments = 16,
-    orientation = "automatic",
-    rotateWithCamera = false,
-    curveOffset = 0.5,
-    curvePosition = 0.5,
-  } = options;
+export const curvedSDefinition = defineEdgePath(
+  "curvedS",
+  curvedSSchema,
+  (options?: CurvedSPathOptions): EdgePath => {
+    const {
+      segments = 16,
+      orientation = "automatic",
+      rotateWithCamera = false,
+      curveOffset = 0.5,
+      curvePosition = 0.5,
+    } = options ?? {};
 
   // Determine orientation mode:
   // 0 = automatic, 1 = horizontal, 2 = vertical, 3 = fixed angle
@@ -220,13 +221,34 @@ vec2 path_curvedS_position(float t, vec2 source, vec2 target) {
 }
 `;
 
-  return {
-    name: "curvedS",
-    segments,
-    minBodyLengthRatio: 0, // No minimum for S-curves
-    glsl,
-    vertexGlsl: "", // Uses standard parametric tessellation
-    uniforms: [],
-    attributes: [],
-  };
-}
+    return {
+      name: "curvedS",
+      segments,
+      minBodyLengthRatio: 0, // No minimum for S-curves
+      glsl,
+      vertexGlsl: "", // Uses standard parametric tessellation
+      uniforms: [],
+      attributes: [],
+    };
+  },
+);
+
+/**
+ * Creates an S-curve edge path using cubic Bézier.
+ *
+ * The path is a cubic Bézier curve with control points positioned to create
+ * smooth S-shaped transitions similar to step paths but without sharp corners.
+ *
+ * @param options - Path configuration
+ * @returns EdgePath definition for S-curve paths
+ *
+ * @example
+ * ```typescript
+ * const EdgeCurvedSProgram = createEdgeProgram({
+ *   paths: [pathCurvedS({ curveOffset: 0.4 })],
+ *   extremities: [extremityNone(), extremityArrow()],
+ *   layers: [layerPlain()],
+ * });
+ * ```
+ */
+export const pathCurvedS = curvedSDefinition.factory;

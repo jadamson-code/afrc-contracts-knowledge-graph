@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { AttributeLayout, computeAttributeLayout, ItemAttributeTexture } from "../data-texture";
+import { ItemAttributeTexture, computeAttributeLayout } from "../data-texture";
 import { AttributeSpecification } from "../nodes";
 import { EdgeLayer, EdgePath } from "./types";
 

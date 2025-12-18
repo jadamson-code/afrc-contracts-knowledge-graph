@@ -10,6 +10,12 @@
  *
  * @module
  */
+import { registerNodeLayerFactory } from "sigma/rendering";
+
+import { layerPiechart } from "./layer";
+
+// Register the runtime factory
+registerNodeLayerFactory("piechart", layerPiechart);
 
 // Layer factory
 export { layerPiechart } from "./layer";

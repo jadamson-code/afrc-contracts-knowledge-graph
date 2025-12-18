@@ -12,9 +12,13 @@
  *
  * @module
  */
-import { NodeProgramType, layerFill, sdfSquare } from "sigma/rendering";
+import { NodeProgramType, layerFill, registerNodeLayerFactory, sdfSquare } from "sigma/rendering";
 
+import { layerImage } from "./layer";
 import { createNodeImageProgram } from "./program";
+
+// Register the runtime factory
+registerNodeLayerFactory("image", layerImage);
 
 // Layer factory
 export { layerImage } from "./layer";

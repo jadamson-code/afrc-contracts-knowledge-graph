@@ -6,7 +6,38 @@
  *
  * @module
  */
+import { defineNodeShape } from "./factory";
 import { SDFShape } from "../types";
+
+/**
+ * Schema for circle shape options (empty - no configurable properties).
+ */
+export const circleSchema = {} as const;
+
+// Register the circle shape schema for type inference
+declare module "../../../primitives/schema" {
+  interface NodeShapeSchemaRegistry {
+    circle: typeof circleSchema;
+  }
+}
+
+/**
+ * Circle shape definition with schema.
+ */
+export const circleDefinition = defineNodeShape("circle", circleSchema, (): SDFShape => {
+  // language=GLSL
+  const glsl = /*glsl*/ `
+float sdf_circle(vec2 uv, float size) {
+  return length(uv) - size;
+}
+`;
+
+  return {
+    name: "circle",
+    glsl,
+    uniforms: [],
+  };
+});
 
 /**
  * Creates a circle SDF shape.
@@ -23,17 +54,4 @@ import { SDFShape } from "../types";
  * });
  * ```
  */
-export function sdfCircle(): SDFShape {
-  // language=GLSL
-  const glsl = /*glsl*/ `
-float sdf_circle(vec2 uv, float size) {
-  return length(uv) - size;
-}
-`;
-
-  return {
-    name: "circle",
-    glsl,
-    uniforms: [],
-  };
-}
+export const sdfCircle = circleDefinition.factory;

@@ -6,9 +6,22 @@
  *
  * @module
  */
+import { defineEdgeLayer } from "./factory";
 import { colorToVec4 } from "../../../utils";
 import { ValueSource, Vec3, Vec4 } from "../../nodes";
 import { EdgeLayer } from "../types";
+
+/**
+ * Schema for dashed layer options (empty - options have complex union types).
+ */
+export const dashedSchema = {} as const;
+
+// Register the dashed layer schema for type inference
+declare module "../../../primitives/schema" {
+  interface EdgeLayerSchemaRegistry {
+    dashed: typeof dashedSchema;
+  }
+}
 
 /**
  * Mode for border size specification.
@@ -159,65 +172,23 @@ function parseSolidMargin(value: SolidMargin | undefined): { tail: number; head:
 }
 
 /**
- * Creates a dashed pattern layer for edges.
- *
- * The edge is rendered with a repeating dash-gap pattern. Each parameter
- * can be specified in absolute pixels or relative to the edge thickness,
- * allowing for flexible visual styles. Boundaries between dashes and gaps
- * are properly antialiased.
- *
- * @param options - Configuration for dash size, gap size, offset, gap color, and alignment
- * @returns EdgeLayer definition for dashed pattern
- *
- * @example
- * ```typescript
- * // Simple dashed line (10px dash, 5px gap, centered)
- * layerDashed({ dashSize: 10, gapSize: 5 })
- *
- * // Dashes relative to thickness
- * layerDashed({
- *   dashSize: { thicknessRelative: 2 },
- *   gapSize: { thicknessRelative: 1 },
- * })
- *
- * // Semi-transparent gaps
- * layerDashed({ dashSize: 10, gapSize: 10, gap: 0.3 })
- *
- * // Colored gaps
- * layerDashed({ dashSize: 10, gapSize: 10, gap: "#ff0000" })
- *
- * // Pattern aligned to start
- * layerDashed({ dashSize: 10, gapSize: 5, align: 0 })
- *
- * // Solid extremities (arrows stay solid, body is dashed)
- * layerDashed({ dashSize: 10, gapSize: 5, solidExtremities: true })
- *
- * // Only head extremity solid
- * layerDashed({ dashSize: 10, gapSize: 5, solidExtremities: "head" })
- *
- * // Extra solid margin at head end (5px solid before dashes)
- * layerDashed({ dashSize: 10, gapSize: 5, solidMargin: { head: 5 } })
- *
- * // Combine solid extremities with extra margins
- * layerDashed({
- *   dashSize: 10,
- *   gapSize: 5,
- *   solidExtremities: true,
- *   solidMargin: { head: 10, tail: 5 },
- * })
- * ```
+ * Dashed layer definition with schema.
  */
-export function layerDashed(options: LayerDashedOptions = {}): EdgeLayer {
-  const dashColor = options.dashColor ?? { attribute: "color" };
-  const gapColor = options.gapColor ?? 0;
-  const sizes = {
-    dashSize: options.dashSize ?? { value: 10, mode: "pixels" },
-    gapSize: options.gapSize ?? { value: 10, mode: "pixels" },
-    dashOffset: options.dashOffset ?? { value: 0, mode: "pixels" },
-  };
-  const align = options.align ?? 0.5;
-  const solidExtremities = parseSolidExtremities(options.solidExtremities);
-  const solidMargin = parseSolidMargin(options.solidMargin);
+export const dashedDefinition = defineEdgeLayer(
+  "dashed",
+  dashedSchema,
+  (options?: LayerDashedOptions): EdgeLayer => {
+    const opts = options ?? {};
+    const dashColor = opts.dashColor ?? { attribute: "color" };
+    const gapColor = opts.gapColor ?? 0;
+    const sizes = {
+      dashSize: opts.dashSize ?? { value: 10, mode: "pixels" },
+      gapSize: opts.gapSize ?? { value: 10, mode: "pixels" },
+      dashOffset: opts.dashOffset ?? { value: 0, mode: "pixels" },
+    };
+    const align = opts.align ?? 0.5;
+    const solidExtremities = parseSolidExtremities(opts.solidExtremities);
+    const solidMargin = parseSolidMargin(opts.solidMargin);
 
   // Parse custom dash color if provided
   const hasCustomColor = typeof dashColor === "string";
@@ -464,10 +435,62 @@ ${gapColorGLSL}
 }
 `;
 
-  return {
-    name: "dashed",
-    glsl,
-    uniforms,
-    attributes,
-  };
-}
+    return {
+      name: "dashed",
+      glsl,
+      uniforms,
+      attributes,
+    };
+  },
+);
+
+/**
+ * Creates a dashed pattern layer for edges.
+ *
+ * The edge is rendered with a repeating dash-gap pattern. Each parameter
+ * can be specified in absolute pixels or relative to the edge thickness,
+ * allowing for flexible visual styles. Boundaries between dashes and gaps
+ * are properly antialiased.
+ *
+ * @param options - Configuration for dash size, gap size, offset, gap color, and alignment
+ * @returns EdgeLayer definition for dashed pattern
+ *
+ * @example
+ * ```typescript
+ * // Simple dashed line (10px dash, 5px gap, centered)
+ * layerDashed({ dashSize: 10, gapSize: 5 })
+ *
+ * // Dashes relative to thickness
+ * layerDashed({
+ *   dashSize: { thicknessRelative: 2 },
+ *   gapSize: { thicknessRelative: 1 },
+ * })
+ *
+ * // Semi-transparent gaps
+ * layerDashed({ dashSize: 10, gapSize: 10, gap: 0.3 })
+ *
+ * // Colored gaps
+ * layerDashed({ dashSize: 10, gapSize: 10, gap: "#ff0000" })
+ *
+ * // Pattern aligned to start
+ * layerDashed({ dashSize: 10, gapSize: 5, align: 0 })
+ *
+ * // Solid extremities (arrows stay solid, body is dashed)
+ * layerDashed({ dashSize: 10, gapSize: 5, solidExtremities: true })
+ *
+ * // Only head extremity solid
+ * layerDashed({ dashSize: 10, gapSize: 5, solidExtremities: "head" })
+ *
+ * // Extra solid margin at head end (5px solid before dashes)
+ * layerDashed({ dashSize: 10, gapSize: 5, solidMargin: { head: 5 } })
+ *
+ * // Combine solid extremities with extra margins
+ * layerDashed({
+ *   dashSize: 10,
+ *   gapSize: 5,
+ *   solidExtremities: true,
+ *   solidMargin: { head: 10, tail: 5 },
+ * })
+ * ```
+ */
+export const layerDashed = dashedDefinition.factory;

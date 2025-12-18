@@ -12,6 +12,7 @@
     "/types",
     "/settings",
     "/rendering",
+    "/registry",
     "/utils"
   ],
   "sideEffects": false,

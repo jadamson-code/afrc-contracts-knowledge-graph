@@ -317,3 +317,16 @@ export type { CameraEvents } from "./core/camera";
 export type { MouseCaptorEvents } from "./core/captors/mouse";
 export type { TouchCaptorEvents } from "./core/captors/touch";
 export type { FontKey, FontDescriptor, GlyphMetrics, SDFAtlasOptions } from "./core/sdf-atlas";
+
+/**
+ * Extensions API:
+ */
+export {
+  defineExtension,
+  registerExtension,
+  isPrimitiveExtension,
+  isKindExtension,
+  type Extension,
+  type PrimitiveExtension,
+  type KindExtension,
+} from "./types/extensions";

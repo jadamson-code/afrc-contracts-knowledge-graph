@@ -2,13 +2,14 @@
  * Sigma.js Shape Registry - Exports
  * ==================================
  *
+ * Re-exports shape instance registry and factory helpers.
+ *
  * @module
  */
-
 export {
-  registerShape,
-  getRegisteredShape,
-  getShape,
+  registerShapeInstance,
+  getRegisteredShapeInstance,
+  getShapeFromSlug,
   getShapeId,
   getRegisteredShapeSlugs,
   getShapeGLSL,
@@ -16,5 +17,5 @@ export {
   getShapeGLSLForShapes,
   generateShapeSelectorGLSL,
   generateNodeShapeSelectorGLSL,
-  clearShapeRegistry,
-} from "./registry";
+  clearShapeInstanceRegistry,
+} from "../nodes/shapes/instance-registry";

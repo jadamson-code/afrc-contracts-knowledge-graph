@@ -33,12 +33,6 @@
       "path": "./packages/node-piechart"
     },
     {
-      "path": "./packages/node-square"
-    },
-    {
-      "path": "./packages/edge-curve"
-    },
-    {
       "path": "./packages/utils"
     },
     {

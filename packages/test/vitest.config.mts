@@ -9,5 +9,10 @@ export default defineConfig({
       enabled: true,
       headless: true,
     },
+    typecheck: {
+      enabled: true,
+      include: ["unit/types/**/*.test-d.ts"],
+      ignoreSourceErrors: true,
+    },
   },
 });

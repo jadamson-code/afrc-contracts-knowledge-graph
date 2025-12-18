@@ -9,8 +9,9 @@
     "vitest": "^2.1.8"
   },
   "scripts": {
-    "test": "npm run test:unit && npm run test:e2e",
+    "test": "npm run test:unit && npm run test:type && npm run test:e2e",
     "test:unit": "vitest run --dir unit",
+    "test:type": "vitest typecheck --run type",
     "test:e2e": "playwright test",
     "benchmark": "vitest bench --dir benchmarks"
   }

@@ -12,7 +12,7 @@ describe("Image layer from @sigma/node-image", () => {
   describe("Basic image configurations", () => {
     test("generates compilable shaders with default options", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerImage()],
       });
 
@@ -21,7 +21,7 @@ describe("Image layer from @sigma/node-image", () => {
 
     test("generates compilable shaders with image drawing mode", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerImage({
             drawingMode: "image",
@@ -34,7 +34,7 @@ describe("Image layer from @sigma/node-image", () => {
 
     test("generates compilable shaders with color drawing mode (pictogram)", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerImage({
             drawingMode: "color",
@@ -49,7 +49,7 @@ describe("Image layer from @sigma/node-image", () => {
   describe("Padding options", () => {
     test("generates compilable shaders with no padding", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerImage({
             padding: 0,
@@ -62,7 +62,7 @@ describe("Image layer from @sigma/node-image", () => {
 
     test("generates compilable shaders with 5% padding", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerImage({
             padding: 0.05,
@@ -75,7 +75,7 @@ describe("Image layer from @sigma/node-image", () => {
 
     test("generates compilable shaders with 20% padding", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerImage({
             padding: 0.2,
@@ -90,7 +90,7 @@ describe("Image layer from @sigma/node-image", () => {
   describe("Multiple texture atlases", () => {
     test("generates compilable shaders with single texture", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerImage({}, 1)],
       });
 
@@ -99,7 +99,7 @@ describe("Image layer from @sigma/node-image", () => {
 
     test("generates compilable shaders with multiple textures", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerImage({}, 3)],
       });
 
@@ -108,7 +108,7 @@ describe("Image layer from @sigma/node-image", () => {
 
     test("generates compilable shaders with many textures", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerImage({}, 8)],
       });
 
@@ -119,7 +119,7 @@ describe("Image layer from @sigma/node-image", () => {
   describe("Image layer with different shapes", () => {
     test("generates compilable shaders with circle shape", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerImage({
             drawingMode: "image",
@@ -132,7 +132,7 @@ describe("Image layer from @sigma/node-image", () => {
 
     test("generates compilable shaders with square shape", () => {
       const generated = generateShaders({
-        shape: sdfSquare({ cornerRadius: 0.1 }),
+        shapes: [sdfSquare({ cornerRadius: 0.1 })],
         layers: [
           layerImage({
             drawingMode: "image",
@@ -145,7 +145,7 @@ describe("Image layer from @sigma/node-image", () => {
 
     test("generates compilable shaders with triangle shape", () => {
       const generated = generateShaders({
-        shape: sdfTriangle({ cornerRadius: 0.05 }),
+        shapes: [sdfTriangle({ cornerRadius: 0.05 })],
         layers: [
           layerImage({
             drawingMode: "color",
@@ -158,7 +158,7 @@ describe("Image layer from @sigma/node-image", () => {
 
     test("generates compilable shaders with diamond shape", () => {
       const generated = generateShaders({
-        shape: sdfDiamond({ rotation: Math.PI / 4 }),
+        shapes: [sdfDiamond({ rotation: Math.PI / 4 })],
         layers: [
           layerImage({
             drawingMode: "image",
@@ -174,7 +174,7 @@ describe("Image layer from @sigma/node-image", () => {
   describe("Image layer metadata", () => {
     test("collects image-specific uniforms", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerImage({}, 2)],
       });
 
@@ -182,35 +182,28 @@ describe("Image layer from @sigma/node-image", () => {
       expect(generated.uniforms).toContain("u_cameraAngle");
     });
 
-    test("collects image-specific attributes", () => {
-      const generated = generateShaders({
-        shape: sdfCircle(),
-        layers: [layerImage()],
-      });
+    test("layer definition contains image-specific attributes", () => {
+      // In the new architecture, layer attributes go into texture, not buffer
+      // Attribute names include the layer name suffix (default: "image")
+      const layer = layerImage();
 
-      const attrNames = generated.attributes.map((a) => a.name);
-      expect(attrNames).toContain("a_texture");
-      expect(attrNames).toContain("a_textureIndex");
+      const attrNames = layer.attributes.map((a) => a.name);
+      expect(attrNames).toContain("texture_image");
+      expect(attrNames).toContain("textureIndex_image");
     });
 
     test("texture attribute has size 4 for UV coordinates", () => {
-      const generated = generateShaders({
-        shape: sdfCircle(),
-        layers: [layerImage()],
-      });
+      const layer = layerImage();
 
-      const textureAttr = generated.attributes.find((a) => a.name === "a_texture");
+      const textureAttr = layer.attributes.find((a) => a.name === "texture_image");
       expect(textureAttr).toBeDefined();
       expect(textureAttr?.size).toBe(4);
     });
 
     test("textureIndex attribute has size 1", () => {
-      const generated = generateShaders({
-        shape: sdfCircle(),
-        layers: [layerImage()],
-      });
+      const layer = layerImage();
 
-      const textureIndexAttr = generated.attributes.find((a) => a.name === "a_textureIndex");
+      const textureIndexAttr = layer.attributes.find((a) => a.name === "textureIndex_image");
       expect(textureIndexAttr).toBeDefined();
       expect(textureIndexAttr?.size).toBe(1);
     });
@@ -219,7 +212,7 @@ describe("Image layer from @sigma/node-image", () => {
   describe("Combined configurations", () => {
     test("generates compilable shaders with all options configured", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerImage(
             {
@@ -238,7 +231,7 @@ describe("Image layer from @sigma/node-image", () => {
 
     test("generates compilable shaders for pictogram mode", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerImage(
             {

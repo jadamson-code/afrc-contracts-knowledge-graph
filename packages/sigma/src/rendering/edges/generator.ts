@@ -77,7 +77,7 @@ function collectUniformsMulti(
 /**
  * Generates GLSL code for all paths (combined).
  */
-function generateAllPathsGLSL(paths: EdgePath[]): string {
+function generateAllPathsGLSL(paths: EdgePath[], includeVertexGlsl: boolean): string {
   const seen = new Set<string>();
   const parts: string[] = [];
 
@@ -88,7 +88,7 @@ function generateAllPathsGLSL(paths: EdgePath[]): string {
       parts.push(path.glsl);
       parts.push(generateNumericalTangentNormal(path.name));
       parts.push(generatePathFallbacks(path.name, path.glsl));
-      if (path.vertexGlsl) {
+      if (includeVertexGlsl && path.vertexGlsl) {
         parts.push(path.vertexGlsl);
       }
     }
@@ -429,8 +429,8 @@ ${getAllShapeGLSL()}
 // Shape selector function
 ${generateShapeSelectorGLSL()}
 
-// All path functions
-${generateAllPathsGLSL(paths)}
+// All path functions (including vertex-only code)
+${generateAllPathsGLSL(paths, true)}
 
 // Path selector functions
 ${generateAllPathSelectors(paths)}
@@ -733,8 +733,8 @@ vec4 blendOver(vec4 bg, vec4 fg) {
   return vec4(mix(bg.rgb, fg.rgb, a), bg.a + a * (1.0 - bg.a));
 }
 
-// All path functions
-${generateAllPathsGLSL(paths)}
+// All path functions (excluding vertex-only code)
+${generateAllPathsGLSL(paths, false)}
 
 // Path selector functions
 ${generateAllPathSelectors(paths)}
@@ -892,6 +892,7 @@ export function generateEdgeShaders(options: EdgeShaderGenerationOptions): Gener
   // Generate constant data for all combinations (any extremity can be head or tail)
   const vertexCountsPerCombination = new Map<string, number>();
   const constantDataPerCombination = new Map<string, number[][]>();
+  const constantAttributesMap = new Map<string, { name: string; size: number; type: number }>();
 
   for (const p of paths) {
     for (const headExt of extremities) {
@@ -900,6 +901,12 @@ export function generateEdgeShaders(options: EdgeShaderGenerationOptions): Gener
         const constantData = getConstantDataForCombination(p, headExt, tailExt);
         vertexCountsPerCombination.set(key, constantData.verticesPerEdge);
         constantDataPerCombination.set(key, constantData.data);
+        // Collect unique constant attributes from all paths
+        for (const attr of constantData.attributes) {
+          if (!constantAttributesMap.has(attr.name)) {
+            constantAttributesMap.set(attr.name, attr);
+          }
+        }
       }
     }
   }
@@ -921,12 +928,8 @@ export function generateEdgeShaders(options: EdgeShaderGenerationOptions): Gener
     }
   }
 
-  // Zone-based constant data (3 attributes: zone, zoneT, side)
-  const constantAttributes = [
-    { name: "a_zone", size: 1, type: FLOAT },
-    { name: "a_zoneT", size: 1, type: FLOAT },
-    { name: "a_side", size: 1, type: FLOAT },
-  ];
+  // Constant attributes collected from all paths
+  const constantAttributes = Array.from(constantAttributesMap.values());
 
   return {
     vertexShader: generateVertexShaderMulti(paths, extremities, layers, constantAttributes),

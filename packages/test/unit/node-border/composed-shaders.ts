@@ -12,12 +12,12 @@ describe("Border layer from @sigma/node-border", () => {
   describe("Basic border configurations", () => {
     test("generates compilable shaders with fixed color border", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.1 }, color: { value: "#ff0000" } },
-              { size: { fill: true }, color: { value: "#0000ff" } },
+              { size: { value: 0.1 }, color: "#ff0000" },
+              { size: { fill: true }, color: "#0000ff" },
             ],
           }),
         ],
@@ -28,7 +28,7 @@ describe("Border layer from @sigma/node-border", () => {
 
     test("generates compilable shaders with attribute-based color", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerBorder({
             borders: [
@@ -44,12 +44,12 @@ describe("Border layer from @sigma/node-border", () => {
 
     test("generates compilable shaders with transparent color", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerBorder({
             borders: [
               { size: { value: 0.2 }, color: { transparent: true } },
-              { size: { fill: true }, color: { value: "#00ff00" } },
+              { size: { fill: true }, color: "#00ff00" },
             ],
           }),
         ],
@@ -62,12 +62,12 @@ describe("Border layer from @sigma/node-border", () => {
   describe("Border size modes", () => {
     test("generates compilable shaders with relative size mode", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.15, mode: "relative" }, color: { value: "#ff0000" } },
-              { size: { fill: true }, color: { value: "#ffffff" } },
+              { size: { value: 0.15, mode: "relative" }, color: "#ff0000" },
+              { size: { fill: true }, color: "#ffffff" },
             ],
           }),
         ],
@@ -78,12 +78,12 @@ describe("Border layer from @sigma/node-border", () => {
 
     test("generates compilable shaders with pixels size mode", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 5, mode: "pixels" }, color: { value: "#ff0000" } },
-              { size: { fill: true }, color: { value: "#ffffff" } },
+              { size: { value: 5, mode: "pixels" }, color: "#ff0000" },
+              { size: { fill: true }, color: "#ffffff" },
             ],
           }),
         ],
@@ -94,11 +94,11 @@ describe("Border layer from @sigma/node-border", () => {
 
     test("generates compilable shaders with attribute-based size", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerBorder({
             borders: [
-              { size: { attribute: "borderSize", defaultValue: 0.1 }, color: { value: "#ff0000" } },
+              { size: { attribute: "borderSize", defaultValue: 0.1 }, color: "#ff0000" },
               { size: { fill: true }, color: { attribute: "color" } },
             ],
           }),
@@ -112,13 +112,13 @@ describe("Border layer from @sigma/node-border", () => {
   describe("Multiple borders", () => {
     test("generates compilable shaders with three borders", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.1 }, color: { value: "#ff0000" } },
-              { size: { value: 0.1 }, color: { value: "#00ff00" } },
-              { size: { fill: true }, color: { value: "#0000ff" } },
+              { size: { value: 0.1 }, color: "#ff0000" },
+              { size: { value: 0.1 }, color: "#00ff00" },
+              { size: { fill: true }, color: "#0000ff" },
             ],
           }),
         ],
@@ -129,13 +129,13 @@ describe("Border layer from @sigma/node-border", () => {
 
     test("generates compilable shaders with multiple fill borders", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.1 }, color: { value: "#ff0000" } },
-              { size: { fill: true }, color: { value: "#00ff00" } },
-              { size: { fill: true }, color: { value: "#0000ff" } },
+              { size: { value: 0.1 }, color: "#ff0000" },
+              { size: { fill: true }, color: "#00ff00" },
+              { size: { fill: true }, color: "#0000ff" },
             ],
           }),
         ],
@@ -148,11 +148,11 @@ describe("Border layer from @sigma/node-border", () => {
   describe("Border layer with different shapes", () => {
     test("generates compilable shaders with square shape", () => {
       const generated = generateShaders({
-        shape: sdfSquare({ cornerRadius: 0.1 }),
+        shapes: [sdfSquare({ cornerRadius: 0.1 })],
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.1 }, color: { value: "#ff0000" } },
+              { size: { value: 0.1 }, color: "#ff0000" },
               { size: { fill: true }, color: { attribute: "color" } },
             ],
           }),
@@ -164,7 +164,7 @@ describe("Border layer from @sigma/node-border", () => {
 
     test("generates compilable shaders with triangle shape", () => {
       const generated = generateShaders({
-        shape: sdfTriangle({ cornerRadius: 0.05 }),
+        shapes: [sdfTriangle({ cornerRadius: 0.05 })],
         layers: [
           layerBorder({
             borders: [
@@ -180,12 +180,12 @@ describe("Border layer from @sigma/node-border", () => {
 
     test("generates compilable shaders with diamond shape", () => {
       const generated = generateShaders({
-        shape: sdfDiamond({ rotation: Math.PI / 4 }),
+        shapes: [sdfDiamond({ rotation: Math.PI / 4 })],
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.2 }, color: { value: "#ffff00" } },
-              { size: { fill: true }, color: { value: "#000000" } },
+              { size: { value: 0.2 }, color: "#ffff00" },
+              { size: { fill: true }, color: "#000000" },
             ],
           }),
         ],
@@ -196,40 +196,34 @@ describe("Border layer from @sigma/node-border", () => {
   });
 
   describe("Border layer metadata", () => {
-    test("collects border-specific uniforms for fixed colors", () => {
-      const generated = generateShaders({
-        shape: sdfCircle(),
-        layers: [
-          layerBorder({
-            borders: [
-              { size: { value: 0.1 }, color: { value: "#ff0000" } },
-              { size: { fill: true }, color: { value: "#0000ff" } },
-            ],
-          }),
+    test("layer definition contains border-specific uniforms for fixed colors", () => {
+      // In the new architecture, check the layer definition for uniforms
+      const layer = layerBorder({
+        borders: [
+          { size: { value: 0.1 }, color: "#ff0000" },
+          { size: { fill: true }, color: "#0000ff" },
         ],
       });
 
-      expect(generated.uniforms).toContain("u_borderColor_1");
-      expect(generated.uniforms).toContain("u_borderColor_2");
+      const uniformNames = layer.uniforms.map((u) => u.name);
+      expect(uniformNames).toContain("u_borderColor_1");
+      expect(uniformNames).toContain("u_borderColor_2");
     });
 
-    test("collects border-specific attributes for attribute-based values", () => {
-      const generated = generateShaders({
-        shape: sdfCircle(),
-        layers: [
-          layerBorder({
-            borders: [
-              { size: { attribute: "borderSize", defaultValue: 0.1 }, color: { attribute: "borderColor" } },
-              { size: { fill: true }, color: { attribute: "color" } },
-            ],
-          }),
+    test("layer definition contains border-specific attributes for attribute-based values", () => {
+      // In the new architecture, layer attributes go into texture, not buffer
+      // Attribute names don't have the 'a_' prefix in layer definition (generator adds it)
+      const layer = layerBorder({
+        borders: [
+          { size: { attribute: "borderSize", defaultValue: 0.1 }, color: { attribute: "borderColor" } },
+          { size: { fill: true }, color: { attribute: "color" } },
         ],
       });
 
-      const attrNames = generated.attributes.map((a) => a.name);
-      expect(attrNames).toContain("a_borderSize_1");
-      expect(attrNames).toContain("a_borderColor_1");
-      expect(attrNames).toContain("a_borderColor_2");
+      const attrNames = layer.attributes.map((a) => a.name);
+      expect(attrNames).toContain("borderSize_1");
+      expect(attrNames).toContain("borderColor_1");
+      expect(attrNames).toContain("borderColor_2");
     });
   });
 });

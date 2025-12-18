@@ -343,7 +343,7 @@ export interface EdgeExtremitySchemaRegistry {}
 // TYPE UTILITIES (re-exported from registry)
 // =============================================================================
 
-export { BuiltInVariableNames, IsCustomVariable, UnionToIntersection } from "./registry";
+export type { BuiltInVariableNames, IsCustomVariable, UnionToIntersection } from "./registry";
 
 // =============================================================================
 // TYPE MAPPING FROM SCHEMA TO TYPESCRIPT

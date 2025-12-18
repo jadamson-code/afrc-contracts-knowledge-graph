@@ -11,7 +11,7 @@ describe("Composed node program shader generation", () => {
   describe("Circle shape", () => {
     test("generates compilable shaders with fill layer", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerFill()],
       });
 
@@ -22,7 +22,7 @@ describe("Composed node program shader generation", () => {
   describe("Square shape", () => {
     test("generates compilable shaders with default options", () => {
       const generated = generateShaders({
-        shape: sdfSquare(),
+        shapes: [sdfSquare()],
         layers: [layerFill()],
       });
 
@@ -31,7 +31,7 @@ describe("Composed node program shader generation", () => {
 
     test("generates compilable shaders with cornerRadius", () => {
       const generated = generateShaders({
-        shape: sdfSquare({ cornerRadius: 0.2 }),
+        shapes: [sdfSquare({ cornerRadius: 0.2 })],
         layers: [layerFill()],
       });
 
@@ -40,7 +40,7 @@ describe("Composed node program shader generation", () => {
 
     test("generates compilable shaders with rotation", () => {
       const generated = generateShaders({
-        shape: sdfSquare({ rotation: Math.PI / 4 }),
+        shapes: [sdfSquare({ rotation: Math.PI / 4 })],
         layers: [layerFill()],
       });
 
@@ -49,7 +49,7 @@ describe("Composed node program shader generation", () => {
 
     test("generates compilable shaders with both options", () => {
       const generated = generateShaders({
-        shape: sdfSquare({ cornerRadius: 0.1, rotation: Math.PI / 6 }),
+        shapes: [sdfSquare({ cornerRadius: 0.1, rotation: Math.PI / 6 })],
         layers: [layerFill()],
       });
 
@@ -60,7 +60,7 @@ describe("Composed node program shader generation", () => {
   describe("Triangle shape", () => {
     test("generates compilable shaders with default options", () => {
       const generated = generateShaders({
-        shape: sdfTriangle(),
+        shapes: [sdfTriangle()],
         layers: [layerFill()],
       });
 
@@ -69,7 +69,7 @@ describe("Composed node program shader generation", () => {
 
     test("generates compilable shaders with cornerRadius", () => {
       const generated = generateShaders({
-        shape: sdfTriangle({ cornerRadius: 0.1 }),
+        shapes: [sdfTriangle({ cornerRadius: 0.1 })],
         layers: [layerFill()],
       });
 
@@ -78,7 +78,7 @@ describe("Composed node program shader generation", () => {
 
     test("generates compilable shaders with rotation", () => {
       const generated = generateShaders({
-        shape: sdfTriangle({ rotation: Math.PI }),
+        shapes: [sdfTriangle({ rotation: Math.PI })],
         layers: [layerFill()],
       });
 
@@ -89,7 +89,7 @@ describe("Composed node program shader generation", () => {
   describe("Diamond shape", () => {
     test("generates compilable shaders with default options", () => {
       const generated = generateShaders({
-        shape: sdfDiamond(),
+        shapes: [sdfDiamond()],
         layers: [layerFill()],
       });
 
@@ -98,7 +98,7 @@ describe("Composed node program shader generation", () => {
 
     test("generates compilable shaders with cornerRadius", () => {
       const generated = generateShaders({
-        shape: sdfDiamond({ cornerRadius: 0.15 }),
+        shapes: [sdfDiamond({ cornerRadius: 0.15 })],
         layers: [layerFill()],
       });
 
@@ -107,7 +107,7 @@ describe("Composed node program shader generation", () => {
 
     test("generates compilable shaders with rotation", () => {
       const generated = generateShaders({
-        shape: sdfDiamond({ rotation: Math.PI / 4 }),
+        shapes: [sdfDiamond({ rotation: Math.PI / 4 })],
         layers: [layerFill()],
       });
 
@@ -118,7 +118,7 @@ describe("Composed node program shader generation", () => {
   describe("Shader metadata", () => {
     test("collects correct uniforms for circle + fill", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerFill()],
       });
 
@@ -129,7 +129,7 @@ describe("Composed node program shader generation", () => {
 
     test("collects shape-specific uniforms for square", () => {
       const generated = generateShaders({
-        shape: sdfSquare({ cornerRadius: 0.2, rotation: Math.PI / 4 }),
+        shapes: [sdfSquare({ cornerRadius: 0.2, rotation: Math.PI / 4 })],
         layers: [layerFill()],
       });
 
@@ -139,14 +139,14 @@ describe("Composed node program shader generation", () => {
 
     test("collects standard attributes", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerFill()],
       });
 
+      // New architecture: position, size, color are fetched from textures
+      // Only nodeIndex (for texture lookup) and id (for picking) remain in buffer
       const attrNames = generated.attributes.map((a) => a.name);
-      expect(attrNames).toContain("a_position");
-      expect(attrNames).toContain("a_size");
-      expect(attrNames).toContain("a_color");
+      expect(attrNames).toContain("a_nodeIndex");
       expect(attrNames).toContain("a_id");
     });
   });
@@ -154,7 +154,7 @@ describe("Composed node program shader generation", () => {
   describe("Edge cases", () => {
     test("handles no layers gracefully", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [],
       });
 
@@ -164,7 +164,7 @@ describe("Composed node program shader generation", () => {
     test("handles multiple layers (when available)", () => {
       // For now we only have layerFill, but this tests the composition logic
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerFill()],
       });
 
@@ -175,7 +175,7 @@ describe("Composed node program shader generation", () => {
   describe("rotateWithCamera option", () => {
     test("generates compilable shaders with rotateWithCamera: false (default)", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerFill()],
         rotateWithCamera: false,
       });
@@ -188,7 +188,7 @@ describe("Composed node program shader generation", () => {
 
     test("generates compilable shaders with rotateWithCamera: true", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerFill()],
         rotateWithCamera: true,
       });
@@ -200,7 +200,7 @@ describe("Composed node program shader generation", () => {
 
     test("defaults to rotateWithCamera: false when not specified", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerFill()],
       });
 
@@ -211,7 +211,7 @@ describe("Composed node program shader generation", () => {
 
     test("includes u_cameraAngle uniform", () => {
       const generated = generateShaders({
-        shape: sdfCircle(),
+        shapes: [sdfCircle()],
         layers: [layerFill()],
       });
 
@@ -219,11 +219,11 @@ describe("Composed node program shader generation", () => {
     });
 
     test("works with all shapes and rotateWithCamera: false", () => {
-      const shapes = [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()];
+      const allShapes = [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()];
 
-      for (const shape of shapes) {
+      for (const shape of allShapes) {
         const generated = generateShaders({
-          shape,
+          shapes: [shape],
           layers: [layerFill()],
           rotateWithCamera: false,
         });
@@ -233,11 +233,11 @@ describe("Composed node program shader generation", () => {
     });
 
     test("works with all shapes and rotateWithCamera: true", () => {
-      const shapes = [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()];
+      const allShapes = [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()];
 
-      for (const shape of shapes) {
+      for (const shape of allShapes) {
         const generated = generateShaders({
-          shape,
+          shapes: [shape],
           layers: [layerFill()],
           rotateWithCamera: true,
         });

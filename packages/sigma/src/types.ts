@@ -327,3 +327,10 @@ export { defineSigmaOptions } from "./types/options";
  * Styles API:
  */
 export type { BaseNodeState, BaseEdgeState, BaseGraphState } from "./types/styles";
+export {
+  resolveGraphicValue,
+  evaluateStatePredicate,
+  evaluateNodeStyle,
+  evaluateEdgeStyle,
+} from "./core/styles";
+export type { ResolvedNodeStyle, ResolvedEdgeStyle } from "./core/styles";

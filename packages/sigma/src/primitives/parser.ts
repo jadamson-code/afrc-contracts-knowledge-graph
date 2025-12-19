@@ -22,10 +22,15 @@ import {
 } from "../rendering";
 import { getFactory } from "./registry";
 import {
+  BuiltInNodeShape,
+  DeclarativeNodeShape,
   NodeShapeSpec,
   NodeLayerSpec,
+  BuiltInEdgePath,
+  DeclarativeEdgePath,
   EdgePathSpec,
   EdgeLayerSpec,
+  BuiltInEdgeExtremity,
   EdgeExtremitySpec,
   NodePrimitives,
   EdgePrimitives,
@@ -43,11 +48,11 @@ import {
 // TYPE GUARDS FOR SHAPES
 // =============================================================================
 
-function isNodeShapeShorthand(spec: NodeShapeSpec): spec is string {
+function isNodeShapeShorthand(spec: NodeShapeSpec): spec is BuiltInNodeShape {
   return typeof spec === "string";
 }
 
-function isDeclarativeNodeShape(spec: NodeShapeSpec): spec is { type: string } & Record<string, unknown> {
+function isDeclarativeNodeShape(spec: NodeShapeSpec): spec is DeclarativeNodeShape {
   return typeof spec === "object" && "type" in spec && !("glsl" in spec);
 }
 
@@ -59,11 +64,11 @@ function isCustomNodeShape(spec: NodeShapeSpec): spec is { name: string; glsl: s
 // TYPE GUARDS FOR EDGE PATHS
 // =============================================================================
 
-function isEdgePathShorthand(spec: EdgePathSpec): spec is string {
+function isEdgePathShorthand(spec: EdgePathSpec): spec is BuiltInEdgePath {
   return typeof spec === "string";
 }
 
-function isDeclarativeEdgePath(spec: EdgePathSpec): spec is { type: string } & Record<string, unknown> {
+function isDeclarativeEdgePath(spec: EdgePathSpec): spec is DeclarativeEdgePath {
   return typeof spec === "object" && "type" in spec && !("glsl" in spec);
 }
 
@@ -75,7 +80,7 @@ function isCustomEdgePath(spec: EdgePathSpec): spec is { name: string; glsl: str
 // TYPE GUARDS FOR EDGE EXTREMITIES
 // =============================================================================
 
-function isEdgeExtremityShorthand(spec: EdgeExtremitySpec): spec is string {
+function isEdgeExtremityShorthand(spec: EdgeExtremitySpec): spec is BuiltInEdgeExtremity {
   return typeof spec === "string";
 }
 
@@ -89,6 +94,33 @@ function isCustomEdgeExtremity(
 // SPEC PARSERS
 // =============================================================================
 
+// Type guard for already-parsed SDFShape
+function isSDFShape(spec: NodeShapeSpec): spec is SDFShape {
+  return typeof spec === "object" && "uniforms" in spec && Array.isArray(spec.uniforms);
+}
+
+// Type guard for already-parsed FragmentLayer
+function isFragmentLayer(spec: NodeLayerSpec): spec is FragmentLayer {
+  return typeof spec === "object" && "uniforms" in spec && "attributes" in spec && "glsl" in spec;
+}
+
+// Type guard for already-parsed EdgePath
+function isEdgePath(spec: EdgePathSpec): spec is EdgePath {
+  return (
+    typeof spec === "object" && "uniforms" in spec && "attributes" in spec && "vertexGlsl" in spec && "segments" in spec
+  );
+}
+
+// Type guard for already-parsed EdgeExtremity
+function isEdgeExtremity(spec: EdgeExtremitySpec): spec is EdgeExtremity {
+  return typeof spec === "object" && "uniforms" in spec && "attributes" in spec && "length" in spec;
+}
+
+// Type guard for already-parsed EdgeLayer
+function isEdgeLayer(spec: EdgeLayerSpec): spec is EdgeLayer {
+  return typeof spec === "object" && "uniforms" in spec && "attributes" in spec && "glsl" in spec;
+}
+
 /**
  * Parses a node shape specification into an SDFShape.
  *
@@ -97,6 +129,11 @@ function isCustomEdgeExtremity(
  * @throws Error if factory not found for built-in shapes
  */
 export function parseNodeShape(spec: NodeShapeSpec): SDFShape {
+  // Already a parsed SDFShape - return as-is
+  if (isSDFShape(spec)) {
+    return spec;
+  }
+
   if (isNodeShapeShorthand(spec)) {
     // String form: "circle" -> getFactory("nodeShape", "circle")()
     const factory = getFactory("nodeShape", spec);
@@ -137,6 +174,11 @@ export function parseNodeShape(spec: NodeShapeSpec): SDFShape {
  * @throws Error if factory not found for built-in layers
  */
 export function parseNodeLayer(spec: NodeLayerSpec): FragmentLayer {
+  // Already a parsed FragmentLayer - return as-is
+  if (isFragmentLayer(spec)) {
+    return spec;
+  }
+
   if (isNodeLayerShorthand(spec)) {
     // String form: "fill" -> getFactory("nodeLayer", "fill")()
     const factory = getFactory("nodeLayer", spec);
@@ -179,6 +221,11 @@ export function parseNodeLayer(spec: NodeLayerSpec): FragmentLayer {
  * @throws Error if factory not found for built-in paths
  */
 export function parseEdgePath(spec: EdgePathSpec): EdgePath {
+  // Already a parsed EdgePath - return as-is
+  if (isEdgePath(spec)) {
+    return spec;
+  }
+
   if (isEdgePathShorthand(spec)) {
     // String form: "line" -> getFactory("edgePath", "line")()
     const factory = getFactory("edgePath", spec);
@@ -205,6 +252,7 @@ export function parseEdgePath(spec: EdgePathSpec): EdgePath {
       name: spec.name,
       glsl: spec.glsl,
       segments: spec.segments,
+      vertexGlsl: "", // Custom paths use standard parametric tessellation
       uniforms: [],
       attributes: [],
     };
@@ -221,6 +269,11 @@ export function parseEdgePath(spec: EdgePathSpec): EdgePath {
  * @throws Error if factory not found for built-in layers
  */
 export function parseEdgeLayer(spec: EdgeLayerSpec): EdgeLayer {
+  // Already a parsed EdgeLayer - return as-is
+  if (isEdgeLayer(spec)) {
+    return spec;
+  }
+
   if (isEdgeLayerShorthand(spec)) {
     // String form: "plain" -> getFactory("edgeLayer", "plain")()
     const factory = getFactory("edgeLayer", spec);
@@ -265,6 +318,11 @@ export function parseEdgeExtremity(spec: EdgeExtremitySpec): EdgeExtremity | nul
   // "none" is handled internally by createEdgeProgram, return null to skip
   if (spec === "none") {
     return null;
+  }
+
+  // Already a parsed EdgeExtremity - return as-is
+  if (isEdgeExtremity(spec)) {
+    return spec;
   }
 
   if (isEdgeExtremityShorthand(spec)) {
@@ -439,6 +497,7 @@ export function generateNodeProgram<
   return createNodeProgram<N, E, G>({
     shapes,
     layers,
+    rotateWithCamera: nodePrimitives?.rotateWithCamera,
   });
 }
 

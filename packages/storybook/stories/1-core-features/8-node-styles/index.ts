@@ -1,14 +1,16 @@
 /**
- * This example demonstrates the unified node program system.
+ * This example demonstrates the v4 primitives and styles API.
  * It shows a 5x4 grid of nodes where:
  * - Each column uses a different shape (circle, square, triangle, diamond)
  * - Each row uses different layer configurations, all rendered by ONE program
  * - Layers auto-disable based on node attributes (borderSize=0, slices=0, no image)
+ * - Styles define hover effects (size increase + highlight color)
  *
  * This demonstrates:
  * 1. Multi-shape programs: One program renders 4 different shapes
  * 2. Dynamic layer enable/disable: Layers return transparent when not needed
  * 3. Single program architecture: 20 visual styles with 1 WebGL program
+ * 4. Styles API: Declarative hover/highlight effects
  *
  * Use the checkbox to toggle whether nodes rotate with the camera.
  */
@@ -17,7 +19,8 @@ import { layerImage } from "@sigma/node-image";
 import { layerPiechart } from "@sigma/node-piechart";
 import Graph from "graphology";
 import Sigma from "sigma";
-import { createNodeProgram, layerFill, sdfCircle, sdfDiamond, sdfSquare, sdfTriangle } from "sigma/rendering";
+import { layerFill, sdfCircle, sdfDiamond, sdfSquare, sdfTriangle } from "sigma/rendering";
+import { DEFAULT_STYLES } from "sigma/types";
 
 export default () => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -113,83 +116,88 @@ export default () => {
     }
   }
 
-  // Create ONE unified program for all shapes and layer combinations
-  const createUnifiedProgram = (rotateWithCamera: boolean) => {
-    return createNodeProgram({
-      // Multi-shape: supports all 4 shapes in one program
-      shapes: [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()],
-      layers: [
-        // Base fill layer (always visible)
-        layerFill({ color: { attribute: "backgroundColor" } }),
+  // Node primitives: shapes and layers for the program
+  const nodePrimitives = {
+    // Multi-shape: supports all 4 shapes in one program
+    shapes: [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()],
+    layers: [
+      // Base fill layer (always visible)
+      layerFill({ color: { attribute: "backgroundColor" } }),
 
-        // Image layer for photo images (rows 3)
-        // Disabled when no 'image' attribute
-        layerImage({
-          name: "photo",
-          drawingMode: "image",
-          imageAttribute: "image",
-        }),
+      // Image layer for photo images (row 3)
+      // Disabled when no 'image' attribute
+      layerImage({
+        name: "photo",
+        drawingMode: "image",
+        imageAttribute: "image",
+      }),
 
-        // Image layer for pictograms (row 4)
-        // Disabled when no 'pictogram' attribute
-        layerImage({
-          name: "pictogram",
-          drawingMode: "color",
-          imageAttribute: "pictogram",
-          colorAttribute: "borderColor",
-          padding: 0.4,
-          textureManagerOptions: {
-            size: { mode: "force", value: 512 },
-          },
-        }),
+      // Image layer for pictograms (row 4)
+      // Disabled when no 'pictogram' attribute
+      layerImage({
+        name: "pictogram",
+        drawingMode: "color",
+        imageAttribute: "pictogram",
+        colorAttribute: "borderColor",
+        padding: 0.4,
+        textureManagerOptions: {
+          size: { mode: "force", value: 512 },
+        },
+      }),
 
-        // Border layer - disabled when borderSize=0
-        layerBorder({
-          borders: [
-            { size: { attribute: "borderSize", default: 0 }, color: { attribute: "borderColor" } },
-            { size: { fill: true }, color: { transparent: true } },
-            { size: { attribute: "innerSize", mode: "pixels", default: 0 }, color: { attribute: "innerColor" } },
-          ],
-        }),
+      // Border layer - disabled when borderSize=0
+      layerBorder({
+        borders: [
+          { size: { attribute: "borderSize", default: 0 }, color: { attribute: "borderColor" } },
+          { size: 0, color: "transparent", fill: true },
+          { size: { attribute: "innerSize", default: 0 }, color: { attribute: "innerColor" }, mode: "pixels" },
+        ],
+      }),
 
-        // Piechart layer - disabled when all slices=0
-        layerPiechart({
-          slices: [
-            { color: "#E74C3C", value: { attribute: "slice1" } },
-            { color: "#3498DB", value: { attribute: "slice2" } },
-            { color: "#2ECC71", value: { attribute: "slice3" } },
-          ],
-        }),
-      ],
-      rotateWithCamera,
-    });
+      // Piechart layer - disabled when all slices=0
+      layerPiechart({
+        slices: [
+          { color: "#E74C3C", value: { attribute: "slice1" } },
+          { color: "#3498DB", value: { attribute: "slice2" } },
+          { color: "#2ECC71", value: { attribute: "slice3" } },
+        ],
+      }),
+    ],
+    rotateWithCamera: false,
   };
 
-  // Initial state: nodes stay upright (rotateWithCamera: false)
-  const UnifiedProgram = createUnifiedProgram(false);
+  // Create Sigma with primitives and styles
   const renderer = new Sigma(graph, container, {
-    nodeProgramClasses: { default: UnifiedProgram },
-    labelProgramClasses: UnifiedProgram.LabelProgram ? { default: UnifiedProgram.LabelProgram } : {},
-    defaultNodeType: "default",
-    // Use positions-based sizing for a clean grid appearance
-    itemSizesReference: "positions",
-    zoomToSizeRatioFunction: (x) => x,
-    autoRescale: true,
+    primitives: {
+      nodes: nodePrimitives,
+    },
+    styles: {
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        // Base styles from graph attributes
+        {
+          size: { attribute: "size", defaultValue: 10 },
+          color: { attribute: "backgroundColor", defaultValue: "#999" },
+        },
+        // Hover effect: increase size
+        {
+          when: "isHovered",
+          then: {
+            size: (attrs) => ((attrs.size as number) || 10) * 1.3,
+          },
+        },
+      ],
+    },
+    settings: {
+      // Use positions-based sizing for a clean grid appearance
+      itemSizesReference: "positions",
+      zoomToSizeRatioFunction: (x: number) => x,
+      autoRescale: true,
+    },
   });
 
   // Set a slight camera rotation to demonstrate the feature
   renderer.getCamera().setState({ angle: 0.1 });
-
-  // Handle checkbox change
-  const checkbox = document.getElementById("rotate-with-camera") as HTMLInputElement;
-  checkbox.addEventListener("change", () => {
-    const rotateWithCamera = checkbox.checked;
-    const NewProgram = createUnifiedProgram(rotateWithCamera);
-    renderer.setSetting("nodeProgramClasses", { default: NewProgram });
-    if (NewProgram.LabelProgram) {
-      renderer.setSetting("labelProgramClasses", { default: NewProgram.LabelProgram });
-    }
-  });
 
   return () => {
     renderer.kill();

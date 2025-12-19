@@ -267,10 +267,11 @@ export function createEdgeLabelProgram<
       });
 
       // Register the default font
+      // TODO: Font configuration should come from styles
       const fontConfig = {
-        family: this.renderer.getSetting("edgeLabelFont") || this.renderer.getSetting("labelFont"),
-        weight: this.renderer.getSetting("edgeLabelWeight") || this.renderer.getSetting("labelWeight"),
-        style: "normal",
+        family: "sans-serif",
+        weight: "normal" as const,
+        style: "normal" as const,
       };
       this.defaultFontKey = this.atlasManager.registerFont(fontConfig);
     }

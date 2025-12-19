@@ -27,6 +27,7 @@ import {
   getShapeId,
 } from "./rendering";
 import { Settings, resolveSettings, validateSettings } from "./settings";
+import { DEFAULT_STYLES } from "./types/styles";
 import {
   CameraState,
   CoordinateConversionOverride,
@@ -52,11 +53,9 @@ import {
   createEdgeState,
   createGraphState,
   createNodeState,
-  NodeStyleProperties,
-  EdgeStyleProperties,
+  StylesDeclaration,
 } from "./types/styles";
-import { StylesDeclaration } from "./types/options";
-import { evaluateNodeStyle, evaluateEdgeStyle, ResolvedNodeStyle, ResolvedEdgeStyle } from "./core/styles";
+import { evaluateNodeStyle, evaluateEdgeStyle } from "./core/styles";
 import { PrimitivesDeclaration, generateNodeProgram, generateEdgeProgram } from "./primitives";
 import {
   NormalizationFunction,
@@ -86,61 +85,37 @@ const NODE_DATA_TEXTURE_UNIT = 3;
 const EDGE_DATA_TEXTURE_UNIT = 4;
 
 /**
- * Important functions.
+ * Reducer types for the new API.
  */
-function applyNodeDefaults<
+export type NodeReducer<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
->(settings: Settings<N, E, G>, key: string, data: Partial<NodeDisplayData>): NodeDisplayData {
-  if (!hasOwnProperty.call(data, "x") || !hasOwnProperty.call(data, "y"))
-    throw new Error(
-      `Sigma: could not find a valid position (x, y) for node "${key}". All your nodes must have a number "x" and "y". Maybe your forgot to apply a layout or your "nodeReducer" is not returning the correct data?`,
-    );
+  NS extends BaseNodeState = BaseNodeState,
+  GS extends BaseGraphState = BaseGraphState,
+> = (
+  key: string,
+  data: NodeDisplayData,
+  attrs: N,
+  state: NS,
+  graphState: GS,
+  graph: Graph<N, E, G>,
+) => Partial<NodeDisplayData>;
 
-  if (!data.color) data.color = settings.defaultNodeColor;
-
-  if (!data.label && data.label !== "") data.label = null;
-
-  if (data.label !== undefined && data.label !== null) data.label = "" + data.label;
-  else data.label = null;
-
-  if (!data.size) data.size = 2;
-
-  if (!hasOwnProperty.call(data, "hidden")) data.hidden = false;
-
-  if (!hasOwnProperty.call(data, "highlighted")) data.highlighted = false;
-
-  if (!hasOwnProperty.call(data, "forceLabel")) data.forceLabel = false;
-
-  if (!data.type || data.type === "") data.type = settings.defaultNodeType;
-
-  if (!data.zIndex) data.zIndex = 0;
-
-  return data as NodeDisplayData;
-}
-
-function applyEdgeDefaults<
+export type EdgeReducer<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
->(settings: Settings<N, E, G>, _key: string, data: Partial<EdgeDisplayData>): EdgeDisplayData {
-  if (!data.color) data.color = settings.defaultEdgeColor;
-
-  if (!data.label) data.label = "";
-
-  if (!data.size) data.size = 0.5;
-
-  if (!hasOwnProperty.call(data, "hidden")) data.hidden = false;
-
-  if (!hasOwnProperty.call(data, "forceLabel")) data.forceLabel = false;
-
-  if (!data.type || data.type === "") data.type = settings.defaultEdgeType;
-
-  if (!data.zIndex) data.zIndex = 0;
-
-  return data as EdgeDisplayData;
-}
+  ES extends BaseEdgeState = BaseEdgeState,
+  GS extends BaseGraphState = BaseGraphState,
+> = (
+  key: string,
+  data: EdgeDisplayData,
+  attrs: E,
+  state: ES,
+  graphState: GS,
+  graph: Graph<N, E, G>,
+) => Partial<EdgeDisplayData>;
 
 /**
  * Main class.
@@ -158,8 +133,12 @@ export default class Sigma<
   ES extends BaseEdgeState = BaseEdgeState,
   GS extends BaseGraphState = BaseGraphState,
 > extends TypedEventEmitter<SigmaEvents> {
-  private settings: Settings<N, E, G>;
+  private settings: Settings;
   private graph: Graph<N, E, G>;
+
+  // Reducers (optional escape hatches for complex styling logic)
+  private nodeReducer: NodeReducer<N, E, G, NS, GS> | null = null;
+  private edgeReducer: EdgeReducer<N, E, G, ES, GS> | null = null;
   private mouseCaptor: MouseCaptor<N, E, G>;
   private touchCaptor: TouchCaptor<N, E, G>;
   private container: HTMLElement;
@@ -264,19 +243,27 @@ export default class Sigma<
   constructor(
     graph: Graph<N, E, G>,
     container: HTMLElement,
-    options: Partial<Settings<N, E, G>> & {
+    options: {
       primitives?: PrimitivesDeclaration;
       styles?: StylesDeclaration<N, E, NS, ES, GS>;
+      settings?: Partial<Settings>;
+      nodeReducer?: NodeReducer<N, E, G, NS, GS>;
+      edgeReducer?: EdgeReducer<N, E, G, ES, GS>;
     } = {},
   ) {
     super();
 
-    // Extract primitives and styles from options, pass rest to settings
-    const { primitives, styles, ...settings } = options;
+    // Extract options
+    const { primitives, styles, settings = {}, nodeReducer, edgeReducer } = options;
 
     // Store primitives and styles declarations for v4 API
+    // Use DEFAULT_STYLES when styles not provided
     this.primitives = primitives ?? null;
-    this.stylesDeclaration = styles ?? null;
+    this.stylesDeclaration = styles ?? (DEFAULT_STYLES as unknown as StylesDeclaration<N, E, NS, ES, GS>);
+
+    // Store reducers
+    this.nodeReducer = nodeReducer ?? null;
+    this.edgeReducer = edgeReducer ?? null;
 
     // Resolving settings
     this.settings = resolveSettings(settings);
@@ -311,25 +298,12 @@ export default class Sigma<
     // Initialize edge data texture for sharing edge data between edge and edge label programs
     this.edgeDataTexture = new EdgeDataTexture(this.webGLContext!);
 
-    // If primitives is provided, generate programs from it
-    if (this.primitives) {
-      // Generate and register node program from primitives
-      const NodeProgram = generateNodeProgram<N, E, G>(this.primitives.nodes);
-      this.registerNodeProgram("default", NodeProgram);
+    // Generate and register programs from primitives (uses defaults when not provided)
+    const NodeProgram = generateNodeProgram<N, E, G>(this.primitives?.nodes);
+    this.registerNodeProgram("default", NodeProgram);
 
-      // Generate and register edge program from primitives
-      const EdgeProgram = generateEdgeProgram<N, E, G>(this.primitives.edges);
-      this.registerEdgeProgram("default", EdgeProgram);
-    }
-
-    // Loading programs from settings (may override primitives-generated ones)
-    for (const type in this.settings.nodeProgramClasses) {
-      this.registerNodeProgram(type, this.settings.nodeProgramClasses[type]);
-    }
-
-    for (const type in this.settings.edgeProgramClasses) {
-      this.registerEdgeProgram(type, this.settings.edgeProgramClasses[type]);
-    }
+    const EdgeProgram = generateEdgeProgram<N, E, G>(this.primitives?.edges);
+    this.registerEdgeProgram("default", EdgeProgram);
 
     // Initialize WebGL labels
     this.initializeWebGLLabels();
@@ -341,9 +315,10 @@ export default class Sigma<
     this.bindCameraHandlers();
 
     // Initializing captors
-    this.mouseCaptor = new MouseCaptor(this.elements.mouse, this);
+    // Cast to Sigma<N, E, G> since captors don't use state generics
+    this.mouseCaptor = new MouseCaptor(this.elements.mouse, this as unknown as Sigma<N, E, G>);
     this.mouseCaptor.setSettings(this.settings);
-    this.touchCaptor = new TouchCaptor(this.elements.mouse, this);
+    this.touchCaptor = new TouchCaptor(this.elements.mouse, this as unknown as Sigma<N, E, G>);
     this.touchCaptor.setSettings(this.settings);
 
     // Binding event handlers
@@ -374,8 +349,10 @@ export default class Sigma<
   private registerNodeProgram(key: string, NodeProgramClass: NodeProgramType<N, E, G>): this {
     if (this.nodePrograms[key]) this.nodePrograms[key].kill();
     if (this.nodeHoverPrograms[key]) this.nodeHoverPrograms[key].kill();
-    this.nodePrograms[key] = new NodeProgramClass(this.webGLContext!, null, this);
-    this.nodeHoverPrograms[key] = new NodeProgramClass(this.webGLContext!, null, this);
+    // Cast this since programs don't use state generics
+    const sigma = this as unknown as Sigma<N, E, G>;
+    this.nodePrograms[key] = new NodeProgramClass(this.webGLContext!, null, sigma);
+    this.nodeHoverPrograms[key] = new NodeProgramClass(this.webGLContext!, null, sigma);
     // Register program type with bucket collection (stride will be set properly when used)
     this.itemBuckets.nodes.registerProgram(key, 1);
 
@@ -425,7 +402,9 @@ export default class Sigma<
    */
   private registerEdgeProgram(key: string, EdgeProgramClass: EdgeProgramType<N, E, G>): this {
     if (this.edgePrograms[key]) this.edgePrograms[key].kill();
-    this.edgePrograms[key] = new EdgeProgramClass(this.webGLContext!, null, this);
+    // Cast this since programs don't use state generics
+    const sigma = this as unknown as Sigma<N, E, G>;
+    this.edgePrograms[key] = new EdgeProgramClass(this.webGLContext!, null, sigma);
     // Register program type with bucket collection (stride will be set properly when used)
     this.itemBuckets.edges.registerProgram(key, 1);
 
@@ -434,54 +413,9 @@ export default class Sigma<
     const LabelProgram = (EdgeProgramClass as any).LabelProgram;
     if (LabelProgram) {
       if (this.edgeLabelPrograms[key]) this.edgeLabelPrograms[key].kill();
-      this.edgeLabelPrograms[key] = new LabelProgram(this.webGLContext!, null, this);
+      this.edgeLabelPrograms[key] = new LabelProgram(this.webGLContext!, null, sigma);
     }
 
-    return this;
-  }
-
-  /**
-   * Internal function used to unregister a node program
-   *
-   * @param  {string} key - The program's key, matching the related nodes "type" values.
-   * @return {Sigma}
-   */
-  private unregisterNodeProgram(key: string): this {
-    if (this.nodePrograms[key]) {
-      const { [key]: program, ...programs } = this.nodePrograms;
-      program.kill();
-      this.nodePrograms = programs;
-    }
-    if (this.nodeHoverPrograms[key]) {
-      const { [key]: program, ...programs } = this.nodeHoverPrograms;
-      program.kill();
-      this.nodeHoverPrograms = programs;
-    }
-    // Unregister the associated label program
-    this.unregisterLabelProgram(key);
-    // Unregister the associated hover program
-    this.unregisterHoverProgram(key);
-    return this;
-  }
-
-  /**
-   * Internal function used to unregister an edge program
-   *
-   * @param  {string} key - The program's key, matching the related edges "type" values.
-   * @return {Sigma}
-   */
-  private unregisterEdgeProgram(key: string): this {
-    if (this.edgePrograms[key]) {
-      const { [key]: program, ...programs } = this.edgePrograms;
-      program.kill();
-      this.edgePrograms = programs;
-    }
-    // Also unregister the associated edge label program
-    if (this.edgeLabelPrograms[key]) {
-      const { [key]: program, ...programs } = this.edgeLabelPrograms;
-      program.kill();
-      this.edgeLabelPrograms = programs;
-    }
     return this;
   }
 
@@ -493,20 +427,12 @@ export default class Sigma<
     // Create SDF Atlas Manager
     this.sdfAtlas = new SDFAtlasManager();
 
-    // Register default font from settings
+    // Register default font
     this.sdfAtlas.registerFont({
-      family: this.settings.labelFont,
-      weight: this.settings.labelWeight,
-      style: this.settings.labelStyle,
+      family: "sans-serif",
+      weight: "normal",
+      style: "normal",
     });
-
-    // Note: Label programs are automatically registered when node programs are registered.
-    // The NodeProgram.LabelProgram static property provides the label renderer for each node type.
-
-    // Register any additional label programs from settings (for custom labels not tied to node types)
-    for (const type in this.settings.labelProgramClasses) {
-      this.registerLabelProgram(type, this.settings.labelProgramClasses[type]);
-    }
   }
 
   /**
@@ -518,22 +444,9 @@ export default class Sigma<
    */
   private registerLabelProgram(key: string, LabelProgramClass: LabelProgramType<N, E, G>): this {
     if (this.labelPrograms[key]) this.labelPrograms[key].kill();
-    this.labelPrograms[key] = new LabelProgramClass(this.webGLContext!, null, this);
-    return this;
-  }
-
-  /**
-   * Internal function used to unregister a label program.
-   *
-   * @param  {string} key - The program's key, matching the related labels "type" values.
-   * @return {Sigma}
-   */
-  private unregisterLabelProgram(key: string): this {
-    if (this.labelPrograms[key]) {
-      const { [key]: program, ...programs } = this.labelPrograms;
-      program.kill();
-      this.labelPrograms = programs;
-    }
+    // Cast this since programs don't use state generics
+    const sigma = this as unknown as Sigma<N, E, G>;
+    this.labelPrograms[key] = new LabelProgramClass(this.webGLContext!, null, sigma);
     return this;
   }
 
@@ -546,22 +459,9 @@ export default class Sigma<
    */
   private registerHoverProgram(key: string, HoverProgramClass: HoverProgramType<N, E, G>): this {
     if (this.hoverPrograms[key]) this.hoverPrograms[key].kill();
-    this.hoverPrograms[key] = new HoverProgramClass(this.webGLContext!, null, this);
-    return this;
-  }
-
-  /**
-   * Internal function used to unregister a hover program.
-   *
-   * @param  {string} key - The program's key, matching the related node "type" values.
-   * @return {Sigma}
-   */
-  private unregisterHoverProgram(key: string): this {
-    if (this.hoverPrograms[key]) {
-      const { [key]: program, ...programs } = this.hoverPrograms;
-      program.kill();
-      this.hoverPrograms = programs;
-    }
+    // Cast this since programs don't use state generics
+    const sigma = this as unknown as Sigma<N, E, G>;
+    this.hoverPrograms[key] = new HoverProgramClass(this.webGLContext!, null, sigma);
     return this;
   }
 
@@ -1201,21 +1101,18 @@ export default class Sigma<
 
   /**
    * Get the label color for a node.
+   * TODO: This should be integrated into the styles system.
    * @private
    */
-  private getLabelColor(data: NodeDisplayData): string {
-    const settings = this.settings;
-    if (settings.labelColor.attribute && data[settings.labelColor.attribute as keyof NodeDisplayData]) {
-      return data[settings.labelColor.attribute as keyof NodeDisplayData] as string;
-    }
-    return settings.labelColor.color || "#000";
+  private getLabelColor(_data: NodeDisplayData): string {
+    return "#000";
   }
 
   /**
    * Method that backports potential settings updates where it's needed.
    * @private
    */
-  private handleSettingsUpdate(oldSettings?: Settings<N, E, G>): this {
+  private handleSettingsUpdate(oldSettings?: Settings): this {
     const settings = this.settings;
 
     this.camera.minRatio = settings.minCameraRatio;
@@ -1237,30 +1134,6 @@ export default class Sigma<
     this.camera.setState(this.camera.validateState(this.camera.getState()));
 
     if (oldSettings) {
-      // Check edge programs:
-      if (oldSettings.edgeProgramClasses !== settings.edgeProgramClasses) {
-        for (const type in settings.edgeProgramClasses) {
-          if (settings.edgeProgramClasses[type] !== oldSettings.edgeProgramClasses[type]) {
-            this.registerEdgeProgram(type, settings.edgeProgramClasses[type]);
-          }
-        }
-        for (const type in oldSettings.edgeProgramClasses) {
-          if (!settings.edgeProgramClasses[type]) this.unregisterEdgeProgram(type);
-        }
-      }
-
-      // Check node programs:
-      if (oldSettings.nodeProgramClasses !== settings.nodeProgramClasses) {
-        for (const type in settings.nodeProgramClasses) {
-          if (settings.nodeProgramClasses[type] !== oldSettings.nodeProgramClasses[type]) {
-            this.registerNodeProgram(type, settings.nodeProgramClasses[type]);
-          }
-        }
-        for (const type in oldSettings.nodeProgramClasses) {
-          if (!settings.nodeProgramClasses[type]) this.unregisterNodeProgram(type);
-        }
-      }
-
       // Check maxDepthLevels:
       if (oldSettings.maxDepthLevels !== settings.maxDepthLevels) {
         this.itemBuckets.nodes.setMaxDepthLevels(settings.maxDepthLevels);
@@ -1456,7 +1329,7 @@ export default class Sigma<
     for (let i = 0, l = visibleNodes.length; i < l; i++) {
       const node = visibleNodes[i];
       const data = this.nodeDataCache[node];
-      const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
+      const labelType = this.labelPrograms[data.type] ? data.type : "default";
       charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + data.label!.length;
     }
 
@@ -1466,12 +1339,17 @@ export default class Sigma<
     }
 
     // Process each visible label into its matching program's buffer
+    // TODO: These defaults should come from the styles system
+    const defaultLabelSize = 14;
+    const defaultLabelMargin = 5;
+    const defaultLabelPosition = "right" as const;
+
     const characterOffsets: Record<string, number> = {};
     for (let i = 0, l = visibleNodes.length; i < l; i++) {
       const node = visibleNodes[i];
       const data = this.nodeDataCache[node];
 
-      const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
+      const labelType = this.labelPrograms[data.type] ? data.type : "default";
       const labelProgram = this.labelPrograms[labelType];
       if (!labelProgram) continue;
 
@@ -1480,11 +1358,11 @@ export default class Sigma<
         text: data.label!,
         x: data.x,
         y: data.y,
-        size: this.settings.labelSize,
+        size: defaultLabelSize,
         color: this.getLabelColor(data),
         nodeSize: data.size,
-        margin: this.settings.labelMargin,
-        position: this.settings.defaultLabelPosition,
+        margin: defaultLabelMargin,
+        position: defaultLabelPosition,
         hidden: false,
         forceLabel: data.forceLabel ?? false,
         type: labelType,
@@ -1585,7 +1463,7 @@ export default class Sigma<
       if (!edgeData.label) continue;
 
       // Use the edge's type to find the matching label program
-      const labelType = this.edgeLabelPrograms[edgeData.type] ? edgeData.type : this.settings.defaultEdgeType;
+      const labelType = this.edgeLabelPrograms[edgeData.type] ? edgeData.type : "default";
       if (!this.edgeLabelPrograms[labelType]) continue;
 
       charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + edgeData.label.length;
@@ -1607,19 +1485,16 @@ export default class Sigma<
     }
 
     // Process each visible edge label into its matching program's buffer
+    // TODO: These defaults should come from the styles system
+    const defaultEdgeLabelSize = 12;
+    const defaultEdgeLabelMargin = 5;
+    const defaultEdgeLabelPosition = "over" as const;
+    const defaultEdgeLabelColor = "#000";
+
     const characterOffsets: Record<string, number> = {};
     for (const { edge, type, sourceData, targetData, edgeData, sourceKey, targetKey } of edgesToProcess) {
       const labelProgram = this.edgeLabelPrograms[type];
       if (!labelProgram) continue;
-
-      // Get edge label color
-      const labelColor = this.settings.edgeLabelColor;
-      let color: string;
-      if ("attribute" in labelColor && labelColor.attribute) {
-        color = (edgeData as unknown as Record<string, string>)[labelColor.attribute] || labelColor.color || "#000";
-      } else {
-        color = labelColor.color || "#000";
-      }
 
       // Get node texture indices for source and target nodes
       const sourceNodeIndex = this.nodeDataTexture!.getNodeIndex(sourceKey);
@@ -1633,12 +1508,12 @@ export default class Sigma<
         text: edgeData.label!,
         x: (sourceData.x + targetData.x) / 2,
         y: (sourceData.y + targetData.y) / 2,
-        size: this.settings.edgeLabelSize,
-        color,
+        size: defaultEdgeLabelSize,
+        color: defaultEdgeLabelColor,
         nodeSize: 0, // Not applicable for edge labels (use sourceSize/targetSize instead)
         nodeIndex: -1, // Not applicable for edge labels (use sourceNodeIndex/targetNodeIndex instead)
-        margin: this.settings.edgeLabelMargin,
-        position: this.settings.edgeLabelPosition,
+        margin: defaultEdgeLabelMargin,
+        position: defaultEdgeLabelPosition,
         hidden: false,
         forceLabel: edgeData.forceLabel ?? false,
         type,
@@ -1839,46 +1714,40 @@ export default class Sigma<
   private addNode(key: string): void {
     const attrs = this.graph.getNodeAttributes(key);
     const nodeState = this.getNodeState(key);
-    let data: NodeDisplayData;
 
-    // Compute display data from styles or defaults
-    if (this.stylesDeclaration?.nodes) {
-      const resolvedStyle = evaluateNodeStyle(
-        this.stylesDeclaration.nodes as NodeStyleProperties<N, NS, GS> | NodeStyleProperties<N, NS, GS>[],
-        attrs,
-        nodeState,
-        this.graphState,
-        this.graph,
+    // Compute display data from styles (always defined, defaults to DEFAULT_STYLES)
+    const resolvedStyle = evaluateNodeStyle(
+      this.stylesDeclaration!.nodes as Record<string, unknown>,
+      attrs,
+      nodeState,
+      this.graphState,
+      this.graph,
+    );
+
+    let data: NodeDisplayData = {
+      x: resolvedStyle.x ?? (attrs.x as number),
+      y: resolvedStyle.y ?? (attrs.y as number),
+      size: resolvedStyle.size ?? 2,
+      color: resolvedStyle.color ?? "#666",
+      label: resolvedStyle.label ?? null,
+      hidden: resolvedStyle.visibility === "hidden",
+      forceLabel: resolvedStyle.labelVisibility === "visible",
+      highlighted: nodeState.isHighlighted,
+      zIndex: resolvedStyle.zIndex ?? 0,
+      type: "default",
+      shape: resolvedStyle.shape,
+    };
+
+    // Validate position
+    if (typeof data.x !== "number" || typeof data.y !== "number") {
+      throw new Error(
+        `Sigma: could not find a valid position (x, y) for node "${key}". All your nodes must have a number "x" and "y".`,
       );
-
-      data = {
-        x: resolvedStyle.x ?? (attrs.x as number),
-        y: resolvedStyle.y ?? (attrs.y as number),
-        size: resolvedStyle.size ?? 2,
-        color: resolvedStyle.color ?? this.settings.defaultNodeColor,
-        label: resolvedStyle.label ?? null,
-        hidden: resolvedStyle.visibility === "hidden",
-        forceLabel: resolvedStyle.labelVisibility === "visible",
-        highlighted: nodeState.isHighlighted,
-        zIndex: resolvedStyle.zIndex ?? 0,
-        type: this.primitives ? "default" : this.settings.defaultNodeType,
-        shape: resolvedStyle.shape,
-      };
-
-      // Validate position
-      if (typeof data.x !== "number" || typeof data.y !== "number") {
-        throw new Error(
-          `Sigma: could not find a valid position (x, y) for node "${key}". All your nodes must have a number "x" and "y".`,
-        );
-      }
-    } else {
-      const attrCopy = Object.assign({}, attrs) as Partial<NodeDisplayData>;
-      data = applyNodeDefaults(this.settings, key, attrCopy);
     }
 
     // Apply reducer if provided
-    if (this.settings.nodeReducer) {
-      const reduced = this.settings.nodeReducer(key, data, attrs, nodeState, this.graphState, this.graph);
+    if (this.nodeReducer) {
+      const reduced = this.nodeReducer(key, data, attrs, nodeState, this.graphState, this.graph);
       data = { ...data, ...reduced };
     }
 
@@ -1974,35 +1843,29 @@ export default class Sigma<
   private addEdge(key: string): void {
     const attrs = this.graph.getEdgeAttributes(key);
     const edgeState = this.getEdgeState(key);
-    let data: EdgeDisplayData;
 
-    // Compute display data from styles or defaults
-    if (this.stylesDeclaration?.edges) {
-      const resolvedStyle = evaluateEdgeStyle(
-        this.stylesDeclaration.edges as EdgeStyleProperties<E, ES, GS> | EdgeStyleProperties<E, ES, GS>[],
-        attrs,
-        edgeState,
-        this.graphState,
-        this.graph,
-      );
+    // Compute display data from styles (always defined, defaults to DEFAULT_STYLES)
+    const resolvedStyle = evaluateEdgeStyle(
+      this.stylesDeclaration!.edges as Record<string, unknown>,
+      attrs,
+      edgeState,
+      this.graphState,
+      this.graph,
+    );
 
-      data = {
-        size: resolvedStyle.size ?? 0.5,
-        color: resolvedStyle.color ?? this.settings.defaultEdgeColor,
-        label: resolvedStyle.label ?? "",
-        hidden: resolvedStyle.visibility === "hidden",
-        forceLabel: resolvedStyle.labelVisibility === "visible",
-        zIndex: resolvedStyle.zIndex ?? 0,
-        type: this.primitives ? "default" : this.settings.defaultEdgeType,
-      };
-    } else {
-      const attrCopy = Object.assign({}, attrs) as Partial<EdgeDisplayData>;
-      data = applyEdgeDefaults(this.settings, key, attrCopy);
-    }
+    let data: EdgeDisplayData = {
+      size: resolvedStyle.size ?? 0.5,
+      color: resolvedStyle.color ?? "#ccc",
+      label: resolvedStyle.label ?? "",
+      hidden: resolvedStyle.visibility === "hidden",
+      forceLabel: resolvedStyle.labelVisibility === "visible",
+      zIndex: resolvedStyle.zIndex ?? 0,
+      type: "default",
+    };
 
     // Apply reducer if provided
-    if (this.settings.edgeReducer) {
-      const reduced = this.settings.edgeReducer(key, data, attrs, edgeState, this.graphState, this.graph);
+    if (this.edgeReducer) {
+      const reduced = this.edgeReducer(key, data, attrs, edgeState, this.graphState, this.graph);
       data = { ...data, ...reduced };
     }
 
@@ -2179,9 +2042,9 @@ export default class Sigma<
     // Allocate edge in edge data texture (or get existing allocation)
     const edgeTextureIndex = this.edgeDataTexture!.allocateEdge(edge);
 
-    // Get program class static properties
-    const edgeProgramClass = this.settings.edgeProgramClasses[data.type];
-    const programStatic = edgeProgramClass as unknown as {
+    // Get program class static properties from registered program instance
+    const edgeProgramInstance = this.edgePrograms[data.type];
+    const programStatic = edgeProgramInstance?.constructor as unknown as {
       programOptions?: { extremities?: Array<{ name: string; length: number }> };
       pathNameToIndex?: Record<string, number>;
       extremityNameToIndex?: Record<string, number>;
@@ -2862,7 +2725,7 @@ export default class Sigma<
    *
    * @return {Settings} A copy of the settings collection.
    */
-  getSettings(): Settings<N, E, G> {
+  getSettings(): Settings {
     return { ...this.settings };
   }
 
@@ -2872,7 +2735,7 @@ export default class Sigma<
    * @param  {string} key - The setting key to get.
    * @return {any} The value attached to this setting key or undefined if not found
    */
-  getSetting<K extends keyof Settings<N, E, G>>(key: K): Settings<N, E, G>[K] {
+  getSetting<K extends keyof Settings>(key: K): Settings[K] {
     return this.settings[key];
   }
 
@@ -2884,7 +2747,7 @@ export default class Sigma<
    * @param  {any}    value - The value to set.
    * @return {Sigma}
    */
-  setSetting<K extends keyof Settings<N, E, G>>(key: K, value: Settings<N, E, G>[K]): this {
+  setSetting<K extends keyof Settings>(key: K, value: Settings[K]): this {
     const oldValues = { ...this.settings };
     this.settings[key] = value;
     validateSettings(this.settings);
@@ -2901,9 +2764,9 @@ export default class Sigma<
    * @param  {function} updater - The update function.
    * @return {Sigma}
    */
-  updateSetting<K extends keyof Settings<N, E, G>>(
+  updateSetting<K extends keyof Settings>(
     key: K,
-    updater: (value: Settings<N, E, G>[K]) => Settings<N, E, G>[K],
+    updater: (value: Settings[K]) => Settings[K],
   ): this {
     this.setSetting(key, updater(this.settings[key]));
     return this;
@@ -2915,7 +2778,7 @@ export default class Sigma<
    * @param  {Partial<Settings>} settings - The settings to set.
    * @return {Sigma}
    */
-  setSettings(settings: Partial<Settings<N, E, G>>): this {
+  setSettings(settings: Partial<Settings>): this {
     const oldValues = { ...this.settings };
     this.settings = { ...this.settings, ...settings };
     validateSettings(this.settings);

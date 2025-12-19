@@ -5,39 +5,18 @@
  * The list of settings and some handy functions.
  * @module
  */
-import { AbstractGraph, Attributes } from "graphology-types";
-
-import {
-  EdgeArrowProgram,
-  EdgeLineProgram,
-  EdgeProgramType,
-  LabelProgramType,
-  NodeCircleProgram,
-  NodeProgramType,
-} from "./rendering";
-import {
-  AtLeastOne,
-  EdgeDisplayData,
-  EdgeLabelFontSizeMode,
-  EdgeLabelPosition,
-  LabelPosition,
-  NodeDisplayData,
-} from "./types";
-import { BaseEdgeState, BaseGraphState, BaseNodeState } from "./types/styles";
+import { AtLeastOne } from "./types";
 import { assign } from "./utils";
 
 /**
  * Sigma.js settings
  * =================================
+ *
+ * Settings control camera, interaction, and rendering behavior.
+ * Styling is handled separately via the `styles` option.
+ * Program generation is handled via the `primitives` option.
  */
-export interface Settings<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-  NS extends BaseNodeState = BaseNodeState,
-  ES extends BaseEdgeState = BaseEdgeState,
-  GS extends BaseGraphState = BaseGraphState,
-> {
+export interface Settings {
   // Performance
   hideEdgesOnMove: boolean;
   hideLabelsOnMove: boolean;
@@ -45,23 +24,6 @@ export interface Settings<
   renderEdgeLabels: boolean;
   enableEdgeEvents: boolean;
   pickingDownSizingRatio: number;
-
-  // Component rendering
-  defaultNodeColor: string;
-  defaultNodeType: string;
-  defaultEdgeColor: string;
-  defaultEdgeType: string;
-  labelFont: string;
-  labelSize: number;
-  labelWeight: string;
-  labelColor: { attribute: string; color?: string } | { color: string; attribute?: undefined };
-  edgeLabelFont: string;
-  edgeLabelSize: number;
-  edgeLabelWeight: string;
-  edgeLabelColor: { attribute: string; color?: string } | { color: string; attribute?: undefined };
-  edgeLabelPosition: EdgeLabelPosition;
-  edgeLabelMargin: number;
-  edgeLabelFontSizeMode: EdgeLabelFontSizeMode;
   stagePadding: number;
   minEdgeThickness: number;
   antiAliasingFeather: number;
@@ -84,30 +46,12 @@ export interface Settings<
   autoRescale: boolean;
   autoCenter: boolean;
 
-  // Labels
+  // Label rendering optimization
   labelDensity: number;
   labelGridCellSize: number;
   labelRenderedSizeThreshold: number;
 
-  // Reducers
-  nodeReducer: null | ((
-    key: string,
-    computed: NodeDisplayData,
-    attrs: N,
-    state: NS,
-    graphState: GS,
-    graph: AbstractGraph<N, E, G>,
-  ) => Partial<NodeDisplayData>);
-  edgeReducer: null | ((
-    key: string,
-    computed: EdgeDisplayData,
-    attrs: E,
-    state: ES,
-    graphState: GS,
-    graph: AbstractGraph<N, E, G>,
-  ) => Partial<EdgeDisplayData>);
-
-  // Features
+  // Camera and features
   maxDepthLevels: number;
   minCameraRatio: null | number;
   maxCameraRatio: null | number;
@@ -122,22 +66,11 @@ export interface Settings<
   // Lifecycle
   allowInvalidContainer: boolean;
 
-  // Program classes
-  nodeProgramClasses: { [type: string]: NodeProgramType<N, E, G> };
-  edgeProgramClasses: { [type: string]: EdgeProgramType<N, E, G> };
-  labelProgramClasses: { [type: string]: LabelProgramType<N, E, G> };
-
-  // WebGL Label Settings (for SDF-based rendering)
-  defaultLabelType: string;
-  defaultLabelPosition: LabelPosition;
-  labelMargin: number;
-  labelStyle: string;
-
   // Debug
   DEBUG_displayPickingLayer: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
+export const DEFAULT_SETTINGS: Settings = {
   // Performance
   hideEdgesOnMove: false,
   hideLabelsOnMove: false,
@@ -145,23 +78,6 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
   renderEdgeLabels: false,
   enableEdgeEvents: false,
   pickingDownSizingRatio: 2,
-
-  // Component rendering
-  defaultNodeColor: "#999",
-  defaultNodeType: "circle",
-  defaultEdgeColor: "#ccc",
-  defaultEdgeType: "line",
-  labelFont: "Arial",
-  labelSize: 14,
-  labelWeight: "normal",
-  labelColor: { color: "#000" },
-  edgeLabelFont: "Arial",
-  edgeLabelSize: 14,
-  edgeLabelWeight: "normal",
-  edgeLabelColor: { color: "#000" },
-  edgeLabelPosition: "over",
-  edgeLabelMargin: 3,
-  edgeLabelFontSizeMode: "fixed",
   stagePadding: 30,
   minEdgeThickness: 1.7,
   antiAliasingFeather: 1,
@@ -184,16 +100,12 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
   autoRescale: true,
   autoCenter: true,
 
-  // Labels
+  // Label rendering optimization
   labelDensity: 1,
   labelGridCellSize: 100,
   labelRenderedSizeThreshold: 6,
 
-  // Reducers
-  nodeReducer: null,
-  edgeReducer: null,
-
-  // Features
+  // Camera and features
   maxDepthLevels: 20,
   minCameraRatio: null,
   maxCameraRatio: null,
@@ -205,38 +117,11 @@ export const DEFAULT_SETTINGS: Settings<Attributes, Attributes, Attributes> = {
   // Lifecycle
   allowInvalidContainer: false,
 
-  // Program classes
-  nodeProgramClasses: {},
-  edgeProgramClasses: {},
-  labelProgramClasses: {},
-
-  // WebGL Label Settings (for SDF-based rendering)
-  defaultLabelType: "sdf",
-  defaultLabelPosition: "right",
-  labelMargin: 3,
-  labelStyle: "normal",
-
   // Debug
   DEBUG_displayPickingLayer: false,
 };
 
-export const DEFAULT_NODE_PROGRAM_CLASSES: Record<string, NodeProgramType> = {
-  circle: NodeCircleProgram,
-};
-
-export const DEFAULT_EDGE_PROGRAM_CLASSES: Record<string, EdgeProgramType> = {
-  arrow: EdgeArrowProgram,
-  line: EdgeLineProgram,
-};
-
-// Default label program classes for WebGL SDF-based rendering
-export const DEFAULT_LABEL_PROGRAM_CLASSES: Record<string, LabelProgramType> = {};
-
-export function validateSettings<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
->(settings: Settings<N, E, G>): void {
+export function validateSettings(settings: Settings): void {
   if (typeof settings.labelDensity !== "number" || settings.labelDensity < 0) {
     throw new Error("Settings: invalid `labelDensity`. Expecting a positive number.");
   }
@@ -249,31 +134,6 @@ export function validateSettings<
   }
 }
 
-export function resolveSettings<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
->(settings: Partial<Settings<N, E, G>>): Settings<N, E, G> {
-  const resolvedSettings = assign({}, DEFAULT_SETTINGS as Settings<N, E, G>, settings);
-
-  // Type assertions needed because default program classes use Attributes defaults,
-  // but Settings<N, E, G> expects programs parameterized with the specific types.
-  // This is safe because programs don't actually depend on the attribute types at runtime.
-  resolvedSettings.nodeProgramClasses = assign(
-    {},
-    DEFAULT_NODE_PROGRAM_CLASSES as unknown as typeof resolvedSettings.nodeProgramClasses,
-    resolvedSettings.nodeProgramClasses,
-  );
-  resolvedSettings.edgeProgramClasses = assign(
-    {},
-    DEFAULT_EDGE_PROGRAM_CLASSES as unknown as typeof resolvedSettings.edgeProgramClasses,
-    resolvedSettings.edgeProgramClasses,
-  );
-  resolvedSettings.labelProgramClasses = assign(
-    {},
-    DEFAULT_LABEL_PROGRAM_CLASSES as unknown as typeof resolvedSettings.labelProgramClasses,
-    resolvedSettings.labelProgramClasses,
-  );
-
-  return resolvedSettings;
+export function resolveSettings(settings: Partial<Settings>): Settings {
+  return assign({}, DEFAULT_SETTINGS, settings);
 }

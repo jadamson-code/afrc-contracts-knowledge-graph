@@ -326,7 +326,8 @@ export { defineSigmaOptions } from "./types/options";
 /**
  * Styles API:
  */
-export type { BaseNodeState, BaseEdgeState, BaseGraphState } from "./types/styles";
+export type { BaseNodeState, BaseEdgeState, BaseGraphState, StylesDeclaration } from "./types/styles";
+export { DEFAULT_STYLES } from "./types/styles";
 export {
   resolveGraphicValue,
   evaluateStatePredicate,
@@ -334,3 +335,13 @@ export {
   evaluateEdgeStyle,
 } from "./core/styles";
 export type { ResolvedNodeStyle, ResolvedEdgeStyle } from "./core/styles";
+
+/**
+ * Primitives API:
+ */
+export type { PrimitivesDeclaration, NodePrimitives, EdgePrimitives } from "./primitives/types";
+export {
+  DEFAULT_PRIMITIVES,
+  DEFAULT_NODE_PRIMITIVES,
+  DEFAULT_EDGE_PRIMITIVES,
+} from "./primitives/types";

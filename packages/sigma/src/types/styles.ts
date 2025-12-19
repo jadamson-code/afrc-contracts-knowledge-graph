@@ -444,51 +444,6 @@ export interface StylesDeclaration<
 }
 
 /**
- * Default values for built-in node graphic variables.
- */
-export const DEFAULT_NODE_STYLE: Required<NodeStyleProperties> = {
-  x: { attribute: "x" },
-  y: { attribute: "y" },
-  size: { attribute: "size", defaultValue: 10 },
-  color: { attribute: "color", defaultValue: "#666" },
-  opacity: 1,
-  shape: "circle",
-  visibility: "visible",
-  zIndex: 0,
-  layer: "nodes",
-  label: { attribute: "label", defaultValue: "" },
-  labelColor: "#000",
-  labelSize: 12,
-  labelFont: "Arial, sans-serif",
-  labelVisibility: "auto",
-  labelPosition: "right",
-  labelAngle: 0,
-  labelLayer: "nodeLabels",
-} as const;
-
-/**
- * Default values for built-in edge graphic variables.
- */
-export const DEFAULT_EDGE_STYLE: Required<EdgeStyleProperties> = {
-  size: { attribute: "size", defaultValue: 1 },
-  color: { attribute: "color", defaultValue: "#ccc" },
-  opacity: 1,
-  path: "straight",
-  tail: "none",
-  head: "none",
-  visibility: "visible",
-  zIndex: 0,
-  layer: "edges",
-  label: { attribute: "label", defaultValue: "" },
-  labelColor: "#666",
-  labelSize: 10,
-  labelFont: "Arial, sans-serif",
-  labelVisibility: "auto",
-  labelPosition: 0.5,
-  labelLayer: "edgeLabels",
-} as const;
-
-/**
  * Default node state values.
  */
 export const DEFAULT_NODE_STATE: BaseNodeState = {
@@ -521,26 +476,72 @@ export const DEFAULT_GRAPH_STATE: BaseGraphState = {
 /**
  * Creates a new node state with default values.
  */
-export function createNodeState<NS extends BaseNodeState = BaseNodeState>(
-  defaults?: Partial<NS>,
-): NS {
+export function createNodeState<NS extends BaseNodeState = BaseNodeState>(defaults?: Partial<NS>): NS {
   return { ...DEFAULT_NODE_STATE, ...defaults } as NS;
 }
 
 /**
  * Creates a new edge state with default values.
  */
-export function createEdgeState<ES extends BaseEdgeState = BaseEdgeState>(
-  defaults?: Partial<ES>,
-): ES {
+export function createEdgeState<ES extends BaseEdgeState = BaseEdgeState>(defaults?: Partial<ES>): ES {
   return { ...DEFAULT_EDGE_STATE, ...defaults } as ES;
 }
 
 /**
  * Creates a new graph state with default values.
  */
-export function createGraphState<GS extends BaseGraphState = BaseGraphState>(
-  defaults?: Partial<GS>,
-): GS {
+export function createGraphState<GS extends BaseGraphState = BaseGraphState>(defaults?: Partial<GS>): GS {
   return { ...DEFAULT_GRAPH_STATE, ...defaults } as GS;
 }
+
+/**
+ * Default styles declaration.
+ *
+ * Provides sensible defaults with hover/highlight handling:
+ * - Node size increases slightly on hover
+ * - Node zIndex increases on highlight (1) and hover (2) for proper layering
+ * - Hidden items via isHidden state
+ *
+ * Users can:
+ * - Use DEFAULT_STYLES as-is for sensible defaults
+ * - Extend with spread: { nodes: { ...DEFAULT_STYLES.nodes, size: 20 } }
+ * - Replace entirely by providing their own styles object
+ */
+export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
+  nodes: {
+    x: { attribute: "x" },
+    y: { attribute: "y" },
+    size: {
+      when: "isHovered",
+      then: { attribute: "size", defaultValue: 12 },
+      else: { attribute: "size", defaultValue: 10 },
+    },
+    color: { attribute: "color", defaultValue: "#666" },
+    label: { attribute: "label" },
+    visibility: {
+      when: "isHidden",
+      then: "hidden",
+      else: "visible",
+    },
+    zIndex: {
+      when: "isHighlighted",
+      then: 1,
+      else: { when: "isHovered", then: 2, else: 0 },
+    },
+  },
+  edges: {
+    size: { attribute: "size", defaultValue: 1 },
+    color: { attribute: "color", defaultValue: "#ccc" },
+    label: { attribute: "label" },
+    visibility: {
+      when: "isHidden",
+      then: "hidden",
+      else: "visible",
+    },
+    zIndex: {
+      when: "isHighlighted",
+      then: 1,
+      else: { when: "isHovered", then: 2, else: 0 },
+    },
+  },
+} as const;

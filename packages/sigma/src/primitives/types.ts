@@ -8,6 +8,9 @@
  *
  * @module
  */
+import type { EdgeExtremity, EdgeLayer, EdgePath } from "../rendering/edges/types";
+import type { FragmentLayer, SDFShape } from "../rendering/nodes/types";
+
 import {
   DeclarativeConfigFromSchema,
   EdgeExtremitySchemaRegistry,
@@ -49,7 +52,7 @@ export interface CustomNodeShape {
   inradiusFactor?: number;
 }
 
-export type NodeShapeSpec = BuiltInNodeShape | DeclarativeNodeShape | CustomNodeShape;
+export type NodeShapeSpec = BuiltInNodeShape | DeclarativeNodeShape | CustomNodeShape | SDFShape;
 
 // =============================================================================
 // NODE LAYERS (schema-derived)
@@ -67,7 +70,7 @@ export interface CustomNodeLayer {
   graphicVariables: readonly GraphicVariableDefinition[];
 }
 
-export type NodeLayerSpec = BuiltInNodeLayerType | DeclarativeNodeLayer | CustomNodeLayer;
+export type NodeLayerSpec = BuiltInNodeLayerType | DeclarativeNodeLayer | CustomNodeLayer | FragmentLayer;
 
 // =============================================================================
 // VALIDATED NODE LAYERS (context-aware variable validation)
@@ -106,7 +109,7 @@ export interface CustomEdgePath {
   graphicVariables?: readonly GraphicVariableDefinition[];
 }
 
-export type EdgePathSpec = BuiltInEdgePath | DeclarativeEdgePath | CustomEdgePath;
+export type EdgePathSpec = BuiltInEdgePath | DeclarativeEdgePath | CustomEdgePath | EdgePath;
 
 // =============================================================================
 // EDGE EXTREMITIES (schema-derived)
@@ -121,7 +124,7 @@ export interface CustomEdgeExtremity {
   widthFactor: number;
 }
 
-export type EdgeExtremitySpec = BuiltInEdgeExtremity | CustomEdgeExtremity;
+export type EdgeExtremitySpec = BuiltInEdgeExtremity | CustomEdgeExtremity | EdgeExtremity;
 
 // =============================================================================
 // EDGE LAYERS (schema-derived)
@@ -139,7 +142,7 @@ export interface CustomEdgeLayer {
   graphicVariables: readonly GraphicVariableDefinition[];
 }
 
-export type EdgeLayerSpec = BuiltInEdgeLayerType | DeclarativeEdgeLayer | CustomEdgeLayer;
+export type EdgeLayerSpec = BuiltInEdgeLayerType | DeclarativeEdgeLayer | CustomEdgeLayer | EdgeLayer;
 
 // =============================================================================
 // VALIDATED EDGE LAYERS (context-aware variable validation)
@@ -168,6 +171,7 @@ export interface NodePrimitives {
   shapes?: readonly NodeShapeSpec[] | NodeShapeSpec[];
   variables?: VariablesDefinition;
   layers?: readonly NodeLayerSpec[] | NodeLayerSpec[];
+  rotateWithCamera?: boolean;
 }
 
 export interface EdgePrimitives {
@@ -289,6 +293,7 @@ export const DEFAULT_NODE_PRIMITIVES: Required<NodePrimitives> = {
   shapes: ["circle" as BuiltInNodeShape],
   variables: {},
   layers: ["fill" as BuiltInNodeLayerType],
+  rotateWithCamera: false,
 };
 
 export const DEFAULT_EDGE_PRIMITIVES: Required<EdgePrimitives> = {

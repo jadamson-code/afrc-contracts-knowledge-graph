@@ -1,6 +1,5 @@
 import Graph from "graphology";
 import Sigma from "sigma";
-import { NodeCircleProgram } from "sigma/rendering";
 import { createElement } from "sigma/utils";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
@@ -10,9 +9,9 @@ interface SigmaTestContext {
 
 beforeEach<SigmaTestContext>(async (context) => {
   const graph = new Graph();
-  graph.addNode("a", { type: "circle", x: 0, y: 0 });
-  graph.addNode("b", { type: "circle", x: 10, y: 10 });
-  graph.addEdge("a", "b", { type: "arrow" });
+  graph.addNode("a", { x: 0, y: 0 });
+  graph.addNode("b", { x: 10, y: 10 });
+  graph.addEdge("a", "b");
   const container = createElement("div", { width: "100px", height: "100px" });
   document.body.append(container);
   context.sigma = new Sigma(graph, container);
@@ -33,14 +32,5 @@ describe("Sigma settings management", () => {
     await new Promise((resolve) => window.setTimeout(resolve, 0));
 
     expect(count).toEqual(1);
-  });
-
-  test<SigmaTestContext>("it should update programs when they're updated", ({ sigma }) => {
-    sigma.setSetting("nodeProgramClasses", { point: NodeCircleProgram });
-    expect(() => sigma.refresh()).toThrow();
-
-    const graph = sigma.getGraph();
-    graph.forEachNode((node) => graph.setNodeAttribute(node, "type", "point"));
-    expect(() => sigma.refresh()).not.toThrow();
   });
 });

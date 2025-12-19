@@ -189,25 +189,8 @@ describe("Sigma v4 API", () => {
     });
   });
 
-  describe("Backward compatibility", () => {
-    test<SigmaTestContext>("legacy API still works without primitives/styles", ({ container }) => {
-      const graph = new Graph();
-      graph.addNode("n1", { x: 0, y: 0, size: 10, color: "#ff0000" });
-      graph.addNode("n2", { x: 1, y: 1, size: 5, color: "#00ff00" });
-      graph.addEdge("n1", "n2", { size: 2, color: "#0000ff" });
-
-      const sigma = new Sigma(graph, container, {
-        defaultNodeColor: "#999",
-        defaultEdgeColor: "#ccc",
-      });
-
-      sigma.refresh();
-      expect(sigma).toBeDefined();
-
-      sigma.kill();
-    });
-
-    test<SigmaTestContext>("nodeReducer works without styles", ({ container }) => {
+  describe("Reducers", () => {
+    test<SigmaTestContext>("nodeReducer works with styles", ({ container }) => {
       const graph = new Graph();
       graph.addNode("n1", { x: 0, y: 0, value: 100 });
 
@@ -230,7 +213,7 @@ describe("Sigma v4 API", () => {
       sigma.kill();
     });
 
-    test<SigmaTestContext>("edgeReducer works without styles", ({ container }) => {
+    test<SigmaTestContext>("edgeReducer works with styles", ({ container }) => {
       const graph = new Graph();
       graph.addNode("n1", { x: 0, y: 0 });
       graph.addNode("n2", { x: 1, y: 1 });
@@ -267,12 +250,14 @@ describe("Sigma v4 API", () => {
             layers: ["fill"],
           },
         },
-        // Settings should still be respected
-        defaultNodeColor: "#ff0000",
+        settings: {
+          minEdgeThickness: 2,
+        },
       });
 
       sigma.refresh();
       expect(sigma).toBeDefined();
+      expect(sigma.getSetting("minEdgeThickness")).toBe(2);
 
       sigma.kill();
     });

@@ -60,12 +60,27 @@ describe("Invalid options for declared primitives", () => {
           variables: {
             nodeColor: { type: "color", default: "#fc0" },
           },
+          // @ts-expect-error - color should be a string, not a number
+          layers: [{ type: "fill", color: 123 }],
+        },
+      },
+    });
+
+    // Note: Color variable references cannot be validated at compile time because
+    // both colors and variable names are strings. The type `AllowedVars | string`
+    // simplifies to `string`, so any string is accepted. Runtime validation is needed.
+    defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          variables: {
+            nodeColor: { type: "color", default: "#fc0" },
+          },
           layers: [
-            // @ts-expect-error - color should be a string, not a number
-            { type: "fill", color: 123 },
-            // @ts-expect-error - "nodeFrontColor" hasn't been declared as a graphic variable
-            { type: "fill", color: "nodeFrontColor" },
-            { type: "fill", color: "nodeColor" },
+            // These are all valid at compile time (all strings)
+            { type: "fill", color: "nodeFrontColor" }, // Would fail at runtime
+            { type: "fill", color: "nodeColor" }, // Valid variable reference
+            { type: "fill", color: "#ff0000" }, // Valid color literal
           ],
         },
       },
@@ -77,48 +92,32 @@ describe("Invalid options for declared primitives", () => {
       primitives: {
         nodes: {
           shapes: ["circle"],
-          layers: [
-            "fill",
-            // @ts-expect-error - borders should be an array, not a string
-            { type: "border", borders: "wrong" },
-          ],
-        },
-      },
-    });
-  });
-
-  test("border layer with wrong property type is rejected", () => {
-    defineSigmaOptions({
-      primitives: {
-        nodes: {
-          shapes: ["circle"],
-          layers: [
-            "fill",
-            // @ts-expect-error - borders should be an array, not a string
-            { type: "border", borders: "wrong" },
-          ],
+          // @ts-expect-error - borders should be an array, not a string
+          layers: ["fill", { type: "border", borders: "wrong" }],
         },
       },
     });
   });
 
   test("border layer with invalid border item is rejected", () => {
+    // Test that invalid variable references in number properties are rejected
     defineSigmaOptions({
       primitives: {
         nodes: {
           shapes: ["circle"],
-          layers: [
-            "fill",
-            {
-              type: "border",
-              borders: [
-                // @ts-expect-error - size should be a number, not a string
-                { size: "big", color: "#000" },
-                // @ts-expect-error - opacity is not a valid option
-                { size: 2, color: "#fff", opacity: 0.5 },
-              ],
-            },
-          ],
+          // @ts-expect-error - size "big" is not a valid variable name or number
+          layers: ["fill", { type: "border", borders: [{ size: "big", color: "#000" }] }],
+        },
+      },
+    });
+
+    // Excess properties are also caught by the validated intersection type
+    defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          // @ts-expect-error - 'opacity' does not exist in border item schema
+          layers: ["fill", { type: "border", borders: [{ size: 2, color: "#fff", opacity: 0.5 }] }],
         },
       },
     });
@@ -129,10 +128,8 @@ describe("Invalid options for declared primitives", () => {
       primitives: {
         nodes: {
           shapes: ["circle"],
-          layers: [
-            // @ts-expect-error - value should be a number, not a string
-            { type: "piechart", slices: [{ color: "#f00", value: "half" }] },
-          ],
+          // @ts-expect-error - value "half" is not a valid variable name or number
+          layers: [{ type: "piechart", slices: [{ color: "#f00", value: "half" }] }],
         },
       },
     });

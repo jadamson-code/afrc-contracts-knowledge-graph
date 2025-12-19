@@ -10,6 +10,7 @@
  */
 import { Attributes } from "graphology-types";
 
+import { NodeBuiltInVariableNames, EdgeBuiltInVariableNames } from "../primitives/registry";
 import {
   BuiltInEdgeExtremity,
   BuiltInEdgePath,
@@ -27,6 +28,9 @@ import {
   NodePrimitives,
   NodeShapeSpec,
   PrimitivesDeclaration,
+  ValidatedNodeLayerSpec,
+  ValidatedEdgeLayerSpec,
+  VariablesDefinition,
 } from "../primitives/types";
 import {
   BaseEdgeState,
@@ -96,6 +100,58 @@ type ExtractExtremityNames<Extremities extends readonly EdgeExtremitySpec[]> = E
   ? ExtractExtremityName<First> | ExtractExtremityNames<Rest>
   : never;
 
+// =============================================================================
+// VARIABLE NAME EXTRACTION FROM PRIMITIVES
+// =============================================================================
+
+/**
+ * Extracts declared variable names from a VariablesDefinition.
+ */
+type ExtractDeclaredVarNames<V> = V extends VariablesDefinition ? keyof V & string : never;
+
+/**
+ * Computes allowed node variable names: built-ins + declared in primitives.nodes.variables.
+ */
+type AllowedNodeVarNames<P extends PrimitivesDeclaration> = NodeBuiltInVariableNames | ExtractDeclaredVarNames<P["nodes"] extends { variables: infer V } ? V : never>;
+
+/**
+ * Computes allowed edge variable names: built-ins + declared in primitives.edges.variables.
+ */
+type AllowedEdgeVarNames<P extends PrimitivesDeclaration> = EdgeBuiltInVariableNames | ExtractDeclaredVarNames<P["edges"] extends { variables: infer V } ? V : never>;
+
+// =============================================================================
+// VALIDATED PRIMITIVES (layer variable refs must match declared vars)
+// =============================================================================
+
+/**
+ * Node primitives with validated layer variable references.
+ */
+interface ValidatedNodePrimitives<AllowedVars extends string> {
+  shapes?: readonly NodeShapeSpec[] | NodeShapeSpec[];
+  variables?: VariablesDefinition;
+  layers?: readonly ValidatedNodeLayerSpec<AllowedVars>[] | ValidatedNodeLayerSpec<AllowedVars>[];
+}
+
+/**
+ * Edge primitives with validated layer variable references.
+ */
+interface ValidatedEdgePrimitives<AllowedVars extends string> {
+  paths?: readonly EdgePathSpec[] | EdgePathSpec[];
+  extremities?: readonly EdgeExtremitySpec[] | EdgeExtremitySpec[];
+  variables?: VariablesDefinition;
+  layers?: readonly ValidatedEdgeLayerSpec<AllowedVars>[] | ValidatedEdgeLayerSpec<AllowedVars>[];
+}
+
+/**
+ * Primitives declaration with validated layer variable references.
+ * This type ensures that variable references in layers match declared variables.
+ */
+interface ValidatedPrimitivesDeclaration<NodeVars extends string, EdgeVars extends string> {
+  nodes?: ValidatedNodePrimitives<NodeVars>;
+  edges?: ValidatedEdgePrimitives<EdgeVars>;
+  layers?: string[];
+}
+
 /**
  * Options structure for inference - separates primitives for proper type flow.
  */
@@ -108,6 +164,21 @@ export interface SigmaOptionsInput<
   GS extends BaseGraphState = BaseGraphState,
 > {
   primitives?: P;
+  styles?: InferredStylesDeclaration<P, NA, EA, NS, ES, GS>;
+}
+
+/**
+ * Validated options input that enforces variable reference constraints.
+ */
+export interface ValidatedSigmaOptionsInput<
+  P extends PrimitivesDeclaration,
+  NA extends Attributes = Attributes,
+  EA extends Attributes = Attributes,
+  NS extends BaseNodeState = BaseNodeState,
+  ES extends BaseEdgeState = BaseEdgeState,
+  GS extends BaseGraphState = BaseGraphState,
+> {
+  primitives?: ValidatedPrimitivesDeclaration<AllowedNodeVarNames<P>, AllowedEdgeVarNames<P>>;
   styles?: InferredStylesDeclaration<P, NA, EA, NS, ES, GS>;
 }
 
@@ -230,6 +301,7 @@ type InferredEdgeStyleRule<
  * This function provides type safety for sigma options with automatic inference:
  * - Shapes/paths are inferred from primitives and enforced in styles
  * - Custom variables declared in primitives or used in layers become available in styles
+ * - Variable references in layers are validated against declared variables
  *
  * Note: When used with the Sigma constructor, node/edge attribute types are
  * automatically inferred from the Graphology graph instance.
@@ -241,9 +313,14 @@ type InferredEdgeStyleRule<
  *   primitives: {
  *     nodes: {
  *       shapes: ["circle", "square"],
+ *       variables: {
+ *         borderSize: { type: "number", default: 2 },
+ *         borderColor: { type: "color", default: "#fff" },
+ *       },
  *       layers: [
  *         "fill",
- *         { type: "border", size: "borderSize", color: "borderColor" },
+ *         // Only "borderSize" and "borderColor" (+ built-ins) are valid here
+ *         { type: "border", borders: [{ size: "borderSize", color: "borderColor" }] },
  *       ],
  *     },
  *     edges: { paths: ["straight", "curved"] },
@@ -252,7 +329,7 @@ type InferredEdgeStyleRule<
  *     nodes: {
  *       color: "#666",
  *       shape: "circle",    // Only "circle" | "square" allowed
- *       borderSize: 2,      // Inferred from border layer
+ *       borderSize: 2,      // Inferred from variables
  *       borderColor: "#fff",
  *     },
  *     edges: {
@@ -263,7 +340,8 @@ type InferredEdgeStyleRule<
  * ```
  */
 export function defineSigmaOptions<const P extends PrimitivesDeclaration>(
-  options: SigmaOptionsInput<P, Attributes, Attributes, BaseNodeState, BaseEdgeState, BaseGraphState>,
+  options: SigmaOptionsInput<P, Attributes, Attributes, BaseNodeState, BaseEdgeState, BaseGraphState> &
+    ValidatedSigmaOptionsInput<P, Attributes, Attributes, BaseNodeState, BaseEdgeState, BaseGraphState>,
 ): SigmaOptionsInput<P, Attributes, Attributes, BaseNodeState, BaseEdgeState, BaseGraphState> {
   return options;
 }

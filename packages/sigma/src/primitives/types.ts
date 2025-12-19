@@ -17,6 +17,7 @@ import {
   NodeLayerSchemaRegistry,
   NodeShapeSchemaRegistry,
   UnionToIntersection,
+  ValidatedConfigFromSchema,
 } from "./schema";
 
 // =============================================================================
@@ -69,6 +70,26 @@ export interface CustomNodeLayer {
 export type NodeLayerSpec = BuiltInNodeLayerType | DeclarativeNodeLayer | CustomNodeLayer;
 
 // =============================================================================
+// VALIDATED NODE LAYERS (context-aware variable validation)
+// =============================================================================
+
+/**
+ * Validated declarative node layer that only accepts declared variable names.
+ * Used by defineSigmaOptions to ensure variable references are valid.
+ */
+export type ValidatedDeclarativeNodeLayer<AllowedVars extends string> = {
+  [K in keyof NodeLayerSchemaRegistry]: { type: K } & ValidatedConfigFromSchema<NodeLayerSchemaRegistry[K], AllowedVars>;
+}[keyof NodeLayerSchemaRegistry];
+
+/**
+ * Node layer spec with validated variable references.
+ */
+export type ValidatedNodeLayerSpec<AllowedVars extends string> =
+  | BuiltInNodeLayerType
+  | ValidatedDeclarativeNodeLayer<AllowedVars>
+  | CustomNodeLayer;
+
+// =============================================================================
 // EDGE PATHS (schema-derived)
 // =============================================================================
 
@@ -119,6 +140,25 @@ export interface CustomEdgeLayer {
 }
 
 export type EdgeLayerSpec = BuiltInEdgeLayerType | DeclarativeEdgeLayer | CustomEdgeLayer;
+
+// =============================================================================
+// VALIDATED EDGE LAYERS (context-aware variable validation)
+// =============================================================================
+
+/**
+ * Validated declarative edge layer that only accepts declared variable names.
+ */
+export type ValidatedDeclarativeEdgeLayer<AllowedVars extends string> = {
+  [K in keyof EdgeLayerSchemaRegistry]: { type: K } & ValidatedConfigFromSchema<EdgeLayerSchemaRegistry[K], AllowedVars>;
+}[keyof EdgeLayerSchemaRegistry];
+
+/**
+ * Edge layer spec with validated variable references.
+ */
+export type ValidatedEdgeLayerSpec<AllowedVars extends string> =
+  | BuiltInEdgeLayerType
+  | ValidatedDeclarativeEdgeLayer<AllowedVars>
+  | CustomEdgeLayer;
 
 // =============================================================================
 // PRIMITIVES DECLARATIONS

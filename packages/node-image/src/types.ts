@@ -7,7 +7,7 @@
  * @module
  */
 import { FragmentLayer, SDFShape, layerFill, sdfCircle } from "sigma/rendering";
-import { enumProp, FactoryOptionsFromSchema, numberProp, stringProp } from "sigma/primitives";
+import { enumProp, FactoryOptionsFromSchema, ResolvedOptionsFromSchema, numberProp, stringProp } from "sigma/primitives";
 
 import { DEFAULT_TEXTURE_MANAGER_OPTIONS, TextureManager, TextureManagerOptions } from "./texture";
 
@@ -37,9 +37,16 @@ export const imageSchema = {
 } as const;
 
 /**
- * Schema-derived options for the layerImage() function.
+ * Schema-derived options for the layerImage() function (input).
+ * All schema properties are optional.
  */
 type SchemaOptions = FactoryOptionsFromSchema<typeof imageSchema>;
+
+/**
+ * Resolved schema options after defaults are applied.
+ * All schema properties are required.
+ */
+export type ResolvedSchemaOptions = ResolvedOptionsFromSchema<typeof imageSchema>;
 
 /**
  * Options for the layerImage() function.

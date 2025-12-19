@@ -20,7 +20,7 @@ import {
 } from "sigma/rendering";
 
 import { Atlas, DEFAULT_TEXTURE_MANAGER_OPTIONS, TextureManager } from "./texture";
-import { DEFAULT_LAYER_IMAGE_OPTIONS, LayerImageOptions } from "./types";
+import { DEFAULT_LAYER_IMAGE_OPTIONS, LayerImageOptions, ResolvedSchemaOptions } from "./types";
 
 /**
  * Computes a deterministic texture unit offset based on layer name.
@@ -58,7 +58,7 @@ function getTextureUnitOffset(name: string): number {
  * the shader generator doesn't support sampler2D array uniforms properly.
  */
 function generateImageGLSL(
-  options: Omit<LayerImageOptions, "textureManager" | "textureManagerOptions">,
+  options: ResolvedSchemaOptions,
   texturesCount: number,
 ): string {
   const { name, drawingMode, padding } = options;
@@ -149,7 +149,7 @@ vec4 ${functionName}(${functionParams}) {
  * Creates the static layer definition (uniforms, attributes, glsl).
  */
 function createLayerDefinition(
-  options: Omit<LayerImageOptions, "textureManager" | "textureManagerOptions">,
+  options: ResolvedSchemaOptions,
   texturesCount: number,
 ): Omit<FragmentLayer, "lifecycle"> {
   const { name, drawingMode, colorAttribute } = options;
@@ -231,18 +231,20 @@ function createLayerDefinition(
  * ```
  */
 export function layerImage(inputOptions?: Partial<LayerImageOptions>): FragmentLayer {
-  const options: LayerImageOptions = {
+  const options = {
     ...DEFAULT_LAYER_IMAGE_OPTIONS,
     ...(inputOptions || {}),
   };
 
   const { textureManager: providedTextureManager, textureManagerOptions, ...layerOptions } = options;
+  // After merging with defaults, schema properties are guaranteed to be defined
+  const resolvedLayerOptions = layerOptions as ResolvedSchemaOptions;
 
   // Initial texture count (will be updated dynamically)
   let currentTexturesCount = 1;
 
   // Create initial layer definition
-  const initialDefinition = createLayerDefinition(layerOptions, currentTexturesCount);
+  const initialDefinition = createLayerDefinition(resolvedLayerOptions, currentTexturesCount);
 
   // Create or use provided TextureManager (shared across all program instances using this layer)
   const textureManager =
@@ -264,7 +266,7 @@ export function layerImage(inputOptions?: Partial<LayerImageOptions>): FragmentL
       let atlas: Atlas = {};
 
       // Get texture unit offset for this layer (prevents conflicts with other image layers)
-      const textureUnitOffset = getTextureUnitOffset(layerOptions.name);
+      const textureUnitOffset = getTextureUnitOffset(resolvedLayerOptions.name);
 
       /**
        * Bind texture data to WebGL.
@@ -333,7 +335,7 @@ export function layerImage(inputOptions?: Partial<LayerImageOptions>): FragmentL
           }
 
           // Set texture atlas uniform (using layer-specific name and offset)
-          const atlasLocation = context.getUniformLocation(`u_atlas_${layerOptions.name}`);
+          const atlasLocation = context.getUniformLocation(`u_atlas_${resolvedLayerOptions.name}`);
           if (atlasLocation) {
             gl.uniform1iv(
               atlasLocation,
@@ -345,11 +347,11 @@ export function layerImage(inputOptions?: Partial<LayerImageOptions>): FragmentL
         regenerate: (): FragmentLayer => {
           // Return new layer definition with updated texture count
           // Don't include lifecycle - the factory preserves it from the original
-          return createLayerDefinition(layerOptions, currentTexturesCount);
+          return createLayerDefinition(resolvedLayerOptions, currentTexturesCount);
         },
 
         getAttributeData: (data: Record<string, unknown>, attributeSource: string): number | number[] | null => {
-          const imageSource = data[layerOptions.imageAttribute] as string | undefined;
+          const imageSource = data[resolvedLayerOptions.imageAttribute] as string | undefined;
 
           if (attributeSource === "__texture__") {
             const imagePosition = imageSource ? atlas[imageSource] : undefined;

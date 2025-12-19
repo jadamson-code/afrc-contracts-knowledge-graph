@@ -395,11 +395,32 @@ export type FactoryOptionsFromItemSchema<S extends Record<string, PropertySchema
 
 /**
  * Derives factory options from a complete primitive schema.
- * All properties are optional.
+ * All properties are optional (for input).
  */
 export type FactoryOptionsFromSchema<S extends PrimitiveSchema> = {
   [K in keyof S]?: S[K] extends ArrayPropertySchema<infer Items>
     ? Array<FactoryOptionsFromItemSchema<Items>>
+    : S[K] extends PropertySchema
+      ? FactoryOptionFromProperty<S[K]>
+      : never;
+};
+
+/**
+ * Derives resolved factory options from an item schema (for array properties).
+ * All properties are required (after defaults applied).
+ */
+export type ResolvedOptionsFromItemSchema<S extends Record<string, PropertySchema>> = {
+  [K in keyof S]: FactoryOptionFromProperty<S[K]>;
+};
+
+/**
+ * Derives resolved factory options from a complete primitive schema.
+ * All properties are required (after defaults applied).
+ * Use this type for the merged options object inside factory functions.
+ */
+export type ResolvedOptionsFromSchema<S extends PrimitiveSchema> = {
+  [K in keyof S]: S[K] extends ArrayPropertySchema<infer Items>
+    ? Array<ResolvedOptionsFromItemSchema<Items>>
     : S[K] extends PropertySchema
       ? FactoryOptionFromProperty<S[K]>
       : never;
@@ -433,6 +454,43 @@ export type DeclarativeConfigFromSchema<S extends PrimitiveSchema> = {
     ? Array<DeclarativeConfigFromItemSchema<Items>>
     : S[K] extends PropertySchema
       ? DeclarativeConfigFromProperty<S[K]>
+      : never;
+};
+
+// =============================================================================
+// VALIDATED DECLARATIVE CONFIG (context-aware variable validation)
+// =============================================================================
+
+/**
+ * Derives the validated declarative config type from a single property schema.
+ * Variable-capable properties only accept declared variable names, not any string.
+ *
+ * @template P - The property schema
+ * @template AllowedVars - Union of allowed variable names (declared + built-in)
+ */
+export type ValidatedConfigFromProperty<P extends PropertySchema, AllowedVars extends string> =
+  IsVariableProperty<P> extends true ? AllowedVars | TypeFromPropertySchema<P> : TypeFromPropertySchema<P>;
+
+/**
+ * Derives validated config from an item schema (for array properties).
+ * Only allows declared variable names for variable-capable properties.
+ */
+export type ValidatedConfigFromItemSchema<S extends Record<string, PropertySchema>, AllowedVars extends string> = {
+  [K in keyof S]?: ValidatedConfigFromProperty<S[K], AllowedVars>;
+};
+
+/**
+ * Derives validated config from a complete primitive schema.
+ * Only allows declared variable names for variable-capable properties.
+ *
+ * @template S - The primitive schema
+ * @template AllowedVars - Union of allowed variable names
+ */
+export type ValidatedConfigFromSchema<S extends PrimitiveSchema, AllowedVars extends string> = {
+  [K in keyof S]?: S[K] extends ArrayPropertySchema<infer Items>
+    ? Array<ValidatedConfigFromItemSchema<Items, AllowedVars>>
+    : S[K] extends PropertySchema
+      ? ValidatedConfigFromProperty<S[K], AllowedVars>
       : never;
 };
 

@@ -18,3 +18,6 @@ export * from "./schema";
 
 // Re-export primitives types
 export * from "./types";
+
+// Re-export primitives parser
+export * from "./parser";

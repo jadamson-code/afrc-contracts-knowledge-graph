@@ -52,7 +52,12 @@ import {
   createEdgeState,
   createGraphState,
   createNodeState,
+  NodeStyleProperties,
+  EdgeStyleProperties,
 } from "./types/styles";
+import { StylesDeclaration } from "./types/options";
+import { evaluateNodeStyle, evaluateEdgeStyle, ResolvedNodeStyle, ResolvedEdgeStyle } from "./core/styles";
+import { PrimitivesDeclaration, generateNodeProgram, generateEdgeProgram } from "./primitives";
 import {
   NormalizationFunction,
   colorToIndex,
@@ -209,6 +214,10 @@ export default class Sigma<
   private hoveredNode: string | null = null;
   private hoveredEdge: string | null = null;
 
+  // New v4 API: primitives and styles declarations
+  private primitives: PrimitivesDeclaration | null = null;
+  private stylesDeclaration: StylesDeclaration<N, E, NS, ES, GS> | null = null;
+
   // Internal states
   private renderFrame: number | null = null;
   private needToProcess = false;
@@ -252,8 +261,22 @@ export default class Sigma<
 
   private camera: Camera;
 
-  constructor(graph: Graph<N, E, G>, container: HTMLElement, settings: Partial<Settings<N, E, G>> = {}) {
+  constructor(
+    graph: Graph<N, E, G>,
+    container: HTMLElement,
+    options: Partial<Settings<N, E, G>> & {
+      primitives?: PrimitivesDeclaration;
+      styles?: StylesDeclaration<N, E, NS, ES, GS>;
+    } = {},
+  ) {
     super();
+
+    // Extract primitives and styles from options, pass rest to settings
+    const { primitives, styles, ...settings } = options;
+
+    // Store primitives and styles declarations for v4 API
+    this.primitives = primitives ?? null;
+    this.stylesDeclaration = styles ?? null;
 
     // Resolving settings
     this.settings = resolveSettings(settings);
@@ -288,7 +311,18 @@ export default class Sigma<
     // Initialize edge data texture for sharing edge data between edge and edge label programs
     this.edgeDataTexture = new EdgeDataTexture(this.webGLContext!);
 
-    // Loading programs
+    // If primitives is provided, generate programs from it
+    if (this.primitives) {
+      // Generate and register node program from primitives
+      const NodeProgram = generateNodeProgram<N, E, G>(this.primitives.nodes);
+      this.registerNodeProgram("default", NodeProgram);
+
+      // Generate and register edge program from primitives
+      const EdgeProgram = generateEdgeProgram<N, E, G>(this.primitives.edges);
+      this.registerEdgeProgram("default", EdgeProgram);
+    }
+
+    // Loading programs from settings (may override primitives-generated ones)
     for (const type in this.settings.nodeProgramClasses) {
       this.registerNodeProgram(type, this.settings.nodeProgramClasses[type]);
     }
@@ -1803,16 +1837,48 @@ export default class Sigma<
    * @param key The node's graphology ID
    */
   private addNode(key: string): void {
-    // Node display data resolution:
-    //  1. First we get the node's attributes
-    //  2. We optionally reduce them using the function provided by the user
-    //     Note that this function must return a total object and won't be merged
-    //  3. We apply our defaults, while running some vital checks
-    //  4. We apply the normalization function
-    // We shallow copy node data to avoid dangerous behaviors from reducers
-    let attr = Object.assign({}, this.graph.getNodeAttributes(key)) as Partial<NodeDisplayData>;
-    if (this.settings.nodeReducer) attr = this.settings.nodeReducer(key, attr as N);
-    const data = applyNodeDefaults(this.settings, key, attr);
+    const attrs = this.graph.getNodeAttributes(key);
+    let data: NodeDisplayData;
+
+    // Use v4 styles API if available, otherwise fall back to reducer + defaults
+    if (this.stylesDeclaration?.nodes) {
+      // v4 API: Use style evaluation
+      const nodeState = this.getNodeState(key);
+      const resolvedStyle = evaluateNodeStyle(
+        this.stylesDeclaration.nodes as NodeStyleProperties<N, NS, GS> | NodeStyleProperties<N, NS, GS>[],
+        attrs,
+        nodeState,
+        this.graphState,
+        this.graph,
+      );
+
+      // Map ResolvedNodeStyle to NodeDisplayData
+      data = {
+        x: resolvedStyle.x ?? (attrs.x as number),
+        y: resolvedStyle.y ?? (attrs.y as number),
+        size: resolvedStyle.size ?? 2,
+        color: resolvedStyle.color ?? this.settings.defaultNodeColor,
+        label: resolvedStyle.label ?? null,
+        hidden: resolvedStyle.visibility === "hidden",
+        forceLabel: resolvedStyle.labelVisibility === "visible",
+        highlighted: nodeState.isHighlighted,
+        zIndex: resolvedStyle.zIndex ?? 0,
+        type: this.primitives ? "default" : this.settings.defaultNodeType,
+        shape: resolvedStyle.shape,
+      };
+
+      // Validate position
+      if (typeof data.x !== "number" || typeof data.y !== "number") {
+        throw new Error(
+          `Sigma: could not find a valid position (x, y) for node "${key}". All your nodes must have a number "x" and "y".`,
+        );
+      }
+    } else {
+      // Legacy API: Use reducer + defaults
+      let attr = Object.assign({}, attrs) as Partial<NodeDisplayData>;
+      if (this.settings.nodeReducer) attr = this.settings.nodeReducer(key, attr as N);
+      data = applyNodeDefaults(this.settings, key, attr);
+    }
 
     // Set shape for edge clamping and multi-shape program selection
     // For multi-shape programs: preserve user-specified shape attribute if it's valid
@@ -1904,15 +1970,38 @@ export default class Sigma<
    * @param key The edge's graphology ID
    */
   private addEdge(key: string): void {
-    // Edge display data resolution:
-    //  1. First we get the edge's attributes
-    //  2. We optionally reduce them using the function provided by the user
-    //  3. Note that this function must return a total object and won't be merged
-    //  4. We apply our defaults, while running some vital checks
-    // We shallow copy edge data to avoid dangerous behaviors from reducers
-    let attr = Object.assign({}, this.graph.getEdgeAttributes(key)) as Partial<EdgeDisplayData>;
-    if (this.settings.edgeReducer) attr = this.settings.edgeReducer(key, attr as E);
-    const data = applyEdgeDefaults(this.settings, key, attr);
+    const attrs = this.graph.getEdgeAttributes(key);
+    let data: EdgeDisplayData;
+
+    // Use v4 styles API if available, otherwise fall back to reducer + defaults
+    if (this.stylesDeclaration?.edges) {
+      // v4 API: Use style evaluation
+      const edgeState = this.getEdgeState(key);
+      const resolvedStyle = evaluateEdgeStyle(
+        this.stylesDeclaration.edges as EdgeStyleProperties<E, ES, GS> | EdgeStyleProperties<E, ES, GS>[],
+        attrs,
+        edgeState,
+        this.graphState,
+        this.graph,
+      );
+
+      // Map ResolvedEdgeStyle to EdgeDisplayData
+      data = {
+        size: resolvedStyle.size ?? 0.5,
+        color: resolvedStyle.color ?? this.settings.defaultEdgeColor,
+        label: resolvedStyle.label ?? "",
+        hidden: resolvedStyle.visibility === "hidden",
+        forceLabel: resolvedStyle.labelVisibility === "visible",
+        zIndex: resolvedStyle.zIndex ?? 0,
+        type: this.primitives ? "default" : this.settings.defaultEdgeType,
+      };
+    } else {
+      // Legacy API: Use reducer + defaults
+      let attr = Object.assign({}, attrs) as Partial<EdgeDisplayData>;
+      if (this.settings.edgeReducer) attr = this.settings.edgeReducer(key, attr as E);
+      data = applyEdgeDefaults(this.settings, key, attr);
+    }
+
     this.edgeDataCache[key] = data;
 
     // Forced label

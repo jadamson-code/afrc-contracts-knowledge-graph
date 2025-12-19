@@ -295,6 +295,29 @@ type InferredEdgeStyleRule<
   | InferredEdgeStyleProperties<E, EA, ES, GS, EPV, Path, Extremity>
   | InlineConditional<EA, ES, GS, InferredEdgeStyleProperties<E, EA, ES, GS, EPV, Path, Extremity>>;
 
+// =============================================================================
+// STYLES DECLARATION TYPE
+// =============================================================================
+
+/**
+ * Full styles declaration with node and edge styles.
+ * This is what gets stored on the Sigma instance.
+ */
+export interface StylesDeclaration<
+  NA extends Attributes = Attributes,
+  EA extends Attributes = Attributes,
+  NS extends BaseNodeState = BaseNodeState,
+  ES extends BaseEdgeState = BaseEdgeState,
+  GS extends BaseGraphState = BaseGraphState,
+> {
+  nodes?: NodeStyleProperties<NA, NS, GS> | NodeStyleProperties<NA, NS, GS>[];
+  edges?: EdgeStyleProperties<EA, ES, GS> | EdgeStyleProperties<EA, ES, GS>[];
+}
+
+// =============================================================================
+// FACTORY FUNCTION
+// =============================================================================
+
 /**
  * Factory function for creating type-safe sigma options.
  *

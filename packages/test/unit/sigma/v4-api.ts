@@ -207,13 +207,13 @@ describe("Sigma v4 API", () => {
       sigma.kill();
     });
 
-    test<SigmaTestContext>("legacy nodeReducer still works", ({ container }) => {
+    test<SigmaTestContext>("nodeReducer works without styles", ({ container }) => {
       const graph = new Graph();
       graph.addNode("n1", { x: 0, y: 0, value: 100 });
 
       const sigma = new Sigma(graph, container, {
-        nodeReducer: (node, attrs) => ({
-          ...attrs,
+        nodeReducer: (key, computed, attrs) => ({
+          ...computed,
           size: Math.sqrt(attrs.value as number),
           color: "#ff0000",
         }),
@@ -222,18 +222,23 @@ describe("Sigma v4 API", () => {
       sigma.refresh();
       expect(sigma).toBeDefined();
 
+      // Verify the reducer was applied
+      const nodeData = sigma.getNodeDisplayData("n1");
+      expect(nodeData?.size).toBe(10); // sqrt(100) = 10
+      expect(nodeData?.color).toBe("#ff0000");
+
       sigma.kill();
     });
 
-    test<SigmaTestContext>("legacy edgeReducer still works", ({ container }) => {
+    test<SigmaTestContext>("edgeReducer works without styles", ({ container }) => {
       const graph = new Graph();
       graph.addNode("n1", { x: 0, y: 0 });
       graph.addNode("n2", { x: 1, y: 1 });
       graph.addEdge("n1", "n2", { weight: 5 });
 
       const sigma = new Sigma(graph, container, {
-        edgeReducer: (edge, attrs) => ({
-          ...attrs,
+        edgeReducer: (key, computed, attrs) => ({
+          ...computed,
           size: attrs.weight as number,
           color: "#333",
         }),
@@ -241,6 +246,11 @@ describe("Sigma v4 API", () => {
 
       sigma.refresh();
       expect(sigma).toBeDefined();
+
+      // Verify the reducer was applied
+      const edgeData = sigma.getEdgeDisplayData(graph.edges()[0]);
+      expect(edgeData?.size).toBe(5);
+      expect(edgeData?.color).toBe("#333");
 
       sigma.kill();
     });
@@ -263,6 +273,80 @@ describe("Sigma v4 API", () => {
 
       sigma.refresh();
       expect(sigma).toBeDefined();
+
+      sigma.kill();
+    });
+
+    test<SigmaTestContext>("nodeReducer can coexist with styles", ({ container }) => {
+      const graph = new Graph();
+      graph.addNode("n1", { x: 0, y: 0 });
+
+      let reducerCalled = false;
+      let receivedState: unknown = null;
+
+      // When both styles and reducer are provided, reducer runs after styles
+      const sigma = new Sigma(graph, container, {
+        styles: {
+          nodes: {
+            size: 10,
+            color: "#666",
+          },
+        },
+        nodeReducer: (key, computed, attrs, state, graphState, graph) => {
+          reducerCalled = true;
+          receivedState = state;
+          // Reducer receives computed display data and can override
+          return {
+            ...computed,
+            size: computed.size * 2, // Double the size
+          };
+        },
+      });
+
+      sigma.refresh();
+      expect(reducerCalled).toBe(true);
+      expect(receivedState).toHaveProperty("isHovered", false);
+
+      // Verify the reducer modified the computed size (10 * 2 = 20)
+      const nodeData = sigma.getNodeDisplayData("n1");
+      expect(nodeData?.size).toBe(20);
+
+      sigma.kill();
+    });
+
+    test<SigmaTestContext>("edgeReducer can coexist with styles", ({ container }) => {
+      const graph = new Graph();
+      graph.addNode("n1", { x: 0, y: 0 });
+      graph.addNode("n2", { x: 1, y: 1 });
+      graph.addEdge("n1", "n2");
+
+      let reducerCalled = false;
+      let receivedState: unknown = null;
+
+      const sigma = new Sigma(graph, container, {
+        styles: {
+          edges: {
+            size: 5,
+            color: "#333",
+          },
+        },
+        edgeReducer: (key, computed, attrs, state, graphState, graph) => {
+          reducerCalled = true;
+          receivedState = state;
+          return {
+            ...computed,
+            size: computed.size + 3, // Add 3 to size
+          };
+        },
+      });
+
+      sigma.refresh();
+      expect(reducerCalled).toBe(true);
+      expect(receivedState).toHaveProperty("isHovered", false);
+
+      // Verify the reducer modified the computed size (5 + 3 = 8)
+      const edgeData = sigma.getEdgeDisplayData(graph.edges()[0]);
+      expect(edgeData?.size).toBe(8);
 
       sigma.kill();
     });
@@ -293,6 +377,89 @@ describe("Sigma v4 API", () => {
       // Verify state was updated
       expect(sigma.getNodeState("n1").isHighlighted).toBe(true);
       expect(sigma.getNodeState("n2").isHighlighted).toBe(false);
+
+      sigma.kill();
+    });
+  });
+
+  describe("Custom state type parameters", () => {
+    // Custom node state with additional properties
+    interface CustomNodeState {
+      isHovered: boolean;
+      isHidden: boolean;
+      isHighlighted: boolean;
+      importance: number; // custom property
+    }
+
+    // Custom edge state with additional properties
+    interface CustomEdgeState {
+      isHovered: boolean;
+      isHidden: boolean;
+      isHighlighted: boolean;
+      weight: number; // custom property
+    }
+
+    test<SigmaTestContext>("custom node state properties can be set and retrieved", ({ container }) => {
+      const graph = new Graph();
+      graph.addNode("n1", { x: 0, y: 0 });
+
+      const sigma = new Sigma<object, object, object, CustomNodeState, CustomEdgeState>(graph, container);
+
+      // Set custom state property
+      sigma.setNodeState("n1", { importance: 5 });
+      sigma.refresh();
+
+      // Retrieve and verify custom state
+      const state = sigma.getNodeState("n1");
+      expect(state.importance).toBe(5);
+      expect(state.isHovered).toBe(false); // default value
+
+      sigma.kill();
+    });
+
+    test<SigmaTestContext>("custom edge state properties can be set and retrieved", ({ container }) => {
+      const graph = new Graph();
+      graph.addNode("n1", { x: 0, y: 0 });
+      graph.addNode("n2", { x: 1, y: 1 });
+      graph.addEdge("n1", "n2");
+
+      const sigma = new Sigma<object, object, object, CustomNodeState, CustomEdgeState>(graph, container);
+
+      const edgeKey = graph.edges()[0];
+
+      // Set custom state property
+      sigma.setEdgeState(edgeKey, { weight: 10 });
+      sigma.refresh();
+
+      // Retrieve and verify custom state
+      const state = sigma.getEdgeState(edgeKey);
+      expect(state.weight).toBe(10);
+      expect(state.isHovered).toBe(false); // default value
+
+      sigma.kill();
+    });
+
+    test<SigmaTestContext>("custom state can be used in style functions", ({ container }) => {
+      const graph = new Graph();
+      graph.addNode("n1", { x: 0, y: 0 });
+
+      const sigma = new Sigma<object, object, object, CustomNodeState, CustomEdgeState>(graph, container, {
+        styles: {
+          nodes: {
+            // Use custom state property in style function
+            size: (attrs, state) => 5 + (state.importance ?? 0),
+            color: "#666",
+          },
+        },
+      });
+
+      // Set custom state
+      sigma.setNodeState("n1", { importance: 10 });
+      sigma.refresh();
+
+      // Verify the style was applied based on custom state
+      const displayData = sigma.getNodeDisplayData("n1");
+      expect(displayData?.size).toBe(15); // 5 + 10
 
       sigma.kill();
     });

@@ -5,7 +5,7 @@
  * The list of settings and some handy functions.
  * @module
  */
-import { Attributes } from "graphology-types";
+import { AbstractGraph, Attributes } from "graphology-types";
 
 import {
   EdgeArrowProgram,
@@ -23,6 +23,7 @@ import {
   LabelPosition,
   NodeDisplayData,
 } from "./types";
+import { BaseEdgeState, BaseGraphState, BaseNodeState } from "./types/styles";
 import { assign } from "./utils";
 
 /**
@@ -33,6 +34,9 @@ export interface Settings<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
+  NS extends BaseNodeState = BaseNodeState,
+  ES extends BaseEdgeState = BaseEdgeState,
+  GS extends BaseGraphState = BaseGraphState,
 > {
   // Performance
   hideEdgesOnMove: boolean;
@@ -86,8 +90,22 @@ export interface Settings<
   labelRenderedSizeThreshold: number;
 
   // Reducers
-  nodeReducer: null | ((node: string, data: N) => Partial<NodeDisplayData>);
-  edgeReducer: null | ((edge: string, data: E) => Partial<EdgeDisplayData>);
+  nodeReducer: null | ((
+    key: string,
+    computed: NodeDisplayData,
+    attrs: N,
+    state: NS,
+    graphState: GS,
+    graph: AbstractGraph<N, E, G>,
+  ) => Partial<NodeDisplayData>);
+  edgeReducer: null | ((
+    key: string,
+    computed: EdgeDisplayData,
+    attrs: E,
+    state: ES,
+    graphState: GS,
+    graph: AbstractGraph<N, E, G>,
+  ) => Partial<EdgeDisplayData>);
 
   // Features
   maxDepthLevels: number;

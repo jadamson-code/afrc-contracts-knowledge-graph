@@ -1838,12 +1838,11 @@ export default class Sigma<
    */
   private addNode(key: string): void {
     const attrs = this.graph.getNodeAttributes(key);
+    const nodeState = this.getNodeState(key);
     let data: NodeDisplayData;
 
-    // Use v4 styles API if available, otherwise fall back to reducer + defaults
+    // Compute display data from styles or defaults
     if (this.stylesDeclaration?.nodes) {
-      // v4 API: Use style evaluation
-      const nodeState = this.getNodeState(key);
       const resolvedStyle = evaluateNodeStyle(
         this.stylesDeclaration.nodes as NodeStyleProperties<N, NS, GS> | NodeStyleProperties<N, NS, GS>[],
         attrs,
@@ -1852,7 +1851,6 @@ export default class Sigma<
         this.graph,
       );
 
-      // Map ResolvedNodeStyle to NodeDisplayData
       data = {
         x: resolvedStyle.x ?? (attrs.x as number),
         y: resolvedStyle.y ?? (attrs.y as number),
@@ -1874,10 +1872,14 @@ export default class Sigma<
         );
       }
     } else {
-      // Legacy API: Use reducer + defaults
-      let attr = Object.assign({}, attrs) as Partial<NodeDisplayData>;
-      if (this.settings.nodeReducer) attr = this.settings.nodeReducer(key, attr as N);
-      data = applyNodeDefaults(this.settings, key, attr);
+      const attrCopy = Object.assign({}, attrs) as Partial<NodeDisplayData>;
+      data = applyNodeDefaults(this.settings, key, attrCopy);
+    }
+
+    // Apply reducer if provided
+    if (this.settings.nodeReducer) {
+      const reduced = this.settings.nodeReducer(key, data, attrs, nodeState, this.graphState, this.graph);
+      data = { ...data, ...reduced };
     }
 
     // Set shape for edge clamping and multi-shape program selection
@@ -1971,12 +1973,11 @@ export default class Sigma<
    */
   private addEdge(key: string): void {
     const attrs = this.graph.getEdgeAttributes(key);
+    const edgeState = this.getEdgeState(key);
     let data: EdgeDisplayData;
 
-    // Use v4 styles API if available, otherwise fall back to reducer + defaults
+    // Compute display data from styles or defaults
     if (this.stylesDeclaration?.edges) {
-      // v4 API: Use style evaluation
-      const edgeState = this.getEdgeState(key);
       const resolvedStyle = evaluateEdgeStyle(
         this.stylesDeclaration.edges as EdgeStyleProperties<E, ES, GS> | EdgeStyleProperties<E, ES, GS>[],
         attrs,
@@ -1985,7 +1986,6 @@ export default class Sigma<
         this.graph,
       );
 
-      // Map ResolvedEdgeStyle to EdgeDisplayData
       data = {
         size: resolvedStyle.size ?? 0.5,
         color: resolvedStyle.color ?? this.settings.defaultEdgeColor,
@@ -1996,10 +1996,14 @@ export default class Sigma<
         type: this.primitives ? "default" : this.settings.defaultEdgeType,
       };
     } else {
-      // Legacy API: Use reducer + defaults
-      let attr = Object.assign({}, attrs) as Partial<EdgeDisplayData>;
-      if (this.settings.edgeReducer) attr = this.settings.edgeReducer(key, attr as E);
-      data = applyEdgeDefaults(this.settings, key, attr);
+      const attrCopy = Object.assign({}, attrs) as Partial<EdgeDisplayData>;
+      data = applyEdgeDefaults(this.settings, key, attrCopy);
+    }
+
+    // Apply reducer if provided
+    if (this.settings.edgeReducer) {
+      const reduced = this.settings.edgeReducer(key, data, attrs, edgeState, this.graphState, this.graph);
+      data = { ...data, ...reduced };
     }
 
     this.edgeDataCache[key] = data;

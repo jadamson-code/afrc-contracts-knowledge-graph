@@ -98,7 +98,7 @@ describe("Primitives Parser", () => {
     registerFactory("nodeShape", "square", mockSquareFactory);
     registerFactory("nodeLayer", "fill", mockFillFactory);
     registerFactory("nodeLayer", "border", mockBorderFactory);
-    registerFactory("edgePath", "line", mockLineFactory);
+    registerFactory("edgePath", "straight", mockLineFactory); // "straight" is the default edge path
     registerFactory("edgePath", "curved", mockCurvedFactory);
     registerFactory("edgeLayer", "plain", mockPlainFactory);
     registerFactory("edgeExtremity", "arrow", mockArrowFactory);
@@ -185,8 +185,8 @@ describe("Primitives Parser", () => {
 
   describe("parseEdgePath", () => {
     it("should parse string form (shorthand)", () => {
-      const path = parseEdgePath("line");
-      expect(path.name).toBe("line");
+      const path = parseEdgePath("straight");
+      expect(path.name).toBe("line"); // Factory returns { name: "line" }
       expect(path.segments).toBe(1);
     });
 
@@ -325,7 +325,7 @@ describe("Primitives Parser", () => {
   describe("parseEdgePrimitives", () => {
     it("should parse edge primitives with paths, extremities, and layers", () => {
       const result = parseEdgePrimitives({
-        paths: ["line", "curved"],
+        paths: ["straight", "curved"],
         extremities: ["arrow"],
         layers: ["plain"],
       });
@@ -341,7 +341,7 @@ describe("Primitives Parser", () => {
 
     it("should use default primitives when undefined", () => {
       const result = parseEdgePrimitives(undefined);
-      // Defaults are "line", "none" (filtered out), and "plain"
+      // Defaults are "straight", "none" (filtered out), and "plain"
       expect(result.paths).toHaveLength(1);
       expect(result.paths[0].name).toBe("line");
       expect(result.extremities).toHaveLength(0); // "none" is filtered
@@ -351,7 +351,7 @@ describe("Primitives Parser", () => {
 
     it("should filter out 'none' extremities", () => {
       const result = parseEdgePrimitives({
-        paths: ["line"],
+        paths: ["straight"],
         extremities: ["none", "arrow", "none"],
         layers: ["plain"],
       });

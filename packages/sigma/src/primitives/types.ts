@@ -292,7 +292,7 @@ export const DEFAULT_NODE_PRIMITIVES: Required<NodePrimitives> = {
 };
 
 export const DEFAULT_EDGE_PRIMITIVES: Required<EdgePrimitives> = {
-  paths: ["line" as BuiltInEdgePath],
+  paths: ["straight" as BuiltInEdgePath],
   extremities: ["none"],
   variables: {},
   layers: ["plain" as BuiltInEdgeLayerType],

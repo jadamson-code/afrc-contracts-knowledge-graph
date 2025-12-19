@@ -20,12 +20,11 @@ import {
   BucketCollection,
   EdgeDataTexture,
   EdgeProgramType,
-  getShapeId,
-  HoverDisplayData,
   HoverProgramType,
   LabelProgramType,
   NodeDataTexture,
   NodeProgramType,
+  getShapeId,
 } from "./rendering";
 import { Settings, resolveSettings, validateSettings } from "./settings";
 import {
@@ -46,6 +45,14 @@ import {
   TouchCoords,
   TypedEventEmitter,
 } from "./types";
+import {
+  BaseEdgeState,
+  BaseGraphState,
+  BaseNodeState,
+  createEdgeState,
+  createGraphState,
+  createNodeState,
+} from "./types/styles";
 import {
   NormalizationFunction,
   colorToIndex,
@@ -142,6 +149,9 @@ export default class Sigma<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
+  NS extends BaseNodeState = BaseNodeState,
+  ES extends BaseEdgeState = BaseEdgeState,
+  GS extends BaseGraphState = BaseGraphState,
 > extends TypedEventEmitter<SigmaEvents> {
   private settings: Settings<N, E, G>;
   private graph: Graph<N, E, G>;
@@ -189,13 +199,18 @@ export default class Sigma<
   // Graph State
   private displayedNodeLabels: Set<string> = new Set();
   private displayedEdgeLabels: Set<string> = new Set();
-  private highlightedNodes: Set<string> = new Set();
+
+  // State management (new API)
+  private nodeStates: Map<string, NS> = new Map();
+  private edgeStates: Map<string, ES> = new Map();
+  private graphState: GS = createGraphState<GS>();
+
+  // Tracking for event system (which node/edge is currently hovered for enter/leave events)
   private hoveredNode: string | null = null;
   private hoveredEdge: string | null = null;
 
   // Internal states
   private renderFrame: number | null = null;
-  private renderHighlightedNodesFrame: number | null = null;
   private needToProcess = false;
   private checkEdgesEventsFrame: number | null = null;
 
@@ -595,7 +610,14 @@ export default class Sigma<
     // Read from picking framebuffer (scaled by downSizingRatio)
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.pickingFrameBuffer);
 
-    const color = getPixelColor(gl, this.pickingFrameBuffer, x, y, this.pixelRatio, this.settings.pickingDownSizingRatio);
+    const color = getPixelColor(
+      gl,
+      this.pickingFrameBuffer,
+      x,
+      y,
+      this.pixelRatio,
+      this.settings.pickingDownSizingRatio,
+    );
     const index = colorToIndex(...color);
     const itemAt = this.itemIDsIndex[index];
 
@@ -630,11 +652,17 @@ export default class Sigma<
       const nodeToHover = this.getNodeAtPosition(event);
       if (nodeToHover && this.hoveredNode !== nodeToHover && !this.nodeDataCache[nodeToHover].hidden) {
         // Handling passing from one node to the other directly
-        if (this.hoveredNode) this.emit("leaveNode", { ...baseEvent, node: this.hoveredNode });
+        if (this.hoveredNode) {
+          const previousNode = this.hoveredNode;
+          this.hoveredNode = nodeToHover;
+          this.setNodeState(previousNode, { isHovered: false } as Partial<NS>);
+          this.emit("leaveNode", { ...baseEvent, node: previousNode });
+        } else {
+          this.hoveredNode = nodeToHover;
+        }
 
-        this.hoveredNode = nodeToHover;
+        this.setNodeState(nodeToHover, { isHovered: true } as Partial<NS>);
         this.emit("enterNode", { ...baseEvent, node: nodeToHover });
-        this.scheduleHighlightedNodesRender();
         return;
       }
 
@@ -643,9 +671,8 @@ export default class Sigma<
         if (this.getNodeAtPosition(event) !== this.hoveredNode) {
           const node = this.hoveredNode;
           this.hoveredNode = null;
-
+          this.setNodeState(node, { isHovered: false } as Partial<NS>);
           this.emit("leaveNode", { ...baseEvent, node });
-          this.scheduleHighlightedNodesRender();
           return;
         }
       }
@@ -654,9 +681,15 @@ export default class Sigma<
         const edgeToHover = this.hoveredNode ? null : this.getEdgeAtPoint(baseEvent.event.x, baseEvent.event.y);
 
         if (edgeToHover !== this.hoveredEdge) {
-          if (this.hoveredEdge) this.emit("leaveEdge", { ...baseEvent, edge: this.hoveredEdge });
-          if (edgeToHover) this.emit("enterEdge", { ...baseEvent, edge: edgeToHover });
+          if (this.hoveredEdge) {
+            this.setEdgeState(this.hoveredEdge, { isHovered: false } as Partial<ES>);
+            this.emit("leaveEdge", { ...baseEvent, edge: this.hoveredEdge });
+          }
           this.hoveredEdge = edgeToHover;
+          if (edgeToHover) {
+            this.setEdgeState(edgeToHover, { isHovered: true } as Partial<ES>);
+            this.emit("enterEdge", { ...baseEvent, edge: edgeToHover });
+          }
         }
       }
     };
@@ -685,13 +718,17 @@ export default class Sigma<
       };
 
       if (this.hoveredNode) {
-        this.emit("leaveNode", { ...baseEvent, node: this.hoveredNode });
-        this.scheduleHighlightedNodesRender();
+        const node = this.hoveredNode;
+        this.hoveredNode = null;
+        this.setNodeState(node, { isHovered: false } as Partial<NS>);
+        this.emit("leaveNode", { ...baseEvent, node });
       }
 
       if (this.settings.enableEdgeEvents && this.hoveredEdge) {
-        this.emit("leaveEdge", { ...baseEvent, edge: this.hoveredEdge });
-        this.scheduleHighlightedNodesRender();
+        const edge = this.hoveredEdge;
+        this.hoveredEdge = null;
+        this.setEdgeState(edge, { isHovered: false } as Partial<ES>);
+        this.emit("leaveEdge", { ...baseEvent, edge });
       }
 
       this.emit("leaveStage", { ...baseEvent });
@@ -914,7 +951,14 @@ export default class Sigma<
     // Read from picking framebuffer (scaled by downSizingRatio)
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.pickingFrameBuffer);
 
-    const color = getPixelColor(gl, this.pickingFrameBuffer, x, y, this.pixelRatio, this.settings.pickingDownSizingRatio);
+    const color = getPixelColor(
+      gl,
+      this.pickingFrameBuffer,
+      x,
+      y,
+      this.pixelRatio,
+      this.settings.pickingDownSizingRatio,
+    );
     const index = colorToIndex(...color);
     const itemAt = this.itemIDsIndex[index];
 
@@ -1460,11 +1504,17 @@ export default class Sigma<
   private renderEdgeLabelsInternal(params: RenderParams): void {
     if (!this.settings.renderEdgeLabels) return;
 
+    // Build highlighted nodes set from state
+    const highlightedNodes = new Set<string>();
+    for (const [key, state] of this.nodeStates) {
+      if (state.isHighlighted) highlightedNodes.add(key);
+    }
+
     const edgeLabelsToDisplay = edgeLabelsToDisplayFromNodes({
       graph: this.graph,
       hoveredNode: this.hoveredNode,
       displayedNodeLabels: this.displayedNodeLabels,
-      highlightedNodes: this.highlightedNodes,
+      highlightedNodes,
     });
     extend(edgeLabelsToDisplay, this.edgesWithForcedLabels);
     // Clear the canvas layer (we're using WebGL instead)
@@ -1505,7 +1555,15 @@ export default class Sigma<
       if (!this.edgeLabelPrograms[labelType]) continue;
 
       charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + edgeData.label.length;
-      edgesToProcess.push({ edge, type: labelType, sourceData, targetData, edgeData, sourceKey: extremities[0], targetKey: extremities[1] });
+      edgesToProcess.push({
+        edge,
+        type: labelType,
+        sourceData,
+        targetData,
+        edgeData,
+        sourceKey: extremities[0],
+        targetKey: extremities[1],
+      });
       displayedLabels.add(edge);
     }
 
@@ -1585,197 +1643,6 @@ export default class Sigma<
     }
 
     this.displayedEdgeLabels = displayedLabels;
-  }
-
-  /**
-   * Method used to render the highlighted nodes.
-   * Renders hover backgrounds, labels, and nodes in WebGL.
-   *
-   * @return {Sigma}
-   */
-  private renderHighlightedNodes(): void {
-    // 1. Collect nodes to render
-    const nodesToRender: string[] = [];
-
-    if (this.hoveredNode && !this.nodeDataCache[this.hoveredNode].hidden) {
-      nodesToRender.push(this.hoveredNode);
-    }
-
-    this.highlightedNodes.forEach((node) => {
-      // The hovered node has already been highlighted
-      if (node !== this.hoveredNode) nodesToRender.push(node);
-    });
-
-    if (nodesToRender.length === 0) return;
-
-    const renderParams = this.getRenderParams();
-    // Highlighted nodes don't need to be in the picking buffer (they're already picked)
-    // This also prevents visual artifacts when DEBUG_displayPickingLayer is enabled
-    renderParams.pickingFrameBuffer = null;
-
-    // 2. Prepare hover data with label dimensions
-    const hoverDataByType: Record<string, HoverDisplayData[]> = {};
-
-    nodesToRender.forEach((node) => {
-      const data = this.nodeDataCache[node];
-
-      // Measure label dimensions if there's a label
-      // These values match the canvas hover implementation in node-hover.ts
-      let labelWidth = 0;
-      let labelHeight = 0;
-      if (data.label) {
-        const context = this.canvasContexts.labels;
-        const { labelSize, labelFont, labelWeight } = this.settings;
-        context.font = `${labelWeight} ${labelSize}px ${labelFont}`;
-        const textWidth = context.measureText(data.label).width;
-        // Match canvas: boxWidth = textWidth + 5, boxHeight = labelSize + 2*PADDING (PADDING=2)
-        labelWidth = Math.round(textWidth + 5);
-        labelHeight = Math.round(labelSize + 4);
-      }
-
-      // Get shapeId for hover rendering
-      // Hover programs use LOCAL indices (0, 1, 2...) in their shader switch statements,
-      // not global registry IDs. This is different from node/edge rendering which uses global IDs.
-      let shapeId: number;
-      const shapeMap = this.nodeTypeShapeMap[data.type];
-      if (shapeMap && data.shape && data.shape in shapeMap) {
-        // Multi-shape program: use local index directly
-        shapeId = shapeMap[data.shape];
-      } else {
-        // Single-shape program: always use 0 (there's only one shape)
-        shapeId = 0;
-      }
-
-      const hoverData: HoverDisplayData = {
-        key: node,
-        x: data.x,
-        y: data.y,
-        size: data.size,
-        label: data.label,
-        labelWidth,
-        labelHeight,
-        type: data.type,
-        shapeId,
-      };
-
-      if (!hoverDataByType[data.type]) {
-        hoverDataByType[data.type] = [];
-      }
-      hoverDataByType[data.type].push(hoverData);
-    });
-
-    // 3. Render hover backgrounds via WebGL (if hover programs are available)
-    for (const type in hoverDataByType) {
-      const hoverProgram = this.hoverPrograms[type];
-      if (hoverProgram) {
-        const items = hoverDataByType[type];
-        hoverProgram.reallocate(items.length);
-        items.forEach((hoverData, index) => {
-          hoverProgram.processHover(index, hoverData);
-        });
-        hoverProgram.render(renderParams);
-      }
-    }
-
-    // Helper function to render labels for a set of nodes
-    const renderLabelsForNodes = (nodes: string[]) => {
-      // Count characters per label program type
-      const charactersPerProgram: Record<string, number> = {};
-      nodes.forEach((node) => {
-        const data = this.nodeDataCache[node];
-        if (!data.label) return;
-        const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
-        charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + data.label.length;
-      });
-
-      // Reallocate label programs based on character counts
-      for (const type in this.labelPrograms) {
-        this.labelPrograms[type].reallocate(charactersPerProgram[type] || 0);
-      }
-
-      // Process each node's label into its matching program's buffer
-      const characterOffsets: Record<string, number> = {};
-      nodes.forEach((node) => {
-        const data = this.nodeDataCache[node];
-        if (!data.label) return;
-
-        const labelType = this.labelPrograms[data.type] ? data.type : this.settings.defaultLabelType;
-        const labelProgram = this.labelPrograms[labelType];
-        if (!labelProgram) return;
-
-        // Build label display data
-        const labelData: LabelDisplayData = {
-          text: data.label,
-          x: data.x,
-          y: data.y,
-          size: this.settings.labelSize,
-          color: this.getLabelColor(data),
-          nodeSize: data.size,
-          margin: this.settings.labelMargin,
-          position: this.settings.defaultLabelPosition,
-          hidden: false,
-          forceLabel: data.forceLabel ?? false,
-          type: labelType,
-          zIndex: data.zIndex ?? 0,
-          parentType: "node",
-          parentKey: node,
-          fontKey: "", // Empty means default font
-          nodeIndex: this.nodeDataTexture!.getNodeIndex(node),
-        };
-
-        // Process label in its matching program
-        const offset = characterOffsets[labelType] || 0;
-        const charsProcessed = labelProgram.processLabel(node, offset, labelData);
-        characterOffsets[labelType] = offset + charsProcessed;
-      });
-
-      // Render WebGL labels
-      for (const type in this.labelPrograms) {
-        this.labelPrograms[type].render(renderParams);
-      }
-    };
-
-    // Helper function to render nodes
-    const renderNodes = (nodes: string[]) => {
-      const nodesPerPrograms: Record<string, number> = {};
-
-      // Count nodes per type:
-      nodes.forEach((node) => {
-        const type = this.nodeDataCache[node].type;
-        nodesPerPrograms[type] = (nodesPerPrograms[type] || 0) + 1;
-      });
-      // Allocate for each type for the proper number of nodes
-      for (const type in this.nodeHoverPrograms) {
-        this.nodeHoverPrograms[type].reallocate(nodesPerPrograms[type] || 0);
-        // Also reset count, to use when rendering:
-        nodesPerPrograms[type] = 0;
-      }
-      // Process all nodes to render:
-      nodes.forEach((node) => {
-        const data = this.nodeDataCache[node];
-        const textureIndex = this.nodeDataTexture!.getNodeIndex(node);
-        this.nodeHoverPrograms[data.type].process(0, nodesPerPrograms[data.type]++, data, textureIndex, node);
-      });
-      // Upload layer textures and render:
-      for (const type in this.nodeHoverPrograms) {
-        const program = this.nodeHoverPrograms[type];
-        program.uploadLayerTexture?.();
-        program.render(renderParams);
-      }
-    };
-
-    // 4. Render nodes on top of hover backgrounds
-    renderNodes(nodesToRender);
-    // 5. Render labels on top of everything
-    renderLabelsForNodes(nodesToRender);
-  }
-
-  /**
-   * Method used to schedule a hover render.
-   * With unified WebGL context, this triggers a full render.
-   */
-  private scheduleHighlightedNodesRender(): void {
-    this.scheduleRender();
   }
 
   /**
@@ -1926,7 +1793,6 @@ export default class Sigma<
 
     this.renderLabels();
     this.renderEdgeLabels();
-    this.renderHighlightedNodes();
 
     return exitRender();
   }
@@ -1972,12 +1838,6 @@ export default class Sigma<
     // update
     this.nodesWithForcedLabels.delete(key);
     if (data.forceLabel && !data.hidden) this.nodesWithForcedLabels.add(key);
-
-    // Highlighted:
-    // We remove and re add if needed because this function is also used from
-    // update
-    this.highlightedNodes.delete(key);
-    if (data.highlighted && !data.hidden) this.highlightedNodes.add(key);
 
     // Bucket management for depth ordering
     const maxDepth = this.itemBuckets.nodes.getMaxDepthLevels();
@@ -2030,8 +1890,8 @@ export default class Sigma<
     delete this.nodeDataCache[key];
     // Remove from node program index
     delete this.nodeProgramIndex[key];
-    // Remove from higlighted nodes
-    this.highlightedNodes.delete(key);
+    // Remove from node state
+    this.nodeStates.delete(key);
     // Remove from hovered
     if (this.hoveredNode === key) this.hoveredNode = null;
     // Remove from forced label
@@ -2110,6 +1970,8 @@ export default class Sigma<
     delete this.edgeProgramIndex[key];
     // Free edge from edge data texture
     this.edgeDataTexture!.freeEdge(key);
+    // Remove from edge state
+    this.edgeStates.delete(key);
     // Remove from hovered
     if (this.hoveredEdge === key) this.hoveredEdge = null;
     // Remove from forced label
@@ -2127,7 +1989,6 @@ export default class Sigma<
     this.nodeDataCache = {};
     this.edgeProgramIndex = {};
     this.nodesWithForcedLabels = new Set<string>();
-    this.highlightedNodes = new Set();
     // Clear bucket data
     this.itemBuckets.nodes.clearAll();
     this.zIndexCache.nodes = {};
@@ -2161,7 +2022,7 @@ export default class Sigma<
    */
   private clearNodeState(): void {
     this.displayedNodeLabels = new Set();
-    this.highlightedNodes = new Set();
+    this.nodeStates.clear();
     this.hoveredNode = null;
   }
 
@@ -2171,7 +2032,7 @@ export default class Sigma<
    */
   private clearEdgeState(): void {
     this.displayedEdgeLabels = new Set();
-    this.highlightedNodes = new Set();
+    this.edgeStates.clear();
     this.hoveredEdge = null;
   }
 
@@ -2182,6 +2043,7 @@ export default class Sigma<
   private clearState(): void {
     this.clearEdgeState();
     this.clearNodeState();
+    this.graphState = createGraphState<GS>();
   }
 
   /**
@@ -2646,6 +2508,242 @@ export default class Sigma<
   getEdgeDisplayData(key: unknown): EdgeDisplayData | undefined {
     const edge = this.edgeDataCache[key as string];
     return edge ? Object.assign({}, edge) : undefined;
+  }
+
+  /**
+   * =========================================================================
+   * STATE MANAGEMENT API
+   * =========================================================================
+   */
+
+  /**
+   * Method returning a node's state.
+   *
+   * @param  {string} key - The node's key.
+   * @return {NS} The node's state.
+   */
+  getNodeState(key: string): NS {
+    let state = this.nodeStates.get(key);
+    if (!state) {
+      state = createNodeState<NS>();
+      this.nodeStates.set(key, state);
+    }
+    return state;
+  }
+
+  /**
+   * Method returning an edge's state.
+   *
+   * @param  {string} key - The edge's key.
+   * @return {ES} The edge's state.
+   */
+  getEdgeState(key: string): ES {
+    let state = this.edgeStates.get(key);
+    if (!state) {
+      state = createEdgeState<ES>();
+      this.edgeStates.set(key, state);
+    }
+    return state;
+  }
+
+  /**
+   * Method returning the graph's state.
+   *
+   * @return {GS} The graph's state.
+   */
+  getGraphState(): GS {
+    return this.graphState;
+  }
+
+  /**
+   * Method to update a node's state.
+   *
+   * @param  {string} key - The node's key.
+   * @param  {Partial<NS>} state - Partial state to merge.
+   * @return {this}
+   */
+  setNodeState(key: string, state: Partial<NS>): this {
+    const currentState = this.getNodeState(key);
+    const newState = { ...currentState, ...state } as NS;
+    this.nodeStates.set(key, newState);
+
+    // Update hovered node tracking for event system
+    this.updateHoveredNodeTracking(key, currentState, newState);
+
+    // Update graph state flags
+    this.updateGraphStateFromNodes();
+
+    // Schedule refresh for this node
+    this.scheduleRefresh();
+
+    return this;
+  }
+
+  /**
+   * Method to update an edge's state.
+   *
+   * @param  {string} key - The edge's key.
+   * @param  {Partial<ES>} state - Partial state to merge.
+   * @return {this}
+   */
+  setEdgeState(key: string, state: Partial<ES>): this {
+    const currentState = this.getEdgeState(key);
+    const newState = { ...currentState, ...state } as ES;
+    this.edgeStates.set(key, newState);
+
+    // Update hovered edge tracking for event system
+    this.updateHoveredEdgeTracking(key, currentState, newState);
+
+    // Update graph state flags
+    this.updateGraphStateFromEdges();
+
+    // Schedule refresh for this edge
+    this.scheduleRefresh();
+
+    return this;
+  }
+
+  /**
+   * Method to update the graph's state.
+   *
+   * @param  {Partial<GS>} state - Partial state to merge.
+   * @return {this}
+   */
+  setGraphState(state: Partial<GS>): this {
+    this.graphState = { ...this.graphState, ...state } as GS;
+
+    // Schedule refresh
+    this.scheduleRefresh();
+
+    return this;
+  }
+
+  /**
+   * Method to update multiple nodes' states at once.
+   *
+   * @param  {string[]} keys - The nodes' keys.
+   * @param  {Partial<NS>} state - Partial state to merge.
+   * @return {this}
+   */
+  setNodesState(keys: string[], state: Partial<NS>): this {
+    for (const key of keys) {
+      const currentState = this.getNodeState(key);
+      const newState = { ...currentState, ...state } as NS;
+      this.nodeStates.set(key, newState);
+      this.updateHoveredNodeTracking(key, currentState, newState);
+    }
+
+    // Update graph state flags once
+    this.updateGraphStateFromNodes();
+
+    // Schedule single refresh
+    this.scheduleRefresh();
+
+    return this;
+  }
+
+  /**
+   * Method to update multiple edges' states at once.
+   *
+   * @param  {string[]} keys - The edges' keys.
+   * @param  {Partial<ES>} state - Partial state to merge.
+   * @return {this}
+   */
+  setEdgesState(keys: string[], state: Partial<ES>): this {
+    for (const key of keys) {
+      const currentState = this.getEdgeState(key);
+      const newState = { ...currentState, ...state } as ES;
+      this.edgeStates.set(key, newState);
+      this.updateHoveredEdgeTracking(key, currentState, newState);
+    }
+
+    // Update graph state flags once
+    this.updateGraphStateFromEdges();
+
+    // Schedule single refresh
+    this.scheduleRefresh();
+
+    return this;
+  }
+
+  /**
+   * Update hovered node tracking for event system (enter/leave events).
+   */
+  private updateHoveredNodeTracking(key: string, oldState: NS, newState: NS): void {
+    if (oldState.isHovered !== newState.isHovered) {
+      if (newState.isHovered) {
+        // Clear previous hovered node if any
+        if (this.hoveredNode && this.hoveredNode !== key) {
+          const prevState = this.getNodeState(this.hoveredNode);
+          this.nodeStates.set(this.hoveredNode, { ...prevState, isHovered: false } as NS);
+        }
+        this.hoveredNode = key;
+      } else if (this.hoveredNode === key) {
+        this.hoveredNode = null;
+      }
+    }
+  }
+
+  /**
+   * Update hovered edge tracking for event system (enter/leave events).
+   */
+  private updateHoveredEdgeTracking(key: string, oldState: ES, newState: ES): void {
+    if (oldState.isHovered !== newState.isHovered) {
+      if (newState.isHovered) {
+        // Clear previous hovered edge if any
+        if (this.hoveredEdge && this.hoveredEdge !== key) {
+          const prevState = this.getEdgeState(this.hoveredEdge);
+          this.edgeStates.set(this.hoveredEdge, { ...prevState, isHovered: false } as ES);
+        }
+        this.hoveredEdge = key;
+      } else if (this.hoveredEdge === key) {
+        this.hoveredEdge = null;
+      }
+    }
+  }
+
+  /**
+   * Update graph state flags based on node states.
+   */
+  private updateGraphStateFromNodes(): void {
+    let hasHovered = false;
+    let hasHighlighted = false;
+
+    for (const [, state] of this.nodeStates) {
+      if (state.isHovered) hasHovered = true;
+      if (state.isHighlighted) hasHighlighted = true;
+      if (hasHovered && hasHighlighted) break;
+    }
+
+    // Also check edges for hover
+    if (!hasHovered && this.hoveredEdge) hasHovered = true;
+
+    this.graphState = {
+      ...this.graphState,
+      hasHovered,
+      hasHighlighted,
+    } as GS;
+  }
+
+  /**
+   * Update graph state flags based on edge states.
+   */
+  private updateGraphStateFromEdges(): void {
+    let hasHovered = this.hoveredNode !== null;
+
+    if (!hasHovered) {
+      for (const [, state] of this.edgeStates) {
+        if (state.isHovered) {
+          hasHovered = true;
+          break;
+        }
+      }
+    }
+
+    this.graphState = {
+      ...this.graphState,
+      hasHovered,
+    } as GS;
   }
 
   /**
@@ -3125,17 +3223,10 @@ export default class Sigma<
     this.nodeDataCache = {};
     this.edgeDataCache = {};
 
-    this.highlightedNodes.clear();
-
     // Clearing frames
     if (this.renderFrame) {
       cancelAnimationFrame(this.renderFrame);
       this.renderFrame = null;
-    }
-
-    if (this.renderHighlightedNodesFrame) {
-      cancelAnimationFrame(this.renderHighlightedNodesFrame);
-      this.renderHighlightedNodesFrame = null;
     }
 
     // Destroying canvases

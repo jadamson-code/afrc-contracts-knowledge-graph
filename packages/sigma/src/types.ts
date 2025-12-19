@@ -322,3 +322,8 @@ export type { FontKey, FontDescriptor, GlyphMetrics, SDFAtlasOptions } from "./c
  * Options API:
  */
 export { defineSigmaOptions } from "./types/options";
+
+/**
+ * Styles API:
+ */
+export type { BaseNodeState, BaseEdgeState, BaseGraphState } from "./types/styles";

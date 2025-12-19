@@ -238,11 +238,22 @@ export function resolveSettings<
 >(settings: Partial<Settings<N, E, G>>): Settings<N, E, G> {
   const resolvedSettings = assign({}, DEFAULT_SETTINGS as Settings<N, E, G>, settings);
 
-  resolvedSettings.nodeProgramClasses = assign({}, DEFAULT_NODE_PROGRAM_CLASSES, resolvedSettings.nodeProgramClasses);
-  resolvedSettings.edgeProgramClasses = assign({}, DEFAULT_EDGE_PROGRAM_CLASSES, resolvedSettings.edgeProgramClasses);
+  // Type assertions needed because default program classes use Attributes defaults,
+  // but Settings<N, E, G> expects programs parameterized with the specific types.
+  // This is safe because programs don't actually depend on the attribute types at runtime.
+  resolvedSettings.nodeProgramClasses = assign(
+    {},
+    DEFAULT_NODE_PROGRAM_CLASSES as unknown as typeof resolvedSettings.nodeProgramClasses,
+    resolvedSettings.nodeProgramClasses,
+  );
+  resolvedSettings.edgeProgramClasses = assign(
+    {},
+    DEFAULT_EDGE_PROGRAM_CLASSES as unknown as typeof resolvedSettings.edgeProgramClasses,
+    resolvedSettings.edgeProgramClasses,
+  );
   resolvedSettings.labelProgramClasses = assign(
     {},
-    DEFAULT_LABEL_PROGRAM_CLASSES,
+    DEFAULT_LABEL_PROGRAM_CLASSES as unknown as typeof resolvedSettings.labelProgramClasses,
     resolvedSettings.labelProgramClasses,
   );
 

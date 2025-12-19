@@ -487,3 +487,60 @@ export const DEFAULT_EDGE_STYLE: Required<EdgeStyleProperties> = {
   labelPosition: 0.5,
   labelLayer: "edgeLabels",
 } as const;
+
+/**
+ * Default node state values.
+ */
+export const DEFAULT_NODE_STATE: BaseNodeState = {
+  isHovered: false,
+  isHidden: false,
+  isHighlighted: false,
+};
+
+/**
+ * Default edge state values.
+ */
+export const DEFAULT_EDGE_STATE: BaseEdgeState = {
+  isHovered: false,
+  isHidden: false,
+  isHighlighted: false,
+};
+
+/**
+ * Default graph state values.
+ */
+export const DEFAULT_GRAPH_STATE: BaseGraphState = {
+  isIdle: true,
+  isPanning: false,
+  isZooming: false,
+  isDragging: false,
+  hasHovered: false,
+  hasHighlighted: false,
+};
+
+/**
+ * Creates a new node state with default values.
+ */
+export function createNodeState<NS extends BaseNodeState = BaseNodeState>(
+  defaults?: Partial<NS>,
+): NS {
+  return { ...DEFAULT_NODE_STATE, ...defaults } as NS;
+}
+
+/**
+ * Creates a new edge state with default values.
+ */
+export function createEdgeState<ES extends BaseEdgeState = BaseEdgeState>(
+  defaults?: Partial<ES>,
+): ES {
+  return { ...DEFAULT_EDGE_STATE, ...defaults } as ES;
+}
+
+/**
+ * Creates a new graph state with default values.
+ */
+export function createGraphState<GS extends BaseGraphState = BaseGraphState>(
+  defaults?: Partial<GS>,
+): GS {
+  return { ...DEFAULT_GRAPH_STATE, ...defaults } as GS;
+}

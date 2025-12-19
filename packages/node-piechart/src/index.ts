@@ -13,6 +13,14 @@
 import { registerNodeLayerFactory } from "sigma/rendering";
 
 import { layerPiechart } from "./layer";
+import { piechartSchema } from "./types";
+
+// Module augmentation: makes "piechart" a recognized node layer type
+declare module "sigma/primitives" {
+  interface NodeLayerSchemaRegistry {
+    piechart: typeof piechartSchema;
+  }
+}
 
 // Register the runtime factory
 registerNodeLayerFactory("piechart", layerPiechart);
@@ -23,15 +31,9 @@ export { layerPiechart } from "./layer";
 // Program factory (for backward compatibility)
 export { createNodePiechartProgram } from "./program";
 
+// Schema
+export { piechartSchema } from "./types";
+
 // Types
-export type {
-  CreateNodePiechartProgramOptions,
-  LayerPiechartOptions,
-  // Backward compatibility aliases
-  NodeSliceColor,
-  NodeSliceValue,
-  PiechartOffset,
-  PiechartSliceColor,
-  PiechartSliceValue,
-} from "./types";
+export type { CreateNodePiechartProgramOptions, LayerPiechartOptions } from "./types";
 export { DEFAULT_COLOR, DEFAULT_CREATE_NODE_PIECHART_OPTIONS } from "./types";

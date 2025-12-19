@@ -12,7 +12,7 @@
     "/types",
     "/settings",
     "/rendering",
-    "/registry",
+    "/primitives",
     "/utils"
   ],
   "sideEffects": false,
@@ -61,6 +61,7 @@
       "types.ts",
       "settings.ts",
       "rendering/index.ts",
+      "primitives/index.ts",
       "utils/index.ts"
     ]
   },
@@ -89,6 +90,11 @@
       "module": "./rendering/dist/sigma-rendering.esm.js",
       "import": "./rendering/dist/sigma-rendering.cjs.mjs",
       "default": "./rendering/dist/sigma-rendering.cjs.js"
+    },
+    "./primitives": {
+      "module": "./primitives/dist/sigma-primitives.esm.js",
+      "import": "./primitives/dist/sigma-primitives.cjs.mjs",
+      "default": "./primitives/dist/sigma-primitives.cjs.js"
     },
     "./package.json": "./package.json"
   }

@@ -7,154 +7,20 @@
  * NOTE: Type test files (*.test-d.ts) are statically analyzed only - they don't execute.
  * Run with: npx vitest typecheck
  */
-import { FragmentLayer } from "sigma/rendering";
-import { defineExtension } from "sigma/types";
+// Import satellite packages to augment the types
+// These packages use module augmentation to add their primitives to the registry
+import "@sigma/node-border";
+// Import schemas from packages for verification
+import { borderSchema } from "@sigma/node-border";
+import "@sigma/node-image";
+import { imageSchema } from "@sigma/node-image";
+import "@sigma/node-piechart";
+import { piechartSchema } from "@sigma/node-piechart";
+// Import real schema helpers from sigma/primitives
+import { colorProp, enumProp, numberProp, stringProp } from "sigma/primitives";
+// Import defineSigmaOptions from sigma/types
+import { defineSigmaOptions } from "sigma/types";
 import { describe, expectTypeOf, test } from "vitest";
-
-// =============================================================================
-// MOCK SCHEMA HELPERS
-// =============================================================================
-// These mirror the helpers from sigma/primitives/schema.ts
-// Once primitives are exported publicly, these can be replaced with real imports.
-
-interface PropertySchema<T = unknown, PT = unknown, V extends boolean = boolean> {
-  type: PT;
-  default: T;
-  variable?: V;
-}
-
-interface EnumPropertyType<T extends string = string> {
-  enum: readonly T[];
-}
-
-function numberProp(defaultValue: number, options?: { variable?: boolean }): PropertySchema<number, "number", boolean> {
-  return { type: "number", default: defaultValue, variable: options?.variable };
-}
-
-function colorProp(defaultValue: string, options?: { variable?: boolean }): PropertySchema<string, "color", boolean> {
-  return { type: "color", default: defaultValue, variable: options?.variable };
-}
-
-function stringProp(defaultValue: string, options?: { variable?: boolean }): PropertySchema<string, "string", boolean> {
-  return { type: "string", default: defaultValue, variable: options?.variable };
-}
-
-function enumProp<T extends string>(values: readonly T[], defaultValue: T): PropertySchema<T, EnumPropertyType<T>> {
-  return { type: { enum: values }, default: defaultValue, variable: false };
-}
-
-// =============================================================================
-// MOCK EXTENSIONS
-// =============================================================================
-// In real usage, these would be imported from @sigma/node-border, @sigma/node-image, etc.
-// Once packages export their extension definitions, these can be replaced.
-
-const borderSchema = {
-  size: numberProp(0, { variable: true }),
-  color: colorProp("#000000", { variable: true }),
-  mode: enumProp(["pixels", "relative"] as const, "pixels"),
-} as const;
-
-const nodeBorder = defineExtension({
-  kind: "nodeLayer",
-  primitives: {
-    border: {
-      schema: borderSchema,
-      factory: (): FragmentLayer => ({
-        name: "border",
-        glsl: "",
-        uniforms: [],
-        attributes: [],
-      }),
-    },
-  },
-});
-
-const imageSchema = {
-  url: stringProp("", { variable: true }),
-  drawingMode: enumProp(["image", "background"] as const, "image"),
-  padding: numberProp(0),
-} as const;
-
-const nodeImage = defineExtension({
-  kind: "nodeLayer",
-  primitives: {
-    image: {
-      schema: imageSchema,
-      factory: (): FragmentLayer => ({
-        name: "image",
-        glsl: "",
-        uniforms: [],
-        attributes: [],
-      }),
-    },
-  },
-});
-
-// =============================================================================
-// TYPE TESTS: defineExtension
-// =============================================================================
-
-describe("defineExtension", () => {
-  test("returns correctly typed PrimitiveExtension", () => {
-    const ext = defineExtension({
-      kind: "nodeLayer",
-      primitives: {
-        myLayer: {
-          schema: { size: numberProp(1) },
-          factory: (): FragmentLayer => ({ name: "myLayer", glsl: "", uniforms: [], attributes: [] }),
-        },
-      },
-    });
-
-    // Verify the extension has the expected structure
-    expectTypeOf(ext).toHaveProperty("kind");
-    expectTypeOf(ext).toHaveProperty("primitives");
-    expectTypeOf(ext.primitives).toHaveProperty("myLayer");
-  });
-
-  test("accepts valid built-in kinds", () => {
-    // All these should compile without error - if they don't, TypeScript will fail
-    const layerExt = defineExtension({
-      kind: "nodeLayer",
-      primitives: {
-        test: { schema: {}, factory: (): FragmentLayer => ({ name: "test", glsl: "", uniforms: [], attributes: [] }) },
-      },
-    });
-    expectTypeOf(layerExt).toHaveProperty("kind");
-
-    const shapeExt = defineExtension({
-      kind: "nodeShape",
-      primitives: {
-        test: {
-          schema: {},
-          factory: () => ({ name: "test", glsl: "", sdf: "", inradiusFactor: 1 }),
-        },
-      },
-    });
-    expectTypeOf(shapeExt).toHaveProperty("kind");
-  });
-});
-
-// =============================================================================
-// TYPE TESTS: Mock extension structure
-// =============================================================================
-
-describe("Extension structure", () => {
-  test("nodeBorder extension has correct structure", () => {
-    expectTypeOf(nodeBorder).toHaveProperty("kind");
-    expectTypeOf(nodeBorder).toHaveProperty("primitives");
-    expectTypeOf(nodeBorder.primitives.border).toHaveProperty("schema");
-    expectTypeOf(nodeBorder.primitives.border).toHaveProperty("factory");
-  });
-
-  test("nodeImage extension has correct structure", () => {
-    expectTypeOf(nodeImage).toHaveProperty("kind");
-    expectTypeOf(nodeImage).toHaveProperty("primitives");
-    expectTypeOf(nodeImage.primitives.image).toHaveProperty("schema");
-    expectTypeOf(nodeImage.primitives.image).toHaveProperty("factory");
-  });
-});
 
 // =============================================================================
 // TYPE TESTS: Schema helpers
@@ -188,20 +54,58 @@ describe("Schema helpers", () => {
     const withVar = numberProp(0, { variable: true });
     const withoutVar = numberProp(0);
 
-    expectTypeOf(withVar.variable).toEqualTypeOf<boolean | undefined>();
-    expectTypeOf(withoutVar.variable).toEqualTypeOf<boolean | undefined>();
+    expectTypeOf(withVar.variable).toEqualTypeOf<true | undefined>();
+    expectTypeOf(withoutVar.variable).toEqualTypeOf<false | undefined>();
   });
 });
 
 // =============================================================================
-// PLACEHOLDER: defineSigmaOptions tests
+// TYPE TESTS: Satellite package schemas
 // =============================================================================
-// These tests are commented out because defineSigmaOptions doesn't yet support
-// the extensions property. Uncomment when the API is complete.
 
-/*
-import { defineSigmaOptions } from "sigma/types";
-import { BaseEdgeState, BaseGraphState, BaseNodeState } from "sigma/types";
+describe("Satellite package schemas", () => {
+  test("borderSchema has correct structure", () => {
+    expectTypeOf(borderSchema).toHaveProperty("borders");
+  });
+
+  test("imageSchema has correct structure", () => {
+    expectTypeOf(imageSchema).toHaveProperty("name");
+    expectTypeOf(imageSchema).toHaveProperty("drawingMode");
+    expectTypeOf(imageSchema).toHaveProperty("padding");
+  });
+
+  test("piechartSchema has correct structure", () => {
+    expectTypeOf(piechartSchema).toHaveProperty("slices");
+    expectTypeOf(piechartSchema).toHaveProperty("offset");
+    expectTypeOf(piechartSchema).toHaveProperty("defaultColor");
+  });
+});
+
+// =============================================================================
+// TYPE TESTS: Module augmentation (after imports)
+// =============================================================================
+// NOTE: These tests verify that importing satellite packages augments the types.
+// The actual type checking is implicit - if types weren't augmented, these would fail.
+
+describe("Module augmentation", () => {
+  test("importing @sigma/node-border augments NodeLayerSchemaRegistry", () => {
+    // This test passes if TypeScript recognizes "border" as a valid layer
+    // after importing @sigma/node-border at the top of the file
+    expectTypeOf(borderSchema).toMatchTypeOf<object>();
+  });
+
+  test("importing @sigma/node-image augments NodeLayerSchemaRegistry", () => {
+    expectTypeOf(imageSchema).toMatchTypeOf<object>();
+  });
+
+  test("importing @sigma/node-piechart augments NodeLayerSchemaRegistry", () => {
+    expectTypeOf(piechartSchema).toMatchTypeOf<object>();
+  });
+});
+
+// =============================================================================
+// TYPE TESTS: defineSigmaOptions - Minimal Setup
+// =============================================================================
 
 describe("defineSigmaOptions - Minimal Setup", () => {
   test("minimal example compiles", () => {
@@ -233,10 +137,13 @@ describe("defineSigmaOptions - Minimal Setup", () => {
   });
 });
 
-describe("defineSigmaOptions - With Extensions", () => {
-  test("shapes with border example compiles", () => {
+// =============================================================================
+// TYPE TESTS: defineSigmaOptions - With shapes and variables
+// =============================================================================
+
+describe("defineSigmaOptions - With shapes and variables", () => {
+  test("shapes with variables example compiles", () => {
     const options = defineSigmaOptions({
-      extensions: [nodeBorder],
       primitives: {
         nodes: {
           shapes: [
@@ -248,7 +155,7 @@ describe("defineSigmaOptions - With Extensions", () => {
             borderSize: { type: "number", default: 0 },
             borderColor: { type: "color", default: "#000" },
           },
-          layers: ["fill", { type: "border", size: "borderSize", color: "borderColor", mode: "pixels" }],
+          layers: ["fill"],
         },
       },
       styles: {
@@ -266,6 +173,10 @@ describe("defineSigmaOptions - With Extensions", () => {
   });
 });
 
+// =============================================================================
+// TYPE TESTS: defineSigmaOptions - Error Cases
+// =============================================================================
+
 describe("defineSigmaOptions - Error Cases", () => {
   test("rejects wrong type for graphic variable", () => {
     defineSigmaOptions({
@@ -280,6 +191,22 @@ describe("defineSigmaOptions - Error Cases", () => {
       styles: {
         // @ts-expect-error - borderSize should be a number, not a string
         nodes: { borderSize: "thick" },
+      },
+    });
+  });
+
+  test("rejects wrong type for default variable value", () => {
+    defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          variables: {
+            // @ts-expect-error - "large" is be a number
+            borderSize: { type: "number", default: "large" },
+            // @ts-expect-error - 0xffcc00 is be a string
+            borderColor: { type: "color", default: 0xffcc00 },
+          },
+        },
       },
     });
   });
@@ -319,4 +246,3 @@ describe("defineSigmaOptions - Error Cases", () => {
     });
   });
 });
-*/

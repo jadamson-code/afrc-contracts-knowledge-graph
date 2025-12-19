@@ -319,14 +319,6 @@ export type { TouchCaptorEvents } from "./core/captors/touch";
 export type { FontKey, FontDescriptor, GlyphMetrics, SDFAtlasOptions } from "./core/sdf-atlas";
 
 /**
- * Extensions API:
+ * Options API:
  */
-export {
-  defineExtension,
-  registerExtension,
-  isPrimitiveExtension,
-  isKindExtension,
-  type Extension,
-  type PrimitiveExtension,
-  type KindExtension,
-} from "./types/extensions";
+export { defineSigmaOptions } from "./types/options";

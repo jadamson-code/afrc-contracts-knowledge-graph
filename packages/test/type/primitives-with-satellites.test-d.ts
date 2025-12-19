@@ -1,0 +1,226 @@
+/**
+ * Type tests for Sigma.js primitives WITH satellite package imports.
+ *
+ * These tests verify that importing satellite packages (like @sigma/node-border)
+ * correctly augments the type system, making their layer types available in
+ * defineSigmaOptions.
+ *
+ * Run with: npx vitest typecheck
+ */
+// Import satellite packages - this should augment the types
+import "@sigma/node-border";
+import "@sigma/node-image";
+import "@sigma/node-piechart";
+import { defineSigmaOptions } from "sigma/types";
+import { describe, expectTypeOf, test } from "vitest";
+
+// =============================================================================
+// TYPE TESTS: Undeclared primitives should error
+// =============================================================================
+
+describe("Undeclared primitives", () => {
+  test("unknown layer type is rejected", () => {
+    defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          layers: [
+            "fill",
+            // @ts-expect-error - "unknownLayer" is not a recognized layer type
+            { type: "unknownLayer", foo: "bar" },
+          ],
+        },
+      },
+    });
+  });
+
+  test("unknown shape type is rejected", () => {
+    defineSigmaOptions({
+      primitives: {
+        nodes: {
+          // @ts-expect-error - "hexagon" is not a recognized shape type
+          shapes: ["circle", "hexagon"],
+          layers: ["fill"],
+        },
+      },
+    });
+  });
+});
+
+// =============================================================================
+// TYPE TESTS: Invalid options for declared primitives should error
+// =============================================================================
+
+describe("Invalid options for declared primitives", () => {
+  test("fill layer with wrong property type is rejected", () => {
+    defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          variables: {
+            nodeColor: { type: "color", default: "#fc0" },
+          },
+          layers: [
+            // @ts-expect-error - color should be a string, not a number
+            { type: "fill", color: 123 },
+            // @ts-expect-error - "nodeFrontColor" hasn't been declared as a graphic variable
+            { type: "fill", color: "nodeFrontColor" },
+            { type: "fill", color: "nodeColor" },
+          ],
+        },
+      },
+    });
+  });
+
+  test("border layer with wrong property type is rejected", () => {
+    defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          layers: [
+            "fill",
+            // @ts-expect-error - borders should be an array, not a string
+            { type: "border", borders: "wrong" },
+          ],
+        },
+      },
+    });
+  });
+
+  test("border layer with wrong property type is rejected", () => {
+    defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          layers: [
+            "fill",
+            // @ts-expect-error - borders should be an array, not a string
+            { type: "border", borders: "wrong" },
+          ],
+        },
+      },
+    });
+  });
+
+  test("border layer with invalid border item is rejected", () => {
+    defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          layers: [
+            "fill",
+            {
+              type: "border",
+              borders: [
+                // @ts-expect-error - size should be a number, not a string
+                { size: "big", color: "#000" },
+                // @ts-expect-error - opacity is not a valid option
+                { size: 2, color: "#fff", opacity: 0.5 },
+              ],
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  test("piechart layer with invalid slice is rejected", () => {
+    defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          layers: [
+            // @ts-expect-error - value should be a number, not a string
+            { type: "piechart", slices: [{ color: "#f00", value: "half" }] },
+          ],
+        },
+      },
+    });
+  });
+});
+
+// =============================================================================
+// TYPE TESTS: Satellite layers ARE recognized after imports
+// =============================================================================
+
+describe("With satellite imports", () => {
+  test("border layer is recognized in primitives", () => {
+    const options = defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          layers: ["fill", { type: "border", borders: [{ size: 0.1, color: "#000" }] }],
+        },
+      },
+      styles: {
+        nodes: {
+          color: "#666",
+          size: 10,
+        },
+      },
+    });
+
+    expectTypeOf(options).toHaveProperty("primitives");
+  });
+
+  test("image layer is recognized in primitives", () => {
+    const options = defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          layers: ["fill", { type: "image", name: "myImage" }],
+        },
+      },
+      styles: {
+        nodes: {
+          color: "#666",
+          size: 10,
+        },
+      },
+    });
+
+    expectTypeOf(options).toHaveProperty("primitives");
+  });
+
+  test("piechart layer is recognized in primitives", () => {
+    const options = defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          layers: [{ type: "piechart", slices: [{ color: "#f00", value: 1 }] }],
+        },
+      },
+      styles: {
+        nodes: {
+          color: "#666",
+          size: 10,
+        },
+      },
+    });
+
+    expectTypeOf(options).toHaveProperty("primitives");
+  });
+
+  test("multiple satellite layers can be combined", () => {
+    const options = defineSigmaOptions({
+      primitives: {
+        nodes: {
+          shapes: ["circle"],
+          layers: [
+            { type: "image", name: "background" },
+            { type: "piechart", slices: [{ color: "#f00", value: 1 }] },
+            { type: "border", borders: [{ size: 0.1, color: "#000" }] },
+          ],
+        },
+      },
+      styles: {
+        nodes: {
+          color: "#666",
+          size: 10,
+        },
+      },
+    });
+
+    expectTypeOf(options).toHaveProperty("primitives");
+  });
+});

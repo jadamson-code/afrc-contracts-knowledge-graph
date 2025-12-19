@@ -8,7 +8,7 @@
  * @module
  */
 import { Attributes } from "graphology-types";
-import { NodeProgramType, createNodeProgram, sdfCircle } from "sigma/rendering";
+import { NodeProgramType, createNodeProgram } from "sigma/rendering";
 
 import { layerBorder } from "./layer";
 import { CreateNodeBorderProgramOptions, DEFAULT_CREATE_NODE_BORDER_OPTIONS } from "./types";
@@ -30,8 +30,8 @@ import { CreateNodeBorderProgramOptions, DEFAULT_CREATE_NODE_BORDER_OPTIONS } fr
  * // Custom borders
  * const CustomProgram = createNodeBorderProgram({
  *   borders: [
- *     { size: { value: 0.15 }, color: { value: "#ff0000" } },
- *     { size: { fill: true }, color: { attribute: "color" } },
+ *     { size: 0.15, color: "#ff0000", mode: "relative" },
+ *     { size: 0, color: { attribute: "color" }, fill: true },
  *   ],
  * });
  *
@@ -56,11 +56,11 @@ export function createNodeBorderProgram<
     ...(inputOptions || {}),
   };
 
-  const { borders } = options;
+  const { borders, shapeFactory } = options;
 
-  // Create the node program with circle shape and border layer
+  // Create the node program with shape and border layer
   return createNodeProgram<N, E, G>({
-    shapes: [sdfCircle()],
+    shapes: [shapeFactory!()],
     layers: [layerBorder({ borders })],
   });
 }

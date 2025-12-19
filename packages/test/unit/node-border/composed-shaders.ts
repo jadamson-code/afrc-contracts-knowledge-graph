@@ -16,8 +16,8 @@ describe("Border layer from @sigma/node-border", () => {
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.1 }, color: "#ff0000" },
-              { size: { fill: true }, color: "#0000ff" },
+              { size: 0.1, color: "#ff0000" },
+              { fill: true, color: "#0000ff" },
             ],
           }),
         ],
@@ -32,8 +32,8 @@ describe("Border layer from @sigma/node-border", () => {
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.1 }, color: { attribute: "borderColor" } },
-              { size: { fill: true }, color: { attribute: "color" } },
+              { size: 0.1, color: { attribute: "borderColor" } },
+              { fill: true, color: { attribute: "color" } },
             ],
           }),
         ],
@@ -48,8 +48,8 @@ describe("Border layer from @sigma/node-border", () => {
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.2 }, color: { transparent: true } },
-              { size: { fill: true }, color: "#00ff00" },
+              { size: 0.2, color: "transparent" },
+              { fill: true, color: "#00ff00" },
             ],
           }),
         ],
@@ -66,8 +66,8 @@ describe("Border layer from @sigma/node-border", () => {
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.15, mode: "relative" }, color: "#ff0000" },
-              { size: { fill: true }, color: "#ffffff" },
+              { size: 0.15, mode: "relative", color: "#ff0000" },
+              { fill: true, color: "#ffffff" },
             ],
           }),
         ],
@@ -82,8 +82,8 @@ describe("Border layer from @sigma/node-border", () => {
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 5, mode: "pixels" }, color: "#ff0000" },
-              { size: { fill: true }, color: "#ffffff" },
+              { size: 5, mode: "pixels", color: "#ff0000" },
+              { fill: true, color: "#ffffff" },
             ],
           }),
         ],
@@ -98,8 +98,8 @@ describe("Border layer from @sigma/node-border", () => {
         layers: [
           layerBorder({
             borders: [
-              { size: { attribute: "borderSize", defaultValue: 0.1 }, color: "#ff0000" },
-              { size: { fill: true }, color: { attribute: "color" } },
+              { size: { attribute: "borderSize", default: 0.1 }, color: "#ff0000" },
+              { fill: true, color: { attribute: "color" } },
             ],
           }),
         ],
@@ -116,9 +116,9 @@ describe("Border layer from @sigma/node-border", () => {
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.1 }, color: "#ff0000" },
-              { size: { value: 0.1 }, color: "#00ff00" },
-              { size: { fill: true }, color: "#0000ff" },
+              { size: 0.1, color: "#ff0000" },
+              { size: 0.1, color: "#00ff00" },
+              { fill: true, color: "#0000ff" },
             ],
           }),
         ],
@@ -133,9 +133,9 @@ describe("Border layer from @sigma/node-border", () => {
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.1 }, color: "#ff0000" },
-              { size: { fill: true }, color: "#00ff00" },
-              { size: { fill: true }, color: "#0000ff" },
+              { size: 0.1, color: "#ff0000" },
+              { fill: true, color: "#00ff00" },
+              { fill: true, color: "#0000ff" },
             ],
           }),
         ],
@@ -152,8 +152,8 @@ describe("Border layer from @sigma/node-border", () => {
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.1 }, color: "#ff0000" },
-              { size: { fill: true }, color: { attribute: "color" } },
+              { size: 0.1, color: "#ff0000" },
+              { fill: true, color: { attribute: "color" } },
             ],
           }),
         ],
@@ -168,8 +168,8 @@ describe("Border layer from @sigma/node-border", () => {
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.15 }, color: { attribute: "borderColor" } },
-              { size: { fill: true }, color: { attribute: "color" } },
+              { size: 0.15, color: { attribute: "borderColor" } },
+              { fill: true, color: { attribute: "color" } },
             ],
           }),
         ],
@@ -184,8 +184,8 @@ describe("Border layer from @sigma/node-border", () => {
         layers: [
           layerBorder({
             borders: [
-              { size: { value: 0.2 }, color: "#ffff00" },
-              { size: { fill: true }, color: "#000000" },
+              { size: 0.2, color: "#ffff00" },
+              { fill: true, color: "#000000" },
             ],
           }),
         ],
@@ -200,8 +200,8 @@ describe("Border layer from @sigma/node-border", () => {
       // In the new architecture, check the layer definition for uniforms
       const layer = layerBorder({
         borders: [
-          { size: { value: 0.1 }, color: "#ff0000" },
-          { size: { fill: true }, color: "#0000ff" },
+          { size: 0.1, color: "#ff0000" },
+          { fill: true, color: "#0000ff" },
         ],
       });
 
@@ -215,8 +215,8 @@ describe("Border layer from @sigma/node-border", () => {
       // Attribute names don't have the 'a_' prefix in layer definition (generator adds it)
       const layer = layerBorder({
         borders: [
-          { size: { attribute: "borderSize", defaultValue: 0.1 }, color: { attribute: "borderColor" } },
-          { size: { fill: true }, color: { attribute: "color" } },
+          { size: { attribute: "borderSize", default: 0.1 }, color: { attribute: "borderColor" } },
+          { fill: true, color: { attribute: "color" } },
         ],
       });
 

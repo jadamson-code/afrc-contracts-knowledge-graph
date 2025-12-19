@@ -10,7 +10,12 @@
 import { AttributeSpecification, FragmentLayer, UniformSpecification, Vec4, numberToGLSLFloat } from "sigma/rendering";
 import { colorToArray } from "sigma/utils";
 
-import { BorderColor, BorderSize, LayerBorderOptions } from "./types";
+import { LayerBorderOptions } from "./types";
+
+/**
+ * Border item type extracted from options.
+ */
+type BorderItem = NonNullable<NonNullable<LayerBorderOptions["borders"]>[number]>;
 
 /**
  * Converts a CSS color string to a Vec4 (normalized RGBA).
@@ -21,56 +26,45 @@ function colorToVec4(color: string): Vec4 {
 }
 
 /**
- * Type guards for BorderColor variants
+ * Type guards for border color variants
  */
-function isTransparentColor(color: BorderColor): color is { transparent: true } {
-  return typeof color === "object" && "transparent" in color;
+function isAttributeColor(color: BorderItem["color"]): color is { attribute: string; default?: string } {
+  return typeof color === "object" && color !== null && "attribute" in color;
 }
 
-function isFixedColor(color: BorderColor): color is string {
+function isFixedColor(color: BorderItem["color"]): color is string {
   return typeof color === "string";
 }
 
-function isAttributeColor(color: BorderColor): color is { attribute: string; default?: string } {
-  return typeof color === "object" && "attribute" in color;
-}
-
 /**
- * Type guards for BorderSize variants
+ * Type guards for border size variants
  */
-function isFillSize(size: BorderSize): size is { fill: true } {
-  return typeof size === "object" && "fill" in size;
-}
-
-function isAttributeSize(
-  size: BorderSize,
-): size is { attribute: string; default?: number; mode?: "relative" | "pixels" } {
-  return typeof size === "object" && "attribute" in size;
+function isAttributeSize(size: BorderItem["size"]): size is { attribute: string; default?: number } {
+  return typeof size === "object" && size !== null && "attribute" in size;
 }
 
 /**
  * Generates the GLSL code for the border layer function.
  * Uses the global `context` struct for context (sdf, shapeSize, aaWidth, pixelSize).
  */
-function generateBorderGLSL(borders: LayerBorderOptions["borders"]): string {
-  const fillCount = borders.filter(({ size }) => isFillSize(size)).length;
+function generateBorderGLSL(borders: NonNullable<LayerBorderOptions["borders"]>): string {
+  const fillCount = borders.filter((b) => b.fill).length;
   const fillCountGLSL = numberToGLSLFloat(fillCount || 1); // Avoid division by zero
 
   // Generate size calculation code (using context.shapeSize and context.pixelSize)
   const sizeCalculations = borders
-    .flatMap(({ size }, i) => {
-      if (isFillSize(size)) return [];
+    .flatMap((border, i) => {
+      if (border.fill) return [];
 
-      // Determine value and mode based on size type
+      const { size, mode } = border;
+      const isPixelMode = mode === "pixels";
+
+      // Determine value based on size type
       let value: string;
-      let isPixelMode: boolean;
-
       if (isAttributeSize(size)) {
         value = `v_borderSize_${i + 1}`;
-        isPixelMode = size.mode === "pixels";
       } else {
-        value = numberToGLSLFloat(size.value);
-        isPixelMode = size.mode === "pixels";
+        value = numberToGLSLFloat(typeof size === "number" ? size : 0);
       }
 
       // For relative mode: multiply by context.shapeHalfSize (size is a fraction 0-1 of the shape)
@@ -84,26 +78,20 @@ function generateBorderGLSL(borders: LayerBorderOptions["borders"]): string {
     .join("\n");
 
   // Generate non-fill size sum for fill calculation
-  const nonFillSizes = borders.flatMap(({ size }, i) => (!isFillSize(size) ? [`borderSize_${i + 1}`] : [])).join(" + ");
+  const nonFillSizes = borders.flatMap((b, i) => (!b.fill ? [`borderSize_${i + 1}`] : [])).join(" + ");
   const nonFillSizesExpr = nonFillSizes || "0.0";
 
   // Generate fill border sizes
-  const fillSizeCalculations = borders
-    .flatMap(({ size }, i) => (isFillSize(size) ? [`  float borderSize_${i + 1} = fillBorderSize;`] : []))
-    .join("\n");
+  const fillSizeCalculations = borders.flatMap((b, i) => (b.fill ? [`  float borderSize_${i + 1} = fillBorderSize;`] : [])).join("\n");
 
   // Generate cumulative boundary calculations (from outside to inside)
   // In SDF space: boundary_0 = 0.0 (shape edge), boundaries go negative (inside)
-  const boundaryCalculations = borders
-    .map((_, i) => `  float boundary_${i + 1} = boundary_${i} - borderSize_${i + 1};`)
-    .join("\n");
+  const boundaryCalculations = borders.map((_, i) => `  float boundary_${i + 1} = boundary_${i} - borderSize_${i + 1};`).join("\n");
 
   // Generate color assignments
   const colorAssignments = borders
     .map(({ color }, i) => {
-      if (isTransparentColor(color)) {
-        return `  vec4 borderColor_${i + 1} = vec4(0.0, 0.0, 0.0, 0.0);`;
-      } else if (isAttributeColor(color)) {
+      if (isAttributeColor(color)) {
         return `  vec4 borderColor_${i + 1} = v_borderColor_${i + 1};`;
       } else {
         // Fixed color string - use uniform
@@ -219,8 +207,8 @@ ${colorAdjustments}
  * // Simple border with fill
  * const borderLayer = layerBorder({
  *   borders: [
- *     { size: 0.1, color: { attribute: "borderColor" } },
- *     { size: { fill: true }, color: { attribute: "color" } },
+ *     { size: 0.1, color: { attribute: "borderColor" }, mode: "relative" },
+ *     { size: 0, color: { attribute: "color" }, fill: true },
  *   ],
  * });
  *
@@ -231,8 +219,18 @@ ${colorAdjustments}
  * });
  * ```
  */
-export function layerBorder(options: LayerBorderOptions): FragmentLayer {
-  const { borders } = options;
+export function layerBorder(options?: LayerBorderOptions): FragmentLayer {
+  const borders = options?.borders ?? [];
+  if (borders.length === 0) {
+    // Return a no-op layer if no borders defined
+    return {
+      name: "border",
+      uniforms: [],
+      attributes: [],
+      glsl: "vec4 layer_border() { return vec4(0.0); }",
+    };
+  }
+
   const { UNSIGNED_BYTE, FLOAT } = WebGL2RenderingContext;
 
   // Generate uniforms for fixed-value colors (direct string values)
@@ -251,6 +249,7 @@ export function layerBorder(options: LayerBorderOptions): FragmentLayer {
               type: UNSIGNED_BYTE,
               normalized: true,
               source: color.attribute,
+              defaultValue: color.default,
             },
           ]
         : [],

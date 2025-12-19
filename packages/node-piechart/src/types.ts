@@ -6,67 +6,30 @@
  *
  * @module
  */
-import { ValueSource } from "sigma/rendering";
-import { NonEmptyArray } from "sigma/types";
+import { arrayProp, colorProp, FactoryOptionsFromSchema, numberProp } from "sigma/primitives";
 
 /**
- * Specifies the color of a piechart slice.
- * - string: Fixed CSS color value (e.g., "#ff0000")
- * - { attribute, default? }: Read from node attribute
- * - { transparent: true }: Fully transparent
+ * Schema for the piechart layer.
+ *
+ * Properties:
+ * - slices: Array of slice definitions (color and value)
+ * - offset: Offset angle in radians (can be variable)
+ * - defaultColor: Color when no slices are visible
  */
-export type PiechartSliceColor = ValueSource<string> | { transparent: true };
-
-/**
- * Specifies the value (size) of a piechart slice.
- * - number: Fixed value
- * - { attribute, default? }: Read from node attribute
- */
-export type PiechartSliceValue = ValueSource<number>;
-
-/**
- * Specifies the offset angle of the piechart.
- * - number: Fixed offset in radians
- * - { attribute, default? }: Read from node attribute
- */
-export type PiechartOffset = ValueSource<number>;
-
-/**
- * @deprecated Use PiechartSliceColor instead.
- */
-export type NodeSliceColor = PiechartSliceColor;
-
-/**
- * @deprecated Use PiechartSliceValue instead.
- */
-export type NodeSliceValue = PiechartSliceValue;
+export const piechartSchema = {
+  slices: arrayProp({
+    color: colorProp("#000000", { variable: true }),
+    value: numberProp(1, { variable: true }),
+  }),
+  offset: numberProp(0, { variable: true }),
+  defaultColor: colorProp("#000000"),
+} as const;
 
 /**
  * Options for the layerPiechart() function.
+ * Derived from the piechartSchema.
  */
-export interface LayerPiechartOptions {
-  /**
-   * Array of slice definitions, in order around the piechart.
-   * Each slice has a color and a value (size).
-   */
-  slices: NonEmptyArray<{
-    color: PiechartSliceColor;
-    value: PiechartSliceValue;
-  }>;
-
-  /**
-   * Offset angle for the piechart in radians.
-   * Allows rotating the starting position of the first slice.
-   * Default: 0
-   */
-  offset?: PiechartOffset;
-
-  /**
-   * Default color to use when no slices are visible.
-   * Default: "#000000"
-   */
-  defaultColor?: string;
-}
+export type LayerPiechartOptions = FactoryOptionsFromSchema<typeof piechartSchema>;
 
 /**
  * Options for the createNodePiechartProgram() function.
@@ -75,22 +38,19 @@ export interface CreateNodePiechartProgramOptions {
   /**
    * Array of slice definitions.
    */
-  slices: NonEmptyArray<{
-    color: PiechartSliceColor;
-    value: PiechartSliceValue;
-  }>;
+  slices: NonNullable<LayerPiechartOptions["slices"]>;
 
   /**
    * Offset angle for the piechart in radians.
    * Default: 0
    */
-  offset: PiechartOffset;
+  offset?: LayerPiechartOptions["offset"];
 
   /**
    * Default color to use when no slices are visible.
    * Default: "#000000"
    */
-  defaultColor: string;
+  defaultColor?: string;
 }
 
 /**

@@ -67,7 +67,7 @@ describe("Piechart layer from @sigma/node-piechart", () => {
           layerPiechart({
             slices: [
               { color: "#ff0000", value: 1 },
-              { color: { transparent: true }, value: 1 },
+              { color: "transparent", value: 1 },
               { color: "#0000ff", value: 1 },
             ],
           }),
@@ -174,7 +174,7 @@ describe("Piechart layer from @sigma/node-piechart", () => {
             slices: [
               { color: "#ff0000", value: 1 },
               { color: { attribute: "color2" }, value: 1 },
-              { color: { transparent: true }, value: 1 },
+              { color: "transparent", value: 1 },
             ],
           }),
         ],

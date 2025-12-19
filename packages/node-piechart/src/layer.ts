@@ -10,9 +10,17 @@
 import { AttributeSpecification, FragmentLayer, UniformSpecification, Vec4, numberToGLSLFloat } from "sigma/rendering";
 import { colorToArray } from "sigma/utils";
 
-import { DEFAULT_COLOR, LayerPiechartOptions, PiechartOffset, PiechartSliceColor, PiechartSliceValue } from "./types";
+import { DEFAULT_COLOR, LayerPiechartOptions } from "./types";
 
 const TWO_PI = 2 * Math.PI;
+
+/**
+ * Types extracted from LayerPiechartOptions.
+ */
+type SliceItem = NonNullable<NonNullable<LayerPiechartOptions["slices"]>[number]>;
+type SliceColor = SliceItem["color"];
+type SliceValue = SliceItem["value"];
+type OffsetValue = LayerPiechartOptions["offset"];
 
 /**
  * Converts a CSS color string to a Vec4 (normalized RGBA).
@@ -23,43 +31,39 @@ function colorToVec4(color: string): Vec4 {
 }
 
 /**
- * Type guards for PiechartSliceColor variants
+ * Type guards for slice color variants
  */
-function isTransparentColor(color: PiechartSliceColor): color is { transparent: true } {
-  return typeof color === "object" && "transparent" in color;
-}
-
-function isFixedColor(color: PiechartSliceColor): color is string {
+function isFixedColor(color: SliceColor): color is string {
   return typeof color === "string";
 }
 
-function isAttributeColor(color: PiechartSliceColor): color is { attribute: string; default?: string } {
-  return typeof color === "object" && "attribute" in color;
+function isAttributeColor(color: SliceColor): color is { attribute: string; default?: string } {
+  return typeof color === "object" && color !== null && "attribute" in color;
 }
 
 /**
- * Type guard for PiechartSliceValue attribute variant
+ * Type guard for slice value attribute variant
  */
-function isAttributeValue(value: PiechartSliceValue): value is { attribute: string; default?: number } {
-  return typeof value === "object" && "attribute" in value;
+function isAttributeValue(value: SliceValue): value is { attribute: string; default?: number } {
+  return typeof value === "object" && value !== null && "attribute" in value;
 }
 
 /**
- * Type guards for PiechartOffset variants
+ * Type guards for offset variants
  */
-function isFixedOffset(offset: PiechartOffset): offset is number {
+function isFixedOffset(offset: OffsetValue): offset is number {
   return typeof offset === "number";
 }
 
-function isAttributeOffset(offset: PiechartOffset): offset is { attribute: string; default?: number } {
-  return typeof offset === "object" && "attribute" in offset;
+function isAttributeOffset(offset: OffsetValue): offset is { attribute: string; default?: number } {
+  return typeof offset === "object" && offset !== null && "attribute" in offset;
 }
 
 /**
  * Generates the GLSL code for the piechart layer function.
  * Uses the global `context` struct for context (sdf, uv, etc.).
  */
-function generatePiechartGLSL(slices: LayerPiechartOptions["slices"], offset: PiechartOffset): string {
+function generatePiechartGLSL(slices: NonNullable<LayerPiechartOptions["slices"]>, offset: OffsetValue): string {
   // Build function parameters: attributes first (as varyings), then uniforms
   // This order must match what the generator produces in generator.ts
   const attributeParams = [
@@ -82,8 +86,6 @@ function generatePiechartGLSL(slices: LayerPiechartOptions["slices"], offset: Pi
     .map(({ color }, i) => {
       if (isAttributeColor(color)) {
         return `  vec4 sliceColor_${i + 1} = v_sliceColor_${i + 1};`;
-      } else if (isTransparentColor(color)) {
-        return `  vec4 sliceColor_${i + 1} = vec4(0.0, 0.0, 0.0, 0.0);`;
       } else {
         return `  vec4 sliceColor_${i + 1} = u_sliceColor_${i + 1};`;
       }
@@ -96,7 +98,7 @@ function generatePiechartGLSL(slices: LayerPiechartOptions["slices"], offset: Pi
   // Generate value assignments
   const valueAssignments = slices
     .map(({ value }, i) => {
-      const valueGLSL = isAttributeValue(value) ? `v_sliceValue_${i + 1}` : numberToGLSLFloat(value as number);
+      const valueGLSL = isAttributeValue(value) ? `v_sliceValue_${i + 1}` : numberToGLSLFloat(typeof value === "number" ? value : 1);
       return `  float sliceValue_${i + 1} = ${valueGLSL};`;
     })
     .join("\n");
@@ -106,14 +108,10 @@ function generatePiechartGLSL(slices: LayerPiechartOptions["slices"], offset: Pi
 
   // Generate angle calculations and color selection
   const angleCalculations = slices
-    .map(
-      (_, i) => `    float angle_${i + 1} = angle_${i} + sliceValue_${i + 1} * ${numberToGLSLFloat(TWO_PI)} / total;`,
-    )
+    .map((_, i) => `    float angle_${i + 1} = angle_${i} + sliceValue_${i + 1} * ${numberToGLSLFloat(TWO_PI)} / total;`)
     .join("\n");
 
-  const colorSelections = slices
-    .map((_, i) => `if (angle < angle_${i + 1}) color = sliceColor_${i + 1};`)
-    .join("\n    else ");
+  const colorSelections = slices.map((_, i) => `if (angle < angle_${i + 1}) color = sliceColor_${i + 1};`).join("\n    else ");
 
   // Build the complete GLSL function
   // language=GLSL
@@ -186,8 +184,21 @@ ${angleCalculations}
  * });
  * ```
  */
-export function layerPiechart(options: LayerPiechartOptions): FragmentLayer {
-  const { slices, offset = 0, defaultColor = DEFAULT_COLOR } = options;
+export function layerPiechart(options?: LayerPiechartOptions): FragmentLayer {
+  const slices = options?.slices ?? [];
+  const offset = options?.offset ?? 0;
+  const defaultColor = options?.defaultColor ?? DEFAULT_COLOR;
+
+  if (slices.length === 0) {
+    // Return a no-op layer if no slices defined
+    return {
+      name: "piechart",
+      uniforms: [],
+      attributes: [],
+      glsl: "vec4 layer_piechart() { return vec4(0.0); }",
+    };
+  }
+
   const { UNSIGNED_BYTE, FLOAT } = WebGL2RenderingContext;
 
   // Generate uniforms
@@ -212,6 +223,7 @@ export function layerPiechart(options: LayerPiechartOptions): FragmentLayer {
             size: 1 as const,
             type: FLOAT,
             source: offset.attribute,
+            defaultValue: offset.default,
           },
         ]
       : []),
@@ -239,6 +251,7 @@ export function layerPiechart(options: LayerPiechartOptions): FragmentLayer {
               size: 1 as const,
               type: FLOAT,
               source: value.attribute,
+              defaultValue: value.default,
             },
           ]
         : [],

@@ -6,7 +6,15 @@
  *
  * @module
  */
-import { ValueSource } from "sigma/rendering";
+import { SDFShape, sdfCircle } from "sigma/rendering";
+import {
+  arrayProp,
+  booleanProp,
+  colorProp,
+  enumProp,
+  FactoryOptionsFromSchema,
+  numberProp,
+} from "sigma/primitives";
 
 /**
  * Mode for border size specification.
@@ -17,37 +25,28 @@ export type BorderSizeMode = "relative" | "pixels";
 export const DEFAULT_BORDER_SIZE_MODE: BorderSizeMode = "relative";
 
 /**
- * Specifies the color of a border.
- * - string: Fixed CSS color value (e.g., "#ff0000")
- * - { attribute, default? }: Read from node attribute
- * - { transparent: true }: Fully transparent
+ * Schema for the border layer.
+ *
+ * Each border in the array specifies:
+ * - size: Border thickness (number or attribute reference)
+ * - color: Border color (CSS color or attribute reference)
+ * - mode: How to interpret size ("relative" = fraction of shape, "pixels" = screen pixels)
+ * - fill: If true, this border fills remaining space (size is ignored)
  */
-export type BorderColor = ValueSource<string> | { transparent: true };
-
-/**
- * Specifies the size of a border.
- * - { value, mode? }: Fixed pixel value
- * - { attribute, default?, mode? }: Read from node attribute
- * - { fill: true }: Fill remaining space
- */
-export type BorderSize =
-  | { value: number; mode?: BorderSizeMode }
-  | { attribute: string; default?: number; mode?: BorderSizeMode }
-  | { fill: true };
+export const borderSchema = {
+  borders: arrayProp({
+    size: numberProp(0.1, { variable: true }),
+    color: colorProp("#000000", { variable: true }),
+    mode: enumProp(["relative", "pixels"] as const, "relative"),
+    fill: booleanProp(false),
+  }),
+} as const;
 
 /**
  * Options for the layerBorder() function.
+ * Derived from the borderSchema.
  */
-export interface LayerBorderOptions {
-  /**
-   * Array of border definitions, from outermost to innermost.
-   * Each border has a size and a color.
-   */
-  borders: {
-    color: BorderColor;
-    size: BorderSize;
-  }[];
-}
+export type LayerBorderOptions = FactoryOptionsFromSchema<typeof borderSchema>;
 
 /**
  * Options for the createNodeBorderProgram() function.
@@ -56,18 +55,21 @@ export interface CreateNodeBorderProgramOptions {
   /**
    * Array of border definitions, from outermost to innermost.
    */
-  borders: {
-    color: BorderColor;
-    size: BorderSize;
-  }[];
+  borders?: LayerBorderOptions["borders"];
+
+  /**
+   * A function that generates an SDF shape.
+   * @default sdfCircle
+   */
+  shapeFactory?: () => SDFShape;
 }
 
 /**
  * Default border configuration: 10% outer border with fill.
  */
-export const DEFAULT_BORDERS: LayerBorderOptions["borders"] = [
-  { size: { value: 0.1 }, color: { attribute: "borderColor" } },
-  { size: { fill: true }, color: { attribute: "color" } },
+export const DEFAULT_BORDERS: NonNullable<LayerBorderOptions["borders"]> = [
+  { size: { attribute: "borderSize", default: 0.1 }, color: { attribute: "borderColor" }, mode: "relative" },
+  { size: 0, color: { attribute: "color" }, fill: true },
 ];
 
 /**
@@ -75,6 +77,7 @@ export const DEFAULT_BORDERS: LayerBorderOptions["borders"] = [
  */
 export const DEFAULT_CREATE_NODE_BORDER_OPTIONS: CreateNodeBorderProgramOptions = {
   borders: DEFAULT_BORDERS,
+  shapeFactory: sdfCircle,
 };
 
 /**

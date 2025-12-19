@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "skipLibCheck": true
+  },
+  "include": ["type/**/*.ts"],
+  "exclude": ["type/primitives-without-satellites.test-d.ts"]
+}

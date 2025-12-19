@@ -11,7 +11,7 @@
   "scripts": {
     "test": "npm run test:unit && npm run test:type && npm run test:e2e",
     "test:unit": "vitest run --dir unit",
-    "test:type": "vitest typecheck --run type",
+    "test:type": "vitest typecheck --run type && tsc --noEmit -p tsconfig.typecheck.json && tsc --noEmit -p tsconfig.typecheck-without-satellites.json",
     "test:e2e": "playwright test",
     "benchmark": "vitest bench --dir benchmarks"
   }

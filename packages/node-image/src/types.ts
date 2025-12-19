@@ -7,8 +7,9 @@
  * @module
  */
 import { FragmentLayer, SDFShape, layerFill, sdfCircle } from "sigma/rendering";
+import { enumProp, FactoryOptionsFromSchema, numberProp, stringProp } from "sigma/primitives";
 
-import { DEFAULT_TEXTURE_MANAGER_OPTIONS, TextureManagerOptions } from "./texture";
+import { DEFAULT_TEXTURE_MANAGER_OPTIONS, TextureManager, TextureManagerOptions } from "./texture";
 
 /**
  * Drawing mode for images.
@@ -18,51 +19,39 @@ import { DEFAULT_TEXTURE_MANAGER_OPTIONS, TextureManagerOptions } from "./textur
 export type DrawingMode = "image" | "color";
 
 /**
- * Options for the layerImage() function.
+ * Schema for the image layer.
+ *
+ * Properties:
+ * - name: Unique name for this layer instance
+ * - drawingMode: How to render the image ("image" or "color")
+ * - padding: Padding around the image (0-1 percentage)
+ * - colorAttribute: Attribute to read color from (for "color" mode)
+ * - imageAttribute: Attribute to read image URL from
  */
-export interface LayerImageOptions {
-  /**
-   * Unique name for this layer instance.
-   * When using multiple image layers in one program, each must have a unique name.
-   * The name is used for GLSL function names, attribute names, and uniform names.
-   * @default "image"
-   */
-  name: string;
+export const imageSchema = {
+  name: stringProp("image"),
+  drawingMode: enumProp(["image", "color"] as const, "image"),
+  padding: numberProp(0),
+  colorAttribute: stringProp("color"),
+  imageAttribute: stringProp("image"),
+} as const;
 
-  /**
-   * Drawing mode:
-   * - "image": Image is rendered as-is (transparent pixels show through)
-   * - "color": Image pixels are colorized with the node color (for pictograms)
-   * @default "image"
-   */
-  drawingMode: DrawingMode;
+/**
+ * Schema-derived options for the layerImage() function.
+ */
+type SchemaOptions = FactoryOptionsFromSchema<typeof imageSchema>;
 
-  /**
-   * Padding around the image, expressed as a [0, 1] percentage.
-   * A padding of 0.05 will always be 5% of the diameter of the node.
-   * @default 0
-   */
-  padding: number;
-
-  /**
-   * Name of the node attribute to read the color from.
-   * Used in "color" drawing mode to colorize image pixels.
-   * @default "color"
-   */
-  colorAttribute: string;
-
-  /**
-   * Name of the node attribute to read the image URL from.
-   * @default "image"
-   */
-  imageAttribute: string;
-
+/**
+ * Options for the layerImage() function.
+ * Extends schema options with programmatic-only options.
+ */
+export interface LayerImageOptions extends SchemaOptions {
   /**
    * Optional TextureManager instance to use.
    * If not provided, a new one will be created internally.
    * Pass an existing TextureManager to share textures across multiple layer instances.
    */
-  textureManager?: import("./texture").TextureManager;
+  textureManager?: TextureManager;
 
   /**
    * Options for creating the internal TextureManager.

@@ -16,6 +16,14 @@ import { NodeProgramType, layerFill, registerNodeLayerFactory, sdfSquare } from 
 
 import { layerImage } from "./layer";
 import { createNodeImageProgram } from "./program";
+import { imageSchema } from "./types";
+
+// Module augmentation: makes "image" a recognized node layer type
+declare module "sigma/primitives" {
+  interface NodeLayerSchemaRegistry {
+    image: typeof imageSchema;
+  }
+}
 
 // Register the runtime factory
 registerNodeLayerFactory("image", layerImage);
@@ -25,6 +33,9 @@ export { layerImage } from "./layer";
 
 // Program factory
 export { createNodeImageProgram } from "./program";
+
+// Schema
+export { imageSchema } from "./types";
 
 // Types
 export type { CreateNodeImageProgramOptions, DrawingMode, LayerImageOptions } from "./types";

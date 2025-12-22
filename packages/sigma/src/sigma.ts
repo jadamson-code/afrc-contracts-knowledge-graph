@@ -1875,6 +1875,9 @@ export default class Sigma<
       forceLabel: resolvedStyle.labelVisibility === "visible",
       zIndex: resolvedStyle.zIndex ?? 0,
       type: "default",
+      path: resolvedStyle.path,
+      head: resolvedStyle.head,
+      tail: resolvedStyle.tail,
     };
 
     // Apply reducer if provided

@@ -79,7 +79,11 @@ export interface NodeDisplayData extends Coordinates, DisplayData {
   highlighted: boolean;
   shape?: string; // Shape name for edge clamping (e.g., "circle", "square")
 }
-export type EdgeDisplayData = DisplayData;
+export interface EdgeDisplayData extends DisplayData {
+  path?: string; // Path type (e.g., "straight", "curved")
+  head?: string; // Head extremity type (e.g., "arrow")
+  tail?: string; // Tail extremity type (e.g., "arrow")
+}
 
 export type CoordinateConversionOverride = {
   cameraState?: CameraState;

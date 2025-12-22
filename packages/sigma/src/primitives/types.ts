@@ -10,7 +10,6 @@
  */
 import type { EdgeExtremity, EdgeLabelOptions, EdgeLayer, EdgePath } from "../rendering/edges/types";
 import type { FragmentLayer, LabelOptions, SDFShape } from "../rendering/nodes/types";
-
 import {
   DeclarativeConfigFromSchema,
   EdgeExtremitySchemaRegistry,
@@ -81,7 +80,10 @@ export type NodeLayerSpec = BuiltInNodeLayerType | DeclarativeNodeLayer | Custom
  * Used by defineSigmaOptions to ensure variable references are valid.
  */
 export type ValidatedDeclarativeNodeLayer<AllowedVars extends string> = {
-  [K in keyof NodeLayerSchemaRegistry]: { type: K } & ValidatedConfigFromSchema<NodeLayerSchemaRegistry[K], AllowedVars>;
+  [K in keyof NodeLayerSchemaRegistry]: { type: K } & ValidatedConfigFromSchema<
+    NodeLayerSchemaRegistry[K],
+    AllowedVars
+  >;
 }[keyof NodeLayerSchemaRegistry];
 
 /**
@@ -152,7 +154,10 @@ export type EdgeLayerSpec = BuiltInEdgeLayerType | DeclarativeEdgeLayer | Custom
  * Validated declarative edge layer that only accepts declared variable names.
  */
 export type ValidatedDeclarativeEdgeLayer<AllowedVars extends string> = {
-  [K in keyof EdgeLayerSchemaRegistry]: { type: K } & ValidatedConfigFromSchema<EdgeLayerSchemaRegistry[K], AllowedVars>;
+  [K in keyof EdgeLayerSchemaRegistry]: { type: K } & ValidatedConfigFromSchema<
+    EdgeLayerSchemaRegistry[K],
+    AllowedVars
+  >;
 }[keyof EdgeLayerSchemaRegistry];
 
 /**
@@ -311,7 +316,14 @@ export const DEFAULT_EDGE_PRIMITIVES: Required<EdgePrimitives> = {
   label: {},
 };
 
-export const DEFAULT_DEPTH_LAYERS = ["edges", "nodes", "edgeLabels", "nodeLabels"] as const;
+export const DEFAULT_DEPTH_LAYERS = [
+  "edges",
+  "edgeLabels",
+  "nodes",
+  "nodeLabels",
+  "topNodes",
+  "topNodeLabels",
+] as const;
 
 export const DEFAULT_PRIMITIVES: Required<PrimitivesDeclaration> = {
   nodes: DEFAULT_NODE_PRIMITIVES,

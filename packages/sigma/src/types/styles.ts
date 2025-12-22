@@ -117,10 +117,11 @@ export type EasingFunction =
 
 /**
  * Any attribute binding type.
+ * Note: [T] wrapping prevents distributive conditional type behavior.
  */
 export type AttributeBinding<T> =
   | DirectAttributeBinding<T>
-  | (T extends number ? NumericalAttributeBinding : never)
+  | ([T] extends [number] ? NumericalAttributeBinding : never)
   | CategoricalAttributeBinding<T>;
 
 /**
@@ -142,8 +143,8 @@ export type ValueFunction<A extends Attributes, S, GS, T> = (
  */
 export interface InlineConditional<A extends Attributes, S, GS, T> {
   when: StatePredicate<A, S, GS>;
-  then: T | AttributeBinding<T> | ValueFunction<A, S, GS, T> | RuleValue<A, S, GS, T>;
-  else?: T | AttributeBinding<T> | ValueFunction<A, S, GS, T> | RuleValue<A, S, GS, T>;
+  then: T | AttributeBinding<T> | ValueFunction<A, S, GS, T>;
+  else?: T | AttributeBinding<T> | ValueFunction<A, S, GS, T>;
 }
 
 /**
@@ -324,37 +325,122 @@ export type EdgeStyleProperties<
   };
 
 /**
- * Relative value function for rules.
- * Receives the current computed value and can modify it.
- * Used for relative modifications like `(current) => current * 1.2`.
+ * Leaf value - a value without conditionals.
+ * Used inside rule-level conditionals where nesting is not allowed.
  */
-export type RelativeValueFunction<A extends Attributes, S, GS, T> = (
-  current: T,
-  attributes: A,
-  state: S,
-  graphState: GS,
-  graph: AbstractGraph,
-) => T;
-
-/**
- * Value specification within a rule.
- * Can be a direct value, attribute binding, function, or relative function.
- */
-export type RuleValue<A extends Attributes, S, GS, T> =
-  | T
-  | AttributeBinding<T>
-  | ValueFunction<A, S, GS, T>
-  | RelativeValueFunction<A, S, GS, T>
-  | InlineConditional<A, S, GS, T>;
+export type LeafValue<A extends Attributes, S, GS, T> = T | AttributeBinding<T> | ValueFunction<A, S, GS, T>;
 
 /**
  * Helper type to extract the base value type from a GraphicValue.
+ * Note: [GV] wrapping prevents distributive conditional type behavior.
  */
-type ExtractBaseType<GV> = GV extends GraphicValue<infer _A, infer _S, infer _GS, infer T> ? T : never;
+type ExtractBaseType<GV> = [GV] extends [GraphicValue<infer _A, infer _S, infer _GS, infer T>] ? T : never;
 
 /**
- * A style rule for nodes (used in array form).
- * If `when` is omitted, the rule always applies (base styles).
+ * Node style properties with LEAF values only (no conditionals).
+ * Used as the then/else type for rule-level conditionals.
+ */
+export type NodeStylePropertiesLeaf<
+  NA extends Attributes = Attributes,
+  NS extends BaseNodeState = BaseNodeState,
+  GS extends BaseGraphState = BaseGraphState,
+  ProgramVariables = EmptyVariables,
+> = {
+  [K in keyof NodeStyleProperties<NA, NS, GS, ProgramVariables>]?: LeafValue<
+    NA,
+    NS,
+    GS,
+    ExtractBaseType<NodeStyleProperties<NA, NS, GS, ProgramVariables>[K]>
+  >;
+};
+
+/**
+ * Edge style properties with LEAF values only (no conditionals).
+ * Used as the then/else type for rule-level conditionals.
+ */
+export type EdgeStylePropertiesLeaf<
+  EA extends Attributes = Attributes,
+  ES extends BaseEdgeState = BaseEdgeState,
+  GS extends BaseGraphState = BaseGraphState,
+  ProgramVariables = EmptyVariables,
+> = {
+  [K in keyof EdgeStyleProperties<EA, ES, GS, ProgramVariables>]?: LeafValue<
+    EA,
+    ES,
+    GS,
+    ExtractBaseType<EdgeStyleProperties<EA, ES, GS, ProgramVariables>[K]>
+  >;
+};
+
+/**
+ * Rule-level conditional for nodes.
+ * The then/else contain property objects WITHOUT nested conditionals.
+ */
+export interface NodeStyleRuleConditional<
+  NA extends Attributes = Attributes,
+  NS extends BaseNodeState = BaseNodeState,
+  GS extends BaseGraphState = BaseGraphState,
+  ProgramVariables = EmptyVariables,
+> {
+  when: StatePredicate<NA, NS, GS>;
+  then: NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>;
+  else?: NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>;
+}
+
+/**
+ * Rule-level conditional for edges.
+ * The then/else contain property objects WITHOUT nested conditionals.
+ */
+export interface EdgeStyleRuleConditional<
+  EA extends Attributes = Attributes,
+  ES extends BaseEdgeState = BaseEdgeState,
+  GS extends BaseGraphState = BaseGraphState,
+  ProgramVariables = EmptyVariables,
+> {
+  when: StatePredicate<EA, ES, GS>;
+  then: EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>;
+  else?: EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>;
+}
+
+/**
+ * Node style properties object where each property CAN have conditionals.
+ */
+export type NodeStylePropertiesWithConditionals<
+  NA extends Attributes = Attributes,
+  NS extends BaseNodeState = BaseNodeState,
+  GS extends BaseGraphState = BaseGraphState,
+  ProgramVariables = EmptyVariables,
+> = {
+  [K in keyof NodeStyleProperties<NA, NS, GS, ProgramVariables>]?: GraphicValue<
+    NA,
+    NS,
+    GS,
+    ExtractBaseType<NodeStyleProperties<NA, NS, GS, ProgramVariables>[K]>
+  >;
+};
+
+/**
+ * Edge style properties object where each property CAN have conditionals.
+ */
+export type EdgeStylePropertiesWithConditionals<
+  EA extends Attributes = Attributes,
+  ES extends BaseEdgeState = BaseEdgeState,
+  GS extends BaseGraphState = BaseGraphState,
+  ProgramVariables = EmptyVariables,
+> = {
+  [K in keyof EdgeStyleProperties<EA, ES, GS, ProgramVariables>]?: GraphicValue<
+    EA,
+    ES,
+    GS,
+    ExtractBaseType<EdgeStyleProperties<EA, ES, GS, ProgramVariables>[K]>
+  >;
+};
+
+/**
+ * A style rule for nodes.
+ * Either:
+ * - A rule-level conditional (then/else have NO nested conditionals)
+ * - A properties object (each property CAN have conditionals)
  */
 export type NodeStyleRule<
   NA extends Attributes = Attributes,
@@ -362,35 +448,23 @@ export type NodeStyleRule<
   GS extends BaseGraphState = BaseGraphState,
   ProgramVariables = EmptyVariables,
 > =
-  | {
-      [K in keyof NodeStyleProperties<NA, NS, GS, ProgramVariables>]?: RuleValue<
-        NA,
-        NS,
-        GS,
-        ExtractBaseType<NodeStyleProperties<NA, NS, GS, ProgramVariables>[K]>
-      >;
-    }
-  | InlineConditional<NA, NS, GS, NodeStyleProperties<NA, NS, GS, ProgramVariables>>;
+  | NodeStyleRuleConditional<NA, NS, GS, ProgramVariables>
+  | NodeStylePropertiesWithConditionals<NA, NS, GS, ProgramVariables>;
 
 /**
- * A style rule for edges (used in array form).
- * If `when` is omitted, the rule always applies (base styles).
+ * A style rule for edges.
+ * Either:
+ * - A rule-level conditional (then/else have NO nested conditionals)
+ * - A properties object (each property CAN have conditionals)
  */
 export type EdgeStyleRule<
-  NA extends Attributes = Attributes,
-  NS extends BaseEdgeState = BaseEdgeState,
+  EA extends Attributes = Attributes,
+  ES extends BaseEdgeState = BaseEdgeState,
   GS extends BaseGraphState = BaseGraphState,
   ProgramVariables = EmptyVariables,
 > =
-  | {
-      [K in keyof EdgeStyleProperties<NA, NS, GS, ProgramVariables>]?: RuleValue<
-        NA,
-        NS,
-        GS,
-        ExtractBaseType<EdgeStyleProperties<NA, NS, GS, ProgramVariables>[K]>
-      >;
-    }
-  | InlineConditional<NA, NS, GS, EdgeStyleProperties<NA, NS, GS, ProgramVariables>>;
+  | EdgeStyleRuleConditional<EA, ES, GS, ProgramVariables>
+  | EdgeStylePropertiesWithConditionals<EA, ES, GS, ProgramVariables>;
 
 /**
  * Node styles declaration.
@@ -523,10 +597,20 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
       then: "hidden",
       else: "visible",
     },
+    layer: {
+      when: ["isHighlighted", "isHovered"],
+      then: "topNodes",
+      else: "nodes",
+    },
+    labelLayer: {
+      when: ["isHighlighted", "isHovered"],
+      then: "topNodeLabels",
+      else: "nodeLabels",
+    },
     zIndex: {
-      when: "isHighlighted",
+      when: "isHovered",
       then: 1,
-      else: { when: "isHovered", then: 2, else: 0 },
+      else: 0,
     },
   },
   edges: {
@@ -538,10 +622,15 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
       then: "hidden",
       else: "visible",
     },
+    layer: {
+      when: ["isHighlighted", "isHovered"],
+      then: "topNodes",
+      else: "nodes",
+    },
     zIndex: {
-      when: "isHighlighted",
+      when: "isHovered",
       then: 1,
-      else: { when: "isHovered", then: 2, else: 0 },
+      else: 0,
     },
   },
 } as const;

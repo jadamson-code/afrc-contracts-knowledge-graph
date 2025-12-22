@@ -11,6 +11,8 @@ import MouseCaptor from "./core/captors/mouse";
 import TouchCaptor from "./core/captors/touch";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
+import { evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
+import { PrimitivesDeclaration, generateEdgeProgram, generateNodeProgram } from "./primitives";
 import {
   AbstractEdgeLabelProgram,
   AbstractEdgeProgram,
@@ -27,11 +29,11 @@ import {
   getShapeId,
 } from "./rendering";
 import { Settings, resolveSettings, validateSettings } from "./settings";
-import { DEFAULT_STYLES } from "./types/styles";
 import {
   CameraState,
   CoordinateConversionOverride,
   Coordinates,
+  DEFAULT_PRIMITIVES,
   Dimensions,
   EdgeDisplayData,
   Extent,
@@ -46,17 +48,16 @@ import {
   TouchCoords,
   TypedEventEmitter,
 } from "./types";
+import { DEFAULT_STYLES } from "./types/styles";
 import {
   BaseEdgeState,
   BaseGraphState,
   BaseNodeState,
+  StylesDeclaration,
   createEdgeState,
   createGraphState,
   createNodeState,
-  StylesDeclaration,
 } from "./types/styles";
-import { evaluateNodeStyle, evaluateEdgeStyle } from "./core/styles";
-import { PrimitivesDeclaration, generateNodeProgram, generateEdgeProgram } from "./primitives";
 import {
   NormalizationFunction,
   colorToIndex,
@@ -258,7 +259,7 @@ export default class Sigma<
 
     // Store primitives and styles declarations for v4 API
     // Use DEFAULT_STYLES when styles not provided
-    this.primitives = primitives ?? null;
+    this.primitives = primitives ?? DEFAULT_PRIMITIVES;
     this.stylesDeclaration = styles ?? (DEFAULT_STYLES as unknown as StylesDeclaration<N, E, NS, ES, GS>);
 
     // Store reducers
@@ -2764,10 +2765,7 @@ export default class Sigma<
    * @param  {function} updater - The update function.
    * @return {Sigma}
    */
-  updateSetting<K extends keyof Settings>(
-    key: K,
-    updater: (value: Settings[K]) => Settings[K],
-  ): this {
+  updateSetting<K extends keyof Settings>(key: K, updater: (value: Settings[K]) => Settings[K]): this {
     this.setSetting(key, updater(this.settings[key]));
     return this;
   }

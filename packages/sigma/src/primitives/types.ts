@@ -8,8 +8,8 @@
  *
  * @module
  */
-import type { EdgeExtremity, EdgeLayer, EdgePath } from "../rendering/edges/types";
-import type { FragmentLayer, SDFShape } from "../rendering/nodes/types";
+import type { EdgeExtremity, EdgeLabelOptions, EdgeLayer, EdgePath } from "../rendering/edges/types";
+import type { FragmentLayer, LabelOptions, SDFShape } from "../rendering/nodes/types";
 
 import {
   DeclarativeConfigFromSchema,
@@ -172,6 +172,7 @@ export interface NodePrimitives {
   variables?: VariablesDefinition;
   layers?: readonly NodeLayerSpec[] | NodeLayerSpec[];
   rotateWithCamera?: boolean;
+  label?: LabelOptions;
 }
 
 export interface EdgePrimitives {
@@ -179,6 +180,9 @@ export interface EdgePrimitives {
   extremities?: readonly EdgeExtremitySpec[] | EdgeExtremitySpec[];
   variables?: VariablesDefinition;
   layers?: readonly EdgeLayerSpec[] | EdgeLayerSpec[];
+  defaultHead?: string;
+  defaultTail?: string;
+  label?: EdgeLabelOptions;
 }
 
 export interface PrimitivesDeclaration {
@@ -294,6 +298,7 @@ export const DEFAULT_NODE_PRIMITIVES: Required<NodePrimitives> = {
   variables: {},
   layers: ["fill" as BuiltInNodeLayerType],
   rotateWithCamera: false,
+  label: {},
 };
 
 export const DEFAULT_EDGE_PRIMITIVES: Required<EdgePrimitives> = {
@@ -301,6 +306,9 @@ export const DEFAULT_EDGE_PRIMITIVES: Required<EdgePrimitives> = {
   extremities: ["none"],
   variables: {},
   layers: ["plain" as BuiltInEdgeLayerType],
+  defaultHead: "none",
+  defaultTail: "none",
+  label: {},
 };
 
 export const DEFAULT_DEPTH_LAYERS = ["edges", "nodes", "edgeLabels", "nodeLabels"] as const;

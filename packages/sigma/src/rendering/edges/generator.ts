@@ -911,25 +911,53 @@ export function generateEdgeShaders(options: EdgeShaderGenerationOptions): Gener
     }
   }
 
+  // Constant attributes collected from all paths
+  const constantAttributes = Array.from(constantAttributesMap.values());
+
+  // Build attribute name to index mapping for padding
+  const attrNameToIndex: Record<string, number> = {};
+  constantAttributes.forEach((attr, idx) => {
+    attrNameToIndex[attr.name] = idx;
+  });
+
   // Find the maximum vertex count across all combinations
   // This is used for instanced rendering where all edges need the same vertex count
   let maxVerticesPerEdge = 0;
-  let maxConstantData: number[][] = [];
-  for (const [, vertexCount] of vertexCountsPerCombination) {
+  let maxConstantDataKey = "";
+  for (const [key, vertexCount] of vertexCountsPerCombination) {
     if (vertexCount > maxVerticesPerEdge) {
       maxVerticesPerEdge = vertexCount;
-    }
-  }
-  // Find a combination with max vertices to use its constant data
-  for (const [key, vertexCount] of vertexCountsPerCombination) {
-    if (vertexCount === maxVerticesPerEdge) {
-      maxConstantData = constantDataPerCombination.get(key)!;
-      break;
+      maxConstantDataKey = key;
     }
   }
 
-  // Constant attributes collected from all paths
-  const constantAttributes = Array.from(constantAttributesMap.values());
+  // Get the constant data for the max-vertex combination and pad to unified format
+  const rawConstantData = constantDataPerCombination.get(maxConstantDataKey) || [];
+
+  // Find which attributes were in the original data by checking the path that generated it
+  // We need to map from the original attribute order to the unified order
+  const [pathName] = maxConstantDataKey.split(":");
+  const path = paths.find((p) => p.name === pathName);
+  let originalAttrs: Array<{ name: string }> = [];
+  if (path?.generateConstantData) {
+    originalAttrs = path.generateConstantData().attributes;
+  } else {
+    // Standard zoned data has these attributes in this order
+    originalAttrs = [{ name: "a_zone" }, { name: "a_zoneT" }, { name: "a_side" }];
+  }
+
+  // Pad each vertex's data to match the unified attribute layout
+  const maxConstantData: number[][] = rawConstantData.map((vertex) => {
+    const padded = new Array(constantAttributes.length).fill(0);
+    // Map original values to their positions in the unified layout
+    originalAttrs.forEach((attr, i) => {
+      const targetIdx = attrNameToIndex[attr.name];
+      if (targetIdx !== undefined && i < vertex.length) {
+        padded[targetIdx] = vertex[i];
+      }
+    });
+    return padded;
+  });
 
   return {
     vertexShader: generateVertexShaderMulti(paths, extremities, layers, constantAttributes),

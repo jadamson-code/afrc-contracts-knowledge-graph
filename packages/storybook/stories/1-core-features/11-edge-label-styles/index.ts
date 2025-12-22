@@ -1,279 +1,179 @@
 /**
- * This example demonstrates edge label styles using the composable edge program system.
- * All labels use "auto" position mode by default, which places labels above or below
- * the edge based on edge direction (left-to-right = above, right-to-left = below).
+ * This example demonstrates edge label styles using the v4 primitives + styles API.
+ * It shows a grid of edges with different path types, where label options
+ * (position, font size mode, text border) are controlled via UI.
  *
- * The last two columns show what "over" mode would look like (labels centered on path).
- * Per-program position mode is set via the `label: { position: "over" }` option.
- *
- * The final columns demonstrate font size modes:
- * - "fixed": Labels stay constant size regardless of zoom level
- * - "scaled": Labels scale with zoom level using zoomToSizeRatioFunction
+ * The primitives API generates a single multi-path program with all path types.
+ * Use the controls to change label position, font size mode, and extremities.
  */
 import Graph from "graphology";
 import Sigma from "sigma";
-import {
-  createEdgeProgram,
-  createNodeProgram,
-  extremityArrow,
-  layerFill,
-  layerPlain,
-  pathCurved,
-  pathCurvedS,
-  pathLine,
-  pathStep,
-  pathStepCurved,
-  sdfDiamond,
-  sdfTriangle,
-} from "sigma/rendering";
+import { EdgeLabelPosition, EdgeLabelFontSizeMode } from "sigma/types";
+import { EdgePrimitives, NodePrimitives } from "sigma/primitives";
 
 export default () => {
   const container = document.getElementById("sigma-container") as HTMLElement;
 
-  const graph = new Graph();
-
   // Grid configuration
-  const COL_SPACING = 120;
+  const COL_SPACING = 100;
   const ROW_SPACING = 80;
-  const NODE_SPACING = 60; // Horizontal distance between source and target nodes
-  const NODE_SIZE = 12;
-  const EDGE_SIZE = 6;
+  const NODE_SPACING = 50;
+  const NODE_SIZE = 10;
+  const EDGE_SIZE = 5;
 
   // Colors
   const EDGE_COLOR = "#999999";
-  const NODE_COLOR = "#5B8FF9";
+  const NODE_COLORS = ["#5B8FF9", "#5AD8A6", "#F6BD16", "#E8684A"];
 
-  // Row types (path types)
-  const ROWS = [
-    { name: "Line", path: pathLine() },
-    { name: "Curved", path: pathCurved() },
-    {
-      name: "Steps (auto)",
-      path: pathStep({
-        orientation: "automatic",
-        rotateWithCamera: false,
-      }),
-    },
-    {
-      name: "Steps (horizontal)",
-      path: pathStep({
-        orientation: "horizontal",
-        rotateWithCamera: true,
-      }),
-    },
-    {
-      name: "Curved steps (auto)",
-      path: pathStepCurved({
-        orientation: "automatic",
-        rotateWithCamera: false,
-      }),
-    },
-    {
-      name: "Curved steps (horizontal)",
-      path: pathStepCurved({
-        orientation: "horizontal",
-        rotateWithCamera: true,
-      }),
-    },
-    {
-      name: "S-curved (auto)",
-      path: pathCurvedS({
-        orientation: "automatic",
-        rotateWithCamera: false,
-      }),
-    },
-    {
-      name: "S-curved (horizontal)",
-      path: pathCurvedS({
-        orientation: "horizontal",
-        rotateWithCamera: true,
-        curveOffset: 0.8,
-      }),
-    },
-  ];
+  // Path types to display (one per row)
+  const PATHS = [
+    { name: "straight", label: "Straight" },
+    { name: "curved", label: "Curved" },
+    { name: "step", label: "Step" },
+    { name: "stepCurved", label: "Step Curved" },
+  ] as const;
 
-  // Column types (extremity and layer configurations)
-  // The first three columns use the default "auto" label position from settings.
-  // The last two columns override with "over" position via the `label` option.
-  const COLS = [
-    {
-      name: "above",
-      displayLabel: "Above",
-      head: "none",
-      tail: "none",
-      labelPosition: "above", // Used to set label.position in the program
-    },
-    {
-      name: "below",
-      displayLabel: "Below",
-      head: "none",
-      tail: "none",
-      labelPosition: "below", // Used to set label.position in the program
-    },
-    {
-      name: "arrow-head",
-      displayLabel: "Auto + arrow",
-      head: "arrow",
-      tail: "none",
-    },
-    {
-      name: "double-arrow",
-      displayLabel: "Auto + both arrows",
-      head: "arrow",
-      tail: "arrow",
-    },
-    {
-      name: "over-arrow",
-      displayLabel: "Over + arrow",
-      head: "arrow",
-      tail: "none",
-      labelPosition: "over",
-      textBorder: { width: 10, color: "#fff" },
-      textColor: "#000",
-    },
-    {
-      name: "over-double",
-      displayLabel: "Over + both arrows",
-      head: "arrow",
-      tail: "arrow",
-      labelPosition: "over",
-      textBorder: { width: 10, color: "#fff" },
-      textColor: "#000",
-    },
-    {
-      name: "scaled-above",
-      displayLabel: "Scaled size + above",
-      head: "none",
-      tail: "none",
-      labelPosition: "above",
-      fontSizeMode: "scaled",
-    },
-    {
-      name: "scaled-over",
-      displayLabel: "Scaled size + over",
-      head: "arrow",
-      tail: "none",
-      labelPosition: "over",
-      fontSizeMode: "scaled",
-      textBorder: { width: 10, color: "#fff" },
-      textColor: "#000",
-    },
-  ];
+  // Create graph with a grid showing all path types
+  const createGraph = () => {
+    const graph = new Graph();
+    const COLS = 4;
 
-  // Create edge programs for each combination
-  const edgeProgramClasses: Record<string, ReturnType<typeof createEdgeProgram>> = {};
+    for (let row = 0; row < PATHS.length; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const pathInfo = PATHS[row];
+        const cellX = col * COL_SPACING;
+        const cellY = -row * ROW_SPACING;
 
-  for (const row of ROWS) {
-    for (const col of COLS) {
-      const edgeType = `${row.name}-${col.name}`;
+        // Source node (diamond)
+        const sourceId = `${pathInfo.name}-${col}-source`;
+        graph.addNode(sourceId, {
+          x: cellX - NODE_SPACING / 2,
+          y: cellY,
+          size: NODE_SIZE,
+          color: NODE_COLORS[row % NODE_COLORS.length],
+          label: "",
+          shape: "diamond",
+        });
 
-      // Build label options conditionally
-      const colWithOptions = col as {
-        labelPosition?: "over" | "above" | "below";
-        textBorder?: { width: number; color: string };
-        fontSizeMode?: "fixed" | "scaled";
-        textColor?: string;
-      };
-      const labelOptions =
-        colWithOptions.labelPosition || colWithOptions.textBorder || colWithOptions.fontSizeMode
-          ? {
-              ...(colWithOptions.labelPosition ? { position: colWithOptions.labelPosition } : {}),
-              ...(colWithOptions.textBorder ? { textBorder: colWithOptions.textBorder } : {}),
-              ...(colWithOptions.fontSizeMode ? { fontSizeMode: colWithOptions.fontSizeMode } : {}),
-              ...(colWithOptions.textColor
-                ? { color: { color: colWithOptions.textColor } }
-                : { color: { color: "#000" } }),
-            }
-          : undefined;
+        // Target node (triangle)
+        const targetId = `${pathInfo.name}-${col}-target`;
+        graph.addNode(targetId, {
+          x: cellX + NODE_SPACING / 2,
+          y: cellY + NODE_SPACING / 2,
+          size: NODE_SIZE,
+          color: NODE_COLORS[row % NODE_COLORS.length],
+          label: "",
+          shape: "triangle",
+        });
 
-      // Only include extremityArrow() if head or tail uses it
-      const needsArrow = col.head === "arrow" || col.tail === "arrow";
-
-      edgeProgramClasses[edgeType] = createEdgeProgram({
-        paths: [row.path],
-        extremities: needsArrow ? [extremityArrow()] : [],
-        defaultHead: col.head,
-        defaultTail: col.tail,
-        label: labelOptions,
-        layers: [layerPlain()],
-      });
+        // Edge
+        graph.addEdge(sourceId, targetId, {
+          size: EDGE_SIZE,
+          color: EDGE_COLOR,
+          label: pathInfo.label,
+          forceLabel: true,
+          path: pathInfo.name,
+          curvature: pathInfo.name === "curved" ? 0.3 : 0,
+        });
+      }
     }
-  }
 
-  // Create nodes and edges in a grid
-  for (let rowIdx = 0; rowIdx < ROWS.length; rowIdx++) {
-    const row = ROWS[rowIdx];
+    return graph;
+  };
 
-    for (let colIdx = 0; colIdx < COLS.length; colIdx++) {
-      const col = COLS[colIdx];
-      const edgeType = `${row.name}-${col.name}`;
-
-      // Calculate positions for this cell
-      const cellX = colIdx * COL_SPACING;
-      const cellY = -rowIdx * ROW_SPACING;
-
-      // Source node (left side of cell)
-      const sourceId = `${edgeType}-source`;
-      graph.addNode(sourceId, {
-        x: cellX - NODE_SPACING / 2,
-        y: cellY,
-        size: NODE_SIZE,
-        color: NODE_COLOR,
-        label: "",
-        type: "diamond",
-      });
-
-      // Target node (right side of cell)
-      const targetId = `${edgeType}-target`;
-      graph.addNode(targetId, {
-        x: cellX + NODE_SPACING / 2,
-        y: cellY + NODE_SPACING / 2,
-        size: NODE_SIZE,
-        color: NODE_COLOR,
-        label: "",
-        type: "triangle",
-      });
-
-      // Edge connecting them
-      const edgeLabel = `${row.name} / ${col.displayLabel}`;
-      graph.addEdge(sourceId, targetId, {
-        type: edgeType,
-        size: EDGE_SIZE,
-        color: EDGE_COLOR,
-        label: edgeLabel,
-        forceLabel: true,
-        // Curvature for curved edges
-        curvature: row.name === "curved" ? 0.3 : 0,
-        // Select extremities from the shared pool
-        head: col.head,
-        tail: col.tail,
-      });
-    }
-  }
-
-  const renderer = new Sigma(graph, container, {
-    edgeProgramClasses,
-    nodeProgramClasses: {
-      diamond: createNodeProgram({
-        shapes: [sdfDiamond()],
-        layers: [layerFill()],
-        rotateWithCamera: false,
-      }),
-      triangle: createNodeProgram({
-        shapes: [sdfTriangle()],
-        layers: [layerFill()],
-        rotateWithCamera: false,
-      }),
-    },
-    defaultEdgeType: "line-no-extremity",
-    // Enable edge labels
-    renderEdgeLabels: true,
-    edgeLabelSize: 16,
-    edgeLabelPosition: "auto",
-    // Use positions-based sizing for a clean grid appearance
-    itemSizesReference: "positions",
-    autoRescale: true,
+  // Get current settings from controls
+  const getSettings = () => ({
+    labelPosition: (document.getElementById("label-position") as HTMLSelectElement).value as EdgeLabelPosition,
+    fontSizeMode: (document.getElementById("font-size-mode") as HTMLSelectElement).value as EdgeLabelFontSizeMode,
+    showBorder: (document.getElementById("show-border") as HTMLInputElement).checked,
+    headType: (document.getElementById("head-type") as HTMLSelectElement).value,
+    tailType: (document.getElementById("tail-type") as HTMLSelectElement).value,
   });
+
+  // Create primitives from current settings
+  const createPrimitives = (): { nodes: NodePrimitives; edges: EdgePrimitives } => {
+    const settings = getSettings();
+
+    return {
+      nodes: {
+        shapes: ["diamond", "triangle"],
+        layers: ["fill"],
+      },
+      edges: {
+        paths: ["straight", "curved", "step", "stepCurved"],
+        extremities: ["arrow"],
+        layers: ["plain"],
+        defaultHead: settings.headType,
+        defaultTail: settings.tailType,
+        label: {
+          position: settings.labelPosition,
+          fontSizeMode: settings.fontSizeMode,
+          color: settings.showBorder ? "#000" : "#333",
+          ...(settings.showBorder ? { textBorder: { width: 8, color: "#ffffff" } } : {}),
+        },
+      },
+    };
+  };
+
+  // Create Sigma instance
+  let graph = createGraph();
+  let renderer = new Sigma(graph, container, {
+    primitives: createPrimitives(),
+    styles: {
+      nodes: {
+        size: { attribute: "size" },
+        color: { attribute: "color" },
+        shape: { attribute: "shape" },
+      },
+      edges: {
+        size: { attribute: "size" },
+        color: { attribute: "color" },
+        label: { attribute: "label" },
+        path: { attribute: "path" },
+      },
+    },
+    settings: {
+      renderEdgeLabels: true,
+      itemSizesReference: "positions",
+      autoRescale: true,
+    },
+  });
+
+  // Recreate renderer when settings change
+  const recreateRenderer = () => {
+    const camera = renderer.getCamera().getState();
+    renderer.kill();
+    graph = createGraph();
+    renderer = new Sigma(graph, container, {
+      primitives: createPrimitives(),
+      styles: {
+        nodes: {
+          size: { attribute: "size" },
+          color: { attribute: "color" },
+          shape: { attribute: "shape" },
+        },
+        edges: {
+          size: { attribute: "size" },
+          color: { attribute: "color" },
+          label: { attribute: "label" },
+          path: { attribute: "path" },
+        },
+      },
+      settings: {
+        renderEdgeLabels: true,
+        itemSizesReference: "positions",
+        autoRescale: true,
+      },
+    });
+    renderer.getCamera().setState(camera);
+  };
+
+  // Bind controls
+  document.getElementById("label-position")?.addEventListener("change", recreateRenderer);
+  document.getElementById("font-size-mode")?.addEventListener("change", recreateRenderer);
+  document.getElementById("show-border")?.addEventListener("change", recreateRenderer);
+  document.getElementById("head-type")?.addEventListener("change", recreateRenderer);
+  document.getElementById("tail-type")?.addEventListener("change", recreateRenderer);
 
   return () => {
     renderer.kill();

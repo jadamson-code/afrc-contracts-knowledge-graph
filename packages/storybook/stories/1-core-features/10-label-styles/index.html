@@ -32,18 +32,29 @@
 <div id="sigma-container"></div>
 <form id="controls">
   <fieldset>
-    <h4>Rotation</h4>
+    <h4>Label Options</h4>
     <div>
-      <input type="checkbox" id="rotate-with-camera" name="rotate-with-camera" />
-      <label for="rotate-with-camera">Rotate nodes with camera</label>
+      <label for="label-position">Position:</label>
+      <select id="label-position" name="label-position">
+        <option value="right" selected>Right</option>
+        <option value="left">Left</option>
+        <option value="above">Above</option>
+        <option value="below">Below</option>
+        <option value="over">Over</option>
+      </select>
     </div>
     <div>
-      <label for="label-angle">Labels angle (degrees):</label>
+      <label for="label-angle">Angle (degrees):</label>
       <input type="number" id="label-angle" name="label-angle" value="0" step="5" style="width: 60px" />
     </div>
     <div>
-      <label for="label-margin">Labels margin (pixels):</label>
+      <label for="label-margin">Margin (pixels):</label>
       <input type="number" id="label-margin" name="label-margin" value="5" step="1" style="width: 60px" />
+    </div>
+    <h4 style="margin-top: 10px">Node Options</h4>
+    <div>
+      <input type="checkbox" id="rotate-with-camera" name="rotate-with-camera" />
+      <label for="rotate-with-camera">Rotate with camera</label>
     </div>
   </fieldset>
 </form>

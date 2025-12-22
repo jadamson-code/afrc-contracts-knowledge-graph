@@ -498,6 +498,7 @@ export function generateNodeProgram<
     shapes,
     layers,
     rotateWithCamera: nodePrimitives?.rotateWithCamera,
+    label: nodePrimitives?.label,
   });
 }
 
@@ -535,5 +536,8 @@ export function generateEdgeProgram<
     paths,
     extremities,
     layers,
+    defaultHead: edgePrimitives?.defaultHead,
+    defaultTail: edgePrimitives?.defaultTail,
+    label: edgePrimitives?.label,
   });
 }

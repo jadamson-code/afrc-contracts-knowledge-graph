@@ -1,5 +1,5 @@
 /**
- * This example demonstrates edge styles using the composable edge program system,
+ * This example demonstrates edge styles using the v4 primitives + styles API,
  * including multi-layer support.
  *
  * It uses:
@@ -10,20 +10,7 @@
  */
 import Graph from "graphology";
 import Sigma from "sigma";
-import {
-  createEdgeProgram,
-  createNodeProgram,
-  extremityArrow,
-  layerDashed,
-  layerFill,
-  layerPlain,
-  pathCurved,
-  pathCurvedS,
-  pathLine,
-  pathStepCurved,
-  sdfDiamond,
-  sdfTriangle,
-} from "sigma/rendering";
+import { EdgeLayerSpec } from "sigma/primitives";
 
 export default () => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -41,39 +28,10 @@ export default () => {
   const ROW_COLORS = ["#5B8FF9", "#61DDAA", "#F6903D", "#E8684A"];
   const NODE_COLOR = "#5B8FF9";
 
-  // Create a single multi-shape node program
-  const NodeProgram = createNodeProgram({
-    shapes: [sdfDiamond(), sdfTriangle()],
-    layers: [layerFill()],
-    rotateWithCamera: false,
-  });
-
-  // Create a single multi-path, multi-layer edge program
-  // All edges use this program with plain + dashed layers composited
-  const EdgeProgram = createEdgeProgram({
-    paths: [
-      pathLine(),
-      pathCurved(),
-      pathStepCurved({ orientation: "automatic" }),
-      pathCurvedS({ orientation: "automatic" }),
-    ],
-    extremities: [extremityArrow()],
-    layers: [
-      layerPlain(),
-      layerDashed({
-        dashColor: { attribute: "dashColor" },
-        dashSize: { attribute: "dashSize", default: 0, mode: "pixels" },
-        gapColor: 0,
-        gapSize: { value: 10, mode: "pixels" },
-      }),
-    ],
-  });
-
   // Path names for the demo
-  const PATH_NAMES = ["line", "curved", "stepCurved", "curvedS"];
+  const PATH_NAMES = ["straight", "curved", "stepCurved", "curvedS"] as const;
 
   // Column configurations: extremity settings
-  // Last column (4) has arrows and dashes aligned to end
   const COLUMN_CONFIGS = [
     {},
     { head: "arrow" },
@@ -115,7 +73,7 @@ export default () => {
         size: EDGE_SIZE,
         color: colConfig.backgroundColor || rowColor,
         dashColor: colConfig.dashColor || rowColor,
-        dashSize: colConfig.dashSize,
+        dashSize: colConfig.dashSize || 0,
         curvature: pathName === "curved" ? 0.3 : 0,
         path: pathName,
         head: colConfig.head,
@@ -125,19 +83,47 @@ export default () => {
   }
 
   const renderer = new Sigma(graph, container, {
-    edgeLabelColor: { color: "#000" },
-    edgeProgramClasses: {
-      edge: EdgeProgram,
+    primitives: {
+      nodes: {
+        shapes: ["diamond", "triangle"],
+        layers: ["fill"],
+      },
+      edges: {
+        paths: ["straight", "curved", "stepCurved", "curvedS"],
+        extremities: ["arrow"],
+        layers: [
+          "plain",
+          // Note: dashed layer options aren't fully typed in the schema yet,
+          // so we use a type assertion. The parser handles these at runtime.
+          {
+            type: "dashed",
+            dashColor: { attribute: "dashColor" },
+            dashSize: { attribute: "dashSize", default: 0, mode: "pixels" },
+            gapColor: 0,
+            gapSize: { value: 10, mode: "pixels" },
+          } as EdgeLayerSpec,
+        ],
+      },
     },
-    nodeProgramClasses: {
-      node: NodeProgram,
+    styles: {
+      nodes: {
+        size: { attribute: "size" },
+        color: { attribute: "color" },
+        shape: { attribute: "shape" },
+      },
+      edges: {
+        size: { attribute: "size" },
+        color: { attribute: "color" },
+        path: { attribute: "path" },
+        head: { attribute: "head" },
+        tail: { attribute: "tail" },
+      },
     },
-    defaultEdgeType: "edge",
-    defaultNodeType: "node",
-    renderEdgeLabels: true,
-    edgeLabelSize: 12,
-    itemSizesReference: "positions",
-    autoRescale: true,
+    settings: {
+      renderEdgeLabels: true,
+      itemSizesReference: "positions",
+      autoRescale: true,
+    },
   });
 
   return () => {

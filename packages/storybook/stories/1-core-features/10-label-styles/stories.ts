@@ -9,11 +9,6 @@ const meta: Meta<StoryArgs> = {
   id: "label-styles",
   title: "Core library/Features showcases",
   argTypes: {
-    labelPosition: {
-      name: "Label position",
-      control: { type: "select" },
-      options: ["right", "left", "above", "below", "over"],
-    },
     labelAngle: {
       name: "Label angle (degrees)",
       control: { type: "number", min: -180, max: 180, step: 5 },
@@ -37,7 +32,6 @@ export const story: Story = {
   render: () => template,
   play: wrapStory(play),
   args: {
-    labelPosition: "right",
     labelAngle: 0,
     labelMargin: 5,
     rotateWithCamera: false,

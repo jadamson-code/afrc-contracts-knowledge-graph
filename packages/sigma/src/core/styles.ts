@@ -300,7 +300,7 @@ export interface ResolvedNodeStyle {
   labelSize: number;
   labelFont: string;
   labelVisibility: "auto" | "visible" | "hidden";
-  labelPosition: "top" | "bottom" | "left" | "right" | "center";
+  labelPosition: "right" | "left" | "above" | "below" | "over";
   labelAngle: number;
   labelLayer: string;
   // Additional program-declared variables stored here

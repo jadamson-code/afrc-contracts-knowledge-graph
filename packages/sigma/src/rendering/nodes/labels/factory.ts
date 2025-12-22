@@ -399,10 +399,10 @@ export function createLabelProgram<
       array[i++] = color;
 
       // a_margin: Gap between node edge and label (pixels)
-      array[i++] = NodeLabelProgram.labelMargin;
+      array[i++] = labelData.margin;
 
-      // a_positionMode: Label position mode for shader
-      array[i++] = POSITION_MODE_MAP[NodeLabelProgram.labelPosition];
+      // a_positionMode: Label position mode for shader (from per-node style)
+      array[i++] = POSITION_MODE_MAP[labelData.position];
 
       // a_labelWidth: Total label width in pixels (for centering/right-alignment)
       array[i++] = cache.totalWidth * scale;

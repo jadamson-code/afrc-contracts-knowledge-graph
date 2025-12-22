@@ -10,7 +10,7 @@
 import { Attributes } from "graphology-types";
 
 import type Sigma from "../../../sigma";
-import type { RenderParams } from "../../../types";
+import type { LabelPosition, RenderParams } from "../../../types";
 import { AbstractProgram, Program } from "../../program";
 import { InstancedProgramDefinition, ProgramDefinition, ProgramInfo } from "../../utils";
 
@@ -24,6 +24,7 @@ export interface HoverDisplayData {
   labelHeight: number;
   type: string;
   shapeId: number;
+  position: LabelPosition;
 }
 
 export abstract class AbstractHoverProgram<

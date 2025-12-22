@@ -114,7 +114,7 @@ export function createHoverProgram<
       array[i++] = data.shapeId;
       array[i++] = data.labelWidth;
       array[i++] = data.labelHeight;
-      array[i++] = POSITION_MODE_MAP[NodeHoverProgram.labelPosition];
+      array[i++] = POSITION_MODE_MAP[data.position];
     }
 
     setUniforms(params: RenderParams, programInfo: ProgramInfo): void {

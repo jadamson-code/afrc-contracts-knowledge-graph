@@ -232,7 +232,7 @@ export interface NodeLabelBuiltInVariables<
   /** Label visibility */
   labelVisibility?: GraphicValue<NA, NS, GS, "auto" | "visible" | "hidden">;
   /** Label position relative to node */
-  labelPosition?: GraphicValue<NA, NS, GS, "top" | "bottom" | "left" | "right" | "center">;
+  labelPosition?: GraphicValue<NA, NS, GS, "right" | "left" | "above" | "below" | "over">;
   /** Label angle */
   labelAngle?: GraphicValue<NA, NS, GS, number>;
   /** Depth bucket for layering */

@@ -78,6 +78,7 @@ export interface DisplayData {
 export interface NodeDisplayData extends Coordinates, DisplayData {
   highlighted: boolean;
   shape?: string; // Shape name for edge clamping (e.g., "circle", "square")
+  labelPosition?: LabelPosition; // Label position relative to node
 }
 export interface EdgeDisplayData extends DisplayData {
   path?: string; // Path type (e.g., "straight", "curved")

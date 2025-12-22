@@ -1348,7 +1348,7 @@ export default class Sigma<
     // Process each visible label into its matching program's buffer
     // TODO: These defaults should come from the styles system
     const defaultLabelSize = 14;
-    const defaultLabelMargin = 5;
+    const defaultLabelMargin = this.primitives?.nodes?.label?.margin ?? 5;
     const defaultLabelPosition = "right" as const;
 
     const characterOffsets: Record<string, number> = {};
@@ -1369,7 +1369,7 @@ export default class Sigma<
         color: this.getLabelColor(data),
         nodeSize: data.size,
         margin: defaultLabelMargin,
-        position: defaultLabelPosition,
+        position: data.labelPosition ?? defaultLabelPosition,
         hidden: false,
         forceLabel: data.forceLabel ?? false,
         type: labelType,
@@ -1494,7 +1494,7 @@ export default class Sigma<
     // Process each visible edge label into its matching program's buffer
     // TODO: These defaults should come from the styles system
     const defaultEdgeLabelSize = 12;
-    const defaultEdgeLabelMargin = 5;
+    const defaultEdgeLabelMargin = this.primitives?.edges?.label?.margin ?? 5;
     const defaultEdgeLabelPosition = "over" as const;
     const defaultEdgeLabelColor = "#000";
 
@@ -1743,6 +1743,7 @@ export default class Sigma<
       zIndex: resolvedStyle.zIndex ?? 0,
       type: "default",
       shape: resolvedStyle.shape,
+      labelPosition: resolvedStyle.labelPosition,
     };
 
     // Validate position

@@ -1,23 +1,23 @@
 /**
- * This example demonstrates label styles using the v4 primitives + styles API.
- * It shows a grid of nodes with different shapes, where labels are positioned
- * according to the selected position (right, left, above, below, over).
+ * This example demonstrates per-node label positioning using the v4 styles API.
+ * It shows a grid of nodes with different shapes, where each row has a different
+ * label position (right, left, above, below).
  *
- * The primitives API generates a single multi-shape program, and label options
- * (position, angle, margin) are configured declaratively.
- *
- * Use the Storybook controls to change label position, angle, margin, and node rotation.
+ * The label text shows both the shape and position for clarity.
+ * Use the Storybook controls to adjust label angle, margin, and node rotation.
  */
 import Graph from "graphology";
 import Sigma from "sigma";
 import { DEFAULT_STYLES, LabelPosition } from "sigma/types";
 
 export interface StoryArgs {
-  labelPosition: LabelPosition;
   labelAngle: number;
   labelMargin: number;
   rotateWithCamera: boolean;
 }
+
+// Label positions for each row
+const ROW_POSITIONS: LabelPosition[] = ["right", "left", "above", "below"];
 
 export default (args: StoryArgs) => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -36,6 +36,7 @@ export default (args: StoryArgs) => {
   const graph = new Graph();
 
   for (let row = 0; row < ROWS; row++) {
+    const position = ROW_POSITIONS[row % ROW_POSITIONS.length];
     for (let col = 0; col < COLS; col++) {
       const shape = SHAPES[col];
       const nodeId = `node-${row}-${col}`;
@@ -44,8 +45,9 @@ export default (args: StoryArgs) => {
         y: -row * SPACING,
         size: NODE_SIZE,
         color: COLORS[row % COLORS.length],
-        label: shape,
+        label: `${shape} / ${position}`,
         shape,
+        labelPosition: position,
       });
     }
   }
@@ -58,7 +60,6 @@ export default (args: StoryArgs) => {
         layers: [{ type: "fill" }],
         rotateWithCamera: args.rotateWithCamera,
         label: {
-          position: args.labelPosition,
           angle: (args.labelAngle * Math.PI) / 180,
           margin: args.labelMargin,
         },
@@ -69,6 +70,7 @@ export default (args: StoryArgs) => {
         DEFAULT_STYLES.nodes,
         {
           shape: { attribute: "shape" },
+          labelPosition: { attribute: "labelPosition", defaultValue: "right" },
         },
       ],
     },

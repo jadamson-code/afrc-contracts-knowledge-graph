@@ -37,6 +37,12 @@ describe("parseColor", () => {
     expect(parseColor("rgba(255, 0, 0, 0)")).toEqual({ r: 255, g: 0, b: 0, a: 0 });
     expect(parseColor("rgba(128, 64, 32, 0.75)")).toEqual({ r: 128, g: 64, b: 32, a: 0.75 });
   });
+
+  test("it should parse 'transparent' keyword", () => {
+    expect(parseColor("transparent")).toEqual({ r: 0, g: 0, b: 0, a: 0 });
+    expect(parseColor("Transparent")).toEqual({ r: 0, g: 0, b: 0, a: 0 });
+    expect(parseColor("TRANSPARENT")).toEqual({ r: 0, g: 0, b: 0, a: 0 });
+  });
 });
 
 describe("colorToGLSLString", () => {
@@ -98,5 +104,10 @@ describe("colorToGLSLString", () => {
     expect(result).toMatch(/vec4\(\d+\.\d+, \d+\.\d+, \d+\.\d+, \d+\.\d+\)/);
     // Gray (128) should be approximately 0.5
     expect(result).toBe("vec4(0.501961, 0.501961, 0.501961, 1.000000)");
+  });
+
+  test("it should convert 'transparent' to GLSL vec4", () => {
+    expect(colorToGLSLString("transparent")).toBe("vec4(0.000000, 0.000000, 0.000000, 0.000000)");
+    expect(colorToGLSLString("Transparent")).toBe("vec4(0.000000, 0.000000, 0.000000, 0.000000)");
   });
 });

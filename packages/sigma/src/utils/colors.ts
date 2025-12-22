@@ -181,6 +181,11 @@ export function parseColor(val: string): RGBAColor {
   let b = 0; // byte
   let a = 1; // float
 
+  // Handle "transparent" special case
+  if (val.toLowerCase() === "transparent") {
+    return { r: 0, g: 0, b: 0, a: 0 };
+  }
+
   // Handling hexadecimal notation
   if (val[0] === "#") {
     if (val.length === 4) {

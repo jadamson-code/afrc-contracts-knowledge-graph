@@ -148,7 +148,7 @@ describe("defineSigmaOptions - With shapes and variables", () => {
         nodes: {
           shapes: [
             "circle",
-            { type: "square", cornerRadius: "nodeCornerRadius" },
+            { type: "square", cornerRadius: { attribute: "nodeCornerRadius" } },
             { type: "triangle", rotation: Math.PI / 6 },
           ],
           variables: {

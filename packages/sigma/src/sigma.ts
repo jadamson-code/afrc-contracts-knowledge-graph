@@ -12,7 +12,7 @@ import TouchCaptor from "./core/captors/touch";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
 import { evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
-import { PrimitivesDeclaration, generateEdgeProgram, generateNodeProgram } from "./primitives";
+import { PrimitivesDeclaration, VariablesDefinition, generateEdgeProgram, generateNodeProgram } from "./primitives";
 import {
   AbstractEdgeLabelProgram,
   AbstractEdgeProgram,
@@ -153,6 +153,10 @@ export default class Sigma<
   private labelGrid: LabelGrid = new LabelGrid();
   private nodeDataCache: Record<string, NodeDisplayData> = {};
   private edgeDataCache: Record<string, EdgeDisplayData> = {};
+
+  // Variables declared in primitives (for custom layer attributes)
+  private nodeVariables: VariablesDefinition = {};
+  private edgeVariables: VariablesDefinition = {};
 
   // Indices to keep track of the index of the item inside programs
   private nodeProgramIndex: Record<string, number> = {};
@@ -300,10 +304,12 @@ export default class Sigma<
     this.edgeDataTexture = new EdgeDataTexture(this.webGLContext!);
 
     // Generate and register programs from primitives (uses defaults when not provided)
-    const NodeProgram = generateNodeProgram<N, E, G>(this.primitives?.nodes);
+    const { program: NodeProgram, variables: nodeVariables } = generateNodeProgram<N, E, G>(this.primitives?.nodes);
+    this.nodeVariables = nodeVariables;
     this.registerNodeProgram("default", NodeProgram);
 
-    const EdgeProgram = generateEdgeProgram<N, E, G>(this.primitives?.edges);
+    const { program: EdgeProgram, variables: edgeVariables } = generateEdgeProgram<N, E, G>(this.primitives?.edges);
+    this.edgeVariables = edgeVariables;
     this.registerEdgeProgram("default", EdgeProgram);
 
     // Initialize WebGL labels
@@ -1769,6 +1775,13 @@ export default class Sigma<
       data.shape = this.nodeTypeShapeCache[data.type];
     }
 
+    // Inject declared variables from primitives into display data
+    // Variables can come from: styles > graph attributes > default value
+    const mutableData = data as unknown as Record<string, unknown>;
+    for (const [varName, varDef] of Object.entries(this.nodeVariables)) {
+      mutableData[varName] = resolvedStyle[varName] ?? attrs[varName] ?? varDef.default;
+    }
+
     this.nodeDataCache[key] = data;
 
     // Label:
@@ -1868,6 +1881,13 @@ export default class Sigma<
     if (this.edgeReducer) {
       const reduced = this.edgeReducer(key, data, attrs, edgeState, this.graphState, this.graph);
       data = { ...data, ...reduced };
+    }
+
+    // Inject declared variables from primitives into display data
+    // Variables can come from: styles > graph attributes > default value
+    for (const [varName, varDef] of Object.entries(this.edgeVariables)) {
+      (data as unknown as Record<string, unknown>)[varName] =
+        resolvedStyle[varName] ?? attrs[varName] ?? varDef.default;
     }
 
     this.edgeDataCache[key] = data;

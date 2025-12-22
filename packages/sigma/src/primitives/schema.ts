@@ -431,12 +431,31 @@ export type ResolvedOptionsFromSchema<S extends PrimitiveSchema> = {
 // =============================================================================
 
 /**
+ * Attribute source for variable-capable properties in declarative configs.
+ * Allows referencing a node/edge attribute with an optional default value.
+ */
+export interface DeclarativeAttributeSource<T> {
+  /** Name of the attribute to read from */
+  attribute: string;
+  /** Default value when the attribute is missing */
+  default?: T;
+}
+
+/**
  * Derives the declarative config type from a single property schema.
- * - Variable-capable properties become `string | T` (string = variable name)
- * - Static properties remain `T`
+ * - Variable-capable properties accept either a literal value OR an attribute source
+ * - Static properties only accept literal values
+ *
+ * @example
+ * // For a variable-capable color property:
+ * color: "#ff0000"                                    // Literal value
+ * color: { attribute: "borderColor" }                 // Attribute reference
+ * color: { attribute: "borderColor", default: "#000" } // With default
  */
 export type DeclarativeConfigFromProperty<P extends PropertySchema> =
-  IsVariableProperty<P> extends true ? string | TypeFromPropertySchema<P> : TypeFromPropertySchema<P>;
+  IsVariableProperty<P> extends true
+    ? TypeFromPropertySchema<P> | DeclarativeAttributeSource<TypeFromPropertySchema<P>>
+    : TypeFromPropertySchema<P>;
 
 /**
  * Derives declarative config from an item schema (for array properties).
@@ -462,6 +481,16 @@ export type DeclarativeConfigFromSchema<S extends PrimitiveSchema> = {
 // =============================================================================
 
 /**
+ * Validated attribute source that restricts attribute names to allowed variables.
+ */
+export interface ValidatedAttributeSource<T, AllowedVars extends string> {
+  /** Name of the attribute to read from (restricted to declared variables) */
+  attribute: AllowedVars;
+  /** Default value when the attribute is missing */
+  default?: T;
+}
+
+/**
  * Derives the validated declarative config type from a single property schema.
  * Variable-capable properties only accept declared variable names, not any string.
  *
@@ -469,7 +498,9 @@ export type DeclarativeConfigFromSchema<S extends PrimitiveSchema> = {
  * @template AllowedVars - Union of allowed variable names (declared + built-in)
  */
 export type ValidatedConfigFromProperty<P extends PropertySchema, AllowedVars extends string> =
-  IsVariableProperty<P> extends true ? AllowedVars | TypeFromPropertySchema<P> : TypeFromPropertySchema<P>;
+  IsVariableProperty<P> extends true
+    ? TypeFromPropertySchema<P> | ValidatedAttributeSource<TypeFromPropertySchema<P>, AllowedVars>
+    : TypeFromPropertySchema<P>;
 
 /**
  * Derives validated config from an item schema (for array properties).
@@ -513,13 +544,16 @@ type VariableTypeFromProperty<P extends PropertySchema> = P["type"] extends "num
 
 /**
  * Extracts variables from a single property in a config.
- * Returns { [varName]: type } if the value is a custom variable string.
+ * Returns { [varName]: type } if the value is a custom variable reference.
+ * Handles both the { attribute: string } object format.
  */
 export type ExtractPropertyVariable<Value, P extends PropertySchema> =
   IsVariableProperty<P> extends true
-    ? Value extends string
-      ? IsCustomVariable<Value> extends true
-        ? { [K in Value]: VariableTypeFromProperty<P> }
+    ? Value extends { attribute: infer A }
+      ? A extends string
+        ? IsCustomVariable<A> extends true
+          ? { [K in A]: VariableTypeFromProperty<P> }
+          : object
         : object
       : object
     : object;

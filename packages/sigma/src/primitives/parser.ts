@@ -34,6 +34,7 @@ import {
   EdgeExtremitySpec,
   NodePrimitives,
   EdgePrimitives,
+  VariablesDefinition,
   isDeclarativeNodeLayer,
   isCustomNodeLayer,
   isNodeLayerShorthand,
@@ -420,23 +421,20 @@ export function parseEdgePrimitives(edgePrimitives?: EdgePrimitives): ParsedEdge
 // =============================================================================
 
 /**
- * Transforms string values (variable references) in a config object
- * into { attribute: varName } format for factory consumption.
+ * Recursively processes config for array properties that need deep handling.
  *
- * This handles the declarative API where users write:
- *   { type: "fill", color: "myColorVar" }
+ * With the explicit { attribute: string } API, values are passed through as-is.
+ * Users now explicitly use:
+ *   { type: "fill", color: "#ff0000" }           // Literal value
+ *   { type: "fill", color: { attribute: "var" } } // Variable reference
  *
- * And it gets transformed to:
- *   { color: { attribute: "myColorVar" } }
+ * This function only handles recursive processing of arrays and nested objects.
  */
 function resolveVariableReferences(config: Record<string, unknown>): Record<string, unknown> {
   const resolved: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(config)) {
-    if (typeof value === "string") {
-      // String values are treated as variable references -> { attribute: value }
-      resolved[key] = { attribute: value };
-    } else if (Array.isArray(value)) {
+    if (Array.isArray(value)) {
       // Arrays need recursive handling for nested objects (e.g., borders array)
       resolved[key] = value.map((item) => {
         if (typeof item === "object" && item !== null) {
@@ -445,15 +443,15 @@ function resolveVariableReferences(config: Record<string, unknown>): Record<stri
         return item;
       });
     } else if (typeof value === "object" && value !== null) {
-      // Nested objects need recursive handling
-      // But if it's already an attribute source { attribute: ... }, keep it as-is
+      // Nested objects: if it's an attribute source { attribute: ... }, keep as-is
+      // Otherwise recurse (for nested config structures)
       if ("attribute" in value) {
         resolved[key] = value;
       } else {
         resolved[key] = resolveVariableReferences(value as Record<string, unknown>);
       }
     } else {
-      // Numbers, booleans, etc. pass through unchanged
+      // Strings, numbers, booleans, etc. pass through unchanged
       resolved[key] = value;
     }
   }
@@ -466,20 +464,46 @@ function resolveVariableReferences(config: Record<string, unknown>): Record<stri
 // =============================================================================
 
 /**
+ * Result of generating a node program from primitives.
+ */
+export interface GeneratedNodeProgram<
+  N extends Attributes = Attributes,
+  E extends Attributes = Attributes,
+  G extends Attributes = Attributes,
+> {
+  program: NodeProgramType<N, E, G>;
+  variables: VariablesDefinition;
+}
+
+/**
+ * Result of generating an edge program from primitives.
+ */
+export interface GeneratedEdgeProgram<
+  N extends Attributes = Attributes,
+  E extends Attributes = Attributes,
+  G extends Attributes = Attributes,
+> {
+  program: EdgeProgramType<N, E, G>;
+  variables: VariablesDefinition;
+}
+
+/**
  * Generates a NodeProgram from a primitives declaration.
  *
  * This is a high-level function that:
  * 1. Parses the node primitives specs into factory outputs
  * 2. Calls createNodeProgram with the parsed shapes and layers
+ * 3. Returns the program along with declared variables
  *
  * @param nodePrimitives - Node primitives declaration
- * @returns NodeProgram class ready for use with Sigma
+ * @returns Object containing the NodeProgram class and declared variables
  *
  * @example
  * ```typescript
- * const NodeProgram = generateNodeProgram({
+ * const { program: NodeProgram, variables } = generateNodeProgram({
  *   shapes: ["circle", "square"],
  *   layers: ["fill", { type: "border", size: 2, color: "#fff" }],
+ *   variables: { borderSize: { type: "number", default: 0 } },
  * });
  *
  * const sigma = new Sigma(graph, container, {
@@ -491,15 +515,18 @@ export function generateNodeProgram<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
->(nodePrimitives?: NodePrimitives): NodeProgramType<N, E, G> {
+>(nodePrimitives?: NodePrimitives): GeneratedNodeProgram<N, E, G> {
   const { shapes, layers } = parseNodePrimitives(nodePrimitives);
+  const variables = nodePrimitives?.variables || {};
 
-  return createNodeProgram<N, E, G>({
+  const program = createNodeProgram<N, E, G>({
     shapes,
     layers,
     rotateWithCamera: nodePrimitives?.rotateWithCamera,
     label: nodePrimitives?.label,
   });
+
+  return { program, variables };
 }
 
 /**
@@ -508,16 +535,18 @@ export function generateNodeProgram<
  * This is a high-level function that:
  * 1. Parses the edge primitives specs into factory outputs
  * 2. Calls createEdgeProgram with the parsed paths, extremities, and layers
+ * 3. Returns the program along with declared variables
  *
  * @param edgePrimitives - Edge primitives declaration
- * @returns EdgeProgram class ready for use with Sigma
+ * @returns Object containing the EdgeProgram class and declared variables
  *
  * @example
  * ```typescript
- * const EdgeProgram = generateEdgeProgram({
+ * const { program: EdgeProgram, variables } = generateEdgeProgram({
  *   paths: ["line", "curved"],
  *   extremities: ["arrow"],
  *   layers: ["plain"],
+ *   variables: { curvature: { type: "number", default: 0 } },
  * });
  *
  * const sigma = new Sigma(graph, container, {
@@ -529,10 +558,11 @@ export function generateEdgeProgram<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
->(edgePrimitives?: EdgePrimitives): EdgeProgramType<N, E, G> {
+>(edgePrimitives?: EdgePrimitives): GeneratedEdgeProgram<N, E, G> {
   const { paths, extremities, layers } = parseEdgePrimitives(edgePrimitives);
+  const variables = edgePrimitives?.variables || {};
 
-  return createEdgeProgram<N, E, G>({
+  const program = createEdgeProgram<N, E, G>({
     paths,
     extremities,
     layers,
@@ -540,4 +570,6 @@ export function generateEdgeProgram<
     defaultTail: edgePrimitives?.defaultTail,
     label: edgePrimitives?.label,
   });
+
+  return { program, variables };
 }

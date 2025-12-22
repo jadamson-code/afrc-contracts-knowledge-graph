@@ -36,6 +36,7 @@ import {
   DEFAULT_PRIMITIVES,
   Dimensions,
   EdgeDisplayData,
+  EdgeLabelPosition,
   Extent,
   LabelDisplayData,
   Listener,
@@ -1520,7 +1521,7 @@ export default class Sigma<
         nodeSize: 0, // Not applicable for edge labels (use sourceSize/targetSize instead)
         nodeIndex: -1, // Not applicable for edge labels (use sourceNodeIndex/targetNodeIndex instead)
         margin: defaultEdgeLabelMargin,
-        position: defaultEdgeLabelPosition,
+        position: edgeData.labelPosition ?? defaultEdgeLabelPosition,
         hidden: false,
         forceLabel: edgeData.forceLabel ?? false,
         type,
@@ -1879,6 +1880,10 @@ export default class Sigma<
       path: resolvedStyle.path,
       head: resolvedStyle.head,
       tail: resolvedStyle.tail,
+      labelPosition:
+        typeof resolvedStyle.labelPosition === "string"
+          ? (resolvedStyle.labelPosition as EdgeLabelPosition)
+          : undefined,
     };
 
     // Apply reducer if provided

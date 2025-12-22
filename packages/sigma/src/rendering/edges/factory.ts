@@ -469,11 +469,11 @@ export function createEdgeProgram<
   };
 
   // Create and attach the label program for this edge type
-  // This allows WebGL edge label rendering that follows the same path
+  // This allows WebGL edge label rendering that follows all path types
   const defaultHeadExtremity = extremities[defaultHeadIndex];
   const defaultTailExtremity = extremities[defaultTailIndex];
   const LabelProgramClass = createEdgeLabelProgram({
-    path: paths[0],
+    paths, // Pass all paths for multi-path support
     // Pass extremity length ratios so labels know where the edge body starts/ends
     headLengthRatio: !isAttributeSource(defaultHeadExtremity.length) ? defaultHeadExtremity.length : 0,
     tailLengthRatio: !isAttributeSource(defaultTailExtremity.length) ? defaultTailExtremity.length : 0,

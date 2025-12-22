@@ -62,14 +62,14 @@ function positionToMode(position: EdgeLabelPosition): number {
 
 /**
  * Options for creating an edge label program.
- * Extends EdgeLabelOptions with program-specific options (path, extremity ratios).
+ * Extends EdgeLabelOptions with program-specific options (paths, extremity ratios).
  */
 export interface CreateEdgeLabelProgramOptions extends EdgeLabelOptions {
   /**
-   * The path type for positioning labels along edges.
-   * Must match the path used by the corresponding edge program.
+   * The path types for positioning labels along edges (supports multi-path).
+   * Must match the paths used by the corresponding edge program.
    */
-  path: EdgePath;
+  paths: EdgePath[];
 
   /**
    * Head extremity length ratio (length / thickness).
@@ -112,7 +112,7 @@ interface EdgeLabelGlyphCache {
  * @example
  * ```typescript
  * const LineEdgeLabelProgram = createEdgeLabelProgram({
- *   path: pathLine(),
+ *   paths: [pathLine(), pathCurved()],
  * });
  *
  * // Attach to edge program
@@ -125,7 +125,7 @@ export function createEdgeLabelProgram<
   G extends Attributes = Attributes,
 >(options: CreateEdgeLabelProgramOptions): EdgeLabelProgramType<N, E, G> {
   const {
-    path,
+    paths,
     headLengthRatio = 0,
     tailLengthRatio = 0,
     color: labelColor,
@@ -160,7 +160,7 @@ export function createEdgeLabelProgram<
     static get generatedShaders() {
       if (!generated) {
         generated = generateEdgeLabelShaders({
-          path,
+          paths,
           hasBorder,
           fontSizeMode,
           minVisibilityThreshold,
@@ -223,7 +223,7 @@ export function createEdgeLabelProgram<
       // Generate shaders on first instantiation (after node shapes are registered)
       if (!generated) {
         generated = generateEdgeLabelShaders({
-          path,
+          paths,
           hasBorder,
           fontSizeMode,
           minVisibilityThreshold,
@@ -235,7 +235,7 @@ export function createEdgeLabelProgram<
 
       // Initialize edge attribute texture for path attributes (curvature, etc.)
       const layer = layerPlain();
-      this.attributeLayout = computeEdgeAttributeLayout([path], [layer]);
+      this.attributeLayout = computeEdgeAttributeLayout(paths, [layer]);
       this.edgeAttributeTexture = new EdgePathAttributeTexture(gl, this.attributeLayout);
       this.packedAttributeData = new Float32Array(this.attributeLayout.floatsPerEdge);
 
@@ -283,12 +283,18 @@ export function createEdgeLabelProgram<
     getDefinition(): InstancedProgramDefinition<EdgeLabelUniform> {
       const { FLOAT, UNSIGNED_BYTE, TRIANGLE_STRIP } = WebGL2RenderingContext;
 
-      // Build path-specific attributes
-      const pathAttributes = path.attributes.map((attr) => ({
-        name: attr.name.startsWith("a_") ? attr.name : `a_${attr.name}`,
-        size: attr.size,
-        type: attr.type,
-      }));
+      // Build path-specific attributes (collect unique attributes from all paths)
+      const seenAttributes = new Set<string>();
+      const pathAttributes: { name: string; size: number; type: number }[] = [];
+      for (const p of paths) {
+        for (const attr of p.attributes) {
+          const name = attr.name.startsWith("a_") ? attr.name : `a_${attr.name}`;
+          if (!seenAttributes.has(name)) {
+            seenAttributes.add(name);
+            pathAttributes.push({ name, size: attr.size, type: attr.type });
+          }
+        }
+      }
 
       return {
         VERTICES: 4, // Quad for each character
@@ -297,8 +303,9 @@ export function createEdgeLabelProgram<
         METHOD: TRIANGLE_STRIP,
         UNIFORMS: generated!.uniforms as EdgeLabelUniform[],
         ATTRIBUTES: [
-          // Edge index for texture lookup (edge data including node indices, thickness, curvature, etc.)
-          { name: "a_edgeIndex", size: 1, type: FLOAT },
+          // Edge indices for texture lookup
+          { name: "a_edgeIndex", size: 1, type: FLOAT }, // Index into edge data texture (node positions, thickness, etc.)
+          { name: "a_edgeAttrIndex", size: 1, type: FLOAT }, // Index into edge attribute texture (curvature, etc.)
           { name: "a_baseFontSize", size: 1, type: FLOAT }, // Base font size in pixels (per-label)
 
           // Character metrics (packed)
@@ -384,8 +391,9 @@ export function createEdgeLabelProgram<
      *
      * ## Attribute Layout (must match getDefinition)
      *
-     * Edge geometry (fetched from edge data texture via edgeIndex):
-     * - a_edgeIndex (1): Index into edge data texture
+     * Edge geometry (fetched from textures via indices):
+     * - a_edgeIndex (1): Index into edge data texture (node positions, thickness, etc.)
+     * - a_edgeAttrIndex (1): Index into edge attribute texture (curvature, etc.)
      * - a_baseFontSize (1): Base font size in pixels
      *
      * Character metrics:
@@ -429,8 +437,11 @@ export function createEdgeLabelProgram<
       const color = floatColor(effectiveColor);
       let i = startIndex;
 
-      // a_edgeIndex: Index into edge data texture (contains node indices, thickness, curvature, head/tail ratios)
+      // a_edgeIndex: Index into edge data texture (contains node indices, thickness, head/tail ratios)
       array[i++] = labelData.edgeIndex;
+
+      // a_edgeAttrIndex: Index into edge attribute texture (contains curvature and other path-specific attributes)
+      array[i++] = this.edgeAttributeTexture?.getIndex(labelData.parentKey) ?? 0;
 
       // a_baseFontSize: Base font size in pixels
       array[i++] = labelData.size;
@@ -479,15 +490,22 @@ export function createEdgeLabelProgram<
       }
 
       // Path-specific attributes (except curvature which is now in edge texture)
-      for (const attr of path.attributes) {
-        const attrName = attr.name.startsWith("a_") ? attr.name.slice(2) : attr.name;
-        // Skip curvature - it's fetched from edge data texture
-        if (attrName === "curvature") {
-          continue;
-        }
-        // Unknown attribute - write zeros
-        for (let j = 0; j < attr.size; j++) {
-          array[i++] = 0;
+      // Collect from all paths to ensure consistent attribute layout
+      const seenAttrs = new Set<string>();
+      for (const p of paths) {
+        for (const attr of p.attributes) {
+          const attrName = attr.name.startsWith("a_") ? attr.name.slice(2) : attr.name;
+          // Skip curvature - it's fetched from edge data texture
+          if (attrName === "curvature") {
+            continue;
+          }
+          if (!seenAttrs.has(attrName)) {
+            seenAttrs.add(attrName);
+            // Unknown attribute - write zeros
+            for (let j = 0; j < attr.size; j++) {
+              array[i++] = 0;
+            }
+          }
         }
       }
     }
@@ -644,6 +662,11 @@ export function createEdgeLabelProgram<
       if (this.atlasManager.hasPendingGlyphs()) {
         this.atlasManager.flush();
         this.updateAtlasTexture();
+      }
+
+      // Upload edge attribute texture (curvature, etc.) to GPU
+      if (this.edgeAttributeTexture) {
+        this.edgeAttributeTexture.upload();
       }
 
       super.renderProgram(params, programInfo);

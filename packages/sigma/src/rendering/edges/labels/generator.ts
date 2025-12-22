@@ -49,8 +49,8 @@ export interface GeneratedEdgeLabelShaders {
 }
 
 export interface EdgeLabelShaderOptions {
-  /** The path type for positioning labels along the edge */
-  path: EdgePath;
+  /** The path types for positioning labels along edges (supports multi-path) */
+  paths: EdgePath[];
   /** Whether to render text border (outline) */
   hasBorder?: boolean;
   /** Font size mode: "fixed" or "scaled" */
@@ -89,20 +89,100 @@ export interface EdgeLabelShaderOptions {
  *    e. Rotate character quad to align with tangent
  *    f. Apply perpendicular offset (for above/below positioning)
  */
+/**
+ * Generates a path selector function for multi-path support.
+ * Creates a switch statement that dispatches to the correct path function based on pathId.
+ */
+function generatePathSelector(
+  paths: EdgePath[],
+  queryName: string,
+  pathFunc: string,
+  returnType: string,
+  params: string,
+  args: string,
+): string {
+  if (paths.length === 1) {
+    return `${returnType} ${queryName}(int pathId, ${params}) {
+  return path_${paths[0].name}_${pathFunc}(${args});
+}`;
+  }
+
+  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_${pathFunc}(${args});`).join("\n");
+
+  return `${returnType} ${queryName}(int pathId, ${params}) {
+  switch (pathId) {
+${cases}
+    default: return path_${paths[0].name}_${pathFunc}(${args});
+  }
+}`;
+}
+
+/**
+ * Generates all clamp T functions and their selectors for multi-path support.
+ */
+function generateAllClampFunctions(paths: EdgePath[]): string {
+  // Generate individual clamp functions for each path
+  const clampFunctions = paths
+    .map(
+      (p) => `${generateFindSourceClampT(p.name)}
+${generateFindTargetClampT(p.name)}`,
+    )
+    .join("\n\n");
+
+  // Generate selector functions
+  let selectors: string;
+  if (paths.length === 1) {
+    selectors = `
+float queryFindSourceClampT(int pathId, vec2 source, float sourceSize, int sourceShapeId, vec2 target, float margin) {
+  return findSourceClampT_${paths[0].name}(source, sourceSize, sourceShapeId, target, margin);
+}
+
+float queryFindTargetClampT(int pathId, vec2 source, vec2 target, float targetSize, int targetShapeId, float margin) {
+  return findTargetClampT_${paths[0].name}(source, target, targetSize, targetShapeId, margin);
+}`;
+  } else {
+    const sourceCases = paths
+      .map((p, i) => `    case ${i}: return findSourceClampT_${p.name}(source, sourceSize, sourceShapeId, target, margin);`)
+      .join("\n");
+    const targetCases = paths
+      .map((p, i) => `    case ${i}: return findTargetClampT_${p.name}(source, target, targetSize, targetShapeId, margin);`)
+      .join("\n");
+
+    selectors = `
+float queryFindSourceClampT(int pathId, vec2 source, float sourceSize, int sourceShapeId, vec2 target, float margin) {
+  switch (pathId) {
+${sourceCases}
+    default: return findSourceClampT_${paths[0].name}(source, sourceSize, sourceShapeId, target, margin);
+  }
+}
+
+float queryFindTargetClampT(int pathId, vec2 source, vec2 target, float targetSize, int targetShapeId, float margin) {
+  switch (pathId) {
+${targetCases}
+    default: return findTargetClampT_${paths[0].name}(source, target, targetSize, targetShapeId, margin);
+  }
+}`;
+  }
+
+  return `${clampFunctions}\n${selectors}`;
+}
+
 export function generateEdgeLabelVertexShader(options: EdgeLabelShaderOptions): string {
   const {
-    path,
+    paths,
     hasBorder = false,
     fontSizeMode = "fixed",
     minVisibilityThreshold = 0.5,
     fullVisibilityThreshold = 0.6,
   } = options;
-  const pathName = path.name;
   const isScaledMode = fontSizeMode === "scaled";
+
+  // Check if any path has sharp corners (for step/taxi edges)
+  const hasAnySharpCorners = paths.some((p) => p.hasSharpCorners);
 
   // Compute attribute layout for path attributes (labels need curvature for curved paths)
   const layer = layerPlain(); // Use empty layer for labels
-  const attributeLayout = computeEdgeAttributeLayout([path], [layer]);
+  const attributeLayout = computeEdgeAttributeLayout(paths, [layer]);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // language=GLSL
@@ -112,10 +192,11 @@ export function generateEdgeLabelVertexShader(options: EdgeLabelShaderOptions): 
 // Attributes - Per Character (Instanced)
 // ============================================================================
 
-// Edge geometry: edge index for texture lookup
-// Edge data (source/target node indices, thickness, curvature, head/tail ratios)
-// is fetched from edge data texture
+// Edge geometry: indices for texture lookup
+// Edge data (source/target node indices, thickness, head/tail ratios) is fetched from edge data texture
+// Edge path attributes (curvature, etc.) are fetched from edge attribute texture
 in float a_edgeIndex;       // Index into edge data texture
+in float a_edgeAttrIndex;   // Index into edge attribute texture (for curvature, etc.)
 in float a_baseFontSize;    // Base font size in pixels (per-label)
 
 // Character metrics (in glyph units = atlas font size pixels)
@@ -168,6 +249,7 @@ out vec4 v_color;
 ${hasBorder ? "out vec4 v_borderColor;" : ""}
 out float v_edgeFade;  // 0 = fully visible, 1 = fully faded (outside body)
 out float v_alphaModifier;  // 0-1 based on label visibility ratio
+${hasBorder ? "out float v_positionMode;  // Position mode for conditional border (0=over needs border)" : ""}
 
 // ============================================================================
 // Constants
@@ -197,26 +279,64 @@ ${getAllShapeGLSL()}
 ${generateShapeSelectorGLSL()}
 
 // ============================================================================
-// Path Functions
+// Path Functions (all paths for multi-path support)
 // ============================================================================
 
-${path.glsl}
+${paths
+  .map(
+    (p) => `// --- Path: ${p.name} ---
+${p.glsl}
 
 // Tangent/normal functions: use analytical if provided, otherwise numerical
-${path.analyticalTangentGlsl || generateNumericalTangentNormal(pathName)}
+${p.analyticalTangentGlsl || generateNumericalTangentNormal(p.name)}
 
 // Auto-generated fallbacks for any missing path functions
-${generatePathFallbacks(pathName, path.glsl)}
+${generatePathFallbacks(p.name, p.glsl)}
 
 // Corner skip helpers (for paths with sharp corners like step/taxi)
-${path.cornerSkipGlsl || ""}
+${p.cornerSkipGlsl || ""}
+`,
+  )
+  .join("\n")}
+
+// ============================================================================
+// Path Selector Functions (dispatch based on pathId)
+// ============================================================================
+
+${generatePathSelector(paths, "queryPathPosition", "position", "vec2", "float t, vec2 source, vec2 target", "t, source, target")}
+
+${generatePathSelector(paths, "queryPathTangent", "tangent", "vec2", "float t, vec2 source, vec2 target", "t, source, target")}
+
+${generatePathSelector(paths, "queryPathNormal", "normal", "vec2", "float t, vec2 source, vec2 target", "t, source, target")}
+
+${generatePathSelector(paths, "queryPathLength", "length", "float", "vec2 source, vec2 target", "source, target")}
+
+${generatePathSelector(paths, "queryPathTAtDistance", "t_at_distance", "float", "float dist, vec2 source, vec2 target", "dist, source, target")}
+
+${
+  hasAnySharpCorners
+    ? `// Corner function selectors (only some paths have sharp corners)
+vec2 queryGetCornerTs(int pathId, vec2 source, vec2 target) {
+  switch (pathId) {
+${paths.map((p, i) => (p.hasSharpCorners ? `    case ${i}: return path_${p.name}_getCornerTs(source, target);` : `    case ${i}: return vec2(-1.0, -1.0); // No corners for ${p.name}`)).join("\n")}
+    default: return vec2(-1.0, -1.0);
+  }
+}
+
+vec2 queryGetCornerConcavity(int pathId, vec2 source, vec2 target, float perpOffset) {
+  switch (pathId) {
+${paths.map((p, i) => (p.hasSharpCorners ? `    case ${i}: return path_${p.name}_getCornerConcavity(source, target, perpOffset);` : `    case ${i}: return vec2(0.0, 0.0); // No corners for ${p.name}`)).join("\n")}
+    default: return vec2(0.0, 0.0);
+  }
+}`
+    : ""
+}
 
 // ============================================================================
 // Binary Search Functions (from shared-glsl.ts)
 // ============================================================================
 
-${generateFindSourceClampT(pathName)}
-${generateFindTargetClampT(pathName)}
+${generateAllClampFunctions(paths)}
 
 // ============================================================================
 // Main
@@ -243,13 +363,18 @@ void main() {
   // edgeData0.w is reserved
   float headLengthRatio = edgeData1.x;
   float tailLengthRatio = edgeData1.y;
+  int pathId = int(edgeData1.z);  // Path type for multi-path support
   float baseFontSize = a_baseFontSize;
 
   // -------------------------------------------------------------------------
   // Fetch path attributes from edge attribute texture
   // -------------------------------------------------------------------------
+  // Note: The fetch code uses 'edgeIdx' variable, so we set it to the attribute texture index
+  {
+    int edgeIdx = int(a_edgeAttrIndex);  // Use attribute texture index for path attributes
 ${textureFetch.fetchCode}
 ${textureFetch.varyingAssignments}
+  }
 
   // -------------------------------------------------------------------------
   // Fetch node data from node texture
@@ -294,11 +419,11 @@ ${textureFetch.varyingAssignments}
   // -------------------------------------------------------------------------
   // Always find where path exits source node and enters target node
   // This ensures labels are truncated at node boundaries, not node centers
-  float tStart = findSourceClampT_${pathName}(source, sourceSize, sourceShapeId, target, 0.0);
-  float tEnd = findTargetClampT_${pathName}(source, target, targetSize, targetShapeId, 0.0);
+  float tStart = queryFindSourceClampT(pathId, source, sourceSize, sourceShapeId, target, 0.0);
+  float tEnd = queryFindTargetClampT(pathId, source, target, targetSize, targetShapeId, 0.0);
 
   // Compute path length
-  float pathLength = path_${pathName}_length(source, target);
+  float pathLength = queryPathLength(pathId, source, target);
   float visibleLength = pathLength * (tEnd - tStart);
 
   // Compute extremity lengths in WebGL units
@@ -415,16 +540,16 @@ ${textureFetch.varyingAssignments}
   if (perpOffset == 0.0) {
     // Simple case: place on centerline
     float charArcDist = bodyCenterDist + charCenterOffset;
-    charT = path_${pathName}_t_at_distance(charArcDist, source, target);
+    charT = queryPathTAtDistance(pathId, charArcDist, source, target);
   } else {
     // Offset path traversal: walk along the offset curve to find character position
     // This ensures even character spacing regardless of curvature
 
     // Start from body center on offset path
-    float centerT = path_${pathName}_t_at_distance(bodyCenterDist, source, target);
+    float centerT = queryPathTAtDistance(pathId, bodyCenterDist, source, target);
 
     ${
-      path.hasSharpCorners
+      hasAnySharpCorners
         ? `// -----------------------------------------------------------------------
     // Corner skip setup for step/taxi edges with above/below labels
     // -----------------------------------------------------------------------
@@ -433,8 +558,8 @@ ${textureFetch.varyingAssignments}
     // crossings during the offset path traversal and add skip distance.
 
     // Get corner t values and concavity
-    vec2 cornerTs = path_${pathName}_getCornerTs(source, target);
-    vec2 concavity = path_${pathName}_getCornerConcavity(source, target, perpOffset);
+    vec2 cornerTs = queryGetCornerTs(pathId, source, target);
+    vec2 concavity = queryGetCornerConcavity(pathId, source, target, perpOffset);
 
     // Skip distance in graph units, proportional to on-screen font size
     // For fixed mode: use pixelToGraph so gap stays constant regardless of zoom
@@ -460,15 +585,15 @@ ${textureFetch.varyingAssignments}
     if (targetOffsetDist < 0.0001) {
       charT = centerT;
     } else {
-      vec2 centerPos = path_${pathName}_position(centerT, source, target);
-      vec2 centerNormal = path_${pathName}_normal(centerT, source, target);
+      vec2 centerPos = queryPathPosition(pathId, centerT, source, target);
+      vec2 centerNormal = queryPathNormal(pathId, centerT, source, target);
       vec2 offsetCenter = centerPos + centerNormal * perpOffset;
 
       float searchDir = charCenterOffset > 0.0 ? 1.0 : -1.0;
 
       // Search bounds (t values for body start and end)
-      float tBodyStart = path_${pathName}_t_at_distance(bodyStartDist, source, target);
-      float tBodyEnd = path_${pathName}_t_at_distance(bodyEndDist, source, target);
+      float tBodyStart = queryPathTAtDistance(pathId, bodyStartDist, source, target);
+      float tBodyEnd = queryPathTAtDistance(pathId, bodyEndDist, source, target);
 
       // Walk along offset path to find character position
       float accumDist = 0.0;
@@ -480,7 +605,7 @@ ${textureFetch.varyingAssignments}
       float tSearchEnd = searchDir > 0.0 ? tBodyEnd : tBodyStart;
 
       ${
-        path.hasSharpCorners
+        hasAnySharpCorners
           ? `// Track which concave corners we've crossed to add skip distance
       bool crossedCorner1 = false;
       bool crossedCorner2 = false;
@@ -494,7 +619,7 @@ ${textureFetch.varyingAssignments}
         float stepT = centerT + searchDir * float(i) * abs(tSearchEnd - centerT) / float(STEPS);
 
         ${
-          path.hasSharpCorners
+          hasAnySharpCorners
             ? `// Check for concave corner crossings and add skip distance
         // Corner 1 crossing check
         if (corner1IsConcave && !crossedCorner1) {
@@ -521,15 +646,15 @@ ${textureFetch.varyingAssignments}
         }
 
         // Compute offset position at this t
-        vec2 stepPos = path_${pathName}_position(stepT, source, target);
-        vec2 stepNormal = path_${pathName}_normal(stepT, source, target);
+        vec2 stepPos = queryPathPosition(pathId, stepT, source, target);
+        vec2 stepNormal = queryPathNormal(pathId, stepT, source, target);
         vec2 offsetPos = stepPos + stepNormal * perpOffset;
 
         // Distance along offset path
         float segDist = length(offsetPos - prevOffsetPos);
 
         ${
-          path.hasSharpCorners
+          hasAnySharpCorners
             ? `if (accumDist + segDist >= effectiveTargetDist) {
           // Interpolate within segment to find exact t
           float remaining = effectiveTargetDist - accumDist;
@@ -558,8 +683,8 @@ ${textureFetch.varyingAssignments}
   }
 
   // Get position and tangent at final character position
-  vec2 pathPos = path_${pathName}_position(charT, source, target);
-  vec2 tangent = path_${pathName}_tangent(charT, source, target);
+  vec2 pathPos = queryPathPosition(pathId, charT, source, target);
+  vec2 tangent = queryPathTangent(pathId, charT, source, target);
 
   // Compute perpendicular direction (90 degrees from tangent)
   vec2 perpDir = vec2(-tangent.y, tangent.x);
@@ -642,7 +767,7 @@ ${textureFetch.varyingAssignments}
   // -------------------------------------------------------------------------
   v_color = a_color;
   v_color.a *= bias;
-${hasBorder ? "  v_borderColor = a_borderColor;\n  v_borderColor.a *= bias;" : ""}
+${hasBorder ? "  v_borderColor = a_borderColor;\n  v_borderColor.a *= bias;\n  v_positionMode = positionMode;" : ""}
   v_alphaModifier = alphaModifier;
 
   // -------------------------------------------------------------------------
@@ -702,6 +827,7 @@ in vec4 v_color;
 ${hasBorder ? "in vec4 v_borderColor;" : ""}
 in float v_edgeFade;  // 0 = fully visible, 1 = fully faded
 in float v_alphaModifier;  // 0-1 based on label visibility ratio
+${hasBorder ? "in float v_positionMode;  // Position mode (0=over, 1=above, 2=below, 3=auto)" : ""}
 
 uniform sampler2D u_atlas;
 uniform float u_gamma;
@@ -732,27 +858,35 @@ void main() {
 
 ${
   hasBorder
-    ? `  // Border rendering: compute alpha for both fill and border regions
-  // Border extends from (edge - borderWidth) to edge
-  float borderEdge = edge - u_borderWidth;
-
-  // Fill alpha: fully opaque inside the glyph
+    ? `  // Fill alpha: fully opaque inside the glyph
   float fillAlpha = smoothstep(edge - aaWidth, edge + aaWidth, sdfValue);
 
-  // Border alpha: opaque in the border region (between borderEdge and edge)
-  float borderAlpha = smoothstep(borderEdge - aaWidth, borderEdge + aaWidth, sdfValue);
+  // Only apply border for "over" position mode (v_positionMode == 0.0)
+  // Labels positioned above/below/auto don't overlap the edge line and don't need borders
+  if (v_positionMode < 0.5) {
+    // Border rendering: compute alpha for both fill and border regions
+    // Border extends from (edge - borderWidth) to edge
+    float borderEdge = edge - u_borderWidth;
 
-  // Composite: fill on top of border
-  // Border is visible where borderAlpha > 0 but fillAlpha < 1
-  vec3 borderColorPremult = v_borderColor.rgb * v_borderColor.a * borderAlpha * edgeAlpha;
-  vec3 fillColorPremult = v_color.rgb * v_color.a * fillAlpha * edgeAlpha;
+    // Border alpha: opaque in the border region (between borderEdge and edge)
+    float borderAlpha = smoothstep(borderEdge - aaWidth, borderEdge + aaWidth, sdfValue);
 
-  // Blend fill over border (fill replaces border where fill is opaque)
-  float finalBorderAlpha = borderAlpha * (1.0 - fillAlpha);
-  vec3 finalColor = fillColorPremult + v_borderColor.rgb * v_borderColor.a * finalBorderAlpha * edgeAlpha;
-  float finalAlpha = (v_color.a * fillAlpha + v_borderColor.a * finalBorderAlpha) * edgeAlpha;
+    // Composite: fill on top of border
+    // Border is visible where borderAlpha > 0 but fillAlpha < 1
+    vec3 borderColorPremult = v_borderColor.rgb * v_borderColor.a * borderAlpha * edgeAlpha;
+    vec3 fillColorPremult = v_color.rgb * v_color.a * fillAlpha * edgeAlpha;
 
-  fragColor = vec4(finalColor, finalAlpha);`
+    // Blend fill over border (fill replaces border where fill is opaque)
+    float finalBorderAlpha = borderAlpha * (1.0 - fillAlpha);
+    vec3 finalColor = fillColorPremult + v_borderColor.rgb * v_borderColor.a * finalBorderAlpha * edgeAlpha;
+    float finalAlpha = (v_color.a * fillAlpha + v_borderColor.a * finalBorderAlpha) * edgeAlpha;
+
+    fragColor = vec4(finalColor, finalAlpha);
+  } else {
+    // No border for above/below/auto positions - simple text rendering
+    float finalAlpha = v_color.a * fillAlpha * edgeAlpha;
+    fragColor = vec4(v_color.rgb * finalAlpha, finalAlpha);
+  }`
     : `  // Smooth transition from transparent to opaque at glyph edge
   float alpha = smoothstep(edge - aaWidth, edge + aaWidth, sdfValue);
 
@@ -772,7 +906,7 @@ ${
 // ============================================================================
 
 export function collectEdgeLabelUniforms(
-  path: EdgePath,
+  paths: EdgePath[],
   hasBorder = false,
   fontSizeMode: "fixed" | "scaled" = "fixed",
 ): string[] {
@@ -808,10 +942,12 @@ export function collectEdgeLabelUniforms(
     uniforms.push("u_borderWidth");
   }
 
-  // Add path-specific uniforms
-  for (const uniform of path.uniforms) {
-    if (!uniforms.includes(uniform.name)) {
-      uniforms.push(uniform.name);
+  // Add path-specific uniforms from all paths
+  for (const path of paths) {
+    for (const uniform of path.uniforms) {
+      if (!uniforms.includes(uniform.name)) {
+        uniforms.push(uniform.name);
+      }
     }
   }
 
@@ -827,6 +963,6 @@ export function generateEdgeLabelShaders(options: EdgeLabelShaderOptions): Gener
   return {
     vertexShader: generateEdgeLabelVertexShader(options),
     fragmentShader: generateEdgeLabelFragmentShader({ hasBorder }),
-    uniforms: collectEdgeLabelUniforms(options.path, hasBorder, fontSizeMode),
+    uniforms: collectEdgeLabelUniforms(options.paths, hasBorder, fontSizeMode),
   };
 }

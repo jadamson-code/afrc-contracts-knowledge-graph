@@ -84,6 +84,7 @@ export interface EdgeDisplayData extends DisplayData {
   path?: string; // Path type (e.g., "straight", "curved")
   head?: string; // Head extremity type (e.g., "arrow")
   tail?: string; // Tail extremity type (e.g., "arrow")
+  labelPosition?: EdgeLabelPosition; // Label position relative to edge path
 }
 
 export type CoordinateConversionOverride = {

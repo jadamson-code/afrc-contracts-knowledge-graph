@@ -9,19 +9,10 @@ const meta: Meta<StoryArgs> = {
   id: "edge-label-styles",
   title: "Core library/Features showcases",
   argTypes: {
-    labelPosition: {
-      name: "Label position",
-      control: { type: "select" },
-      options: ["auto", "above", "below", "over"],
-    },
     fontSizeMode: {
       name: "Font size mode",
       control: { type: "select" },
       options: ["fixed", "scaled"],
-    },
-    showBorder: {
-      name: "Text border",
-      control: { type: "boolean" },
     },
     headType: {
       name: "Head extremity",
@@ -44,9 +35,7 @@ export const story: Story = {
   render: () => template,
   play: wrapStory(play),
   args: {
-    labelPosition: "auto",
     fontSizeMode: "fixed",
-    showBorder: false,
     headType: "arrow",
     tailType: "none",
   },

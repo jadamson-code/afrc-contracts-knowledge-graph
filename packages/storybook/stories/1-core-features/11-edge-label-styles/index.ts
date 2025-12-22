@@ -1,22 +1,23 @@
 /**
  * This example demonstrates edge label styles using the v4 primitives + styles API.
- * It shows a grid of edges with different path types, where label options
- * (position, font size mode, text border) are controlled via Storybook controls.
+ * It shows a grid of edges with different path types, where each column has a different
+ * label position (over, above, below, auto).
  *
  * The primitives API generates a single multi-path program with all path types.
- * Use the Storybook controls to change label position, font size mode, and extremities.
+ * Use the Storybook controls to change font size mode and extremities.
  */
 import Graph from "graphology";
 import Sigma from "sigma";
 import { DEFAULT_STYLES, EdgeLabelFontSizeMode, EdgeLabelPosition } from "sigma/types";
 
 export interface StoryArgs {
-  labelPosition: EdgeLabelPosition;
   fontSizeMode: EdgeLabelFontSizeMode;
-  showBorder: boolean;
   headType: string;
   tailType: string;
 }
+
+// Label positions for each column
+const COL_POSITIONS: EdgeLabelPosition[] = ["over", "above", "below", "auto"];
 
 export default (args: StoryArgs) => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -47,6 +48,7 @@ export default (args: StoryArgs) => {
   for (let row = 0; row < PATHS.length; row++) {
     for (let col = 0; col < COLS; col++) {
       const pathInfo = PATHS[row];
+      const position = COL_POSITIONS[col % COL_POSITIONS.length];
       const cellX = col * COL_SPACING;
       const cellY = -row * ROW_SPACING;
 
@@ -72,13 +74,13 @@ export default (args: StoryArgs) => {
         shape: "triangle",
       });
 
-      // Edge
+      // Edge with label showing path and position
       graph.addEdge(sourceId, targetId, {
         size: EDGE_SIZE,
         color: EDGE_COLOR,
-        label: pathInfo.label,
-        forceLabel: true,
+        label: `${pathInfo.label} / ${position}`,
         path: pathInfo.name,
+        labelPosition: position,
         curvature: pathInfo.name === "curved" ? 0.3 : 0,
       });
     }
@@ -97,11 +99,13 @@ export default (args: StoryArgs) => {
         layers: [{ type: "plain" }],
         defaultHead: args.headType === "none" ? undefined : args.headType,
         defaultTail: args.tailType === "none" ? undefined : args.tailType,
+        // Declare curvature variable so it gets passed to edge display data
+        variables: { curvature: { type: "number", default: 0 } },
         label: {
-          position: args.labelPosition,
           fontSizeMode: args.fontSizeMode,
-          color: args.showBorder ? "#000" : "#333",
-          ...(args.showBorder ? { textBorder: { width: 8, color: "#ffffff" } } : {}),
+          color: "#000",
+          // Border is only applied to "over" labels (first column) automatically by the shader
+          textBorder: { width: 8, color: "#ffffff" },
         },
       },
     },
@@ -116,6 +120,10 @@ export default (args: StoryArgs) => {
         DEFAULT_STYLES.edges,
         {
           path: { attribute: "path" },
+          // Force all labels to be visible
+          labelVisibility: "visible",
+          // Read label position from edge attribute
+          labelPosition: { attribute: "labelPosition", defaultValue: "over" },
         },
       ],
     },

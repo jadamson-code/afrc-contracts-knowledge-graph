@@ -14,12 +14,11 @@
  *
  * Use the checkbox to toggle whether nodes rotate with the camera.
  */
-import { layerBorder } from "@sigma/node-border";
+import "@sigma/node-border";
 import { layerImage } from "@sigma/node-image";
-import { layerPiechart } from "@sigma/node-piechart";
+import "@sigma/node-piechart";
 import Graph from "graphology";
 import Sigma from "sigma";
-import { layerFill, sdfCircle, sdfDiamond, sdfSquare, sdfTriangle } from "sigma/rendering";
 import { DEFAULT_STYLES } from "sigma/types";
 
 export default () => {
@@ -116,68 +115,82 @@ export default () => {
     }
   }
 
-  // Node primitives: shapes and layers for the program
-  const nodePrimitives = {
-    // Multi-shape: supports all 4 shapes in one program
-    shapes: [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()],
-    layers: [
-      // Base fill layer (always visible)
-      layerFill({ color: { attribute: "backgroundColor" } }),
-
-      // Image layer for photo images (row 3)
-      // Disabled when no 'image' attribute
-      layerImage({
-        name: "photo",
-        drawingMode: "image",
-        imageAttribute: "image",
-      }),
-
-      // Image layer for pictograms (row 4)
-      // Disabled when no 'pictogram' attribute
-      layerImage({
-        name: "pictogram",
-        drawingMode: "color",
-        imageAttribute: "pictogram",
-        colorAttribute: "borderColor",
-        padding: 0.4,
-        textureManagerOptions: {
-          size: { mode: "force", value: 512 },
-        },
-      }),
-
-      // Border layer - disabled when borderSize=0
-      layerBorder({
-        borders: [
-          { size: { attribute: "borderSize", default: 0 }, color: { attribute: "borderColor" } },
-          { size: 0, color: "transparent", fill: true },
-          { size: { attribute: "innerSize", default: 0 }, color: { attribute: "innerColor" }, mode: "pixels" },
-        ],
-      }),
-
-      // Piechart layer - disabled when all slices=0
-      layerPiechart({
-        slices: [
-          { color: "#E74C3C", value: { attribute: "slice1" } },
-          { color: "#3498DB", value: { attribute: "slice2" } },
-          { color: "#2ECC71", value: { attribute: "slice3" } },
-        ],
-      }),
-    ],
-    rotateWithCamera: false,
-  };
-
   // Create Sigma with primitives and styles
   const renderer = new Sigma(graph, container, {
     primitives: {
-      nodes: nodePrimitives,
+      nodes: {
+        // Declare custom variables that layers will read from node attributes
+        variables: {
+          backgroundColor: { type: "color", default: "#fc0" },
+          borderSize: { type: "number", default: 0 },
+          borderColor: { type: "color", default: "transparent" },
+          innerSize: { type: "number", default: 0 },
+          innerColor: { type: "color", default: "transparent" },
+          slice1: { type: "number", default: 0 },
+          slice2: { type: "number", default: 0 },
+          slice3: { type: "number", default: 0 },
+          image: { type: "string", default: "" },
+          pictogram: { type: "string", default: "" },
+        },
+        // Multi-shape: supports all 4 shapes in one program
+        shapes: ["circle", "square", "triangle", "diamond"],
+        layers: [
+          // Base fill layer (always visible)
+          { type: "fill", color: { attribute: "backgroundColor" } },
+
+          // Image layer for photo images (row 3)
+          // Disabled when no 'image' attribute
+          {
+            type: "image",
+            name: "photo",
+            drawingMode: "image",
+            imageAttribute: "image",
+          },
+
+          // Image layer for pictograms (row 4)
+          // Disabled when no 'pictogram' attribute
+          layerImage({
+            name: "pictogram",
+            drawingMode: "color",
+            imageAttribute: "pictogram",
+            colorAttribute: "borderColor",
+            padding: 0.4,
+            textureManagerOptions: {
+              size: { mode: "force", value: 512 },
+            },
+          }),
+
+          // Border layer - disabled when borderSize=0
+          {
+            type: "border",
+            borders: [
+              { size: { attribute: "borderSize", default: 0 }, color: { attribute: "borderColor" } },
+              { size: 0, color: "transparent", fill: true },
+              { size: { attribute: "innerSize", default: 0 }, color: { attribute: "innerColor" }, mode: "pixels" },
+            ],
+          },
+
+          // Piechart layer - disabled when all slices=0
+          {
+            type: "piechart",
+            slices: [
+              { color: "#E74C3C", value: { attribute: "slice1" } },
+              { color: "#3498DB", value: { attribute: "slice2" } },
+              { color: "#2ECC71", value: { attribute: "slice3" } },
+            ],
+          },
+        ],
+        rotateWithCamera: false,
+      },
     },
     styles: {
       nodes: [
         DEFAULT_STYLES.nodes,
         // Base styles from graph attributes
         {
+          shape: { attribute: "shape" },
           size: { attribute: "size", defaultValue: 10 },
-          color: { attribute: "backgroundColor", defaultValue: "#999" },
+          color: { attribute: "backgroundColor", defaultValue: "#fc0" },
         },
         // Hover effect: increase size
         {

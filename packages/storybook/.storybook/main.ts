@@ -5,7 +5,7 @@ import { mergeConfig } from "vite";
 const config: StorybookConfig = {
   stories: ["../stories/**/*.mdx", "../stories/**/stories.ts"],
   addons: [
-    { name: "@storybook/addon-essentials", options: { actions: false, controls: false } },
+    { name: "@storybook/addon-essentials", options: { actions: false } },
     "@storybook/addon-storysource",
   ],
   framework: "@storybook/html-vite",

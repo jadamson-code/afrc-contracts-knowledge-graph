@@ -1,17 +1,24 @@
 /**
  * This example demonstrates edge label styles using the v4 primitives + styles API.
  * It shows a grid of edges with different path types, where label options
- * (position, font size mode, text border) are controlled via UI.
+ * (position, font size mode, text border) are controlled via Storybook controls.
  *
  * The primitives API generates a single multi-path program with all path types.
- * Use the controls to change label position, font size mode, and extremities.
+ * Use the Storybook controls to change label position, font size mode, and extremities.
  */
 import Graph from "graphology";
 import Sigma from "sigma";
-import { EdgeLabelPosition, EdgeLabelFontSizeMode } from "sigma/types";
-import { EdgePrimitives, NodePrimitives } from "sigma/primitives";
+import { DEFAULT_STYLES, EdgeLabelFontSizeMode, EdgeLabelPosition } from "sigma/types";
 
-export default () => {
+export interface StoryArgs {
+  labelPosition: EdgeLabelPosition;
+  fontSizeMode: EdgeLabelFontSizeMode;
+  showBorder: boolean;
+  headType: string;
+  tailType: string;
+}
+
+export default (args: StoryArgs) => {
   const container = document.getElementById("sigma-container") as HTMLElement;
 
   // Grid configuration
@@ -34,103 +41,83 @@ export default () => {
   ] as const;
 
   // Create graph with a grid showing all path types
-  const createGraph = () => {
-    const graph = new Graph();
-    const COLS = 4;
+  const graph = new Graph();
+  const COLS = 4;
 
-    for (let row = 0; row < PATHS.length; row++) {
-      for (let col = 0; col < COLS; col++) {
-        const pathInfo = PATHS[row];
-        const cellX = col * COL_SPACING;
-        const cellY = -row * ROW_SPACING;
+  for (let row = 0; row < PATHS.length; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const pathInfo = PATHS[row];
+      const cellX = col * COL_SPACING;
+      const cellY = -row * ROW_SPACING;
 
-        // Source node (diamond)
-        const sourceId = `${pathInfo.name}-${col}-source`;
-        graph.addNode(sourceId, {
-          x: cellX - NODE_SPACING / 2,
-          y: cellY,
-          size: NODE_SIZE,
-          color: NODE_COLORS[row % NODE_COLORS.length],
-          label: "",
-          shape: "diamond",
-        });
+      // Source node (diamond)
+      const sourceId = `${pathInfo.name}-${col}-source`;
+      graph.addNode(sourceId, {
+        x: cellX - NODE_SPACING / 2,
+        y: cellY,
+        size: NODE_SIZE,
+        color: NODE_COLORS[row % NODE_COLORS.length],
+        label: "",
+        shape: "diamond",
+      });
 
-        // Target node (triangle)
-        const targetId = `${pathInfo.name}-${col}-target`;
-        graph.addNode(targetId, {
-          x: cellX + NODE_SPACING / 2,
-          y: cellY + NODE_SPACING / 2,
-          size: NODE_SIZE,
-          color: NODE_COLORS[row % NODE_COLORS.length],
-          label: "",
-          shape: "triangle",
-        });
+      // Target node (triangle)
+      const targetId = `${pathInfo.name}-${col}-target`;
+      graph.addNode(targetId, {
+        x: cellX + NODE_SPACING / 2,
+        y: cellY + NODE_SPACING / 2,
+        size: NODE_SIZE,
+        color: NODE_COLORS[row % NODE_COLORS.length],
+        label: "",
+        shape: "triangle",
+      });
 
-        // Edge
-        graph.addEdge(sourceId, targetId, {
-          size: EDGE_SIZE,
-          color: EDGE_COLOR,
-          label: pathInfo.label,
-          forceLabel: true,
-          path: pathInfo.name,
-          curvature: pathInfo.name === "curved" ? 0.3 : 0,
-        });
-      }
+      // Edge
+      graph.addEdge(sourceId, targetId, {
+        size: EDGE_SIZE,
+        color: EDGE_COLOR,
+        label: pathInfo.label,
+        forceLabel: true,
+        path: pathInfo.name,
+        curvature: pathInfo.name === "curved" ? 0.3 : 0,
+      });
     }
+  }
 
-    return graph;
-  };
-
-  // Get current settings from controls
-  const getSettings = () => ({
-    labelPosition: (document.getElementById("label-position") as HTMLSelectElement).value as EdgeLabelPosition,
-    fontSizeMode: (document.getElementById("font-size-mode") as HTMLSelectElement).value as EdgeLabelFontSizeMode,
-    showBorder: (document.getElementById("show-border") as HTMLInputElement).checked,
-    headType: (document.getElementById("head-type") as HTMLSelectElement).value,
-    tailType: (document.getElementById("tail-type") as HTMLSelectElement).value,
-  });
-
-  // Create primitives from current settings
-  const createPrimitives = (): { nodes: NodePrimitives; edges: EdgePrimitives } => {
-    const settings = getSettings();
-
-    return {
+  // Create Sigma instance with primitives configured from args
+  const renderer = new Sigma(graph, container, {
+    primitives: {
       nodes: {
         shapes: ["diamond", "triangle"],
-        layers: ["fill"],
+        layers: [{ type: "fill" }],
       },
       edges: {
         paths: ["straight", "curved", "step", "stepCurved"],
         extremities: ["arrow"],
-        layers: ["plain"],
-        defaultHead: settings.headType,
-        defaultTail: settings.tailType,
+        layers: [{ type: "plain" }],
+        defaultHead: args.headType === "none" ? undefined : args.headType,
+        defaultTail: args.tailType === "none" ? undefined : args.tailType,
         label: {
-          position: settings.labelPosition,
-          fontSizeMode: settings.fontSizeMode,
-          color: settings.showBorder ? "#000" : "#333",
-          ...(settings.showBorder ? { textBorder: { width: 8, color: "#ffffff" } } : {}),
+          position: args.labelPosition,
+          fontSizeMode: args.fontSizeMode,
+          color: args.showBorder ? "#000" : "#333",
+          ...(args.showBorder ? { textBorder: { width: 8, color: "#ffffff" } } : {}),
         },
       },
-    };
-  };
-
-  // Create Sigma instance
-  let graph = createGraph();
-  let renderer = new Sigma(graph, container, {
-    primitives: createPrimitives(),
+    },
     styles: {
-      nodes: {
-        size: { attribute: "size" },
-        color: { attribute: "color" },
-        shape: { attribute: "shape" },
-      },
-      edges: {
-        size: { attribute: "size" },
-        color: { attribute: "color" },
-        label: { attribute: "label" },
-        path: { attribute: "path" },
-      },
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          shape: { attribute: "shape" },
+        },
+      ],
+      edges: [
+        DEFAULT_STYLES.edges,
+        {
+          path: { attribute: "path" },
+        },
+      ],
     },
     settings: {
       renderEdgeLabels: true,
@@ -138,42 +125,6 @@ export default () => {
       autoRescale: true,
     },
   });
-
-  // Recreate renderer when settings change
-  const recreateRenderer = () => {
-    const camera = renderer.getCamera().getState();
-    renderer.kill();
-    graph = createGraph();
-    renderer = new Sigma(graph, container, {
-      primitives: createPrimitives(),
-      styles: {
-        nodes: {
-          size: { attribute: "size" },
-          color: { attribute: "color" },
-          shape: { attribute: "shape" },
-        },
-        edges: {
-          size: { attribute: "size" },
-          color: { attribute: "color" },
-          label: { attribute: "label" },
-          path: { attribute: "path" },
-        },
-      },
-      settings: {
-        renderEdgeLabels: true,
-        itemSizesReference: "positions",
-        autoRescale: true,
-      },
-    });
-    renderer.getCamera().setState(camera);
-  };
-
-  // Bind controls
-  document.getElementById("label-position")?.addEventListener("change", recreateRenderer);
-  document.getElementById("font-size-mode")?.addEventListener("change", recreateRenderer);
-  document.getElementById("show-border")?.addEventListener("change", recreateRenderer);
-  document.getElementById("head-type")?.addEventListener("change", recreateRenderer);
-  document.getElementById("tail-type")?.addEventListener("change", recreateRenderer);
 
   return () => {
     renderer.kill();

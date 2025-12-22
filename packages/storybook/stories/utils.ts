@@ -11,9 +11,10 @@ export function onStoryDown(cleanFn: () => void) {
   }
 }
 
-export function wrapStory(story: () => void | (() => void)) {
-  return () => {
-    const cleanFn = story();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function wrapStory<T extends Record<string, any>>(story: (args: T) => void | (() => void)) {
+  return ({ args }: { args: T }) => {
+    const cleanFn = story(args);
     if (cleanFn) onStoryDown(cleanFn);
   };
 }

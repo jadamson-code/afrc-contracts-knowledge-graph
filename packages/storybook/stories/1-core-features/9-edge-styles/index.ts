@@ -10,7 +10,8 @@
  */
 import Graph from "graphology";
 import Sigma from "sigma";
-import { EdgeLayerSpec } from "sigma/primitives";
+import { layerDashed } from "sigma/rendering";
+import { DEFAULT_STYLES } from "sigma/types";
 
 export default () => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -89,35 +90,40 @@ export default () => {
         layers: ["fill"],
       },
       edges: {
+        // Declare custom variables for edge layers
+        variables: {
+          dashColor: { type: "color", default: "#000" },
+          dashSize: { type: "number", default: 0 },
+        },
         paths: ["straight", "curved", "stepCurved", "curvedS"],
         extremities: ["arrow"],
         layers: [
-          "plain",
-          // Note: dashed layer options aren't fully typed in the schema yet,
-          // so we use a type assertion. The parser handles these at runtime.
-          {
-            type: "dashed",
+          { type: "plain" },
+          // Using factory function for dashed layer (complex options not in declarative schema)
+          layerDashed({
             dashColor: { attribute: "dashColor" },
             dashSize: { attribute: "dashSize", default: 0, mode: "pixels" },
             gapColor: 0,
             gapSize: { value: 10, mode: "pixels" },
-          } as EdgeLayerSpec,
+          }),
         ],
       },
     },
     styles: {
-      nodes: {
-        size: { attribute: "size" },
-        color: { attribute: "color" },
-        shape: { attribute: "shape" },
-      },
-      edges: {
-        size: { attribute: "size" },
-        color: { attribute: "color" },
-        path: { attribute: "path" },
-        head: { attribute: "head" },
-        tail: { attribute: "tail" },
-      },
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          shape: { attribute: "shape" },
+        },
+      ],
+      edges: [
+        DEFAULT_STYLES.edges,
+        {
+          path: { attribute: "path" },
+          head: { attribute: "head" },
+          tail: { attribute: "tail" },
+        },
+      ],
     },
     settings: {
       renderEdgeLabels: true,

@@ -31,6 +31,10 @@ const forceReloadDecorator: Preview["decorators"] = (storyFn, context) => {
 
 const preview: Preview = {
   decorators: [forceReloadDecorator],
+  parameters: {
+    // Hide controls panel by default (stories can override with controls: { disable: false })
+    controls: { disable: true },
+  },
 };
 
 export default preview;

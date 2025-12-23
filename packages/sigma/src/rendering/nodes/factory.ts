@@ -17,7 +17,7 @@ import { getShapeId, registerShapeInstance } from "../shapes";
 import { ProgramInfo } from "../utils";
 import { NodeProgram, NodeProgramType } from "./base";
 import { generateShaders } from "./generator";
-import { createHoverProgram } from "./hovers";
+import { createBackdropProgram } from "./backdrops";
 import { createLabelProgram } from "./labels";
 import { NodeLayerAttributeTexture, computeLayerAttributeLayout } from "./layer-attribute-texture";
 import { FragmentLayer, LayerLifecycleContext, LayerLifecycleHooks, NodeProgramOptions } from "./types";
@@ -65,7 +65,7 @@ export function createNodeProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: NodeProgramOptions): NodeProgramType<N, E, G> {
-  const { rotateWithCamera = false, label: labelOptions = {}, shapes } = options;
+  const { rotateWithCamera = false, label: labelOptions = {}, shapes, backdrop } = options;
 
   if (shapes.length === 0) {
     throw new Error("createNodeProgram: at least one shape must be provided in 'shapes'");
@@ -105,14 +105,15 @@ export function createNodeProgram<
     label: labelOptions,
   });
 
-  // Create the hover program class with all shapes (for multi-shape support)
-  const HoverProgramClass = createHoverProgram({
+  // Create the backdrop program class with all shapes (for multi-shape support)
+  const BackdropProgramClass = createBackdropProgram({
     shapes,
     rotateWithCamera,
     label: labelOptions,
+    backdrop,
   });
 
-  // Compute layout once for all instances (shared across nodePrograms and nodeHoverPrograms)
+  // Compute layout once for all instances
   const layerAttributeLayout = computeLayerAttributeLayout(layers);
 
   // Create the node program class
@@ -128,10 +129,10 @@ export function createNodeProgram<
     // Static reference to the associated LabelProgram
     static LabelProgram = LabelProgramClass;
 
-    // Static reference to the associated HoverProgram
-    static HoverProgram = HoverProgramClass;
+    // Static reference to the associated BackdropProgram
+    static BackdropProgram = BackdropProgramClass;
 
-    // Static shared texture per GL context (shared between nodePrograms and nodeHoverPrograms)
+    // Static shared texture per GL context
     private static layerTextures = new WeakMap<WebGL2RenderingContext, NodeLayerAttributeTexture>();
     private static textureRefCounts = new WeakMap<WebGL2RenderingContext, number>();
 

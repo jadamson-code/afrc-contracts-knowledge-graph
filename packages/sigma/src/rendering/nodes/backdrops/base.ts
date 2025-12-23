@@ -1,9 +1,9 @@
 /**
- * Sigma.js WebGL Abstract Hover Program
- * ======================================
+ * Sigma.js WebGL Abstract Backdrop Program
+ * =========================================
  *
- * Base classes for WebGL hover programs.
- * Hover programs render the background shape (node + label union) with shadow
+ * Base classes for WebGL backdrop programs.
+ * Backdrop programs render the background shape (node + label union) with shadow
  * for highlighted/hovered nodes.
  * @module
  */
@@ -14,7 +14,7 @@ import type { LabelPosition, RenderParams } from "../../../types";
 import { AbstractProgram, Program } from "../../program";
 import { InstancedProgramDefinition, ProgramDefinition, ProgramInfo } from "../../utils";
 
-export interface HoverDisplayData {
+export interface BackdropDisplayData {
   key: string;
   x: number;
   y: number;
@@ -32,47 +32,47 @@ export interface HoverDisplayData {
   backdropPadding: number;
 }
 
-export abstract class AbstractHoverProgram<
+export abstract class AbstractBackdropProgram<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 > extends AbstractProgram<N, E, G> {
-  abstract processHover(offset: number, data: HoverDisplayData): void;
+  abstract processBackdrop(offset: number, data: BackdropDisplayData): void;
 }
 
-export abstract class HoverProgram<
+export abstract class BackdropProgram<
     Uniform extends string = string,
     N extends Attributes = Attributes,
     E extends Attributes = Attributes,
     G extends Attributes = Attributes,
   >
   extends Program<Uniform, N, E, G>
-  implements AbstractHoverProgram<N, E, G>
+  implements AbstractBackdropProgram<N, E, G>
 {
-  protected totalHoverCount = 0;
+  protected totalBackdropCount = 0;
   protected bufferCapacity = 0;
 
-  abstract processHover(offset: number, data: HoverDisplayData): void;
+  abstract processBackdrop(offset: number, data: BackdropDisplayData): void;
 
   hasNothingToRender(): boolean {
-    return this.totalHoverCount === 0;
+    return this.totalBackdropCount === 0;
   }
 
   drawWebGL(method: number, { gl }: ProgramInfo): void {
-    if (this.totalHoverCount === 0) return;
+    if (this.totalBackdropCount === 0) return;
 
     if (!this.isInstanced) {
-      gl.drawArrays(method, 0, this.totalHoverCount * this.VERTICES);
+      gl.drawArrays(method, 0, this.totalBackdropCount * this.VERTICES);
     } else {
-      gl.drawArraysInstanced(method, 0, this.VERTICES, this.totalHoverCount);
+      gl.drawArraysInstanced(method, 0, this.VERTICES, this.totalBackdropCount);
     }
   }
 
-  reallocate(hoverCount: number): void {
-    this.totalHoverCount = hoverCount;
+  reallocate(backdropCount: number): void {
+    this.totalBackdropCount = backdropCount;
 
-    if (hoverCount > this.bufferCapacity) {
-      this.bufferCapacity = Math.max(hoverCount, Math.ceil(this.bufferCapacity * 1.5) || 10);
+    if (backdropCount > this.bufferCapacity) {
+      this.bufferCapacity = Math.max(backdropCount, Math.ceil(this.bufferCapacity * 1.5) || 10);
       super.reallocate(this.bufferCapacity);
     }
   }
@@ -81,11 +81,11 @@ export abstract class HoverProgram<
   abstract setUniforms(params: RenderParams, programInfo: ProgramInfo): void;
 }
 
-class _HoverProgramClass<
+class _BackdropProgramClass<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
-> implements AbstractHoverProgram<N, E, G>
+> implements AbstractBackdropProgram<N, E, G>
 {
   constructor(_gl: WebGL2RenderingContext, _pickingBuffer: WebGLFramebuffer | null, _renderer: Sigma<N, E, G>) {
     return this;
@@ -97,7 +97,7 @@ class _HoverProgramClass<
   reallocate(_capacity: number): void {
     return undefined;
   }
-  processHover(_offset: number, _data: HoverDisplayData): void {
+  processBackdrop(_offset: number, _data: BackdropDisplayData): void {
     return undefined;
   }
   render(_params: RenderParams): void {
@@ -105,8 +105,8 @@ class _HoverProgramClass<
   }
 }
 
-export type HoverProgramType<
+export type BackdropProgramType<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
-> = typeof _HoverProgramClass<N, E, G>;
+> = typeof _BackdropProgramClass<N, E, G>;

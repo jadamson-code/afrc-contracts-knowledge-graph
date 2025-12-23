@@ -172,12 +172,24 @@ export type ValidatedEdgeLayerSpec<AllowedVars extends string> =
 // PRIMITIVES DECLARATIONS
 // =============================================================================
 
+/**
+ * Backdrop style configuration for hover effects.
+ * Values can be constants (baked into shader) or attribute references (per-node storage).
+ */
+export interface BackdropOptions {
+  color?: string | { attribute: string; default?: string };
+  shadowColor?: string | { attribute: string; default?: string };
+  shadowBlur?: number | { attribute: string; default?: number };
+  padding?: number | { attribute: string; default?: number };
+}
+
 export interface NodePrimitives {
   shapes?: readonly NodeShapeSpec[] | NodeShapeSpec[];
   variables?: VariablesDefinition;
   layers?: readonly NodeLayerSpec[] | NodeLayerSpec[];
   rotateWithCamera?: boolean;
   label?: LabelOptions;
+  backdrop?: BackdropOptions;
 }
 
 export interface EdgePrimitives {
@@ -304,6 +316,7 @@ export const DEFAULT_NODE_PRIMITIVES: Required<NodePrimitives> = {
   layers: ["fill" as BuiltInNodeLayerType],
   rotateWithCamera: false,
   label: {},
+  backdrop: {},
 };
 
 export const DEFAULT_EDGE_PRIMITIVES: Required<EdgePrimitives> = {

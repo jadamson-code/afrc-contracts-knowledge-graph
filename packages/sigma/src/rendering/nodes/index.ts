@@ -49,11 +49,11 @@ export { layerFill, registerNodeLayerFactory, type NodeLayerFactory } from "./la
 export { createLabelProgram } from "./labels";
 export type { CreateLabelProgramOptions } from "./labels";
 
-// Hover program creation
-export { createHoverProgram } from "./hovers";
-export type { CreateHoverProgramOptions, HoverStyleOptions } from "./hovers";
-export { AbstractHoverProgram, HoverProgram } from "./hovers";
-export type { HoverProgramType, HoverDisplayData } from "./hovers";
+// Backdrop program creation
+export { createBackdropProgram } from "./backdrops";
+export type { CreateBackdropProgramOptions } from "./backdrops";
+export { AbstractBackdropProgram, BackdropProgram } from "./backdrops";
+export type { BackdropProgramType, BackdropDisplayData } from "./backdrops";
 
 // Shader generators (advanced usage)
 export {
@@ -74,12 +74,12 @@ export {
 export type { GeneratedLabelShaders, LabelShaderOptions } from "./labels";
 
 export {
-  generateHoverShaders,
-  generateHoverVertexShader,
-  generateHoverFragmentShader,
-  collectHoverUniforms,
-} from "./hovers";
-export type { GeneratedHoverShaders, HoverShaderOptions } from "./hovers";
+  generateBackdropShaders,
+  generateBackdropVertexShader,
+  generateBackdropFragmentShader,
+  collectBackdropUniforms,
+} from "./backdrops";
+export type { GeneratedBackdropShaders, BackdropShaderOptions } from "./backdrops";
 
 // Built-in node programs
 export { NodeCircleProgram, NodeSquareProgram } from "./programs";

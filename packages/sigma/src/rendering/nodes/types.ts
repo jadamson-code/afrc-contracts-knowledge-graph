@@ -9,6 +9,7 @@
  *
  * @module
  */
+import { BackdropOptions } from "../../primitives/types";
 import { LabelPosition } from "../../types";
 
 export type Vec2 = [number, number];
@@ -448,6 +449,14 @@ export interface NodeProgramOptions {
    * The LabelProgram is automatically generated from the shape and these options.
    */
   label?: LabelOptions;
+
+  /**
+   * Backdrop configuration for hover effects.
+   * Controls the backdrop style rendered behind hovered nodes.
+   * When using constant values, they're baked into the shader (no per-node storage).
+   * When using attribute bindings, per-node values are stored in vertex buffers.
+   */
+  backdrop?: BackdropOptions;
 
   /**
    * Whether nodes should rotate with the camera.

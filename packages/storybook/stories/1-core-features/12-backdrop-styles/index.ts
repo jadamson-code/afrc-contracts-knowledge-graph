@@ -87,6 +87,12 @@ export default () => {
       nodes: {
         shapes: ["circle", "square", "diamond", "triangle"],
         layers: [{ type: "fill", color: { attribute: "color" } }],
+        backdrop: {
+          color: { attribute: "backdropColor" },
+          shadowColor: { attribute: "backdropShadowColor" },
+          shadowBlur: { attribute: "backdropShadowBlur" },
+          padding: { attribute: "backdropPadding" },
+        },
       },
     },
     styles: {

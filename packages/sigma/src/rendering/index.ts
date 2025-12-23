@@ -18,8 +18,8 @@ export { Program, AbstractProgram } from "./program";
 export type { ProgramType } from "./program";
 export { LabelProgram, AbstractLabelProgram } from "./nodes/labels";
 export type { LabelProgramType } from "./nodes/labels";
-export { HoverProgram, AbstractHoverProgram } from "./nodes/hovers";
-export type { HoverProgramType, HoverDisplayData } from "./nodes/hovers";
+export { BackdropProgram, AbstractBackdropProgram } from "./nodes/backdrops";
+export type { BackdropProgramType, BackdropDisplayData } from "./nodes/backdrops";
 export { Bucket, BucketCollection, clampZIndex } from "./bucket";
 export type { ProcessItemFunction } from "./bucket";
 

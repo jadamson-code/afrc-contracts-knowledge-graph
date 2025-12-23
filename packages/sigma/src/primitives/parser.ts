@@ -524,6 +524,7 @@ export function generateNodeProgram<
     layers,
     rotateWithCamera: nodePrimitives?.rotateWithCamera,
     label: nodePrimitives?.label,
+    backdrop: nodePrimitives?.backdrop,
   });
 
   return { program, variables };

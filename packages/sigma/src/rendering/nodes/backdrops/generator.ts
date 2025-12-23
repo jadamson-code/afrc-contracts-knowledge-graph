@@ -1,10 +1,9 @@
 /**
- * Sigma.js Hover Shader Generator
- * ================================
+ * Sigma.js Backdrop Shader Generator
+ * ===================================
  *
- * Generates GLSL shaders for hover background rendering. The hover background
- * is the union of an enlarged node shape and a label rectangle, with a soft
- * shadow effect.
+ * Generates GLSL shaders for backdrop rendering. The backdrop is the union of
+ * an enlarged node shape and a label rectangle, with a soft shadow effect.
  *
  * @module
  */
@@ -22,19 +21,21 @@ import { SDFShape } from "../types";
 
 export { POSITION_MODE_MAP };
 
-export interface GeneratedHoverShaders {
+export interface GeneratedBackdropShaders {
   vertexShader: string;
   fragmentShader: string;
   uniforms: string[];
 }
 
-export interface HoverShaderOptions {
+export interface BackdropShaderOptions {
   shapes: SDFShape[];
   rotateWithCamera?: boolean;
+  /** If true, generate per-node backdrop attributes. If false, use uniforms only. */
+  useBackdropAttributes?: boolean;
 }
 
-export function generateHoverVertexShader(options: HoverShaderOptions): string {
-  const { shapes, rotateWithCamera = false } = options;
+export function generateBackdropVertexShader(options: BackdropShaderOptions): string {
+  const { shapes, rotateWithCamera = false, useBackdropAttributes = false } = options;
 
   // Get all shape SDF functions (deduplicated)
   const shapeGLSL = getShapeGLSLForShapes(shapes);
@@ -124,6 +125,27 @@ float findEdgeDistance(vec2 direction, float size) {
 `;
   }
 
+  // Backdrop attributes/varyings only when using per-node values
+  const backdropAttrs = useBackdropAttributes
+    ? `in vec4 a_backdropColor;
+in vec4 a_backdropShadowColor;
+in float a_backdropShadowBlur;
+in float a_backdropPadding;`
+    : "";
+
+  const backdropVaryings = useBackdropAttributes
+    ? `out vec4 v_backdropColor;
+out vec4 v_backdropShadowColor;
+out float v_backdropShadowBlur;
+out float v_backdropPadding;`
+    : "";
+
+  const backdropMainInit = useBackdropAttributes
+    ? `float padding = a_backdropPadding;
+  float shadowBlur = a_backdropShadowBlur;`
+    : `float padding = u_padding;
+  float shadowBlur = u_shadowBlur;`;
+
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es
 
@@ -134,11 +156,7 @@ in float a_labelWidth;
 in float a_labelHeight;
 in float a_positionMode;
 in vec2 a_quadCorner;
-// Per-node backdrop style attributes
-in vec4 a_backdropColor;
-in vec4 a_backdropShadowColor;
-in float a_backdropShadowBlur;
-in float a_backdropPadding;
+${backdropAttrs}
 
 uniform mat3 u_matrix;
 uniform float u_sizeRatio;
@@ -148,6 +166,8 @@ uniform float u_labelAngle;
 uniform vec2 u_resolution;
 uniform float u_pixelRatio;
 uniform float u_labelMargin;
+uniform float u_shadowBlur;
+uniform float u_padding;
 ${shapeUniformDeclarations}
 
 out vec2 v_uv;
@@ -157,11 +177,7 @@ out vec2 v_labelCenter;
 out vec2 v_labelHalfSize;
 out float v_aaWidth;
 out float v_shapeId;
-// Per-node backdrop style varyings
-out vec4 v_backdropColor;
-out vec4 v_backdropShadowColor;
-out float v_backdropShadowBlur;
-out float v_backdropPadding;
+${backdropVaryings}
 
 ${shapeGLSL}
 ${findEdgeDistanceCode}
@@ -170,7 +186,8 @@ ${GLSL_GET_LABEL_DIRECTION}
 void main() {
   ${shapes.length > 1 ? "g_shapeId = int(a_shapeId);  // Set global shape ID for multi-shape mode" : "// Single-shape mode"}
   ${GLSL_NODE_SIZE_TO_PIXELS}
-  float enlargedRadius = nodeRadiusPixels + a_backdropPadding;
+  ${backdropMainInit}
+  float enlargedRadius = nodeRadiusPixels + padding;
 
   vec2 labelHalfSize = vec2(a_labelWidth * 0.5, a_labelHeight * 0.5);
   vec2 labelOffset = vec2(0.0);
@@ -186,7 +203,7 @@ void main() {
 
     float edgeDistNormalized = findEdgeDistance(sdfDir, 1.0);
     float edgeDistPixels = nodeRadiusPixels * edgeDistNormalized;
-    float labelEnd = edgeDistPixels + a_backdropPadding + u_labelMargin;
+    float labelEnd = edgeDistPixels + padding + u_labelMargin;
 
     if (a_positionMode < 0.5) {
       float boxRightEdge = labelEnd + a_labelWidth;
@@ -226,10 +243,10 @@ void main() {
       labelMax = labelOffset + labelHalfSize;
     }
 
-    minBound = min(-vec2(enlargedRadius), labelMin) - a_backdropShadowBlur;
-    maxBound = max(vec2(enlargedRadius), labelMax) + a_backdropShadowBlur;
+    minBound = min(-vec2(enlargedRadius), labelMin) - shadowBlur;
+    maxBound = max(vec2(enlargedRadius), labelMax) + shadowBlur;
   } else {
-    float totalRadius = enlargedRadius + a_backdropShadowBlur;
+    float totalRadius = enlargedRadius + shadowBlur;
     if (a_positionMode >= 3.5 && a_labelWidth > 0.0) {
       vec2 rotatedHalfSize = labelHalfSize;
       if (u_labelAngle != 0.0) {
@@ -241,8 +258,8 @@ void main() {
         vec2 labelMax = max(max(corner1, corner2), max(corner3, corner4));
         rotatedHalfSize = max(abs(labelMin), abs(labelMax));
       }
-      minBound = -vec2(max(totalRadius, rotatedHalfSize.x + a_backdropShadowBlur),
-                       max(totalRadius, rotatedHalfSize.y + a_backdropShadowBlur));
+      minBound = -vec2(max(totalRadius, rotatedHalfSize.x + shadowBlur),
+                       max(totalRadius, rotatedHalfSize.y + shadowBlur));
       maxBound = -minBound;
     } else {
       minBound = -vec2(totalRadius);
@@ -267,19 +284,18 @@ void main() {
   v_labelHalfSize = labelHalfSize;
   v_aaWidth = 1.0;
   v_shapeId = a_shapeId;
-  // Pass per-node backdrop styles to fragment shader
-  v_backdropColor = a_backdropColor;
+${useBackdropAttributes ? `  v_backdropColor = a_backdropColor;
   v_backdropShadowColor = a_backdropShadowColor;
   v_backdropShadowBlur = a_backdropShadowBlur;
-  v_backdropPadding = a_backdropPadding;
+  v_backdropPadding = a_backdropPadding;` : ""}
 }
 `;
 
   return glsl;
 }
 
-export function generateHoverFragmentShader(options: HoverShaderOptions): string {
-  const { shapes, rotateWithCamera = false } = options;
+export function generateBackdropFragmentShader(options: BackdropShaderOptions): string {
+  const { shapes, rotateWithCamera = false, useBackdropAttributes = false } = options;
 
   // Get all shape SDF functions (deduplicated)
   const shapeGLSL = getShapeGLSLForShapes(shapes);
@@ -341,6 +357,24 @@ ${cases}
   vec2 nodeUV = vec2(rotatedScreenUV.x, -rotatedScreenUV.y) / v_nodeRadius;`
     : `vec2 nodeUV = vec2(screenUV.x, -screenUV.y) / v_nodeRadius;`;
 
+  // Backdrop varyings only when using per-node values
+  const fragBackdropVaryings = useBackdropAttributes
+    ? `in vec4 v_backdropColor;
+in vec4 v_backdropShadowColor;
+in float v_backdropShadowBlur;
+in float v_backdropPadding;`
+    : "";
+
+  const fragBackdropInit = useBackdropAttributes
+    ? `vec4 backdropColor = v_backdropColor;
+  vec4 shadowColor = v_backdropShadowColor;
+  float shadowBlur = v_backdropShadowBlur;
+  float padding = v_backdropPadding;`
+    : `vec4 backdropColor = u_backdropColor;
+  vec4 shadowColor = u_shadowColor;
+  float shadowBlur = u_shadowBlur;
+  float padding = u_padding;`;
+
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es
 precision highp float;
@@ -352,14 +386,14 @@ in vec2 v_labelCenter;
 in vec2 v_labelHalfSize;
 in float v_aaWidth;
 in float v_shapeId;
-// Per-node backdrop style varyings
-in vec4 v_backdropColor;
-in vec4 v_backdropShadowColor;
-in float v_backdropShadowBlur;
-in float v_backdropPadding;
+${fragBackdropVaryings}
 
 uniform float u_cameraAngle;
 uniform float u_labelAngle;
+uniform vec4 u_backdropColor;
+uniform vec4 u_shadowColor;
+uniform float u_shadowBlur;
+uniform float u_padding;
 ${shapeUniformDeclarations}
 
 layout(location = 0) out vec4 fragColor;
@@ -370,13 +404,15 @@ ${GLSL_SDF_BOX}
 ${GLSL_SDF_ROTATED_BOX}
 
 void main() {
-  float enlargedRadius = v_nodeRadius + v_backdropPadding;
+  ${fragBackdropInit}
+
+  float enlargedRadius = v_nodeRadius + padding;
   vec2 screenUV = v_uv - v_nodeCenter;
   ${nodeUVCode}
 
   // Query the correct shape SDF based on shapeId
   ${shapeCallCode}
-  float nodeSdfPixels = nodeSdfNormalized * v_nodeRadius - v_backdropPadding;
+  float nodeSdfPixels = nodeSdfNormalized * v_nodeRadius - padding;
 
   // Is the fragment in the white rectangle behind the label?
   float labelSdfPixels;
@@ -387,21 +423,20 @@ void main() {
       labelSdfPixels = sdfBox(v_uv - v_labelCenter, v_labelHalfSize);
     }
   } else {
-    // No label - use a large value so it doesn't affect the union
     labelSdfPixels = 10000.0;
   }
 
   // Compute union of node and label
   float combinedSdf = min(nodeSdfPixels, labelSdfPixels);
 
-  float bgAlpha = smoothstep(v_aaWidth, -v_aaWidth, combinedSdf) * v_backdropColor.a;
-  vec4 background = vec4(v_backdropColor.rgb * bgAlpha, bgAlpha);
+  float bgAlpha = smoothstep(v_aaWidth, -v_aaWidth, combinedSdf) * backdropColor.a;
+  vec4 background = vec4(backdropColor.rgb * bgAlpha, bgAlpha);
 
   // Gaussian-like shadow falloff (mimics canvas shadowBlur)
   float shadowDist = max(0.0, combinedSdf);
-  float sigma = v_backdropShadowBlur / 2.5;
-  float shadowAlpha = exp(-(shadowDist * shadowDist) / (2.0 * sigma * sigma)) * v_backdropShadowColor.a;
-  vec4 shadow = vec4(v_backdropShadowColor.rgb * shadowAlpha, shadowAlpha);
+  float sigma = shadowBlur / 2.5;
+  float shadowAlpha = exp(-(shadowDist * shadowDist) / (2.0 * sigma * sigma)) * shadowColor.a;
+  vec4 shadow = vec4(shadowColor.rgb * shadowAlpha, shadowAlpha);
 
   fragColor = background + shadow * (1.0 - background.a);
   fragPicking = vec4(0.0);
@@ -411,9 +446,7 @@ void main() {
   return glsl;
 }
 
-export function collectHoverUniforms(shapes: SDFShape[]): string[] {
-  // Note: u_backgroundColor, u_shadowColor, u_shadowOpacity, u_padding, u_shadowBlur
-  // are now per-node attributes, not uniforms
+export function collectBackdropUniforms(shapes: SDFShape[]): string[] {
   const uniforms = [
     "u_matrix",
     "u_sizeRatio",
@@ -423,6 +456,11 @@ export function collectHoverUniforms(shapes: SDFShape[]): string[] {
     "u_resolution",
     "u_pixelRatio",
     "u_labelMargin",
+    // Backdrop uniforms (used directly when no per-node attributes)
+    "u_backdropColor",
+    "u_shadowColor",
+    "u_shadowBlur",
+    "u_padding",
   ];
 
   for (const shape of shapes) {
@@ -436,10 +474,10 @@ export function collectHoverUniforms(shapes: SDFShape[]): string[] {
   return uniforms;
 }
 
-export function generateHoverShaders(options: HoverShaderOptions): GeneratedHoverShaders {
+export function generateBackdropShaders(options: BackdropShaderOptions): GeneratedBackdropShaders {
   return {
-    vertexShader: generateHoverVertexShader(options),
-    fragmentShader: generateHoverFragmentShader(options),
-    uniforms: collectHoverUniforms(options.shapes),
+    vertexShader: generateBackdropVertexShader(options),
+    fragmentShader: generateBackdropFragmentShader(options),
+    uniforms: collectBackdropUniforms(options.shapes),
   };
 }

@@ -2,7 +2,7 @@
  * Sigma.js Shared GLSL Utilities
  * ===============================
  *
- * Common GLSL code snippets shared across shader generators (nodes, labels, hovers).
+ * Common GLSL code snippets shared across shader generators (nodes, labels, backdrops).
  * @module
  */
 

@@ -16,14 +16,14 @@ import { PrimitivesDeclaration, VariablesDefinition, generateEdgeProgram, genera
 import {
   AbstractEdgeLabelProgram,
   AbstractEdgeProgram,
-  AbstractHoverProgram,
+  AbstractBackdropProgram,
   AbstractLabelProgram,
   AbstractNodeProgram,
   BucketCollection,
   EdgeDataTexture,
   EdgeProgramType,
-  HoverDisplayData,
-  HoverProgramType,
+  BackdropDisplayData,
+  BackdropProgramType,
   LabelProgramType,
   NodeDataTexture,
   NodeProgramType,
@@ -218,8 +218,7 @@ export default class Sigma<
 
   // Programs
   private nodePrograms: { [key: string]: AbstractNodeProgram<N, E, G> } = {};
-  private nodeHoverPrograms: { [key: string]: AbstractNodeProgram<N, E, G> } = {};
-  private hoverPrograms: { [key: string]: AbstractHoverProgram<N, E, G> } = {};
+  private backdropPrograms: { [key: string]: AbstractBackdropProgram<N, E, G> } = {};
   private edgePrograms: { [key: string]: AbstractEdgeProgram<N, E, G> } = {};
   private labelPrograms: { [key: string]: AbstractLabelProgram<N, E, G> } = {};
   private edgeLabelPrograms: { [key: string]: AbstractEdgeLabelProgram<N, E, G> } = {};
@@ -365,11 +364,9 @@ export default class Sigma<
    */
   private registerNodeProgram(key: string, NodeProgramClass: NodeProgramType<N, E, G>): this {
     if (this.nodePrograms[key]) this.nodePrograms[key].kill();
-    if (this.nodeHoverPrograms[key]) this.nodeHoverPrograms[key].kill();
     // Cast this since programs don't use state generics
     const sigma = this as unknown as Sigma<N, E, G>;
     this.nodePrograms[key] = new NodeProgramClass(this.webGLContext!, null, sigma);
-    this.nodeHoverPrograms[key] = new NodeProgramClass(this.webGLContext!, null, sigma);
     // Register program type with bucket collection (stride will be set properly when used)
     this.itemBuckets.nodes.registerProgram(key, 1);
 
@@ -401,10 +398,10 @@ export default class Sigma<
       this.registerLabelProgram(key, LabelProgramClass);
     }
 
-    // Register the associated hover program if the node program has one
-    const HoverProgramClass = NodeProgramClass.HoverProgram as HoverProgramType<N, E, G> | undefined;
-    if (HoverProgramClass) {
-      this.registerHoverProgram(key, HoverProgramClass);
+    // Register the associated backdrop program if the node program has one
+    const BackdropProgramClass = NodeProgramClass.BackdropProgram as BackdropProgramType<N, E, G> | undefined;
+    if (BackdropProgramClass) {
+      this.registerBackdropProgram(key, BackdropProgramClass);
     }
 
     return this;
@@ -468,17 +465,17 @@ export default class Sigma<
   }
 
   /**
-   * Internal function used to register a hover program
+   * Internal function used to register a backdrop program
    *
-   * @param  {string}           key               - The program's key, matching the related node "type" values.
-   * @param  {HoverProgramType} HoverProgramClass - A hover program class.
+   * @param  {string}              key                  - The program's key, matching the related node "type" values.
+   * @param  {BackdropProgramType} BackdropProgramClass - A backdrop program class.
    * @return {Sigma}
    */
-  private registerHoverProgram(key: string, HoverProgramClass: HoverProgramType<N, E, G>): this {
-    if (this.hoverPrograms[key]) this.hoverPrograms[key].kill();
+  private registerBackdropProgram(key: string, BackdropProgramClass: BackdropProgramType<N, E, G>): this {
+    if (this.backdropPrograms[key]) this.backdropPrograms[key].kill();
     // Cast this since programs don't use state generics
     const sigma = this as unknown as Sigma<N, E, G>;
-    this.hoverPrograms[key] = new HoverProgramClass(this.webGLContext!, null, sigma);
+    this.backdropPrograms[key] = new BackdropProgramClass(this.webGLContext!, null, sigma);
     return this;
   }
 
@@ -1423,7 +1420,7 @@ export default class Sigma<
 
     // Render backdrops for each program type
     for (const type in nodesByType) {
-      const program = this.hoverPrograms[type];
+      const program = this.backdropPrograms[type];
       if (!program) continue;
 
       const nodes = nodesByType[type];
@@ -1459,13 +1456,26 @@ export default class Sigma<
           shapeId = getShapeId(data.shape || "circle");
         }
 
-        // Build backdrop colors as RGBA arrays (normalized to 0-1 range)
-        const rawBgColor = data.backdropColor ? colorToArray(data.backdropColor) : [0, 0, 0, 0];
-        const rawShadowColor = data.backdropShadowColor ? colorToArray(data.backdropShadowColor) : [0, 0, 0, 0];
-        const backdropColor = rawBgColor.map((c) => c / 255) as [number, number, number, number];
-        const backdropShadowColor = rawShadowColor.map((c) => c / 255) as [number, number, number, number];
+        // Compute backdrop values only when the program uses per-node attributes
+        // When useBackdropAttributes is false, the shader uses uniforms and ignores these values
+        const ProgramClass = program.constructor as { useBackdropAttributes?: boolean };
+        let backdropColor: [number, number, number, number] = [0, 0, 0, 0];
+        let backdropShadowColor: [number, number, number, number] = [0, 0, 0, 0];
+        let backdropShadowBlur = 0;
+        let backdropPadding = 0;
 
-        const hoverData: HoverDisplayData = {
+        if (ProgramClass.useBackdropAttributes) {
+          const rawBgColor = data.backdropColor ? colorToArray(data.backdropColor) : [255, 255, 255, 255];
+          const rawShadowColor = data.backdropShadowColor
+            ? colorToArray(data.backdropShadowColor)
+            : [0, 0, 0, 128];
+          backdropColor = rawBgColor.map((c) => c / 255) as [number, number, number, number];
+          backdropShadowColor = rawShadowColor.map((c) => c / 255) as [number, number, number, number];
+          backdropShadowBlur = data.backdropShadowBlur ?? 12;
+          backdropPadding = data.backdropPadding ?? 6;
+        }
+
+        const backdropData: BackdropDisplayData = {
           key,
           x: data.x,
           y: data.y,
@@ -1476,13 +1486,13 @@ export default class Sigma<
           type,
           shapeId,
           position: data.labelPosition || "right",
-          backdropColor: backdropColor as [number, number, number, number],
-          backdropShadowColor: backdropShadowColor as [number, number, number, number],
-          backdropShadowBlur: data.backdropShadowBlur ?? 0,
-          backdropPadding: data.backdropPadding ?? 0,
+          backdropColor,
+          backdropShadowColor,
+          backdropShadowBlur,
+          backdropPadding,
         };
 
-        program.processHover(i, hoverData);
+        program.processBackdrop(i, backdropData);
       }
 
       program.render(params);
@@ -3339,9 +3349,6 @@ export default class Sigma<
     for (const type in this.nodePrograms) {
       this.nodePrograms[type].kill();
     }
-    for (const type in this.nodeHoverPrograms) {
-      this.nodeHoverPrograms[type].kill();
-    }
     for (const type in this.edgePrograms) {
       this.edgePrograms[type].kill();
     }
@@ -3351,12 +3358,11 @@ export default class Sigma<
     for (const type in this.edgeLabelPrograms) {
       this.edgeLabelPrograms[type].kill();
     }
-    for (const type in this.hoverPrograms) {
-      this.hoverPrograms[type].kill();
+    for (const type in this.backdropPrograms) {
+      this.backdropPrograms[type].kill();
     }
     this.nodePrograms = {};
-    this.nodeHoverPrograms = {};
-    this.hoverPrograms = {};
+    this.backdropPrograms = {};
     this.edgePrograms = {};
     this.labelPrograms = {};
     this.edgeLabelPrograms = {};
@@ -3447,10 +3453,6 @@ export default class Sigma<
         textures.push({ name: `nodes:${key}:layerAttributes`, ...layerStats });
       }
     }
-    for (const [key, program] of Object.entries(this.nodeHoverPrograms)) {
-      buffers.push({ program: `nodeHover:${key}`, ...program.getMemoryStats() });
-    }
-
     // Edge programs
     for (const [key, program] of Object.entries(this.edgePrograms)) {
       buffers.push({ program: `edges:${key}`, ...program.getMemoryStats() });
@@ -3469,9 +3471,9 @@ export default class Sigma<
       buffers.push({ program: `edgeLabels:${key}`, ...program.getMemoryStats() });
     }
 
-    // Hover programs
-    for (const [key, program] of Object.entries(this.hoverPrograms)) {
-      buffers.push({ program: `hover:${key}`, ...program.getMemoryStats() });
+    // Backdrop programs
+    for (const [key, program] of Object.entries(this.backdropPrograms)) {
+      buffers.push({ program: `backdrop:${key}`, ...program.getMemoryStats() });
     }
 
     // Buckets
@@ -3537,10 +3539,6 @@ export default class Sigma<
         textures.push({ name: `nodes:${key}:layerAttributes`, ...layerStats });
       }
     }
-    for (const [key, program] of Object.entries(this.nodeHoverPrograms)) {
-      buffers.push({ program: `nodeHover:${key}`, ...program.getWriteStats() });
-    }
-
     // Edge programs
     for (const [key, program] of Object.entries(this.edgePrograms)) {
       buffers.push({ program: `edges:${key}`, ...program.getWriteStats() });
@@ -3559,9 +3557,9 @@ export default class Sigma<
       buffers.push({ program: `edgeLabels:${key}`, ...program.getWriteStats() });
     }
 
-    // Hover programs
-    for (const [key, program] of Object.entries(this.hoverPrograms)) {
-      buffers.push({ program: `hover:${key}`, ...program.getWriteStats() });
+    // Backdrop programs
+    for (const [key, program] of Object.entries(this.backdropPrograms)) {
+      buffers.push({ program: `backdrop:${key}`, ...program.getWriteStats() });
     }
 
     const textureWrites = textures.reduce((sum, t) => sum + t.writes, 0);
@@ -3587,9 +3585,6 @@ export default class Sigma<
       program.resetWriteStats();
       (program as { resetLayerTextureWriteStats?: () => void }).resetLayerTextureWriteStats?.();
     }
-    for (const program of Object.values(this.nodeHoverPrograms)) {
-      program.resetWriteStats();
-    }
     for (const program of Object.values(this.edgePrograms)) {
       program.resetWriteStats();
       (program as { resetAttributeTextureWriteStats?: () => void }).resetAttributeTextureWriteStats?.();
@@ -3600,7 +3595,7 @@ export default class Sigma<
     for (const program of Object.values(this.edgeLabelPrograms)) {
       program.resetWriteStats();
     }
-    for (const program of Object.values(this.hoverPrograms)) {
+    for (const program of Object.values(this.backdropPrograms)) {
       program.resetWriteStats();
     }
   }

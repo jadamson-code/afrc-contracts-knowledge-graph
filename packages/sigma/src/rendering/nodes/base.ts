@@ -9,7 +9,7 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { NodeDisplayData, RenderParams } from "../../types";
 import { indexToColor } from "../../utils";
-import { HoverProgramType } from "./hovers";
+import { BackdropProgramType } from "./backdrops";
 import { LabelProgramType } from "./labels";
 import { AbstractProgram, Program } from "../program";
 
@@ -43,10 +43,10 @@ export abstract class NodeProgram<
   static LabelProgram: LabelProgramType | undefined;
 
   /**
-   * Static reference to the associated HoverProgram class.
+   * Static reference to the associated BackdropProgram class.
    * This is set by createNodeProgram() for programs created via the factory.
    */
-  static HoverProgram: HoverProgramType | undefined;
+  static BackdropProgram: BackdropProgramType | undefined;
 
   kill(): void {
     super.kill();
@@ -81,7 +81,7 @@ class _NodeProgramClass<
 > implements AbstractNodeProgram<N, E, G>
 {
   static LabelProgram: LabelProgramType | undefined;
-  static HoverProgram: HoverProgramType | undefined;
+  static BackdropProgram: BackdropProgramType | undefined;
 
   constructor(_gl: WebGL2RenderingContext, _pickingBuffer: WebGLFramebuffer | null, _renderer: Sigma<N, E, G>) {
     return this;

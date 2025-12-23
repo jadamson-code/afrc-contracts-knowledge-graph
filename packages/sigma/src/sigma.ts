@@ -1372,7 +1372,7 @@ export default class Sigma<
         text: data.label!,
         x: data.x,
         y: data.y,
-        size: defaultLabelSize,
+        size: data.labelSize ?? defaultLabelSize,
         color: this.getLabelColor(data),
         nodeSize: data.size,
         margin: defaultLabelMargin,
@@ -1431,8 +1431,7 @@ export default class Sigma<
         const data = this.nodeDataCache[key];
 
         // Get label dimensions using canvas context (matches label rendering)
-        // Must match defaultLabelSize in renderWebGLLabels (14px sans-serif)
-        const labelSize = 14;
+        const labelSize = data.labelSize ?? 14;
         const labelFont = "sans-serif";
         let labelWidth = 0;
         let labelHeight = 0;
@@ -1855,6 +1854,7 @@ export default class Sigma<
       type: "default",
       shape: resolvedStyle.shape,
       labelPosition: resolvedStyle.labelPosition,
+      labelSize: resolvedStyle.labelSize,
       backdropColor: resolvedStyle.backdropColor,
       backdropShadowColor: resolvedStyle.backdropShadowColor,
       backdropShadowBlur: resolvedStyle.backdropShadowBlur,

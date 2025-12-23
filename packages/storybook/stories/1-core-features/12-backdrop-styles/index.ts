@@ -5,7 +5,7 @@
  *
  * Grid layout:
  * - Rows: Different backdrop behaviors (default hover, custom colors, always-visible, disabled)
- * - Columns: Different shapes, label positions, and node sizes
+ * - Columns: Different shapes, label positions, node sizes, and label sizes
  */
 import Graph from "graphology";
 import Sigma from "sigma";
@@ -16,15 +16,15 @@ export default () => {
 
   const graph = new Graph();
 
-  const COL_SPACING = 120;
-  const ROW_SPACING = 80;
+  const COL_SPACING = 150;
+  const ROW_SPACING = 100;
 
-  // Column configurations: shape, labelPosition, nodeSize
+  // Column configurations: shape, labelPosition, nodeSize, labelSize
   const columns = [
-    { shape: "circle", labelPosition: "right", nodeSize: 10 },
-    { shape: "square", labelPosition: "above", nodeSize: 14 },
-    { shape: "diamond", labelPosition: "below", nodeSize: 18 },
-    { shape: "triangle", labelPosition: "over", nodeSize: 14 },
+    { shape: "circle", labelPosition: "right", nodeSize: 10, labelSize: 12 },
+    { shape: "square", labelPosition: "above", nodeSize: 14, labelSize: 16 },
+    { shape: "diamond", labelPosition: "below", nodeSize: 18, labelSize: 20 },
+    { shape: "triangle", labelPosition: "over", nodeSize: 14, labelSize: 24 },
   ] as const;
 
   // Row configurations: backdrop behavior with distinct styling
@@ -71,6 +71,7 @@ export default () => {
         label,
         shape: col.shape,
         labelPosition: col.labelPosition,
+        labelSize: col.labelSize,
         // Row-specific backdrop attributes
         ...("backdropColor" in row && { backdropColor: row.backdropColor }),
         ...("backdropShadowColor" in row && { backdropShadowColor: row.backdropShadowColor }),
@@ -103,6 +104,7 @@ export default () => {
           color: { attribute: "color", defaultValue: "#999" },
           shape: { attribute: "shape", defaultValue: "circle" },
           labelPosition: { attribute: "labelPosition", defaultValue: "right" },
+          labelSize: { attribute: "labelSize", defaultValue: 14 },
         },
         // Custom backdrop from node attributes (row 2: custom colors)
         {

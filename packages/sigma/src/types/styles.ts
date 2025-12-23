@@ -209,6 +209,14 @@ export interface NodeBuiltInVariables<
   layer?: GraphicValue<NA, NS, GS, Layer>;
   /** Z-index for layering (inside the bucket) */
   zIndex?: GraphicValue<NA, NS, GS, number>;
+  /** Backdrop fill color (transparent = no backdrop) */
+  backdropColor?: GraphicValue<NA, NS, GS, string>;
+  /** Backdrop shadow color */
+  backdropShadowColor?: GraphicValue<NA, NS, GS, string>;
+  /** Backdrop shadow blur radius in pixels */
+  backdropShadowBlur?: GraphicValue<NA, NS, GS, number>;
+  /** Backdrop padding around node+label in pixels */
+  backdropPadding?: GraphicValue<NA, NS, GS, number>;
 }
 
 /**
@@ -610,6 +618,26 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
     zIndex: {
       when: "isHovered",
       then: 1,
+      else: 0,
+    },
+    backdropColor: {
+      when: "isHovered",
+      then: "#ffffff",
+      else: "transparent",
+    },
+    backdropShadowColor: {
+      when: "isHovered",
+      then: "rgba(0, 0, 0, 0.5)",
+      else: "transparent",
+    },
+    backdropShadowBlur: {
+      when: "isHovered",
+      then: 12,
+      else: 0,
+    },
+    backdropPadding: {
+      when: "isHovered",
+      then: 6,
       else: 0,
     },
   },

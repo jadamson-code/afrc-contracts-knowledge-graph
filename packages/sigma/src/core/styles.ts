@@ -303,6 +303,10 @@ export interface ResolvedNodeStyle {
   labelPosition: "right" | "left" | "above" | "below" | "over";
   labelAngle: number;
   labelLayer: string;
+  backdropColor: string;
+  backdropShadowColor: string;
+  backdropShadowBlur: number;
+  backdropPadding: number;
   // Additional program-declared variables stored here
   [key: string]: unknown;
 }
@@ -352,6 +356,10 @@ const DEFAULT_RESOLVED_NODE_STYLE: ResolvedNodeStyle = {
   labelPosition: "right",
   labelAngle: 0,
   labelLayer: "nodeLabels",
+  backdropColor: "transparent",
+  backdropShadowColor: "transparent",
+  backdropShadowBlur: 0,
+  backdropPadding: 0,
 };
 
 /**

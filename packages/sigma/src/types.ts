@@ -79,6 +79,10 @@ export interface NodeDisplayData extends Coordinates, DisplayData {
   highlighted: boolean;
   shape?: string; // Shape name for edge clamping (e.g., "circle", "square")
   labelPosition?: LabelPosition; // Label position relative to node
+  backdropColor?: string; // Backdrop fill color (transparent = no backdrop)
+  backdropShadowColor?: string; // Backdrop shadow color
+  backdropShadowBlur?: number; // Backdrop shadow blur radius in pixels
+  backdropPadding?: number; // Backdrop padding around node+label in pixels
 }
 export interface EdgeDisplayData extends DisplayData {
   path?: string; // Path type (e.g., "straight", "curved")

@@ -22,6 +22,7 @@ import {
   BucketCollection,
   EdgeDataTexture,
   EdgeProgramType,
+  HoverDisplayData,
   HoverProgramType,
   LabelProgramType,
   NodeDataTexture,
@@ -72,6 +73,7 @@ import {
   extend,
   getMatrixImpact,
   getPixelColor,
+  colorToArray,
   getPixelRatio,
   graphExtent,
   identity,
@@ -169,6 +171,7 @@ export default class Sigma<
   private edgeProgramIndex: Record<string, number> = {};
   private nodesWithForcedLabels: Set<string> = new Set<string>();
   private edgesWithForcedLabels: Set<string> = new Set<string>();
+  private nodesWithBackdrop: Set<string> = new Set<string>();
   private nodeExtent: { x: Extent; y: Extent } = { x: [0, 1], y: [0, 1] };
 
   private matrix: Float32Array = identity();
@@ -235,6 +238,7 @@ export default class Sigma<
 
   // WebGL Labels (SDF-based rendering)
   private sdfAtlas: SDFAtlasManager | null = null;
+  private defaultFontKey: string = "";
 
   // Shared texture storing node position, size, and shapeId for GPU programs
   private nodeDataTexture: NodeDataTexture | null = null;
@@ -441,7 +445,7 @@ export default class Sigma<
     this.sdfAtlas = new SDFAtlasManager();
 
     // Register default font
-    this.sdfAtlas.registerFont({
+    this.defaultFontKey = this.sdfAtlas.registerFont({
       family: "sans-serif",
       weight: "normal",
       style: "normal",
@@ -1399,6 +1403,93 @@ export default class Sigma<
   }
 
   /**
+   * Method used to render backdrops (background + shadow) behind nodes with labels.
+   * Called from render() before nodes are drawn, so backdrops appear behind.
+   *
+   * @private
+   */
+  private renderBackdrops(params: RenderParams): void {
+    // Group nodes by their program type
+    const nodesByType: Record<string, string[]> = {};
+
+    for (const key of this.nodesWithBackdrop) {
+      const data = this.nodeDataCache[key];
+      if (!data || data.hidden) continue;
+
+      const type = data.type || "default";
+      if (!nodesByType[type]) nodesByType[type] = [];
+      nodesByType[type].push(key);
+    }
+
+    // Render backdrops for each program type
+    for (const type in nodesByType) {
+      const program = this.hoverPrograms[type];
+      if (!program) continue;
+
+      const nodes = nodesByType[type];
+      program.reallocate(nodes.length);
+
+      for (let i = 0; i < nodes.length; i++) {
+        const key = nodes[i];
+        const data = this.nodeDataCache[key];
+
+        // Get label dimensions using canvas context (matches label rendering)
+        // Must match defaultLabelSize in renderWebGLLabels (14px sans-serif)
+        const labelSize = 14;
+        const labelFont = "sans-serif";
+        let labelWidth = 0;
+        let labelHeight = 0;
+        if (data.label) {
+          const context = this.canvasContexts.labels;
+          context.font = `normal ${labelSize}px ${labelFont}`;
+          const textWidth = context.measureText(data.label).width;
+          // Match original canvas hover: boxWidth = textWidth + 5, boxHeight = labelSize + 4
+          labelWidth = Math.round(textWidth + 5);
+          labelHeight = Math.round(labelSize + 4);
+        }
+
+        // Get shapeId
+        const shapeMap = this.nodeTypeShapeMap[type];
+        const globalIds = this.nodeTypeGlobalShapeIds[type];
+        let shapeId: number;
+        if (shapeMap && globalIds) {
+          const localIndex = shapeMap[data.shape || Object.keys(shapeMap)[0]];
+          shapeId = globalIds[localIndex];
+        } else {
+          shapeId = getShapeId(data.shape || "circle");
+        }
+
+        // Build backdrop colors as RGBA arrays (normalized to 0-1 range)
+        const rawBgColor = data.backdropColor ? colorToArray(data.backdropColor) : [0, 0, 0, 0];
+        const rawShadowColor = data.backdropShadowColor ? colorToArray(data.backdropShadowColor) : [0, 0, 0, 0];
+        const backdropColor = rawBgColor.map((c) => c / 255) as [number, number, number, number];
+        const backdropShadowColor = rawShadowColor.map((c) => c / 255) as [number, number, number, number];
+
+        const hoverData: HoverDisplayData = {
+          key,
+          x: data.x,
+          y: data.y,
+          size: data.size,
+          label: data.label,
+          labelWidth,
+          labelHeight,
+          type,
+          shapeId,
+          position: data.labelPosition || "right",
+          backdropColor: backdropColor as [number, number, number, number],
+          backdropShadowColor: backdropShadowColor as [number, number, number, number],
+          backdropShadowBlur: data.backdropShadowBlur ?? 0,
+          backdropPadding: data.backdropPadding ?? 0,
+        };
+
+        program.processHover(i, hoverData);
+      }
+
+      program.render(params);
+    }
+  }
+
+  /**
    * Method used to render edge labels using WebGL.
    * Called from render() before nodes are drawn, so edge labels appear under nodes.
    *
@@ -1680,6 +1771,10 @@ export default class Sigma<
       this.renderEdgeLabelsWebGL(params);
     }
 
+    // Drawing backdrops (background + shadow) behind nodes with labels
+    // Rendered before nodes so they appear behind
+    this.renderBackdrops(params);
+
     // Drawing nodes (programs handle two-pass rendering internally)
     for (const type in this.nodePrograms) {
       const program = this.nodePrograms[type];
@@ -1750,6 +1845,10 @@ export default class Sigma<
       type: "default",
       shape: resolvedStyle.shape,
       labelPosition: resolvedStyle.labelPosition,
+      backdropColor: resolvedStyle.backdropColor,
+      backdropShadowColor: resolvedStyle.backdropShadowColor,
+      backdropShadowBlur: resolvedStyle.backdropShadowBlur,
+      backdropPadding: resolvedStyle.backdropPadding,
     };
 
     // Validate position
@@ -1796,6 +1895,16 @@ export default class Sigma<
     // update
     this.nodesWithForcedLabels.delete(key);
     if (data.forceLabel && !data.hidden) this.nodesWithForcedLabels.add(key);
+
+    // Backdrop visibility tracking:
+    // Check if backdrop is visible by parsing colors and checking alpha
+    this.nodesWithBackdrop.delete(key);
+    if (!data.hidden) {
+      const bgAlpha = data.backdropColor ? colorToArray(data.backdropColor)[3] : 0;
+      const shadowAlpha = data.backdropShadowColor ? colorToArray(data.backdropShadowColor)[3] : 0;
+      const hasVisibleBackdrop = bgAlpha > 0 || (shadowAlpha > 0 && (data.backdropShadowBlur ?? 0) > 0);
+      if (hasVisibleBackdrop) this.nodesWithBackdrop.add(key);
+    }
 
     // Bucket management for depth ordering
     const maxDepth = this.itemBuckets.nodes.getMaxDepthLevels();
@@ -1854,6 +1963,8 @@ export default class Sigma<
     if (this.hoveredNode === key) this.hoveredNode = null;
     // Remove from forced label
     this.nodesWithForcedLabels.delete(key);
+    // Remove from backdrop tracking
+    this.nodesWithBackdrop.delete(key);
   }
 
   /**
@@ -1980,6 +2091,7 @@ export default class Sigma<
     this.nodeDataCache = {};
     this.edgeProgramIndex = {};
     this.nodesWithForcedLabels = new Set<string>();
+    this.nodesWithBackdrop = new Set<string>();
     // Clear bucket data
     this.itemBuckets.nodes.clearAll();
     this.zIndexCache.nodes = {};
@@ -2015,6 +2127,7 @@ export default class Sigma<
     this.displayedNodeLabels = new Set();
     this.nodeStates.clear();
     this.hoveredNode = null;
+    this.nodesWithBackdrop.clear();
   }
 
   /**

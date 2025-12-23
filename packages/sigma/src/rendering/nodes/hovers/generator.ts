@@ -134,6 +134,11 @@ in float a_labelWidth;
 in float a_labelHeight;
 in float a_positionMode;
 in vec2 a_quadCorner;
+// Per-node backdrop style attributes
+in vec4 a_backdropColor;
+in vec4 a_backdropShadowColor;
+in float a_backdropShadowBlur;
+in float a_backdropPadding;
 
 uniform mat3 u_matrix;
 uniform float u_sizeRatio;
@@ -143,8 +148,6 @@ uniform float u_labelAngle;
 uniform vec2 u_resolution;
 uniform float u_pixelRatio;
 uniform float u_labelMargin;
-uniform float u_padding;
-uniform float u_shadowBlur;
 ${shapeUniformDeclarations}
 
 out vec2 v_uv;
@@ -154,6 +157,11 @@ out vec2 v_labelCenter;
 out vec2 v_labelHalfSize;
 out float v_aaWidth;
 out float v_shapeId;
+// Per-node backdrop style varyings
+out vec4 v_backdropColor;
+out vec4 v_backdropShadowColor;
+out float v_backdropShadowBlur;
+out float v_backdropPadding;
 
 ${shapeGLSL}
 ${findEdgeDistanceCode}
@@ -162,7 +170,7 @@ ${GLSL_GET_LABEL_DIRECTION}
 void main() {
   ${shapes.length > 1 ? "g_shapeId = int(a_shapeId);  // Set global shape ID for multi-shape mode" : "// Single-shape mode"}
   ${GLSL_NODE_SIZE_TO_PIXELS}
-  float enlargedRadius = nodeRadiusPixels + u_padding;
+  float enlargedRadius = nodeRadiusPixels + a_backdropPadding;
 
   vec2 labelHalfSize = vec2(a_labelWidth * 0.5, a_labelHeight * 0.5);
   vec2 labelOffset = vec2(0.0);
@@ -178,7 +186,7 @@ void main() {
 
     float edgeDistNormalized = findEdgeDistance(sdfDir, 1.0);
     float edgeDistPixels = nodeRadiusPixels * edgeDistNormalized;
-    float labelEnd = edgeDistPixels + u_padding + u_labelMargin;
+    float labelEnd = edgeDistPixels + a_backdropPadding + u_labelMargin;
 
     if (a_positionMode < 0.5) {
       float boxRightEdge = labelEnd + a_labelWidth;
@@ -218,10 +226,10 @@ void main() {
       labelMax = labelOffset + labelHalfSize;
     }
 
-    minBound = min(-vec2(enlargedRadius), labelMin) - u_shadowBlur;
-    maxBound = max(vec2(enlargedRadius), labelMax) + u_shadowBlur;
+    minBound = min(-vec2(enlargedRadius), labelMin) - a_backdropShadowBlur;
+    maxBound = max(vec2(enlargedRadius), labelMax) + a_backdropShadowBlur;
   } else {
-    float totalRadius = enlargedRadius + u_shadowBlur;
+    float totalRadius = enlargedRadius + a_backdropShadowBlur;
     if (a_positionMode >= 3.5 && a_labelWidth > 0.0) {
       vec2 rotatedHalfSize = labelHalfSize;
       if (u_labelAngle != 0.0) {
@@ -233,8 +241,8 @@ void main() {
         vec2 labelMax = max(max(corner1, corner2), max(corner3, corner4));
         rotatedHalfSize = max(abs(labelMin), abs(labelMax));
       }
-      minBound = -vec2(max(totalRadius, rotatedHalfSize.x + u_shadowBlur),
-                       max(totalRadius, rotatedHalfSize.y + u_shadowBlur));
+      minBound = -vec2(max(totalRadius, rotatedHalfSize.x + a_backdropShadowBlur),
+                       max(totalRadius, rotatedHalfSize.y + a_backdropShadowBlur));
       maxBound = -minBound;
     } else {
       minBound = -vec2(totalRadius);
@@ -259,6 +267,11 @@ void main() {
   v_labelHalfSize = labelHalfSize;
   v_aaWidth = 1.0;
   v_shapeId = a_shapeId;
+  // Pass per-node backdrop styles to fragment shader
+  v_backdropColor = a_backdropColor;
+  v_backdropShadowColor = a_backdropShadowColor;
+  v_backdropShadowBlur = a_backdropShadowBlur;
+  v_backdropPadding = a_backdropPadding;
 }
 `;
 
@@ -339,14 +352,14 @@ in vec2 v_labelCenter;
 in vec2 v_labelHalfSize;
 in float v_aaWidth;
 in float v_shapeId;
+// Per-node backdrop style varyings
+in vec4 v_backdropColor;
+in vec4 v_backdropShadowColor;
+in float v_backdropShadowBlur;
+in float v_backdropPadding;
 
-uniform vec4 u_backgroundColor;
-uniform vec4 u_shadowColor;
-uniform float u_shadowOpacity;
 uniform float u_cameraAngle;
 uniform float u_labelAngle;
-uniform float u_padding;
-uniform float u_shadowBlur;
 ${shapeUniformDeclarations}
 
 layout(location = 0) out vec4 fragColor;
@@ -357,13 +370,13 @@ ${GLSL_SDF_BOX}
 ${GLSL_SDF_ROTATED_BOX}
 
 void main() {
-  float enlargedRadius = v_nodeRadius + u_padding;
+  float enlargedRadius = v_nodeRadius + v_backdropPadding;
   vec2 screenUV = v_uv - v_nodeCenter;
   ${nodeUVCode}
 
   // Query the correct shape SDF based on shapeId
   ${shapeCallCode}
-  float nodeSdfPixels = nodeSdfNormalized * v_nodeRadius - u_padding;
+  float nodeSdfPixels = nodeSdfNormalized * v_nodeRadius - v_backdropPadding;
 
   // Is the fragment in the white rectangle behind the label?
   float labelSdfPixels;
@@ -381,11 +394,14 @@ void main() {
   // Compute union of node and label
   float combinedSdf = min(nodeSdfPixels, labelSdfPixels);
 
-  float bgAlpha = smoothstep(v_aaWidth, -v_aaWidth, combinedSdf);
-  vec4 background = vec4(u_backgroundColor.rgb * bgAlpha, bgAlpha);
+  float bgAlpha = smoothstep(v_aaWidth, -v_aaWidth, combinedSdf) * v_backdropColor.a;
+  vec4 background = vec4(v_backdropColor.rgb * bgAlpha, bgAlpha);
 
-  float shadowAlpha = (1.0 - smoothstep(0.0, u_shadowBlur, combinedSdf)) * u_shadowOpacity;
-  vec4 shadow = vec4(u_shadowColor.rgb * shadowAlpha, shadowAlpha);
+  // Gaussian-like shadow falloff (mimics canvas shadowBlur)
+  float shadowDist = max(0.0, combinedSdf);
+  float sigma = v_backdropShadowBlur / 2.5;
+  float shadowAlpha = exp(-(shadowDist * shadowDist) / (2.0 * sigma * sigma)) * v_backdropShadowColor.a;
+  vec4 shadow = vec4(v_backdropShadowColor.rgb * shadowAlpha, shadowAlpha);
 
   fragColor = background + shadow * (1.0 - background.a);
   fragPicking = vec4(0.0);
@@ -396,6 +412,8 @@ void main() {
 }
 
 export function collectHoverUniforms(shapes: SDFShape[]): string[] {
+  // Note: u_backgroundColor, u_shadowColor, u_shadowOpacity, u_padding, u_shadowBlur
+  // are now per-node attributes, not uniforms
   const uniforms = [
     "u_matrix",
     "u_sizeRatio",
@@ -404,12 +422,7 @@ export function collectHoverUniforms(shapes: SDFShape[]): string[] {
     "u_labelAngle",
     "u_resolution",
     "u_pixelRatio",
-    "u_backgroundColor",
-    "u_shadowColor",
-    "u_shadowOpacity",
     "u_labelMargin",
-    "u_padding",
-    "u_shadowBlur",
   ];
 
   for (const shape of shapes) {

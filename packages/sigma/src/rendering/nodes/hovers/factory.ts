@@ -12,26 +12,16 @@ import { Attributes } from "graphology-types";
 
 import type Sigma from "../../../sigma";
 import type { LabelPosition, RenderParams } from "../../../types";
-import { colorToArray } from "../../../utils";
 import { POSITION_MODE_MAP } from "../../glsl";
 import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
 import { LabelOptions, SDFShape } from "../types";
 import { HoverDisplayData, HoverProgram, HoverProgramType } from "./base";
 import { HoverShaderOptions, generateHoverShaders } from "./generator";
 
-export interface HoverStyleOptions {
-  backgroundColor?: string;
-  shadowColor?: string;
-  shadowBlur?: number;
-  shadowOpacity?: number;
-  padding?: number;
-}
-
 export interface CreateHoverProgramOptions {
   shapes: SDFShape[];
   rotateWithCamera?: boolean;
   label?: LabelOptions;
-  hover?: HoverStyleOptions;
 }
 
 export function createHoverProgram<
@@ -39,7 +29,7 @@ export function createHoverProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: CreateHoverProgramOptions): HoverProgramType<N, E, G> {
-  const { rotateWithCamera = false, label: labelOptions = {}, hover: hoverOptions = {}, shapes } = options;
+  const { rotateWithCamera = false, label: labelOptions = {}, shapes } = options;
 
   if (shapes.length === 0) {
     throw new Error("createHoverProgram: at least one shape must be provided in 'shapes'");
@@ -48,15 +38,6 @@ export function createHoverProgram<
   const labelPosition: LabelPosition = labelOptions.position ?? "right";
   const labelMargin = labelOptions.margin ?? 1;
   const labelAngle = labelOptions.angle ?? 0;
-
-  const backgroundColor = hoverOptions.backgroundColor ?? "#ffffff";
-  const shadowColor = hoverOptions.shadowColor ?? "#000000";
-  const shadowBlur = hoverOptions.shadowBlur ?? 8;
-  const shadowOpacity = hoverOptions.shadowOpacity ?? 0.5;
-  const padding = hoverOptions.padding ?? 2;
-
-  const bgColorRGBA = colorToArray(backgroundColor);
-  const shadowColorRGBA = colorToArray(shadowColor);
 
   const shaderOptions: HoverShaderOptions = { shapes, rotateWithCamera };
   const generatedShaders = generateHoverShaders(shaderOptions);
@@ -69,8 +50,6 @@ export function createHoverProgram<
     static readonly labelPosition = labelPosition;
     static readonly labelMargin = labelMargin;
     static readonly labelAngle = labelAngle;
-    static readonly padding = padding;
-    static readonly shadowBlur = shadowBlur;
 
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
       super(gl, pickingBuffer, renderer);
@@ -92,6 +71,11 @@ export function createHoverProgram<
           { name: "a_labelWidth", size: 1, type: FLOAT },
           { name: "a_labelHeight", size: 1, type: FLOAT },
           { name: "a_positionMode", size: 1, type: FLOAT },
+          // Per-node backdrop style attributes
+          { name: "a_backdropColor", size: 4, type: FLOAT },
+          { name: "a_backdropShadowColor", size: 4, type: FLOAT },
+          { name: "a_backdropShadowBlur", size: 1, type: FLOAT },
+          { name: "a_backdropPadding", size: 1, type: FLOAT },
         ],
         CONSTANT_ATTRIBUTES: [{ name: "a_quadCorner", size: 2, type: FLOAT }],
         CONSTANT_DATA: [
@@ -115,6 +99,17 @@ export function createHoverProgram<
       array[i++] = data.labelWidth;
       array[i++] = data.labelHeight;
       array[i++] = POSITION_MODE_MAP[data.position];
+      // Per-node backdrop style data
+      array[i++] = data.backdropColor[0];
+      array[i++] = data.backdropColor[1];
+      array[i++] = data.backdropColor[2];
+      array[i++] = data.backdropColor[3];
+      array[i++] = data.backdropShadowColor[0];
+      array[i++] = data.backdropShadowColor[1];
+      array[i++] = data.backdropShadowColor[2];
+      array[i++] = data.backdropShadowColor[3];
+      array[i++] = data.backdropShadowBlur;
+      array[i++] = data.backdropPadding;
     }
 
     setUniforms(params: RenderParams, programInfo: ProgramInfo): void {
@@ -127,13 +122,7 @@ export function createHoverProgram<
       gl.uniform1f(uniformLocations.u_labelAngle, NodeHoverProgram.labelAngle);
       gl.uniform2f(uniformLocations.u_resolution, params.width * params.pixelRatio, params.height * params.pixelRatio);
       gl.uniform1f(uniformLocations.u_pixelRatio, params.pixelRatio);
-
-      gl.uniform4fv(uniformLocations.u_backgroundColor, bgColorRGBA);
-      gl.uniform4fv(uniformLocations.u_shadowColor, shadowColorRGBA);
-      gl.uniform1f(uniformLocations.u_shadowOpacity, shadowOpacity);
       gl.uniform1f(uniformLocations.u_labelMargin, NodeHoverProgram.labelMargin);
-      gl.uniform1f(uniformLocations.u_padding, NodeHoverProgram.padding);
-      gl.uniform1f(uniformLocations.u_shadowBlur, NodeHoverProgram.shadowBlur);
 
       // Shape-specific uniforms (deduplicate across all shapes)
       const seenUniforms = new Set<string>();

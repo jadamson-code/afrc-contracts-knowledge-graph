@@ -25,6 +25,11 @@ export interface HoverDisplayData {
   type: string;
   shapeId: number;
   position: LabelPosition;
+  // Per-node backdrop style data
+  backdropColor: [number, number, number, number]; // RGBA floats 0-1
+  backdropShadowColor: [number, number, number, number]; // RGBA floats 0-1
+  backdropShadowBlur: number;
+  backdropPadding: number;
 }
 
 export abstract class AbstractHoverProgram<

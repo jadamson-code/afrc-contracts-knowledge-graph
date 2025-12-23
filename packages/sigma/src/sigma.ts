@@ -30,6 +30,8 @@ import {
 } from "./rendering";
 import { Settings, resolveSettings, validateSettings } from "./settings";
 import {
+  BucketStats,
+  BufferStats,
   CameraState,
   CoordinateConversionOverride,
   Coordinates,
@@ -40,14 +42,17 @@ import {
   Extent,
   LabelDisplayData,
   Listener,
+  MemoryStats,
   MouseCoords,
   MouseInteraction,
   NodeDisplayData,
   PlainObject,
   RenderParams,
   SigmaEvents,
+  TextureStats,
   TouchCoords,
   TypedEventEmitter,
+  WriteStats,
 } from "./types";
 import { DEFAULT_STYLES } from "./types/styles";
 import {
@@ -3302,5 +3307,188 @@ export default class Sigma<
     for (const layer in this.elements)
       if (this.elements[layer] instanceof HTMLCanvasElement) res[layer] = this.elements[layer] as HTMLCanvasElement;
     return res;
+  }
+
+  /**
+   * Returns memory usage statistics for all WebGL resources.
+   */
+  getMemoryStats(): MemoryStats {
+    const textures: TextureStats[] = [];
+    const buffers: BufferStats[] = [];
+    const buckets: BucketStats[] = [];
+
+    // Shared data textures
+    if (this.nodeDataTexture) {
+      textures.push({ name: "nodeData", ...this.nodeDataTexture.getMemoryStats() });
+    }
+    if (this.edgeDataTexture) {
+      textures.push({ name: "edgeData", ...this.edgeDataTexture.getMemoryStats() });
+    }
+
+    // Node programs
+    for (const [key, program] of Object.entries(this.nodePrograms)) {
+      buffers.push({ program: `nodes:${key}`, ...program.getMemoryStats() });
+      const layerStats = (program as { getLayerTextureStats?: () => ReturnType<typeof program.getMemoryStats> })
+        .getLayerTextureStats?.();
+      if (layerStats) {
+        textures.push({ name: `nodes:${key}:layerAttributes`, ...layerStats });
+      }
+    }
+    for (const [key, program] of Object.entries(this.nodeHoverPrograms)) {
+      buffers.push({ program: `nodeHover:${key}`, ...program.getMemoryStats() });
+    }
+
+    // Edge programs
+    for (const [key, program] of Object.entries(this.edgePrograms)) {
+      buffers.push({ program: `edges:${key}`, ...program.getMemoryStats() });
+      const attrStats = (program as { getAttributeTextureStats?: () => ReturnType<typeof program.getMemoryStats> | null })
+        .getAttributeTextureStats?.();
+      if (attrStats) {
+        textures.push({ name: `edges:${key}:pathAttributes`, ...attrStats });
+      }
+    }
+
+    // Label programs
+    for (const [key, program] of Object.entries(this.labelPrograms)) {
+      buffers.push({ program: `labels:${key}`, ...program.getMemoryStats() });
+    }
+    for (const [key, program] of Object.entries(this.edgeLabelPrograms)) {
+      buffers.push({ program: `edgeLabels:${key}`, ...program.getMemoryStats() });
+    }
+
+    // Hover programs
+    for (const [key, program] of Object.entries(this.hoverPrograms)) {
+      buffers.push({ program: `hover:${key}`, ...program.getMemoryStats() });
+    }
+
+    // Buckets
+    for (const stats of this.itemBuckets.nodes.getMemoryStats()) {
+      buckets.push({ type: "nodes", ...stats });
+    }
+    for (const stats of this.itemBuckets.edges.getMemoryStats()) {
+      buckets.push({ type: "edges", ...stats });
+    }
+
+    // Picking resources
+    const pickingWidth = Math.ceil((this.width * this.pixelRatio) / this.settings.pickingDownSizingRatio);
+    const pickingHeight = Math.ceil((this.height * this.pixelRatio) / this.settings.pickingDownSizingRatio);
+    const picking = {
+      width: pickingWidth,
+      height: pickingHeight,
+      textureBytes: pickingWidth * pickingHeight * 4,
+      depthBufferBytes: pickingWidth * pickingHeight * 2,
+    };
+
+    // Summary
+    const texturesBytes = textures.reduce((sum, t) => sum + t.totalBytes, 0);
+    const buffersBytes = buffers.reduce((sum, b) => sum + b.totalBytes, 0);
+    const bucketsBytes = buckets.reduce((sum, b) => sum + b.totalBytes, 0);
+    const pickingBytes = picking.textureBytes + picking.depthBufferBytes;
+
+    return {
+      textures,
+      buffers,
+      buckets,
+      picking,
+      summary: {
+        texturesBytes,
+        buffersBytes,
+        bucketsBytes,
+        pickingBytes,
+        totalBytes: texturesBytes + buffersBytes + bucketsBytes + pickingBytes,
+      },
+    };
+  }
+
+  /**
+   * Returns write statistics for all WebGL resources since last reset.
+   */
+  getWriteStats(): WriteStats {
+    const textures: { name: string; writes: number; bytesWritten: number }[] = [];
+    const buffers: { program: string; writes: number; bytesWritten: number }[] = [];
+
+    // Data textures
+    if (this.nodeDataTexture) {
+      textures.push({ name: "nodeData", ...this.nodeDataTexture.getWriteStats() });
+    }
+    if (this.edgeDataTexture) {
+      textures.push({ name: "edgeData", ...this.edgeDataTexture.getWriteStats() });
+    }
+
+    // Node programs
+    for (const [key, program] of Object.entries(this.nodePrograms)) {
+      buffers.push({ program: `nodes:${key}`, ...program.getWriteStats() });
+      const layerStats = (program as { getLayerTextureWriteStats?: () => { writes: number; bytesWritten: number } })
+        .getLayerTextureWriteStats?.();
+      if (layerStats) {
+        textures.push({ name: `nodes:${key}:layerAttributes`, ...layerStats });
+      }
+    }
+    for (const [key, program] of Object.entries(this.nodeHoverPrograms)) {
+      buffers.push({ program: `nodeHover:${key}`, ...program.getWriteStats() });
+    }
+
+    // Edge programs
+    for (const [key, program] of Object.entries(this.edgePrograms)) {
+      buffers.push({ program: `edges:${key}`, ...program.getWriteStats() });
+      const attrStats = (program as { getAttributeTextureWriteStats?: () => { writes: number; bytesWritten: number } | null })
+        .getAttributeTextureWriteStats?.();
+      if (attrStats) {
+        textures.push({ name: `edges:${key}:pathAttributes`, ...attrStats });
+      }
+    }
+
+    // Label programs
+    for (const [key, program] of Object.entries(this.labelPrograms)) {
+      buffers.push({ program: `labels:${key}`, ...program.getWriteStats() });
+    }
+    for (const [key, program] of Object.entries(this.edgeLabelPrograms)) {
+      buffers.push({ program: `edgeLabels:${key}`, ...program.getWriteStats() });
+    }
+
+    // Hover programs
+    for (const [key, program] of Object.entries(this.hoverPrograms)) {
+      buffers.push({ program: `hover:${key}`, ...program.getWriteStats() });
+    }
+
+    const textureWrites = textures.reduce((sum, t) => sum + t.writes, 0);
+    const bufferWrites = buffers.reduce((sum, b) => sum + b.writes, 0);
+    const totalBytesWritten =
+      textures.reduce((sum, t) => sum + t.bytesWritten, 0) + buffers.reduce((sum, b) => sum + b.bytesWritten, 0);
+
+    return {
+      textures,
+      buffers,
+      summary: { textureWrites, bufferWrites, totalBytesWritten },
+    };
+  }
+
+  /**
+   * Resets write statistics counters for all WebGL resources.
+   */
+  resetWriteStats(): void {
+    this.nodeDataTexture?.resetWriteStats();
+    this.edgeDataTexture?.resetWriteStats();
+
+    for (const program of Object.values(this.nodePrograms)) {
+      program.resetWriteStats();
+      (program as { resetLayerTextureWriteStats?: () => void }).resetLayerTextureWriteStats?.();
+    }
+    for (const program of Object.values(this.nodeHoverPrograms)) {
+      program.resetWriteStats();
+    }
+    for (const program of Object.values(this.edgePrograms)) {
+      program.resetWriteStats();
+      (program as { resetAttributeTextureWriteStats?: () => void }).resetAttributeTextureWriteStats?.();
+    }
+    for (const program of Object.values(this.labelPrograms)) {
+      program.resetWriteStats();
+    }
+    for (const program of Object.values(this.edgeLabelPrograms)) {
+      program.resetWriteStats();
+    }
+    for (const program of Object.values(this.hoverPrograms)) {
+      program.resetWriteStats();
+    }
   }
 }

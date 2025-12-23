@@ -50,6 +50,9 @@ export abstract class DataTexture {
   protected freeIndices: number[] = [];
   // Next index to allocate if free list is empty
   protected nextIndex: number = 0;
+  // Write tracking for stats
+  protected writeCount: number = 0;
+  protected bytesWritten: number = 0;
 
   constructor(gl: WebGL2RenderingContext, initialCapacity: number = INITIAL_CAPACITY) {
     this.gl = gl;
@@ -260,6 +263,8 @@ export abstract class DataTexture {
           const subData = this.data.subarray(uploadStart * 4, uploadEnd * 4);
 
           gl.texSubImage2D(gl.TEXTURE_2D, 0, xOffset, row, width, 1, gl.RGBA, gl.FLOAT, subData);
+          this.writeCount++;
+          this.bytesWritten += width * 16; // 4 floats * 4 bytes per texel
         }
       }
     }
@@ -321,6 +326,35 @@ export abstract class DataTexture {
    */
   isDirty(): boolean {
     return this.dirty;
+  }
+
+  /**
+   * Returns memory usage stats for this texture.
+   */
+  getMemoryStats(): { width: number; height: number; bytesPerTexel: number; totalBytes: number; itemCount: number; capacity: number } {
+    return {
+      width: this.textureWidth,
+      height: this.textureHeight,
+      bytesPerTexel: 16,
+      totalBytes: this.textureWidth * this.textureHeight * 16,
+      itemCount: this.indexMap.size,
+      capacity: this.capacity,
+    };
+  }
+
+  /**
+   * Returns write stats for this texture.
+   */
+  getWriteStats(): { writes: number; bytesWritten: number } {
+    return { writes: this.writeCount, bytesWritten: this.bytesWritten };
+  }
+
+  /**
+   * Resets write stats counters.
+   */
+  resetWriteStats(): void {
+    this.writeCount = 0;
+    this.bytesWritten = 0;
   }
 
   /**

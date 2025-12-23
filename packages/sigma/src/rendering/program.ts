@@ -84,6 +84,8 @@ export abstract class Program<
   constantArray: Float32Array = new Float32Array();
   capacity = 0;
   verticesCount = 0;
+  writeCount = 0;
+  bytesWritten = 0;
 
   normalProgram: ProgramInfo;
   pickProgram: ProgramInfo | null = null;
@@ -220,6 +222,8 @@ export abstract class Program<
       offset = 0;
       this.ATTRIBUTES.forEach((attr) => (offset += this.bindAttribute(attr, program, offset)));
       gl.bufferData(gl.ARRAY_BUFFER, this.array, gl.DYNAMIC_DRAW);
+      this.writeCount++;
+      this.bytesWritten += this.array.byteLength;
     } else {
       // Handle constant data (things that remain unchanged for all items):
       gl.bindBuffer(gl.ARRAY_BUFFER, program.constantBuffer);
@@ -227,6 +231,8 @@ export abstract class Program<
       offset = 0;
       this.CONSTANT_ATTRIBUTES.forEach((attr) => (offset += this.bindAttribute(attr, program, offset, false)));
       gl.bufferData(gl.ARRAY_BUFFER, this.constantArray, gl.STATIC_DRAW);
+      this.writeCount++;
+      this.bytesWritten += this.constantArray.byteLength;
 
       // Handle "instance specific" data (things that vary for each item):
       gl.bindBuffer(gl.ARRAY_BUFFER, program.buffer);
@@ -234,6 +240,8 @@ export abstract class Program<
       offset = 0;
       this.ATTRIBUTES.forEach((attr) => (offset += this.bindAttribute(attr, program, offset, true)));
       gl.bufferData(gl.ARRAY_BUFFER, this.array, gl.DYNAMIC_DRAW);
+      this.writeCount++;
+      this.bytesWritten += this.array.byteLength;
     }
 
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
@@ -308,6 +316,24 @@ export abstract class Program<
 
   hasNothingToRender(): boolean {
     return this.verticesCount === 0;
+  }
+
+  getMemoryStats(): { type: "vertex" | "constant"; capacity: number; stride: number; totalBytes: number } {
+    return {
+      type: "vertex",
+      capacity: this.capacity,
+      stride: this.STRIDE,
+      totalBytes: this.array.byteLength + this.constantArray.byteLength,
+    };
+  }
+
+  getWriteStats(): { writes: number; bytesWritten: number } {
+    return { writes: this.writeCount, bytesWritten: this.bytesWritten };
+  }
+
+  resetWriteStats(): void {
+    this.writeCount = 0;
+    this.bytesWritten = 0;
   }
 
   protected setTypedUniform(uniform: UniformSpecification, programInfo: ProgramInfo): void {

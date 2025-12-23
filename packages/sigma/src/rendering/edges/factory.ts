@@ -454,6 +454,18 @@ export function createEdgeProgram<
       }
     }
 
+    getAttributeTextureStats() {
+      return this.edgeAttributeTexture?.getMemoryStats() ?? null;
+    }
+
+    getAttributeTextureWriteStats() {
+      return this.edgeAttributeTexture?.getWriteStats() ?? null;
+    }
+
+    resetAttributeTextureWriteStats() {
+      this.edgeAttributeTexture?.resetWriteStats();
+    }
+
     kill(): void {
       // Call kill hook for all layers
       this.layerLifecycles.forEach((hooks) => hooks.kill?.());

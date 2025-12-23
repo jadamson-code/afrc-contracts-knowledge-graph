@@ -176,6 +176,18 @@ export class Bucket {
   clearDirtyFlag(): void {
     this.dirty = false;
   }
+
+  /**
+   * Returns memory usage stats for this bucket.
+   */
+  getMemoryStats(): { itemCount: number; capacity: number; stride: number; totalBytes: number } {
+    return {
+      itemCount: this.items.size,
+      capacity: this.capacity,
+      stride: this.stride,
+      totalBytes: this.array.byteLength,
+    };
+  }
 }
 
 /**
@@ -371,5 +383,21 @@ export class BucketCollection {
       }
     }
     return false;
+  }
+
+  /**
+   * Returns memory stats for all non-empty buckets.
+   */
+  getMemoryStats(): { programType: string; zIndex: number; itemCount: number; capacity: number; stride: number; totalBytes: number }[] {
+    const stats: { programType: string; zIndex: number; itemCount: number; capacity: number; stride: number; totalBytes: number }[] = [];
+    for (const [programType, programBuckets] of this.buckets) {
+      for (let z = 0; z < programBuckets.length; z++) {
+        const bucket = programBuckets[z];
+        if (bucket.count > 0) {
+          stats.push({ programType, zIndex: z, ...bucket.getMemoryStats() });
+        }
+      }
+    }
+    return stats;
   }
 }

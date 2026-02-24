@@ -20,7 +20,7 @@ import { Attributes } from "graphology-types";
 
 import { DEFAULT_SDF_ATLAS_OPTIONS, GlyphMetrics, SDFAtlasManager } from "../../../core/sdf-atlas";
 import type Sigma from "../../../sigma";
-import type { LabelDisplayData, LabelPosition, RenderParams } from "../../../types";
+import type { LabelDisplayData, RenderParams } from "../../../types";
 import { floatColor } from "../../../utils";
 import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
 import { LabelOptions, SDFShape } from "../types";
@@ -32,17 +32,7 @@ import { LabelShaderOptions, generateLabelShaders } from "./generator";
 // Constants
 // ============================================================================
 
-/**
- * Maps label position names to numeric values for the shader.
- * These values are used in the vertex shader to determine label direction.
- */
-const POSITION_MODE_MAP: Record<LabelPosition, number> = {
-  right: 0,
-  left: 1,
-  above: 2,
-  below: 3,
-  over: 4,
-};
+import { POSITION_MODE_MAP } from "../../glsl";
 
 // ============================================================================
 // Types

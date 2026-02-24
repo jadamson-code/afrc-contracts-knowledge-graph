@@ -7,8 +7,8 @@
  *
  * @module
  */
-import { AttributeSpecification, FragmentLayer, UniformSpecification, Vec4, numberToGLSLFloat } from "sigma/rendering";
-import { colorToArray } from "sigma/utils";
+import { AttributeSpecification, FragmentLayer, UniformSpecification, numberToGLSLFloat } from "sigma/rendering";
+import { colorToVec4 } from "sigma/utils";
 
 import { LayerBorderOptions } from "./types";
 
@@ -16,14 +16,6 @@ import { LayerBorderOptions } from "./types";
  * Border item type extracted from options.
  */
 type BorderItem = NonNullable<NonNullable<LayerBorderOptions["borders"]>[number]>;
-
-/**
- * Converts a CSS color string to a Vec4 (normalized RGBA).
- */
-function colorToVec4(color: string): Vec4 {
-  const [r, g, b, a] = colorToArray(color);
-  return [r / 255, g / 255, b / 255, a / 255];
-}
 
 /**
  * Type guards for border color variants

@@ -25,7 +25,6 @@ export type {
   AttributeSpecification,
   ValueSource,
   LayerContext,
-  LayerConfig,
   LayerLifecycleContext,
   LayerLifecycleHooks,
   Vec2,

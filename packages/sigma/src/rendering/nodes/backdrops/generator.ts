@@ -12,14 +12,11 @@ import {
   GLSL_NODE_SIZE_TO_PIXELS,
   GLSL_SDF_BOX,
   GLSL_SDF_ROTATED_BOX,
-  POSITION_MODE_MAP,
   generateFindEdgeDistance,
 } from "../../glsl";
 import { getShapeGLSLForShapes } from "../../shapes";
 import { numberToGLSLFloat } from "../../utils";
 import { SDFShape } from "../types";
-
-export { POSITION_MODE_MAP };
 
 export interface GeneratedBackdropShaders {
   vertexShader: string;

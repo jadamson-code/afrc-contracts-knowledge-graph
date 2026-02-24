@@ -1,4 +1,4 @@
-export function getAttributeItemsCount(attr: ProgramAttributeSpecification): number {
+function getAttributeItemsCount(attr: ProgramAttributeSpecification): number {
   return attr.normalized ? 1 : attr.size;
 }
 export function getAttributesItemsCount(attrs: ProgramAttributeSpecification[]): number {

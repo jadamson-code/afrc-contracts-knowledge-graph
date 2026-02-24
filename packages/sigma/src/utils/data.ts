@@ -18,13 +18,6 @@ export function extend<T>(array: T[], values: Set<T>): void {
 }
 
 /**
- * Checks whether the given value is a plain object.
- */
-export function isPlainObject(value: unknown): boolean {
-  return typeof value === "object" && value !== null && value.constructor === Object;
-}
-
-/**
  * Helper to use `Object.assign` with more than two objects.
  */
 export function assign<T>(target: Partial<T> | undefined, ...objects: Array<Partial<T | undefined>>): T {
@@ -41,25 +34,3 @@ export function assign<T>(target: Partial<T> | undefined, ...objects: Array<Part
   return target as T;
 }
 
-/**
- * Very simple recursive `Object.assign` like function.
- */
-export function assignDeep<T>(target: Partial<T> | undefined, ...objects: Array<Partial<T | undefined>>): T {
-  target = target || {};
-
-  for (let i = 0, l = objects.length; i < l; i++) {
-    const o = objects[i];
-
-    if (!o) continue;
-
-    for (const k in o) {
-      if (isPlainObject(o[k])) {
-        target[k] = assignDeep(target[k], o[k]);
-      } else {
-        target[k] = o[k];
-      }
-    }
-  }
-
-  return target as T;
-}

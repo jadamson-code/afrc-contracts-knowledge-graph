@@ -60,10 +60,6 @@ export function getFactory<K extends BuiltInPrimitiveKind>(
   return factories.get(kind)?.get(name) as ((options?: unknown) => PrimitiveKindOutputs[K]) | undefined;
 }
 
-export function hasFactory(kind: BuiltInPrimitiveKind, name: string): boolean {
-  return factories.get(kind)?.has(name) ?? false;
-}
-
 export function clearFactoryRegistry(): void {
   factories.clear();
 }

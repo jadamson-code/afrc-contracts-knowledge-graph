@@ -152,17 +152,6 @@ export const HTML_COLORS: Record<string, string> = {
 };
 
 /**
- * Function extracting the color at the given pixel.
- */
-export function extractPixel(gl: WebGL2RenderingContext, x: number, y: number, array: Uint8Array): Uint8Array {
-  const data = array || new Uint8Array(4);
-
-  gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, data);
-
-  return data;
-}
-
-/**
  * Memoized function returning a float-encoded color from various string
  * formats describing colors.
  */
@@ -232,7 +221,7 @@ for (const htmlColor in HTML_COLORS) {
   FLOAT_COLOR_CACHE[HTML_COLORS[htmlColor]] = FLOAT_COLOR_CACHE[htmlColor];
 }
 
-export function rgbaToFloat(r: number, g: number, b: number, a: number, masking?: boolean): number {
+function rgbaToFloat(r: number, g: number, b: number, a: number, masking?: boolean): number {
   INT32[0] = (a << 24) | (b << 16) | (g << 8) | r;
   if (masking) INT32[0] = INT32[0] & 0xfeffffff;
   return FLOAT32[0];

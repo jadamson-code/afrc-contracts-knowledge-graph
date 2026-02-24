@@ -26,7 +26,6 @@ export type PartialButFor<T, K extends keyof T> = Pick<T, K> & Partial<Omit<T, K
  */
 export type AtLeastOne<T, U = { [K in keyof T]: Pick<T, K> }> = Partial<T> & U[keyof U];
 
-export type NonEmptyArray<T> = [T, ...T[]];
 
 export interface Coordinates {
   x: number;

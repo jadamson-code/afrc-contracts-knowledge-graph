@@ -15,7 +15,6 @@ import { LabelPosition } from "../../types";
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
 export type Vec4 = [number, number, number, number];
-export type Mat2 = [...Vec2, ...Vec2];
 export type Mat3 = [...Vec3, ...Vec3, ...Vec3];
 export type Mat4 = [...Vec4, ...Vec4, ...Vec4, ...Vec4];
 
@@ -343,21 +342,6 @@ export interface FragmentLayer {
    * Layers without this property work as before (purely declarative).
    */
   lifecycle?: (context: LayerLifecycleContext) => LayerLifecycleHooks;
-}
-
-/**
- * Configuration for a specific layer instance, including its options.
- */
-export interface LayerConfig<Options = Record<string, unknown>> {
-  /**
-   * The layer definition.
-   */
-  layer: FragmentLayer;
-
-  /**
-   * Options/parameters for this layer instance.
-   */
-  options: Options;
 }
 
 /**

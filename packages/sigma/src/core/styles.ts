@@ -293,7 +293,7 @@ export interface ResolvedNodeStyle {
   opacity: number;
   shape: string;
   visibility: "visible" | "hidden";
-  layer: string;
+  depth: string;
   zIndex: number;
   label: string;
   labelColor: string;
@@ -302,7 +302,7 @@ export interface ResolvedNodeStyle {
   labelVisibility: "auto" | "visible" | "hidden";
   labelPosition: "right" | "left" | "above" | "below" | "over";
   labelAngle: number;
-  labelLayer: string;
+  labelDepth: string;
   backdropColor: string;
   backdropShadowColor: string;
   backdropShadowBlur: number;
@@ -322,7 +322,7 @@ export interface ResolvedEdgeStyle {
   tail: string;
   head: string;
   visibility: "visible" | "hidden";
-  layer: string;
+  depth: string;
   zIndex: number;
   label: string;
   labelColor: string;
@@ -330,7 +330,7 @@ export interface ResolvedEdgeStyle {
   labelFont: string;
   labelVisibility: "auto" | "visible" | "hidden";
   labelPosition: number | "over" | "above" | "below" | "auto";
-  labelLayer: string;
+  labelDepth: string;
   // Additional program-declared variables stored here
   [key: string]: unknown;
 }
@@ -346,7 +346,7 @@ const DEFAULT_RESOLVED_NODE_STYLE: ResolvedNodeStyle = {
   opacity: 1,
   shape: "circle",
   visibility: "visible",
-  layer: "nodes",
+  depth: "nodes",
   zIndex: 0,
   label: "",
   labelColor: "#000",
@@ -355,7 +355,7 @@ const DEFAULT_RESOLVED_NODE_STYLE: ResolvedNodeStyle = {
   labelVisibility: "auto",
   labelPosition: "right",
   labelAngle: 0,
-  labelLayer: "nodeLabels",
+  labelDepth: "nodeLabels",
   backdropColor: "transparent",
   backdropShadowColor: "transparent",
   backdropShadowBlur: 0,
@@ -373,7 +373,7 @@ const DEFAULT_RESOLVED_EDGE_STYLE: ResolvedEdgeStyle = {
   tail: "none",
   head: "none",
   visibility: "visible",
-  layer: "edges",
+  depth: "edges",
   zIndex: 0,
   label: "",
   labelColor: "#666",
@@ -381,7 +381,7 @@ const DEFAULT_RESOLVED_EDGE_STYLE: ResolvedEdgeStyle = {
   labelFont: "Arial, sans-serif",
   labelVisibility: "auto",
   labelPosition: 0.5,
-  labelLayer: "edgeLabels",
+  labelDepth: "edgeLabels",
 };
 
 /**

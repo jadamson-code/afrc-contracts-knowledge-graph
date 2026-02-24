@@ -55,7 +55,7 @@ export abstract class AbstractProgram<
 > {
   constructor(_gl: WebGL2RenderingContext, _pickGl: WebGL2RenderingContext, _renderer: Sigma<N, E, G>) {}
   abstract reallocate(capacity: number): void;
-  abstract render(params: RenderParams): void;
+  abstract render(params: RenderParams, offset?: number, count?: number): void;
   abstract kill(): void;
 }
 
@@ -86,6 +86,9 @@ export abstract class Program<
   verticesCount = 0;
   writeCount = 0;
   bytesWritten = 0;
+
+  protected renderOffset = 0;
+  protected renderCount = -1;
 
   normalProgram: ProgramInfo;
   pickProgram: ProgramInfo | null = null;
@@ -237,7 +240,7 @@ export abstract class Program<
       // Handle "instance specific" data (things that vary for each item):
       gl.bindBuffer(gl.ARRAY_BUFFER, program.buffer);
 
-      offset = 0;
+      offset = this.renderOffset * this.ATTRIBUTES_ITEMS_COUNT * Float32Array.BYTES_PER_ELEMENT;
       this.ATTRIBUTES.forEach((attr) => (offset += this.bindAttribute(attr, program, offset, true)));
       gl.bufferData(gl.ARRAY_BUFFER, this.array, gl.DYNAMIC_DRAW);
       this.writeCount++;
@@ -388,8 +391,11 @@ export abstract class Program<
     this.drawWebGL(this.METHOD, programInfo);
   }
 
-  render(params: RenderParams): void {
+  render(params: RenderParams, offset?: number, count?: number): void {
     if (this.hasNothingToRender()) return;
+
+    this.renderOffset = offset ?? 0;
+    this.renderCount = count ?? -1;
 
     const gl = this.normalProgram.gl;
 
@@ -415,10 +421,11 @@ export abstract class Program<
 
   drawWebGL(method: number /* GLenum */, { gl }: ProgramInfo): void {
     // Framebuffer is already bound by render() for either picking or visual pass
+    const count = this.renderCount >= 0 ? this.renderCount : this.capacity;
     if (!this.isInstanced) {
-      gl.drawArrays(method, 0, this.verticesCount);
+      gl.drawArrays(method, this.renderOffset * this.VERTICES, count * this.VERTICES);
     } else {
-      gl.drawArraysInstanced(method, 0, this.VERTICES, this.capacity);
+      gl.drawArraysInstanced(method, 0, this.VERTICES, count);
     }
   }
 }

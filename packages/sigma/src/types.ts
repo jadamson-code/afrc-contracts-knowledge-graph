@@ -73,6 +73,8 @@ export interface DisplayData {
   forceLabel: boolean;
   zIndex: number;
   type: string;
+  depth: string;
+  labelDepth: string;
 }
 
 export interface NodeDisplayData extends Coordinates, DisplayData {

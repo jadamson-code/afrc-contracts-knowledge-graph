@@ -205,9 +205,9 @@ export interface NodeBuiltInVariables<
   opacity?: GraphicValue<NA, NS, GS, number>;
   /** Visibility */
   visibility?: GraphicValue<NA, NS, GS, "visible" | "hidden">;
-  /** Depth bucket for layering */
-  layer?: GraphicValue<NA, NS, GS, Layer>;
-  /** Z-index for layering (inside the bucket) */
+  /** Depth layer for render ordering */
+  depth?: GraphicValue<NA, NS, GS, Layer>;
+  /** Z-index within the depth layer */
   zIndex?: GraphicValue<NA, NS, GS, number>;
   /** Backdrop fill color (transparent = no backdrop) */
   backdropColor?: GraphicValue<NA, NS, GS, string>;
@@ -243,8 +243,8 @@ export interface NodeLabelBuiltInVariables<
   labelPosition?: GraphicValue<NA, NS, GS, "right" | "left" | "above" | "below" | "over">;
   /** Label angle */
   labelAngle?: GraphicValue<NA, NS, GS, number>;
-  /** Depth bucket for layering */
-  labelLayer?: GraphicValue<NA, NS, GS, Layer>;
+  /** Depth layer for label render ordering */
+  labelDepth?: GraphicValue<NA, NS, GS, Layer>;
 }
 
 /**
@@ -286,9 +286,9 @@ export interface EdgeBuiltInVariables<
   head?: GraphicValue<EA, ES, GS, string>;
   /** Visibility */
   visibility?: GraphicValue<EA, ES, GS, "visible" | "hidden">;
-  /** Depth bucket for layering */
-  layer?: GraphicValue<EA, ES, GS, Layer>;
-  /** Z-index for layering (inside the bucket) */
+  /** Depth layer for render ordering */
+  depth?: GraphicValue<EA, ES, GS, Layer>;
+  /** Z-index within the depth layer */
   zIndex?: GraphicValue<EA, ES, GS, number>;
 }
 
@@ -314,8 +314,8 @@ export interface EdgeLabelBuiltInVariables<
   labelVisibility?: GraphicValue<EA, ES, GS, "auto" | "visible" | "hidden">;
   /** Label position along edge (0 = source, 0.5 = middle, 1 = target) or mode */
   labelPosition?: GraphicValue<EA, ES, GS, number | "over" | "above" | "below" | "auto">;
-  /** Depth bucket for layering */
-  labelLayer?: GraphicValue<EA, ES, GS, Layer>;
+  /** Depth layer for label render ordering */
+  labelDepth?: GraphicValue<EA, ES, GS, Layer>;
 }
 
 /**
@@ -605,15 +605,20 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
       then: "hidden",
       else: "visible",
     },
-    layer: {
-      when: ["isHighlighted", "isHovered"],
+    depth: {
+      when: "isHovered",
       then: "topNodes",
       else: "nodes",
     },
-    labelLayer: {
-      when: ["isHighlighted", "isHovered"],
+    labelDepth: {
+      when: "isHovered",
       then: "topNodeLabels",
       else: "nodeLabels",
+    },
+    labelVisibility: {
+      when: "isHovered",
+      then: "visible",
+      else: "auto",
     },
     zIndex: {
       when: "isHovered",
@@ -650,7 +655,7 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
       then: "hidden",
       else: "visible",
     },
-    layer: {
+    depth: {
       when: ["isHighlighted", "isHovered"],
       then: "topNodes",
       else: "nodes",

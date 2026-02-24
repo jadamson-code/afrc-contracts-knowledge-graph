@@ -205,7 +205,7 @@ export interface EdgePrimitives {
 export interface PrimitivesDeclaration {
   nodes?: NodePrimitives;
   edges?: EdgePrimitives;
-  layers?: string[];
+  depthLayers?: string[];
 }
 
 // =============================================================================
@@ -341,5 +341,5 @@ export const DEFAULT_DEPTH_LAYERS = [
 export const DEFAULT_PRIMITIVES: Required<PrimitivesDeclaration> = {
   nodes: DEFAULT_NODE_PRIMITIVES,
   edges: DEFAULT_EDGE_PRIMITIVES,
-  layers: [...DEFAULT_DEPTH_LAYERS],
+  depthLayers: [...DEFAULT_DEPTH_LAYERS],
 };

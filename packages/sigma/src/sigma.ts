@@ -13,6 +13,7 @@ import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
 import { evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
 import { PrimitivesDeclaration, VariablesDefinition, generateEdgeProgram, generateNodeProgram } from "./primitives";
+import { DEFAULT_DEPTH_LAYERS } from "./primitives/types";
 import {
   AbstractEdgeLabelProgram,
   AbstractEdgeProgram,
@@ -251,6 +252,11 @@ export default class Sigma<
     nodes: {},
     edges: {},
   };
+  // Track {offset, count} ranges per [depth][programType] for range-rendering
+  private depthRanges: {
+    nodes: Record<string, Record<string, { offset: number; count: number }>>;
+    edges: Record<string, Record<string, { offset: number; count: number }>>;
+  } = { nodes: {}, edges: {} };
 
   private camera: Camera;
 
@@ -291,10 +297,11 @@ export default class Sigma<
     this.graph = graph;
     this.container = container;
 
-    // Initialize bucket collections with maxDepthLevels setting
+    // Initialize bucket collections with numDepthLayers * maxDepthLevels
+    const numDepthLayers = (this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS]).length;
     this.itemBuckets = {
-      nodes: new BucketCollection(this.settings.maxDepthLevels),
-      edges: new BucketCollection(this.settings.maxDepthLevels),
+      nodes: new BucketCollection(numDepthLayers * this.settings.maxDepthLevels),
+      edges: new BucketCollection(numDepthLayers * this.settings.maxDepthLevels),
     };
 
     // Initializing contexts
@@ -1024,9 +1031,18 @@ export default class Sigma<
     }
 
     // Add data to programs using buckets (preserves zIndex ordering)
-    this.itemBuckets.nodes.forEachBucketByZIndex((programType, _zIndex, bucket) => {
+    const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
+    const maxDepthLevels = this.settings.maxDepthLevels;
+    this.depthRanges.nodes = {};
+    this.itemBuckets.nodes.forEachBucketByZIndex((programType, zIndex, bucket) => {
       const items = bucket.getItems();
       const nodeProgram = this.nodePrograms[programType];
+      const depthIndex = Math.floor(zIndex / maxDepthLevels);
+      const depth = depthLayers[depthIndex] ?? depthLayers[0];
+      if (!this.depthRanges.nodes[depth]) this.depthRanges.nodes[depth] = {};
+      if (!this.depthRanges.nodes[depth][programType])
+        this.depthRanges.nodes[depth][programType] = { offset: nodesPerPrograms[programType], count: 0 };
+      this.depthRanges.nodes[depth][programType].count += items.size;
       for (const node of items) {
         nodeIndices[node] = incrID;
         itemIDsIndex[nodeIndices[node]] = { type: "node", id: node };
@@ -1064,8 +1080,15 @@ export default class Sigma<
     }
 
     // Add data to programs using buckets (preserves zIndex ordering)
-    this.itemBuckets.edges.forEachBucketByZIndex((programType, _zIndex, bucket) => {
+    this.depthRanges.edges = {};
+    this.itemBuckets.edges.forEachBucketByZIndex((programType, zIndex, bucket) => {
       const items = bucket.getItems();
+      const depthIndex = Math.floor(zIndex / maxDepthLevels);
+      const depth = depthLayers[depthIndex] ?? depthLayers[0];
+      if (!this.depthRanges.edges[depth]) this.depthRanges.edges[depth] = {};
+      if (!this.depthRanges.edges[depth][programType])
+        this.depthRanges.edges[depth][programType] = { offset: edgesPerPrograms[programType], count: 0 };
+      this.depthRanges.edges[depth][programType].count += items.size;
       for (const edge of items) {
         edgeIndices[edge] = incrID;
         itemIDsIndex[edgeIndices[edge]] = { type: "edge", id: edge };
@@ -1122,6 +1145,12 @@ export default class Sigma<
     return "#000";
   }
 
+  private getDepthOffset(depth: string): number {
+    const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
+    const idx = depthLayers.indexOf(depth);
+    return (idx >= 0 ? idx : 0) * this.settings.maxDepthLevels;
+  }
+
   /**
    * Method that backports potential settings updates where it's needed.
    * @private
@@ -1150,8 +1179,9 @@ export default class Sigma<
     if (oldSettings) {
       // Check maxDepthLevels:
       if (oldSettings.maxDepthLevels !== settings.maxDepthLevels) {
-        this.itemBuckets.nodes.setMaxDepthLevels(settings.maxDepthLevels);
-        this.itemBuckets.edges.setMaxDepthLevels(settings.maxDepthLevels);
+        const numDepthLayers = (this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS]).length;
+        this.itemBuckets.nodes.setMaxDepthLevels(numDepthLayers * settings.maxDepthLevels);
+        this.itemBuckets.edges.setMaxDepthLevels(numDepthLayers * settings.maxDepthLevels);
         // Mark need to reprocess since bucket structure changed
         this.needToProcess = true;
       }
@@ -1251,7 +1281,7 @@ export default class Sigma<
    *
    * @param params - Render parameters
    */
-  private renderWebGLLabels(params: RenderParams): void {
+  private renderWebGLLabels(params: RenderParams, depth?: string): void {
     const cameraState = this.camera.getState();
 
     // Compute viewport bounds in framed graph coordinates for early rejection
@@ -1306,7 +1336,6 @@ export default class Sigma<
     extend(labelsToDisplay, this.nodesWithForcedLabels);
 
     // Collect visible nodes after viewport/threshold culling
-    this.displayedNodeLabels = new Set();
     const visibleNodes: string[] = [];
 
     for (let i = 0, l = labelsToDisplay.length; i < l; i++) {
@@ -1314,6 +1343,7 @@ export default class Sigma<
       const data = this.nodeDataCache[node];
 
       if (this.displayedNodeLabels.has(node)) continue;
+      if (depth && data.labelDepth !== depth) continue;
       if (data.hidden) continue;
       if (!data.label) continue;
 
@@ -1405,13 +1435,14 @@ export default class Sigma<
    *
    * @private
    */
-  private renderBackdrops(params: RenderParams): void {
+  private renderBackdrops(params: RenderParams, depth?: string): void {
     // Group nodes by their program type
     const nodesByType: Record<string, string[]> = {};
 
     for (const key of this.nodesWithBackdrop) {
       const data = this.nodeDataCache[key];
       if (!data || data.hidden) continue;
+      if (depth && data.depth !== depth) continue;
 
       const type = data.type || "default";
       if (!nodesByType[type]) nodesByType[type] = [];
@@ -1504,8 +1535,8 @@ export default class Sigma<
    *
    * @private
    */
-  private renderEdgeLabelsWebGL(params: RenderParams): void {
-    this.renderEdgeLabelsInternal(params);
+  private renderEdgeLabelsWebGL(params: RenderParams, depth?: string): void {
+    this.renderEdgeLabelsInternal(params, depth);
   }
 
   /**
@@ -1526,7 +1557,7 @@ export default class Sigma<
    *
    * @private
    */
-  private renderEdgeLabelsInternal(params: RenderParams): void {
+  private renderEdgeLabelsInternal(params: RenderParams, depth?: string): void {
     if (!this.settings.renderEdgeLabels) return;
 
     // Build highlighted nodes set from state
@@ -1573,6 +1604,7 @@ export default class Sigma<
         continue;
       }
 
+      if (depth && edgeData.labelDepth !== depth) continue;
       if (!edgeData.label) continue;
 
       // Use the edge's type to find the matching label program
@@ -1765,35 +1797,40 @@ export default class Sigma<
     this.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
     this.edgeDataTexture!.bind(EDGE_DATA_TEXTURE_UNIT);
 
-    // Drawing edges first (so nodes render on top for picking priority)
-    // Programs handle two-pass rendering internally (picking then visual)
-    if (!this.settings.hideEdgesOnMove || !moving) {
-      for (const type in this.edgePrograms) {
-        const program = this.edgePrograms[type];
-        program.render(params);
+    // Render all items depth by depth (depth layers control draw order)
+    this.displayedNodeLabels = new Set();
+    const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
+    for (const depth of depthLayers) {
+      // Edge programs in this depth
+      const edgeRanges = this.depthRanges.edges[depth];
+      if (edgeRanges && (!this.settings.hideEdgesOnMove || !moving)) {
+        for (const type in edgeRanges) {
+          const { offset, count } = edgeRanges[type];
+          if (count > 0) this.edgePrograms[type].render(params, offset, count);
+        }
       }
-    }
 
-    // Drawing edge labels (after edges, before nodes, so they appear under nodes)
-    // Edge labels are WebGL-rendered like node labels
-    if (this.settings.renderEdgeLabels && (!this.settings.hideLabelsOnMove || !moving)) {
-      this.renderEdgeLabelsWebGL(params);
-    }
+      // Edge labels for this depth
+      if (this.settings.renderEdgeLabels && (!this.settings.hideLabelsOnMove || !moving)) {
+        this.renderEdgeLabelsWebGL(params, depth);
+      }
 
-    // Drawing backdrops (background + shadow) behind nodes with labels
-    // Rendered before nodes so they appear behind
-    this.renderBackdrops(params);
+      // Backdrops for nodes in this depth (before node programs so they appear behind)
+      this.renderBackdrops(params, depth);
 
-    // Drawing nodes (programs handle two-pass rendering internally)
-    for (const type in this.nodePrograms) {
-      const program = this.nodePrograms[type];
-      program.render(params);
-    }
+      // Node programs in this depth
+      const nodeRanges = this.depthRanges.nodes[depth];
+      if (nodeRanges) {
+        for (const type in nodeRanges) {
+          const { offset, count } = nodeRanges[type];
+          if (count > 0) this.nodePrograms[type].render(params, offset, count);
+        }
+      }
 
-    // Drawing WebGL labels (programs handle two-pass rendering internally)
-    // WebGL labels are GPU-accelerated, so they can render during camera movement
-    if (this.settings.renderLabels) {
-      this.renderWebGLLabels(params);
+      // Node labels for this depth
+      if (this.settings.renderLabels) {
+        this.renderWebGLLabels(params, depth);
+      }
     }
 
     // If DEBUG_displayPickingLayer is enabled, blit picking framebuffer to screen
@@ -1852,6 +1889,8 @@ export default class Sigma<
       highlighted: nodeState.isHighlighted,
       zIndex: resolvedStyle.zIndex ?? 0,
       type: "default",
+      depth: resolvedStyle.depth ?? "nodes",
+      labelDepth: resolvedStyle.labelDepth ?? "nodeLabels",
       shape: resolvedStyle.shape,
       labelPosition: resolvedStyle.labelPosition,
       labelSize: resolvedStyle.labelSize,
@@ -1916,20 +1955,16 @@ export default class Sigma<
       if (hasVisibleBackdrop) this.nodesWithBackdrop.add(key);
     }
 
-    // Bucket management for depth ordering
-    const maxDepth = this.itemBuckets.nodes.getMaxDepthLevels();
-    const newZIndex = Math.max(0, Math.min(maxDepth - 1, Math.floor(data.zIndex)));
+    // Bucket management for depth ordering (depth encoded into zIndex range)
+    const newZIndex = this.getDepthOffset(data.depth) +
+      Math.max(0, Math.min(this.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
     const oldZIndex = this.zIndexCache.nodes[key];
 
     if (oldZIndex !== undefined && oldZIndex !== newZIndex) {
-      // zIndex changed - move between buckets
-      // Note: program type changes require full reprocess, so we use data.type for both
       this.itemBuckets.nodes.moveItem(data.type, oldZIndex, data.type, newZIndex, key);
     } else if (oldZIndex === undefined) {
-      // New node - add to bucket
       this.itemBuckets.nodes.addItem(data.type, newZIndex, key);
     } else {
-      // Same zIndex - mark for update
       this.itemBuckets.nodes.updateItem(data.type, newZIndex, key);
     }
     this.zIndexCache.nodes[key] = newZIndex;
@@ -2003,6 +2038,8 @@ export default class Sigma<
       forceLabel: resolvedStyle.labelVisibility === "visible",
       zIndex: resolvedStyle.zIndex ?? 0,
       type: "default",
+      depth: resolvedStyle.depth ?? "edges",
+      labelDepth: resolvedStyle.labelDepth ?? "edgeLabels",
       path: resolvedStyle.path,
       head: resolvedStyle.head,
       tail: resolvedStyle.tail,
@@ -2033,20 +2070,16 @@ export default class Sigma<
     this.edgesWithForcedLabels.delete(key);
     if (data.forceLabel && !data.hidden) this.edgesWithForcedLabels.add(key);
 
-    // Bucket management for depth ordering
-    const maxDepth = this.itemBuckets.edges.getMaxDepthLevels();
-    const newZIndex = Math.max(0, Math.min(maxDepth - 1, Math.floor(data.zIndex)));
+    // Bucket management for depth ordering (depth encoded into zIndex range)
+    const newZIndex = this.getDepthOffset(data.depth) +
+      Math.max(0, Math.min(this.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
     const oldZIndex = this.zIndexCache.edges[key];
 
     if (oldZIndex !== undefined && oldZIndex !== newZIndex) {
-      // zIndex changed - move between buckets
-      // Note: program type changes require full reprocess, so we use data.type for both
       this.itemBuckets.edges.moveItem(data.type, oldZIndex, data.type, newZIndex, key);
     } else if (oldZIndex === undefined) {
-      // New edge - add to bucket
       this.itemBuckets.edges.addItem(data.type, newZIndex, key);
     } else {
-      // Same zIndex - mark for update
       this.itemBuckets.edges.updateItem(data.type, newZIndex, key);
     }
     this.zIndexCache.edges[key] = newZIndex;
@@ -2105,6 +2138,7 @@ export default class Sigma<
     // Clear bucket data
     this.itemBuckets.nodes.clearAll();
     this.zIndexCache.nodes = {};
+    this.depthRanges.nodes = {};
   }
 
   /**
@@ -2118,6 +2152,7 @@ export default class Sigma<
     // Clear bucket data
     this.itemBuckets.edges.clearAll();
     this.zIndexCache.edges = {};
+    this.depthRanges.edges = {};
   }
 
   /**

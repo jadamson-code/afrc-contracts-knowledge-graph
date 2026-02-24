@@ -31,6 +31,7 @@ import {
   getShapeId,
 } from "./rendering";
 import { Settings, resolveSettings, validateSettings } from "./settings";
+import { DepthRanges, addPositionToDepthRanges, removePositionFromDepthRanges } from "./utils/fragments";
 import {
   BucketStats,
   BufferStats,
@@ -215,6 +216,7 @@ export default class Sigma<
   // Internal states
   private renderFrame: number | null = null;
   private needToProcess = false;
+  private needToRefreshState = false;
   private checkEdgesEventsFrame: number | null = null;
 
   // Programs
@@ -252,11 +254,11 @@ export default class Sigma<
     nodes: {},
     edges: {},
   };
-  // Track {offset, count} ranges per [depth][programType] for range-rendering
-  private depthRanges: {
-    nodes: Record<string, Record<string, { offset: number; count: number }>>;
-    edges: Record<string, Record<string, { offset: number; count: number }>>;
-  } = { nodes: {}, edges: {} };
+  // Track {offset, count} fragment ranges per [depth][programType] for range-rendering
+  private depthRanges: { nodes: DepthRanges; edges: DepthRanges } = { nodes: {}, edges: {} };
+  // Depth assigned to each item during the last process() call
+  private nodeBaseDepth: Record<string, string> = {};
+  private edgeBaseDepth: Record<string, string> = {};
 
   private camera: Camera;
 
@@ -1034,6 +1036,7 @@ export default class Sigma<
     const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
     const maxDepthLevels = this.settings.maxDepthLevels;
     this.depthRanges.nodes = {};
+    this.nodeBaseDepth = {};
     this.itemBuckets.nodes.forEachBucketByZIndex((programType, zIndex, bucket) => {
       const items = bucket.getItems();
       const nodeProgram = this.nodePrograms[programType];
@@ -1041,9 +1044,11 @@ export default class Sigma<
       const depth = depthLayers[depthIndex] ?? depthLayers[0];
       if (!this.depthRanges.nodes[depth]) this.depthRanges.nodes[depth] = {};
       if (!this.depthRanges.nodes[depth][programType])
-        this.depthRanges.nodes[depth][programType] = { offset: nodesPerPrograms[programType], count: 0 };
-      this.depthRanges.nodes[depth][programType].count += items.size;
+        this.depthRanges.nodes[depth][programType] = [{ offset: nodesPerPrograms[programType], count: 0 }];
+      const fragments = this.depthRanges.nodes[depth][programType];
+      fragments[fragments.length - 1].count += items.size;
       for (const node of items) {
+        this.nodeBaseDepth[node] = depth;
         nodeIndices[node] = incrID;
         itemIDsIndex[nodeIndices[node]] = { type: "node", id: node };
         incrID++;
@@ -1081,15 +1086,18 @@ export default class Sigma<
 
     // Add data to programs using buckets (preserves zIndex ordering)
     this.depthRanges.edges = {};
+    this.edgeBaseDepth = {};
     this.itemBuckets.edges.forEachBucketByZIndex((programType, zIndex, bucket) => {
       const items = bucket.getItems();
       const depthIndex = Math.floor(zIndex / maxDepthLevels);
       const depth = depthLayers[depthIndex] ?? depthLayers[0];
       if (!this.depthRanges.edges[depth]) this.depthRanges.edges[depth] = {};
       if (!this.depthRanges.edges[depth][programType])
-        this.depthRanges.edges[depth][programType] = { offset: edgesPerPrograms[programType], count: 0 };
-      this.depthRanges.edges[depth][programType].count += items.size;
+        this.depthRanges.edges[depth][programType] = [{ offset: edgesPerPrograms[programType], count: 0 }];
+      const fragments = this.depthRanges.edges[depth][programType];
+      fragments[fragments.length - 1].count += items.size;
       for (const edge of items) {
+        this.edgeBaseDepth[edge] = depth;
         edgeIndices[edge] = incrID;
         itemIDsIndex[edgeIndices[edge]] = { type: "edge", id: edge };
         incrID++;
@@ -1149,6 +1157,30 @@ export default class Sigma<
     const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
     const idx = depthLayers.indexOf(depth);
     return (idx >= 0 ? idx : 0) * this.settings.maxDepthLevels;
+  }
+
+  /**
+   * Update depth ranges when a node moves between depth layers without
+   * reprocessing the program array.
+   */
+  private updateNodeDepthRanges(key: string, oldDepth: string, newDepth: string): void {
+    const programType = this.nodeDataCache[key].type;
+    const position = this.nodeProgramIndex[key];
+    if (position === undefined) return;
+    removePositionFromDepthRanges(this.depthRanges.nodes, oldDepth, programType, position);
+    addPositionToDepthRanges(this.depthRanges.nodes, newDepth, programType, position);
+  }
+
+  /**
+   * Update depth ranges when an edge moves between depth layers without
+   * reprocessing the program array.
+   */
+  private updateEdgeDepthRanges(key: string, oldDepth: string, newDepth: string): void {
+    const programType = this.edgeDataCache[key].type;
+    const position = this.edgeProgramIndex[key];
+    if (position === undefined) return;
+    removePositionFromDepthRanges(this.depthRanges.edges, oldDepth, programType, position);
+    addPositionToDepthRanges(this.depthRanges.edges, newDepth, programType, position);
   }
 
   /**
@@ -1722,8 +1754,15 @@ export default class Sigma<
     this.resize();
 
     // Do we need to reprocess data?
-    if (this.needToProcess) this.process();
+    if (this.needToProcess) {
+      this.process();
+      this.needToRefreshState = false;
+    }
     this.needToProcess = false;
+
+    // Do we need to refresh state (styles in-place, no reprocess)?
+    if (this.needToRefreshState) this.refreshState();
+    this.needToRefreshState = false;
 
     // Clearing the canvases
     this.clear();
@@ -1805,8 +1844,9 @@ export default class Sigma<
       const edgeRanges = this.depthRanges.edges[depth];
       if (edgeRanges && (!this.settings.hideEdgesOnMove || !moving)) {
         for (const type in edgeRanges) {
-          const { offset, count } = edgeRanges[type];
-          if (count > 0) this.edgePrograms[type].render(params, offset, count);
+          for (const { offset, count } of edgeRanges[type]) {
+            if (count > 0) this.edgePrograms[type].render(params, offset, count);
+          }
         }
       }
 
@@ -1822,8 +1862,9 @@ export default class Sigma<
       const nodeRanges = this.depthRanges.nodes[depth];
       if (nodeRanges) {
         for (const type in nodeRanges) {
-          const { offset, count } = nodeRanges[type];
-          if (count > 0) this.nodePrograms[type].render(params, offset, count);
+          for (const { offset, count } of nodeRanges[type]) {
+            if (count > 0) this.nodePrograms[type].render(params, offset, count);
+          }
         }
       }
 
@@ -2139,6 +2180,7 @@ export default class Sigma<
     this.itemBuckets.nodes.clearAll();
     this.zIndexCache.nodes = {};
     this.depthRanges.nodes = {};
+    this.nodeBaseDepth = {};
   }
 
   /**
@@ -2153,6 +2195,7 @@ export default class Sigma<
     this.itemBuckets.edges.clearAll();
     this.zIndexCache.edges = {};
     this.depthRanges.edges = {};
+    this.edgeBaseDepth = {};
   }
 
   /**
@@ -2722,8 +2765,8 @@ export default class Sigma<
     // Update graph state flags
     this.updateGraphStateFromNodes();
 
-    // Schedule refresh for this node
-    this.scheduleRefresh();
+    // Re-evaluate styles in-place (no reprocess)
+    this.scheduleStateRefresh();
 
     return this;
   }
@@ -2746,8 +2789,8 @@ export default class Sigma<
     // Update graph state flags
     this.updateGraphStateFromEdges();
 
-    // Schedule refresh for this edge
-    this.scheduleRefresh();
+    // Re-evaluate styles in-place (no reprocess)
+    this.scheduleStateRefresh();
 
     return this;
   }
@@ -2761,8 +2804,8 @@ export default class Sigma<
   setGraphState(state: Partial<GS>): this {
     this.graphState = { ...this.graphState, ...state } as GS;
 
-    // Schedule refresh
-    this.scheduleRefresh();
+    // Re-evaluate styles in-place (no reprocess)
+    this.scheduleStateRefresh();
 
     return this;
   }
@@ -2785,8 +2828,8 @@ export default class Sigma<
     // Update graph state flags once
     this.updateGraphStateFromNodes();
 
-    // Schedule single refresh
-    this.scheduleRefresh();
+    // Re-evaluate styles in-place (no reprocess)
+    this.scheduleStateRefresh();
 
     return this;
   }
@@ -2809,8 +2852,8 @@ export default class Sigma<
     // Update graph state flags once
     this.updateGraphStateFromEdges();
 
-    // Schedule single refresh
-    this.scheduleRefresh();
+    // Re-evaluate styles in-place (no reprocess)
+    this.scheduleStateRefresh();
 
     return this;
   }
@@ -3054,6 +3097,70 @@ export default class Sigma<
 
     this.emit("afterClear");
     return this;
+  }
+
+  /**
+   * Schedule a state-only refresh: re-evaluate all styles in-place without
+   * rebuilding program arrays. Depth changes are handled via fragmented ranges.
+   */
+  private scheduleStateRefresh(): void {
+    this.needToRefreshState = true;
+    this.scheduleRender();
+  }
+
+  /**
+   * Re-evaluate all item styles in-place. Called from render() when
+   * needToRefreshState is set.
+   */
+  private refreshState(): void {
+    const graph = this.graph;
+
+    // Re-evaluate all nodes
+    graph.forEachNode((node) => {
+      const oldDepth = this.nodeDataCache[node]?.depth;
+      this.updateNode(node);
+      const data = this.nodeDataCache[node];
+
+      // Update node data texture (size may change on hover)
+      let shapeId: number;
+      const shapeMap = this.nodeTypeShapeMap[data.type];
+      const globalIds = this.nodeTypeGlobalShapeIds[data.type];
+      if (shapeMap && globalIds && data.shape && data.shape in shapeMap) {
+        shapeId = globalIds[shapeMap[data.shape]];
+      } else {
+        shapeId = getShapeId(data.shape || "circle");
+      }
+      this.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
+
+      // Update fragmented depth ranges if depth changed
+      if (oldDepth && data.depth !== oldDepth) {
+        this.updateNodeDepthRanges(node, oldDepth, data.depth);
+      }
+
+      // Rewrite data at existing position
+      const programIndex = this.nodeProgramIndex[node];
+      if (programIndex !== undefined) {
+        this.addNodeToProgram(node, this.nodeIndices[node], programIndex);
+      }
+    });
+
+    // Re-evaluate all edges
+    graph.forEachEdge((edge) => {
+      const oldDepth = this.edgeDataCache[edge]?.depth;
+      this.updateEdge(edge);
+      const newDepth = this.edgeDataCache[edge].depth;
+
+      // Update fragmented depth ranges if depth changed
+      if (oldDepth && newDepth !== oldDepth) {
+        this.updateEdgeDepthRanges(edge, oldDepth, newDepth);
+      }
+
+      // Rewrite data at existing position
+      const programIndex = this.edgeProgramIndex[edge];
+      if (programIndex !== undefined) {
+        this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
+      }
+    });
   }
 
   /**

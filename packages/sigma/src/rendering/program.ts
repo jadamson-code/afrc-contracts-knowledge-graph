@@ -310,9 +310,10 @@ export abstract class Program<
     return this.verticesCount === 0;
   }
 
-  getMemoryStats(): { type: "vertex" | "constant"; capacity: number; stride: number; totalBytes: number } {
+  getMemoryStats(): { type: "vertex" | "constant"; itemCount: number; capacity: number; stride: number; totalBytes: number } {
     return {
       type: "vertex",
+      itemCount: this.capacity,
       capacity: this.capacity,
       stride: this.STRIDE,
       totalBytes: this.array.byteLength + this.constantArray.byteLength,

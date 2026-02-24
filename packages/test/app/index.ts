@@ -4,9 +4,9 @@ import { SerializedGraph } from "graphology-types";
 import Sigma from "sigma";
 import {
   EdgeArrowProgram,
+  EdgeCurveProgram,
+  EdgeCurvedArrowProgram,
   EdgeLineProgram,
-  EdgeRectangleProgram,
-  EdgeTriangleProgram,
   NodeCircleProgram,
 } from "sigma/rendering";
 
@@ -61,9 +61,9 @@ const dependencies: BrowserTestDependencies = {
   },
   edgePrograms: {
     EdgeLineProgram,
-    EdgeRectangleProgram,
+    EdgeCurveProgram,
     EdgeArrowProgram,
-    EdgeTriangleProgram,
+    EdgeCurvedArrowProgram,
   },
   container,
 

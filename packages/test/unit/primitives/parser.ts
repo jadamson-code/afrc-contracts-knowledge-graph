@@ -157,10 +157,9 @@ describe("Primitives Parser", () => {
       expect(layer.name).toBe("border");
     });
 
-    it("should parse declarative form and transform variable references", () => {
-      const layer = parseNodeLayer({ type: "fill", color: "myColorVar" });
+    it("should parse declarative form with explicit attribute source", () => {
+      const layer = parseNodeLayer({ type: "fill", color: { attribute: "myColorVar" } });
       expect(layer.name).toBe("fill");
-      // The factory should receive { color: { attribute: "myColorVar" } }
       expect(layer.attributes.length).toBe(1);
       expect(layer.attributes[0].source).toBe("myColorVar");
     });
@@ -190,10 +189,9 @@ describe("Primitives Parser", () => {
       expect(path.segments).toBe(1);
     });
 
-    it("should parse declarative form with variable reference", () => {
-      const path = parseEdgePath({ type: "curved", curvature: "myCurvatureVar" });
+    it("should parse declarative form with explicit attribute source", () => {
+      const path = parseEdgePath({ type: "curved", curvature: { attribute: "myCurvatureVar" } });
       expect(path.name).toBe("curved");
-      // The factory should receive { curvature: { attribute: "myCurvatureVar" } }
       expect(path.attributes.length).toBe(1);
       expect(path.attributes[0].source).toBe("myCurvatureVar");
     });
@@ -365,15 +363,14 @@ describe("Primitives Parser", () => {
   // VARIABLE REFERENCE RESOLUTION
   // ===========================================================================
 
-  describe("Variable reference resolution", () => {
-    it("should transform string values to attribute sources in node layers", () => {
-      const layer = parseNodeLayer({ type: "fill", color: "colorAttribute" });
-      // The mock factory creates an attribute when color is an attribute source
+  describe("Explicit attribute source passing", () => {
+    it("should pass attribute sources through to node layer factories", () => {
+      const layer = parseNodeLayer({ type: "fill", color: { attribute: "colorAttribute" } });
       expect(layer.attributes[0].source).toBe("colorAttribute");
     });
 
-    it("should transform string values to attribute sources in edge paths", () => {
-      const path = parseEdgePath({ type: "curved", curvature: "curvatureAttribute" });
+    it("should pass attribute sources through to edge path factories", () => {
+      const path = parseEdgePath({ type: "curved", curvature: { attribute: "curvatureAttribute" } });
       expect(path.attributes[0].source).toBe("curvatureAttribute");
     });
 

@@ -15,14 +15,14 @@ import { evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
 import { PrimitivesDeclaration, VariablesDefinition, generateEdgeProgram, generateNodeProgram } from "./primitives";
 import { DEFAULT_DEPTH_LAYERS } from "./primitives/types";
 import {
+  BackdropDisplayData,
   BackdropProgram,
+  BackdropProgramType,
   BucketCollection,
   EdgeDataTexture,
   EdgeLabelProgram,
   EdgeProgram,
   EdgeProgramType,
-  BackdropDisplayData,
-  BackdropProgramType,
   LabelProgram,
   LabelProgramType,
   NodeDataTexture,
@@ -31,7 +31,6 @@ import {
   getShapeId,
 } from "./rendering";
 import { Settings, resolveSettings, validateSettings } from "./settings";
-import { DepthRanges, addPositionToDepthRanges, removePositionFromDepthRanges } from "./utils/fragments";
 import {
   BucketStats,
   BufferStats,
@@ -69,13 +68,13 @@ import {
 } from "./types/styles";
 import {
   NormalizationFunction,
+  colorToArray,
   colorToIndex,
   createElement,
   createNormalizationFunction,
   extend,
   getMatrixImpact,
   getPixelColor,
-  colorToArray,
   getPixelRatio,
   graphExtent,
   identity,
@@ -83,6 +82,7 @@ import {
   multiplyVec2,
   validateGraph,
 } from "./utils";
+import { DepthRanges, addPositionToDepthRanges, removePositionFromDepthRanges } from "./utils/fragments";
 
 /**
  * Constants.
@@ -240,7 +240,6 @@ export default class Sigma<
 
   // WebGL Labels (SDF-based rendering)
   private sdfAtlas: SDFAtlasManager | null = null;
-  private defaultFontKey: string = "";
 
   // Shared texture storing node position, size, and shapeId for GPU programs
   private nodeDataTexture: NodeDataTexture | null = null;
@@ -451,7 +450,7 @@ export default class Sigma<
     this.sdfAtlas = new SDFAtlasManager();
 
     // Register default font
-    this.defaultFontKey = this.sdfAtlas.registerFont({
+    this.sdfAtlas.registerFont({
       family: "sans-serif",
       weight: "normal",
       style: "normal",
@@ -1528,9 +1527,7 @@ export default class Sigma<
 
         if (ProgramClass.useBackdropAttributes) {
           const rawBgColor = data.backdropColor ? colorToArray(data.backdropColor) : [255, 255, 255, 255];
-          const rawShadowColor = data.backdropShadowColor
-            ? colorToArray(data.backdropShadowColor)
-            : [0, 0, 0, 128];
+          const rawShadowColor = data.backdropShadowColor ? colorToArray(data.backdropShadowColor) : [0, 0, 0, 128];
           backdropColor = rawBgColor.map((c) => c / 255) as [number, number, number, number];
           backdropShadowColor = rawShadowColor.map((c) => c / 255) as [number, number, number, number];
           backdropShadowBlur = data.backdropShadowBlur ?? 12;
@@ -1997,7 +1994,8 @@ export default class Sigma<
     }
 
     // Bucket management for depth ordering (depth encoded into zIndex range)
-    const newZIndex = this.getDepthOffset(data.depth) +
+    const newZIndex =
+      this.getDepthOffset(data.depth) +
       Math.max(0, Math.min(this.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
     const oldZIndex = this.zIndexCache.nodes[key];
 
@@ -2112,7 +2110,8 @@ export default class Sigma<
     if (data.forceLabel && !data.hidden) this.edgesWithForcedLabels.add(key);
 
     // Bucket management for depth ordering (depth encoded into zIndex range)
-    const newZIndex = this.getDepthOffset(data.depth) +
+    const newZIndex =
+      this.getDepthOffset(data.depth) +
       Math.max(0, Math.min(this.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
     const oldZIndex = this.zIndexCache.edges[key];
 
@@ -3589,8 +3588,9 @@ export default class Sigma<
     // Node programs
     for (const [key, program] of Object.entries(this.nodePrograms)) {
       buffers.push({ program: `nodes:${key}`, ...program.getMemoryStats() });
-      const layerStats = (program as { getLayerTextureStats?: () => ReturnType<typeof program.getMemoryStats> })
-        .getLayerTextureStats?.();
+      const layerStats = (
+        program as { getLayerTextureStats?: () => Omit<TextureStats, "name"> }
+      ).getLayerTextureStats?.();
       if (layerStats) {
         textures.push({ name: `nodes:${key}:layerAttributes`, ...layerStats });
       }
@@ -3598,8 +3598,9 @@ export default class Sigma<
     // Edge programs
     for (const [key, program] of Object.entries(this.edgePrograms)) {
       buffers.push({ program: `edges:${key}`, ...program.getMemoryStats() });
-      const attrStats = (program as { getAttributeTextureStats?: () => ReturnType<typeof program.getMemoryStats> | null })
-        .getAttributeTextureStats?.();
+      const attrStats = (
+        program as { getAttributeTextureStats?: () => Omit<TextureStats, "name"> | null }
+      ).getAttributeTextureStats?.();
       if (attrStats) {
         textures.push({ name: `edges:${key}:pathAttributes`, ...attrStats });
       }
@@ -3675,8 +3676,9 @@ export default class Sigma<
     // Node programs
     for (const [key, program] of Object.entries(this.nodePrograms)) {
       buffers.push({ program: `nodes:${key}`, ...program.getWriteStats() });
-      const layerStats = (program as { getLayerTextureWriteStats?: () => { writes: number; bytesWritten: number } })
-        .getLayerTextureWriteStats?.();
+      const layerStats = (
+        program as { getLayerTextureWriteStats?: () => { writes: number; bytesWritten: number } }
+      ).getLayerTextureWriteStats?.();
       if (layerStats) {
         textures.push({ name: `nodes:${key}:layerAttributes`, ...layerStats });
       }
@@ -3684,8 +3686,9 @@ export default class Sigma<
     // Edge programs
     for (const [key, program] of Object.entries(this.edgePrograms)) {
       buffers.push({ program: `edges:${key}`, ...program.getWriteStats() });
-      const attrStats = (program as { getAttributeTextureWriteStats?: () => { writes: number; bytesWritten: number } | null })
-        .getAttributeTextureWriteStats?.();
+      const attrStats = (
+        program as { getAttributeTextureWriteStats?: () => { writes: number; bytesWritten: number } | null }
+      ).getAttributeTextureWriteStats?.();
       if (attrStats) {
         textures.push({ name: `edges:${key}:pathAttributes`, ...attrStats });
       }

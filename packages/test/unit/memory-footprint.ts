@@ -9,9 +9,6 @@
  */
 import Graph from "graphology";
 import Sigma from "sigma";
-// Import shapes to register them in the factory registry (side-effect import)
-import { sdfCircle as _sdfCircle } from "sigma/rendering";
-void _sdfCircle;
 import { createElement } from "sigma/utils";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -248,10 +245,9 @@ describe("Style memory footprint", () => {
   });
 
   describe("Backdrop styles", () => {
-    // Helper to find hover program buffer stats
-    function findHoverBuffer(sigma: Sigma) {
+    function findBackdropBuffer(sigma: Sigma) {
       const stats = sigma.getMemoryStats();
-      return stats.buffers.find((b) => b.program.includes("hover"));
+      return stats.buffers.find((b) => b.program.includes("backdrop"));
     }
 
     it("constant backdrop uses smaller stride (uniforms only, no per-node attributes)", () => {
@@ -283,8 +279,8 @@ describe("Style memory footprint", () => {
       constantInstance.sigma.refresh();
       attributeInstance.sigma.refresh();
 
-      const constantBuffer = findHoverBuffer(constantInstance.sigma);
-      const attributeBuffer = findHoverBuffer(attributeInstance.sigma);
+      const constantBuffer = findBackdropBuffer(constantInstance.sigma);
+      const attributeBuffer = findBackdropBuffer(attributeInstance.sigma);
 
       expect(constantBuffer).toBeDefined();
       expect(attributeBuffer).toBeDefined();
@@ -332,8 +328,8 @@ describe("Style memory footprint", () => {
       fullAttributeInstance.sigma.refresh();
       noAttributeInstance.sigma.refresh();
 
-      const fullBuffer = findHoverBuffer(fullAttributeInstance.sigma);
-      const noBuffer = findHoverBuffer(noAttributeInstance.sigma);
+      const fullBuffer = findBackdropBuffer(fullAttributeInstance.sigma);
+      const noBuffer = findBackdropBuffer(noAttributeInstance.sigma);
 
       expect(fullBuffer).toBeDefined();
       expect(noBuffer).toBeDefined();
@@ -378,8 +374,8 @@ describe("Style memory footprint", () => {
       partialInstance.sigma.refresh();
       fullInstance.sigma.refresh();
 
-      const partialBuffer = findHoverBuffer(partialInstance.sigma);
-      const fullBuffer = findHoverBuffer(fullInstance.sigma);
+      const partialBuffer = findBackdropBuffer(partialInstance.sigma);
+      const fullBuffer = findBackdropBuffer(fullInstance.sigma);
 
       // Both should have same stride since any attribute binding triggers all
       expect(partialBuffer!.stride).toBe(fullBuffer!.stride);

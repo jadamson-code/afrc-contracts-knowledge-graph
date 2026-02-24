@@ -484,3 +484,97 @@ export class ItemAttributeTexture extends DataTexture {
     return this.TEXELS_PER_ITEM;
   }
 }
+
+// ============================================================================
+// Shared Texture Fetch GLSL Generation
+// ============================================================================
+
+/**
+ * Naming context for generating texture-fetch GLSL code.
+ */
+export interface TextureFetchNaming {
+  /** Prefix for GLSL local variables: e.g. "layer" → layerTexel0, layerCoord0 */
+  varPrefix: string;
+  /** GLSL expression for the base texel index, e.g. "nodeIdx * u_layerAttributeTexelsPerNode" */
+  baseTexelExpr: string;
+  /** Uniform name for texture width, e.g. "u_layerAttributeTextureWidth" */
+  textureWidthUniform: string;
+  /** Uniform name for the texture sampler, e.g. "u_layerAttributeTexture" */
+  textureSamplerUniform: string;
+}
+
+const COMPONENTS = ["r", "g", "b", "a"];
+
+/**
+ * Generates GLSL code to fetch packed attributes from a 2D RGBA32F texture.
+ * Used by both node and edge shaders.
+ */
+export function generateAttributeTextureFetch(
+  layout: AttributeLayout,
+  naming: TextureFetchNaming,
+): { fetchCode: string; varyingAssignments: string } {
+  const { offsets, specs, texelsPerItem, floatsPerItem } = layout;
+  const attributeNames = Object.keys(offsets);
+
+  if (attributeNames.length === 0 || floatsPerItem === 0) {
+    return { fetchCode: "", varyingAssignments: "" };
+  }
+
+  const { varPrefix, baseTexelExpr, textureWidthUniform, textureSamplerUniform } = naming;
+  const lines: string[] = [];
+
+  // Base texel computation
+  lines.push(`  int ${varPrefix}BaseTexel = ${baseTexelExpr};`);
+  lines.push("");
+
+  // Fetch all needed texels
+  for (let t = 0; t < texelsPerItem; t++) {
+    lines.push(
+      `  ivec2 ${varPrefix}Coord${t} = ivec2((${varPrefix}BaseTexel + ${t}) % ${textureWidthUniform}, (${varPrefix}BaseTexel + ${t}) / ${textureWidthUniform});`,
+    );
+    lines.push(
+      `  vec4 ${varPrefix}Texel${t} = texelFetch(${textureSamplerUniform}, ${varPrefix}Coord${t}, 0);`,
+    );
+  }
+  lines.push("");
+
+  // Extract each attribute from texels
+  const varyingLines: string[] = [];
+
+  for (const name of attributeNames) {
+    const spec = specs[name];
+    const offset = offsets[name];
+    const texelIndex = Math.floor(offset / 4);
+    const component = offset % 4;
+    const texel = `${varPrefix}Texel${texelIndex}`;
+    const nextTexel = `${varPrefix}Texel${texelIndex + 1}`;
+
+    if (spec.size === 1) {
+      lines.push(`  float fetched_${name} = ${texel}.${COMPONENTS[component]};`);
+    } else if (spec.size === 4 && component === 0) {
+      lines.push(`  vec4 fetched_${name} = ${texel};`);
+    } else {
+      const endComponent = component + spec.size;
+      if (endComponent <= 4) {
+        // Fits within one texel
+        const glslType = `vec${spec.size}`;
+        const swizzle = COMPONENTS.slice(component, endComponent).join("");
+        lines.push(`  ${glslType} fetched_${name} = ${texel}.${swizzle};`);
+      } else {
+        // Spans two texels
+        const glslType = spec.size === 4 ? "vec4" : `vec${spec.size}`;
+        const firstParts = COMPONENTS.slice(component).map((c) => `${texel}.${c}`);
+        const secondParts = COMPONENTS.slice(0, endComponent - 4).map((c) => `${nextTexel}.${c}`);
+        const allParts = [...firstParts, ...secondParts].join(", ");
+        lines.push(`  ${glslType} fetched_${name} = ${glslType}(${allParts});`);
+      }
+    }
+
+    varyingLines.push(`  v_${name} = fetched_${name};`);
+  }
+
+  return {
+    fetchCode: lines.join("\n"),
+    varyingAssignments: varyingLines.join("\n"),
+  };
+}

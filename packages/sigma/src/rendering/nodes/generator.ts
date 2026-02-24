@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { computeAttributeLayout } from "../data-texture";
+import { computeAttributeLayout, generateAttributeTextureFetch } from "../data-texture";
 import { generateNodeShapeSelectorGLSL, getShapeGLSLForShapes } from "../shapes";
 import { AttributeSpecification, FragmentLayer, SDFShape } from "./types";
 
@@ -31,89 +31,6 @@ export interface ShaderGenerationOptions {
    * to local indices for the queryNodeSDF switch statement.
    */
   shapeGlobalIds?: number[];
-}
-
-/**
- * Generates GLSL code to fetch layer attributes from texture.
- * Returns the fetch code and a map of attribute names to their fetched variable names.
- */
-function generateTextureFetchCode(layers: FragmentLayer[]): { fetchCode: string; varyingAssignments: string } {
-  const { offsets, floatsPerItem, texelsPerItem } = computeAttributeLayout(layers);
-
-  const lines: string[] = [];
-
-  if (floatsPerItem === 0) {
-    // No layer attributes to fetch
-    return { fetchCode: "", varyingAssignments: "" };
-  }
-
-  lines.push("  // Fetch layer attributes from texture");
-  lines.push("  int layerBaseTexel = nodeIdx * u_layerAttributeTexelsPerNode;");
-  lines.push("");
-
-  // Fetch all needed texels
-  for (let t = 0; t < texelsPerItem; t++) {
-    lines.push(
-      `  ivec2 layerCoord${t} = ivec2((layerBaseTexel + ${t}) % u_layerAttributeTextureWidth, (layerBaseTexel + ${t}) / u_layerAttributeTextureWidth);`,
-    );
-    lines.push(`  vec4 layerTexel${t} = texelFetch(u_layerAttributeTexture, layerCoord${t}, 0);`);
-  }
-  lines.push("");
-
-  // Extract each attribute from texels
-  const components = ["r", "g", "b", "a"];
-  const seenAttributes = new Set<string>();
-  const varyingLines: string[] = [];
-
-  for (const layer of layers) {
-    for (const attr of layer.attributes) {
-      const name = attr.name.replace(/^a_/, "");
-      if (seenAttributes.has(name)) continue;
-      seenAttributes.add(name);
-
-      const offset = offsets[name];
-      const texelIndex = Math.floor(offset / 4);
-      const component = offset % 4;
-
-      if (attr.size === 1) {
-        lines.push(`  float fetched_${name} = layerTexel${texelIndex}.${components[component]};`);
-        varyingLines.push(`  v_${name} = fetched_${name};`);
-      } else if (attr.size === 4 && component === 0) {
-        // 4-component value starting at component 0 (aligned)
-        lines.push(`  vec4 fetched_${name} = layerTexel${texelIndex};`);
-        varyingLines.push(`  v_${name} = fetched_${name};`);
-      } else if (attr.size === 4) {
-        // 4-component value spanning two texels - build component list with proper prefixes
-        const firstParts = components.slice(component).map((c) => `layerTexel${texelIndex}.${c}`);
-        const secondParts = components.slice(0, component).map((c) => `layerTexel${texelIndex + 1}.${c}`);
-        const allParts = [...firstParts, ...secondParts].join(", ");
-        lines.push(`  vec4 fetched_${name} = vec4(${allParts});`);
-        varyingLines.push(`  v_${name} = fetched_${name};`);
-      } else {
-        // 2 or 3 component values - check if they span texels
-        const endComponent = component + attr.size;
-        if (endComponent <= 4) {
-          // Fits within one texel
-          const glslType = `vec${attr.size}`;
-          const componentList = components.slice(component, endComponent).join("");
-          lines.push(`  ${glslType} fetched_${name} = layerTexel${texelIndex}.${componentList};`);
-        } else {
-          // Spans two texels
-          const glslType = `vec${attr.size}`;
-          const firstParts = components.slice(component).map((c) => `layerTexel${texelIndex}.${c}`);
-          const secondParts = components.slice(0, endComponent - 4).map((c) => `layerTexel${texelIndex + 1}.${c}`);
-          const allParts = [...firstParts, ...secondParts].join(", ");
-          lines.push(`  ${glslType} fetched_${name} = ${glslType}(${allParts});`);
-        }
-        varyingLines.push(`  v_${name} = fetched_${name};`);
-      }
-    }
-  }
-
-  return {
-    fetchCode: lines.join("\n"),
-    varyingAssignments: varyingLines.join("\n"),
-  };
 }
 
 /**
@@ -174,7 +91,12 @@ export function generateVertexShader(shapes: SDFShape[], layers: FragmentLayer[]
     .join("\n");
 
   // Generate texture fetch code for layer attributes
-  const { fetchCode, varyingAssignments } = generateTextureFetchCode(layers);
+  const { fetchCode, varyingAssignments } = generateAttributeTextureFetch(computeAttributeLayout(layers), {
+    varPrefix: "layer",
+    baseTexelExpr: "nodeIdx * u_layerAttributeTexelsPerNode",
+    textureWidthUniform: "u_layerAttributeTextureWidth",
+    textureSamplerUniform: "u_layerAttributeTexture",
+  });
 
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es

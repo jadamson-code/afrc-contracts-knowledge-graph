@@ -1,74 +1,17 @@
 /**
- * Sigma.js Edge Path Attribute Texture
- * =====================================
+ * Sigma.js Edge Path Attribute Texture Fetch
+ * ===========================================
  *
- * Manages a GPU texture containing per-edge path and layer attribute data.
- * This texture stores all attributes declared by EdgePath and EdgeLayer
- * for efficient shader access, eliminating the need for hardcoded global
- * variables like `a_curvature`.
+ * Generates GLSL code to fetch per-edge path and layer attribute data
+ * from a texture. The texture stores all attributes declared by EdgePath
+ * and EdgeLayer for efficient shader access.
  *
  * @module
  */
-import { ItemAttributeTexture, computeAttributeLayout } from "../data-texture";
-import { AttributeSpecification } from "../nodes";
-import { EdgeLayer, EdgePath } from "./types";
+import { AttributeLayout } from "../data-texture";
 
 /** WebGL texture unit used for edge path attribute texture */
 export const EDGE_ATTRIBUTE_TEXTURE_UNIT = 6;
-
-/**
- * Describes the memory layout of path/layer attributes in the texture.
- */
-export interface EdgeAttributeLayout {
-  /** Total floats needed per edge */
-  floatsPerEdge: number;
-  /** Number of texels (4 floats each) per edge */
-  texelsPerEdge: number;
-  /** Map of attribute name to float offset within the edge's texel range */
-  offsets: Record<string, number>;
-  /** Map of attribute name to its specification (for type info in GLSL generation) */
-  specs: Record<string, AttributeSpecification>;
-}
-
-/**
- * Computes the memory layout for edge path/layer attributes.
- * Collects all unique attributes from all paths and all layers, assigns sequential offsets.
- * Used by both the factory (for texture allocation) and generator (for GLSL code).
- *
- * @param paths - Array of EdgePath definitions (all paths in multi-path mode)
- * @param layers - Array of EdgeLayer definitions (all layers for multi-layer support)
- * @returns Layout describing attribute positions in the texture
- */
-export function computeEdgeAttributeLayout(paths: EdgePath[], layers: EdgeLayer[]): EdgeAttributeLayout {
-  // Use the generic layout computation
-  const baseLayout = computeAttributeLayout([...paths, ...layers]);
-
-  // Build specs map (edge-specific, needed for GLSL generation)
-  const specs: Record<string, AttributeSpecification> = {};
-  for (const path of paths) {
-    for (const attr of path.attributes) {
-      const name = attr.name.replace(/^a_/, "");
-      if (!(name in specs)) {
-        specs[name] = attr;
-      }
-    }
-  }
-  for (const layer of layers) {
-    for (const attr of layer.attributes) {
-      const name = attr.name.replace(/^a_/, "");
-      if (!(name in specs)) {
-        specs[name] = attr;
-      }
-    }
-  }
-
-  return {
-    floatsPerEdge: baseLayout.floatsPerItem,
-    texelsPerEdge: baseLayout.texelsPerItem,
-    offsets: baseLayout.offsets,
-    specs,
-  };
-}
 
 // ============================================================================
 // Edge Path Attribute Texture Fetch Generation
@@ -85,10 +28,10 @@ function sizeToGlslType(size: number): string {
  * Generates GLSL code to fetch path/layer attributes from the edge attribute texture.
  * This replaces the hardcoded `a_curvature` global variable with a clean texture-based system.
  *
- * @param layout - The attribute layout computed from paths and layer
+ * @param layout - The attribute layout computed from paths and layers
  * @returns Object containing uniforms, fetch code, and varying declarations
  */
-export function generateEdgeAttributeTextureFetch(layout: EdgeAttributeLayout): {
+export function generateEdgeAttributeTextureFetch(layout: AttributeLayout): {
   uniformDeclarations: string;
   uniformNames: string[];
   vertexVaryingDeclarations: string;
@@ -96,11 +39,11 @@ export function generateEdgeAttributeTextureFetch(layout: EdgeAttributeLayout): 
   fetchCode: string;
   varyingAssignments: string;
 } {
-  const { offsets, specs, texelsPerEdge, floatsPerEdge } = layout;
+  const { offsets, specs, texelsPerItem, floatsPerItem } = layout;
   const attributeNames = Object.keys(offsets);
 
   // If no attributes, return empty
-  if (attributeNames.length === 0 || floatsPerEdge === 0) {
+  if (attributeNames.length === 0 || floatsPerItem === 0) {
     return {
       uniformDeclarations: "",
       uniformNames: [],
@@ -133,7 +76,7 @@ uniform int u_edgeAttributeTexelsPerEdge;`;
   // Generate texture fetch code for vertex shader
   // First, calculate which texels we need to fetch
   const texelFetches: string[] = [];
-  for (let i = 0; i < texelsPerEdge; i++) {
+  for (let i = 0; i < texelsPerItem; i++) {
     texelFetches.push(`
   int attrTexel${i}Idx = attrBaseTexel + ${i};
   ivec2 attrCoord${i} = ivec2(attrTexel${i}Idx % u_edgeAttributeTextureWidth, attrTexel${i}Idx / u_edgeAttributeTextureWidth);
@@ -218,35 +161,4 @@ ${extractions.join("\n")}`;
     fetchCode,
     varyingAssignments,
   };
-}
-
-/**
- * Manages a GPU texture storing path/layer attribute data for edges.
- *
- * The texture is a 2D RGBA32F texture where each edge uses `texelsPerEdge` texels.
- * Attributes are packed sequentially and can span multiple texels.
- *
- * Edge index N maps to texels starting at:
- *   baseTexel = N * texelsPerEdge
- *   texCoord = (baseTexel % textureWidth, baseTexel / textureWidth)
- */
-export class EdgePathAttributeTexture extends ItemAttributeTexture {
-  constructor(gl: WebGL2RenderingContext, layout: EdgeAttributeLayout, initialCapacity?: number) {
-    super(
-      gl,
-      {
-        floatsPerItem: layout.floatsPerEdge,
-        texelsPerItem: layout.texelsPerEdge,
-        offsets: layout.offsets,
-      },
-      initialCapacity,
-    );
-  }
-
-  /**
-   * Gets the number of texels per edge.
-   */
-  getTexelsPerEdge(): number {
-    return this.TEXELS_PER_ITEM;
-  }
 }

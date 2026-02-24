@@ -9,8 +9,8 @@
  * - Unified data source for both edge and edge label rendering
  * - Per-edge path/extremity selection for multi-mode programs
  *
- * Note: Path-specific attributes (like curvature) are stored in the EdgePathAttributeTexture,
- * which is managed per-program. This texture contains only the core data shared across all programs.
+ * Note: Path-specific attributes (like curvature) are stored in a per-program attribute texture.
+ * This texture contains only the core data shared across all programs.
  *
  * @module
  */
@@ -43,36 +43,6 @@ export class EdgeDataTexture extends DataTexture {
   constructor(gl: WebGL2RenderingContext, initialCapacity?: number) {
     super(gl, initialCapacity);
     this.initializeTexture();
-  }
-
-  /**
-   * Allocates a texture index for an edge.
-   * Returns existing index if edge already allocated.
-   */
-  allocateEdge(edgeKey: string): number {
-    return this.allocate(edgeKey);
-  }
-
-  /**
-   * Frees an edge's texture index for reuse.
-   */
-  freeEdge(edgeKey: string): void {
-    this.free(edgeKey);
-  }
-
-  /**
-   * Gets the texture index for an edge.
-   * Returns -1 if edge not found.
-   */
-  getEdgeIndex(edgeKey: string): number {
-    return this.getIndex(edgeKey);
-  }
-
-  /**
-   * Checks if an edge has been allocated.
-   */
-  hasEdge(edgeKey: string): boolean {
-    return this.has(edgeKey);
   }
 
   /**
@@ -120,12 +90,5 @@ export class EdgeDataTexture extends DataTexture {
     this.data[texelBase + 7] = ((headId & 0xf) << 4) | (tailId & 0xf);
 
     this.markDirty(index);
-  }
-
-  /**
-   * Gets the number of allocated edges.
-   */
-  getEdgeCount(): number {
-    return this.getCount();
   }
 }

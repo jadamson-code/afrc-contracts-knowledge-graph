@@ -1011,7 +1011,7 @@ export default class Sigma<
       const node = nodes[i];
       const data = this.nodeDataCache[node];
       // Allocate texture index for this node (or get existing)
-      this.nodeDataTexture!.allocateNode(node);
+      this.nodeDataTexture!.allocate(node);
 
       // Get shape ID:
       // - For multi-shape programs: convert local index to global ID for edge clamping
@@ -1446,7 +1446,7 @@ export default class Sigma<
         parentType: "node",
         parentKey: node,
         fontKey: "", // Empty means default font
-        nodeIndex: this.nodeDataTexture!.getNodeIndex(node),
+        nodeIndex: this.nodeDataTexture!.getIndex(node),
       };
 
       // Process label in its matching program
@@ -1674,11 +1674,11 @@ export default class Sigma<
       if (!labelProgram) continue;
 
       // Get node texture indices for source and target nodes
-      const sourceNodeIndex = this.nodeDataTexture!.getNodeIndex(sourceKey);
-      const targetNodeIndex = this.nodeDataTexture!.getNodeIndex(targetKey);
+      const sourceNodeIndex = this.nodeDataTexture!.getIndex(sourceKey);
+      const targetNodeIndex = this.nodeDataTexture!.getIndex(targetKey);
 
       // Get edge texture index (already allocated in addEdgeToProgram)
-      const edgeIndex = this.edgeDataTexture!.getEdgeIndex(edge);
+      const edgeIndex = this.edgeDataTexture!.getIndex(edge);
 
       // Build edge label display data
       const labelData: import("./types").EdgeLabelDisplayData = {
@@ -2155,7 +2155,7 @@ export default class Sigma<
     // Remove from programId index
     delete this.edgeProgramIndex[key];
     // Free edge from edge data texture
-    this.edgeDataTexture!.freeEdge(key);
+    this.edgeDataTexture!.free(key);
     // Remove from edge state
     this.edgeStates.delete(key);
     // Remove from hovered
@@ -2250,7 +2250,7 @@ export default class Sigma<
     const nodeProgram = this.nodePrograms[data.type];
     if (!nodeProgram) throw new Error(`Sigma: could not find a suitable program for node type "${data.type}"!`);
     // Get the node's texture index (already allocated during processing)
-    const textureIndex = this.nodeDataTexture!.getNodeIndex(node);
+    const textureIndex = this.nodeDataTexture!.getIndex(node);
     nodeProgram.process(fingerprint, position, data, textureIndex, node);
     // Saving program index
     this.nodeProgramIndex[node] = position;
@@ -2272,11 +2272,11 @@ export default class Sigma<
       targetData = this.nodeDataCache[extremities[1]];
 
     // Get node texture indices for source and target
-    const sourceNodeIndex = this.nodeDataTexture!.getNodeIndex(extremities[0]);
-    const targetNodeIndex = this.nodeDataTexture!.getNodeIndex(extremities[1]);
+    const sourceNodeIndex = this.nodeDataTexture!.getIndex(extremities[0]);
+    const targetNodeIndex = this.nodeDataTexture!.getIndex(extremities[1]);
 
     // Allocate edge in edge data texture (or get existing allocation)
-    const edgeTextureIndex = this.edgeDataTexture!.allocateEdge(edge);
+    const edgeTextureIndex = this.edgeDataTexture!.allocate(edge);
 
     // Get program class static properties from registered program instance
     const edgeProgramInstance = this.edgePrograms[data.type];
@@ -2320,7 +2320,7 @@ export default class Sigma<
     const tailLengthRatio = extremitiesPool?.[tailId]?.length ?? 0;
 
     // Update edge data texture with core edge data
-    // Path-specific attributes (curvature, etc.) are stored in EdgePathAttributeTexture
+    // Path-specific attributes (curvature, etc.) are stored in a per-program attribute texture
     this.edgeDataTexture!.updateEdge(
       edge,
       sourceNodeIndex,

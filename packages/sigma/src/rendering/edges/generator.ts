@@ -11,7 +11,8 @@
 import { isAttributeSource } from "../nodes";
 import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../shapes";
 import { numberToGLSLFloat } from "../utils";
-import { computeEdgeAttributeLayout, generateEdgeAttributeTextureFetch } from "./path-attribute-texture";
+import { computeAttributeLayout } from "../data-texture";
+import { generateEdgeAttributeTextureFetch } from "./path-attribute-texture";
 import {
   generateFindSourceClampT,
   generateFindTargetClampT,
@@ -314,7 +315,7 @@ function generateVertexShaderMulti(
   constantAttributes: Array<{ name: string; size: number; type: number }>,
 ): string {
   // Compute attribute layout for path/layer attributes from texture
-  const attributeLayout = computeEdgeAttributeLayout(paths, layers);
+  const attributeLayout = computeAttributeLayout([...paths, ...layers]);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // Collect all unique uniforms
@@ -623,7 +624,7 @@ function generateFragmentShaderMulti(
   layers: EdgeLayer[],
 ): string {
   // Compute attribute layout for path/layer attributes from texture
-  const attributeLayout = computeEdgeAttributeLayout(paths, layers);
+  const attributeLayout = computeAttributeLayout([...paths, ...layers]);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // Collect all unique uniforms

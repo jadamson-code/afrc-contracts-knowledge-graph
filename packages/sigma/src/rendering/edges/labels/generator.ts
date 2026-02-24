@@ -22,7 +22,8 @@ import { DEFAULT_SDF_ATLAS_OPTIONS } from "../../../core/sdf-atlas";
 import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../../shapes";
 import { numberToGLSLFloat } from "../../utils";
 import { layerPlain } from "../layers";
-import { computeEdgeAttributeLayout, generateEdgeAttributeTextureFetch } from "../path-attribute-texture";
+import { computeAttributeLayout } from "../../data-texture";
+import { generateEdgeAttributeTextureFetch } from "../path-attribute-texture";
 import {
   generateFindSourceClampT,
   generateFindTargetClampT,
@@ -182,7 +183,7 @@ export function generateEdgeLabelVertexShader(options: EdgeLabelShaderOptions): 
 
   // Compute attribute layout for path attributes (labels need curvature for curved paths)
   const layer = layerPlain(); // Use empty layer for labels
-  const attributeLayout = computeEdgeAttributeLayout(paths, [layer]);
+  const attributeLayout = computeAttributeLayout([...paths, layer]);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
   // language=GLSL

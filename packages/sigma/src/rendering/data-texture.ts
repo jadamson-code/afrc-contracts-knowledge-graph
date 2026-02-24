@@ -405,6 +405,8 @@ export interface AttributeLayout {
   texelsPerItem: number;
   /** Map of attribute name (without a_ prefix) to float offset */
   offsets: Record<string, number>;
+  /** Map of attribute name (without a_ prefix) to its spec */
+  specs: Record<string, AttributeSpec>;
 }
 
 /**
@@ -416,6 +418,7 @@ export interface AttributeLayout {
  */
 export function computeAttributeLayout(sources: Array<{ attributes: AttributeSpec[] }>): AttributeLayout {
   const offsets: Record<string, number> = {};
+  const specs: Record<string, AttributeSpec> = {};
   let offset = 0;
 
   for (const source of sources) {
@@ -423,6 +426,7 @@ export function computeAttributeLayout(sources: Array<{ attributes: AttributeSpe
       const name = attr.name.replace(/^a_/, "");
       if (!(name in offsets)) {
         offsets[name] = offset;
+        specs[name] = attr;
         offset += attr.size;
       }
     }
@@ -432,6 +436,7 @@ export function computeAttributeLayout(sources: Array<{ attributes: AttributeSpe
     floatsPerItem: offset,
     texelsPerItem: Math.max(1, Math.ceil(offset / 4)),
     offsets,
+    specs,
   };
 }
 

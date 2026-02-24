@@ -17,12 +17,8 @@ import { ProgramInfo } from "../utils";
 import { EdgeProgram as BaseEdgeProgram, EdgeProgramType } from "./base";
 import { generateEdgeShaders } from "./generator";
 import { type EdgeLabelProgramType, createEdgeLabelProgram } from "./labels";
-import {
-  EDGE_ATTRIBUTE_TEXTURE_UNIT,
-  EdgeAttributeLayout,
-  EdgePathAttributeTexture,
-  computeEdgeAttributeLayout,
-} from "./path-attribute-texture";
+import { AttributeLayout, ItemAttributeTexture, computeAttributeLayout } from "../data-texture";
+import { EDGE_ATTRIBUTE_TEXTURE_UNIT } from "./path-attribute-texture";
 import {
   EdgeExtremity,
   EdgeLifecycleContext,
@@ -125,7 +121,7 @@ export function createEdgeProgram<
   let generated: GeneratedEdgeShaders | null = null;
 
   // Compute attribute layout once for this program configuration (all layers)
-  const attributeLayout: EdgeAttributeLayout = computeEdgeAttributeLayout(paths, layers);
+  const attributeLayout: AttributeLayout = computeAttributeLayout([...paths, ...layers]);
 
   // Create the edge program class
   const EdgeProgramClass = class extends BaseEdgeProgram<string, N, E, G> {
@@ -151,9 +147,9 @@ export function createEdgeProgram<
     private _pickingBuffer: WebGLFramebuffer | null;
 
     // Edge path attribute texture for storing path/layer attributes
-    private edgeAttributeTexture: EdgePathAttributeTexture | null = null;
+    private edgeAttributeTexture: ItemAttributeTexture | null = null;
     private packedAttributeData: Float32Array;
-    private readonly layout: EdgeAttributeLayout = attributeLayout;
+    private readonly layout: AttributeLayout = attributeLayout;
 
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
       // Generate shaders on first instantiation (after node shapes are registered)
@@ -165,8 +161,8 @@ export function createEdgeProgram<
       this._pickingBuffer = pickingBuffer;
 
       // Create edge attribute texture for path/layer attributes
-      this.edgeAttributeTexture = new EdgePathAttributeTexture(gl, this.layout);
-      this.packedAttributeData = new Float32Array(this.layout.floatsPerEdge);
+      this.edgeAttributeTexture = new ItemAttributeTexture(gl, this.layout);
+      this.packedAttributeData = new Float32Array(this.layout.floatsPerItem);
 
       // Initialize layer lifecycles for all layers
       layers.forEach((layer, index) => {
@@ -389,7 +385,7 @@ export function createEdgeProgram<
       }
 
       // Edge path attribute texture
-      if (this.edgeAttributeTexture && this.layout.floatsPerEdge > 0) {
+      if (this.edgeAttributeTexture && this.layout.floatsPerItem > 0) {
         this.edgeAttributeTexture.bind(EDGE_ATTRIBUTE_TEXTURE_UNIT);
 
         if (uniformLocations.u_edgeAttributeTexture) {
@@ -399,7 +395,7 @@ export function createEdgeProgram<
           gl.uniform1i(uniformLocations.u_edgeAttributeTextureWidth, this.edgeAttributeTexture.getTextureWidth());
         }
         if (uniformLocations.u_edgeAttributeTexelsPerEdge) {
-          gl.uniform1i(uniformLocations.u_edgeAttributeTexelsPerEdge, this.edgeAttributeTexture.getTexelsPerEdge());
+          gl.uniform1i(uniformLocations.u_edgeAttributeTexelsPerEdge, this.edgeAttributeTexture.getTexelsPerItem());
         }
       }
 
@@ -449,7 +445,7 @@ export function createEdgeProgram<
      * Called by sigma before rendering to ensure texture data is current.
      */
     uploadAttributeTexture(): void {
-      if (this.edgeAttributeTexture && this.layout.floatsPerEdge > 0) {
+      if (this.edgeAttributeTexture && this.layout.floatsPerItem > 0) {
         this.edgeAttributeTexture.upload();
       }
     }

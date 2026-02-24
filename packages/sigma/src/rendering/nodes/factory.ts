@@ -19,7 +19,7 @@ import { NodeProgram, NodeProgramType } from "./base";
 import { generateShaders } from "./generator";
 import { createBackdropProgram } from "./backdrops";
 import { createLabelProgram } from "./labels";
-import { NodeLayerAttributeTexture, computeLayerAttributeLayout } from "./layer-attribute-texture";
+import { ItemAttributeTexture, computeAttributeLayout } from "../data-texture";
 import { FragmentLayer, LayerLifecycleContext, LayerLifecycleHooks, NodeProgramOptions } from "./types";
 
 // Texture unit for layer attribute texture (units 0-4 used by sigma, unit 5 for layer attributes)
@@ -114,7 +114,7 @@ export function createNodeProgram<
   });
 
   // Compute layout once for all instances
-  const layerAttributeLayout = computeLayerAttributeLayout(layers);
+  const layerAttributeLayout = computeAttributeLayout(layers);
 
   // Create the node program class
   const NodeProgramClass = class extends NodeProgram<string, N, E, G> {
@@ -133,7 +133,7 @@ export function createNodeProgram<
     static BackdropProgram = BackdropProgramClass;
 
     // Static shared texture per GL context
-    private static layerTextures = new WeakMap<WebGL2RenderingContext, NodeLayerAttributeTexture>();
+    private static layerTextures = new WeakMap<WebGL2RenderingContext, ItemAttributeTexture>();
     private static textureRefCounts = new WeakMap<WebGL2RenderingContext, number>();
 
     // Lifecycle hooks storage (keyed by layer index for uniqueness)
@@ -142,7 +142,7 @@ export function createNodeProgram<
     private readonly _pickingBuffer: WebGLFramebuffer | null;
 
     // Layer attribute texture management (instance references the shared static texture)
-    private layerAttributeTexture: NodeLayerAttributeTexture;
+    private layerAttributeTexture: ItemAttributeTexture;
     private readonly packedAttributeData: Float32Array;
 
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
@@ -152,7 +152,7 @@ export function createNodeProgram<
       // Get or create shared texture for this GL context
       let texture = NodeProgramClass.layerTextures.get(gl);
       if (!texture) {
-        texture = new NodeLayerAttributeTexture(gl, layerAttributeLayout);
+        texture = new ItemAttributeTexture(gl, layerAttributeLayout);
         NodeProgramClass.layerTextures.set(gl, texture);
       }
       this.layerAttributeTexture = texture;
@@ -161,7 +161,7 @@ export function createNodeProgram<
       const refCount = NodeProgramClass.textureRefCounts.get(gl) || 0;
       NodeProgramClass.textureRefCounts.set(gl, refCount + 1);
 
-      this.packedAttributeData = new Float32Array(layerAttributeLayout.floatsPerNode);
+      this.packedAttributeData = new Float32Array(layerAttributeLayout.floatsPerItem);
 
       // Initialize lifecycle hooks for each layer that has them
       layers.forEach((layer, index) => {
@@ -265,14 +265,14 @@ export function createNodeProgram<
      * Allocates a node in the layer attribute texture.
      */
     allocateNode(nodeKey: string): void {
-      this.layerAttributeTexture.allocateNode(nodeKey);
+      this.layerAttributeTexture.allocate(nodeKey);
     }
 
     /**
      * Frees a node from the layer attribute texture.
      */
     freeNode(nodeKey: string): void {
-      this.layerAttributeTexture.freeNode(nodeKey);
+      this.layerAttributeTexture.free(nodeKey);
     }
 
     /**
@@ -349,7 +349,7 @@ export function createNodeProgram<
       });
 
       // Update the layer attribute texture with packed data
-      if (layout.floatsPerNode > 0) {
+      if (layout.floatsPerItem > 0) {
         this.layerAttributeTexture.updateAllAttributes(nodeKey, packed);
       }
     }
@@ -386,7 +386,7 @@ export function createNodeProgram<
         gl.uniform1i(uniformLocations.u_layerAttributeTextureWidth, this.layerAttributeTexture.getTextureWidth());
       }
       if (uniformLocations.u_layerAttributeTexelsPerNode) {
-        gl.uniform1i(uniformLocations.u_layerAttributeTexelsPerNode, this.layerAttributeTexture.getTexelsPerNode());
+        gl.uniform1i(uniformLocations.u_layerAttributeTexelsPerNode, this.layerAttributeTexture.getTexelsPerItem());
       }
 
       // Set shape-specific uniforms (from all shapes)

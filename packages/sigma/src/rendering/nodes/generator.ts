@@ -6,8 +6,8 @@
  *
  * @module
  */
+import { computeAttributeLayout } from "../data-texture";
 import { generateNodeShapeSelectorGLSL, getShapeGLSLForShapes } from "../shapes";
-import { computeLayerAttributeLayout } from "./layer-attribute-texture";
 import { AttributeSpecification, FragmentLayer, SDFShape } from "./types";
 
 export interface GeneratedShaders {
@@ -37,14 +37,12 @@ export interface ShaderGenerationOptions {
  * Generates GLSL code to fetch layer attributes from texture.
  * Returns the fetch code and a map of attribute names to their fetched variable names.
  */
-function generateTextureFetchCode(
-  layers: FragmentLayer[],
-): { fetchCode: string; varyingAssignments: string } {
-  const { offsets, floatsPerNode, texelsPerNode } = computeLayerAttributeLayout(layers);
+function generateTextureFetchCode(layers: FragmentLayer[]): { fetchCode: string; varyingAssignments: string } {
+  const { offsets, floatsPerItem, texelsPerItem } = computeAttributeLayout(layers);
 
   const lines: string[] = [];
 
-  if (floatsPerNode === 0) {
+  if (floatsPerItem === 0) {
     // No layer attributes to fetch
     return { fetchCode: "", varyingAssignments: "" };
   }
@@ -54,8 +52,10 @@ function generateTextureFetchCode(
   lines.push("");
 
   // Fetch all needed texels
-  for (let t = 0; t < texelsPerNode; t++) {
-    lines.push(`  ivec2 layerCoord${t} = ivec2((layerBaseTexel + ${t}) % u_layerAttributeTextureWidth, (layerBaseTexel + ${t}) / u_layerAttributeTextureWidth);`);
+  for (let t = 0; t < texelsPerItem; t++) {
+    lines.push(
+      `  ivec2 layerCoord${t} = ivec2((layerBaseTexel + ${t}) % u_layerAttributeTextureWidth, (layerBaseTexel + ${t}) / u_layerAttributeTextureWidth);`,
+    );
     lines.push(`  vec4 layerTexel${t} = texelFetch(u_layerAttributeTexture, layerCoord${t}, 0);`);
   }
   lines.push("");
@@ -204,7 +204,6 @@ ${layerUniforms}
 
 // Standard varyings
 out vec2 v_uv;                    // Normalized coordinates [-1, 1]
-out vec4 v_color;                 // Reserved for legacy compatibility (use layer attributes for colors)
 out vec4 v_id;
 out float v_antialiasingWidth;    // Width for antialiasing in UV space
 out float v_pixelSize;            // Node size in pixels (for pixel-mode borders)
@@ -254,9 +253,6 @@ ${
 
   // Pass ID to fragment shader
   v_id = a_id;
-
-  // Legacy v_color is transparent (layers use their own color attributes from texture)
-  v_color = vec4(0.0);
 
   // Pass pixel size for layers that need pixel-mode calculations
   // Multiply by 2 because 'size' is half-width (offset from center), not full diameter
@@ -362,7 +358,6 @@ precision highp float;
 
 // Standard varyings
 in vec2 v_uv;
-in vec4 v_color;
 in vec4 v_id;
 in float v_antialiasingWidth;
 in float v_pixelSize;

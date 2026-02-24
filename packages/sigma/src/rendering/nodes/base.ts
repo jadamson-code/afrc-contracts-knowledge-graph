@@ -39,10 +39,6 @@ export abstract class NodeProgram<
    */
   static BackdropProgram: BackdropProgramType | undefined;
 
-  kill(): void {
-    super.kill();
-  }
-
   process(nodeIndex: number, offset: number, data: NodeDisplayData, textureIndex: number, nodeKey: string): void {
     let i = offset * this.STRIDE;
     // NOTE: dealing with hidden items automatically

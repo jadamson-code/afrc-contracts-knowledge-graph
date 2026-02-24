@@ -24,10 +24,6 @@ export abstract class EdgeProgram<
    */
   static LabelProgram: EdgeLabelProgramType | undefined;
 
-  kill(): void {
-    super.kill();
-  }
-
   process(
     edgeIndex: number,
     offset: number,

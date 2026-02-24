@@ -34,36 +34,6 @@ export class NodeDataTexture extends DataTexture {
   }
 
   /**
-   * Allocates a texture index for a node.
-   * Returns existing index if node already allocated.
-   */
-  allocateNode(nodeKey: string): number {
-    return this.allocate(nodeKey);
-  }
-
-  /**
-   * Frees a node's texture index for reuse.
-   */
-  freeNode(nodeKey: string): void {
-    this.free(nodeKey);
-  }
-
-  /**
-   * Gets the texture index for a node.
-   * Returns -1 if node not found.
-   */
-  getNodeIndex(nodeKey: string): number {
-    return this.getIndex(nodeKey);
-  }
-
-  /**
-   * Checks if a node has been allocated.
-   */
-  hasNode(nodeKey: string): boolean {
-    return this.has(nodeKey);
-  }
-
-  /**
    * Updates all data for a node.
    */
   updateNode(nodeKey: string, x: number, y: number, size: number, shapeId: number): void {
@@ -79,12 +49,5 @@ export class NodeDataTexture extends DataTexture {
     this.data[offset + 3] = shapeId;
 
     this.markDirty(index);
-  }
-
-  /**
-   * Gets the number of allocated nodes.
-   */
-  getNodeCount(): number {
-    return this.getCount();
   }
 }

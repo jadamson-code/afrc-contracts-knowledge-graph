@@ -24,11 +24,8 @@ import type { EdgeLabelDisplayData, EdgeLabelPosition, RenderParams } from "../.
 import { floatColor } from "../../../utils";
 import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
 import { layerPlain } from "../layers";
-import {
-  EDGE_ATTRIBUTE_TEXTURE_UNIT,
-  EdgePathAttributeTexture,
-  computeEdgeAttributeLayout,
-} from "../path-attribute-texture";
+import { ItemAttributeTexture, computeAttributeLayout } from "../../data-texture";
+import { EDGE_ATTRIBUTE_TEXTURE_UNIT } from "../path-attribute-texture";
 import type { EdgeLabelOptions, EdgePath } from "../types";
 import { EdgeLabelProgram } from "./base";
 import type { EdgeLabelProgramType } from "./base";
@@ -207,13 +204,13 @@ export function createEdgeLabelProgram<
     private defaultFontKey: string;
 
     /** Edge path attribute texture for curvature and other path attributes */
-    private edgeAttributeTexture: EdgePathAttributeTexture | null = null;
+    private edgeAttributeTexture: ItemAttributeTexture | null = null;
 
     /** Packed attribute data buffer for reuse */
     private packedAttributeData: Float32Array;
 
     /** Layout describing attribute positions in the texture */
-    private attributeLayout: ReturnType<typeof computeEdgeAttributeLayout>;
+    private attributeLayout: ReturnType<typeof computeAttributeLayout>;
 
     // -----------------------------------------------------------------------
     // Constructor
@@ -235,9 +232,9 @@ export function createEdgeLabelProgram<
 
       // Initialize edge attribute texture for path attributes (curvature, etc.)
       const layer = layerPlain();
-      this.attributeLayout = computeEdgeAttributeLayout(paths, [layer]);
-      this.edgeAttributeTexture = new EdgePathAttributeTexture(gl, this.attributeLayout);
-      this.packedAttributeData = new Float32Array(this.attributeLayout.floatsPerEdge);
+      this.attributeLayout = computeAttributeLayout([...paths, layer]);
+      this.edgeAttributeTexture = new ItemAttributeTexture(gl, this.attributeLayout);
+      this.packedAttributeData = new Float32Array(this.attributeLayout.floatsPerItem);
 
       // Initialize SDF atlas manager for glyph generation
       this.atlasManager = new SDFAtlasManager();
@@ -636,7 +633,7 @@ export function createEdgeLabelProgram<
         this.edgeAttributeTexture.bind(EDGE_ATTRIBUTE_TEXTURE_UNIT);
         gl.uniform1i(uniformLocations.u_edgeAttributeTexture, EDGE_ATTRIBUTE_TEXTURE_UNIT);
         gl.uniform1i(uniformLocations.u_edgeAttributeTextureWidth, this.edgeAttributeTexture.getTextureWidth());
-        gl.uniform1i(uniformLocations.u_edgeAttributeTexelsPerEdge, this.edgeAttributeTexture.getTexelsPerEdge());
+        gl.uniform1i(uniformLocations.u_edgeAttributeTexelsPerEdge, this.edgeAttributeTexture.getTexelsPerItem());
       }
 
       // Zoom size ratio uniform (only if scaled font size mode)

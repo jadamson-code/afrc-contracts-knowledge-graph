@@ -48,24 +48,13 @@ function insertPickingModeDefine(shaderSource: string): string {
   return "#define PICKING_MODE\n" + shaderSource;
 }
 
-export abstract class AbstractProgram<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> {
-  constructor(_gl: WebGL2RenderingContext, _pickGl: WebGL2RenderingContext, _renderer: Sigma<N, E, G>) {}
-  abstract reallocate(capacity: number): void;
-  abstract render(params: RenderParams, offset?: number, count?: number): void;
-  abstract kill(): void;
-}
-
 export abstract class Program<
     Uniform extends string = string,
     N extends Attributes = Attributes,
     E extends Attributes = Attributes,
     G extends Attributes = Attributes,
   >
-  implements AbstractProgram<N, E, G>, InstancedProgramDefinition
+  implements InstancedProgramDefinition
 {
   VERTICES: number;
   VERTEX_SHADER_SOURCE: string;
@@ -430,22 +419,12 @@ export abstract class Program<
   }
 }
 
-class _ProgramClass<
-  Uniform extends string = string,
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> extends Program<Uniform, N, E, G> {
-  getDefinition(): ProgramDefinition<Uniform> | InstancedProgramDefinition<Uniform> {
-    return {} as unknown as ProgramDefinition<Uniform>;
-  }
-  setUniforms(_params: RenderParams, _programInfo: ProgramInfo) {
-    return undefined;
-  }
-}
 export type ProgramType<
-  Uniform extends string = string,
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
-> = typeof _ProgramClass<Uniform, N, E, G>;
+> = new (
+  gl: WebGL2RenderingContext,
+  pickingBuffer: WebGLFramebuffer | null,
+  renderer: Sigma<N, E, G>,
+) => Program<string, N, E, G>;

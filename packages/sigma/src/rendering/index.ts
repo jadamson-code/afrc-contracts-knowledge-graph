@@ -12,13 +12,13 @@ export * from "./glsl";
 export * from "./nodes";
 
 // Base classes
-export { EdgeProgram, AbstractEdgeProgram, createEdgeCompoundProgram } from "./edges";
+export { EdgeProgram } from "./edges";
 export type { EdgeProgramType } from "./edges";
-export { Program, AbstractProgram } from "./program";
+export { Program } from "./program";
 export type { ProgramType } from "./program";
-export { LabelProgram, AbstractLabelProgram } from "./nodes/labels";
+export { LabelProgram } from "./nodes/labels";
 export type { LabelProgramType } from "./nodes/labels";
-export { BackdropProgram, AbstractBackdropProgram } from "./nodes/backdrops";
+export { BackdropProgram } from "./nodes/backdrops";
 export type { BackdropProgramType, BackdropDisplayData } from "./nodes/backdrops";
 export { Bucket, BucketCollection, clampZIndex } from "./bucket";
 export type { ProcessItemFunction } from "./bucket";

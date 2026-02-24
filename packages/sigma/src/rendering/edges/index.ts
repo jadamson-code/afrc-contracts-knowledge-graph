@@ -9,7 +9,7 @@
  */
 
 // Base classes and types
-export { EdgeProgram, AbstractEdgeProgram, createEdgeCompoundProgram } from "./base";
+export { EdgeProgram } from "./base";
 export type { EdgeProgramType } from "./base";
 
 // Types
@@ -71,19 +71,12 @@ export {
 // Built-in programs
 export { EdgeLineProgram, EdgeArrowProgram, EdgeCurveProgram, EdgeCurvedArrowProgram } from "./programs";
 
-// Legacy constant for edge-curve package compatibility
-export const DEFAULT_EDGE_ARROW_HEAD_PROGRAM_OPTIONS = {
-  extremity: "target" as const,
-  lengthToThicknessRatio: 2.5,
-  widenessToThicknessRatio: 2,
-};
-
 // Shader generator (for advanced users)
 export { generateEdgeShaders, type EdgeShaderGenerationOptions } from "./generator";
 
 // Edge labels
 export { createEdgeLabelProgram, type CreateEdgeLabelProgramOptions } from "./labels/factory";
-export { EdgeLabelProgram, AbstractEdgeLabelProgram, type EdgeLabelProgramType } from "./labels/base";
+export { EdgeLabelProgram, type EdgeLabelProgramType } from "./labels/base";
 export {
   generateEdgeLabelShaders,
   type EdgeLabelShaderOptions,

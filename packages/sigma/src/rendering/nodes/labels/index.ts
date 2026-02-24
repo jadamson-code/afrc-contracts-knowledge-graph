@@ -7,7 +7,7 @@
  * @module
  */
 
-export { LabelProgram, AbstractLabelProgram } from "./base";
+export { LabelProgram } from "./base";
 export type { LabelProgramType } from "./base";
 
 export { createLabelProgram } from "./factory";

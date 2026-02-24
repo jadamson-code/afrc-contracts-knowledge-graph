@@ -70,27 +70,12 @@ export abstract class WebGLLayerProgram<
   }
 }
 
-class _WebGLLayerProgramClass<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> extends WebGLLayerProgram<N, E, G> {
-  getCustomLayerDefinition(): WebGLLayerDefinition {
-    return {
-      FRAGMENT_SHADER_SOURCE: "",
-      DATA_UNIFORMS: [],
-      CAMERA_UNIFORMS: [],
-    };
-  }
-  setCameraUniforms(_params: RenderParams, _programInfo: ProgramInfo): void {
-    return undefined;
-  }
-  cacheDataUniforms(_programInfo: ProgramInfo): void {
-    return undefined;
-  }
-}
 export type WebGLLayerProgramType<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
-> = typeof _WebGLLayerProgramClass<N, E, G>;
+> = new (
+  gl: WebGL2RenderingContext,
+  pickingBuffer: WebGLFramebuffer | null,
+  renderer: Sigma<N, E, G>,
+) => WebGLLayerProgram<N, E, G>;

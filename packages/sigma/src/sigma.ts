@@ -15,18 +15,18 @@ import { evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
 import { PrimitivesDeclaration, VariablesDefinition, generateEdgeProgram, generateNodeProgram } from "./primitives";
 import { DEFAULT_DEPTH_LAYERS } from "./primitives/types";
 import {
-  AbstractEdgeLabelProgram,
-  AbstractEdgeProgram,
-  AbstractBackdropProgram,
-  AbstractLabelProgram,
-  AbstractNodeProgram,
+  BackdropProgram,
   BucketCollection,
   EdgeDataTexture,
+  EdgeLabelProgram,
+  EdgeProgram,
   EdgeProgramType,
   BackdropDisplayData,
   BackdropProgramType,
+  LabelProgram,
   LabelProgramType,
   NodeDataTexture,
+  NodeProgram,
   NodeProgramType,
   getShapeId,
 } from "./rendering";
@@ -220,11 +220,11 @@ export default class Sigma<
   private checkEdgesEventsFrame: number | null = null;
 
   // Programs
-  private nodePrograms: { [key: string]: AbstractNodeProgram<N, E, G> } = {};
-  private backdropPrograms: { [key: string]: AbstractBackdropProgram<N, E, G> } = {};
-  private edgePrograms: { [key: string]: AbstractEdgeProgram<N, E, G> } = {};
-  private labelPrograms: { [key: string]: AbstractLabelProgram<N, E, G> } = {};
-  private edgeLabelPrograms: { [key: string]: AbstractEdgeLabelProgram<N, E, G> } = {};
+  private nodePrograms: { [key: string]: NodeProgram<string, N, E, G> } = {};
+  private backdropPrograms: { [key: string]: BackdropProgram<string, N, E, G> } = {};
+  private edgePrograms: { [key: string]: EdgeProgram<string, N, E, G> } = {};
+  private labelPrograms: { [key: string]: LabelProgram<string, N, E, G> } = {};
+  private edgeLabelPrograms: { [key: string]: EdgeLabelProgram<string, N, E, G> } = {};
 
   // Cache mapping node type to shape slug (for edge clamping)
   // The slug encodes shape name, params, and rotateWithCamera flag

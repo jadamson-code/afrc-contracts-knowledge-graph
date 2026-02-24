@@ -9,58 +9,14 @@ import { Attributes } from "graphology-types";
 
 import type Sigma from "../../../sigma";
 import type { LabelDisplayData, RenderParams } from "../../../types";
-import { AbstractProgram, Program } from "../../program";
+import { Program } from "../../program";
 import { InstancedProgramDefinition, ProgramDefinition, ProgramInfo } from "../../utils";
 
 /**
- * Abstract base class for label programs.
+ * Base class for label program implementations.
  *
  * Label programs render text labels using WebGL (SDF-based rendering).
  * Unlike node/edge programs, labels are processed per-character.
- *
- * Visibility is handled by processing only visible labels each frame,
- * rather than maintaining visibility flags for all labels.
- */
-export abstract class AbstractLabelProgram<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> extends AbstractProgram<N, E, G> {
-  /**
-   * Process a label and write its character data to the GPU buffer.
-   *
-   * @param labelKey - Unique key for the label
-   * @param offset - Starting offset in the buffer
-   * @param data - Label display data
-   * @returns Number of characters processed (for buffer offset calculation)
-   */
-  abstract processLabel(labelKey: string, offset: number, data: LabelDisplayData): number;
-
-  /**
-   * Get the label at a given screen position (for picking/events).
-   *
-   * @param x - Screen X coordinate
-   * @param y - Screen Y coordinate
-   * @returns Label key or null if no label at position
-   */
-  abstract getLabelAtPosition(x: number, y: number): string | null;
-
-  /**
-   * Ensure all glyphs for the given texts are generated and available.
-   * Optional method - implementations may provide this for glyph caching.
-   *
-   * @param texts - Array of text strings to prepare
-   * @param fontKey - Optional font key
-   */
-  ensureGlyphsReady?(texts: string[], fontKey?: string): void;
-}
-
-/**
- * Base class for concrete label program implementations.
- *
- * Extends Program with label-specific functionality:
- * - Per-character processing
- * - Screen-space bounds tracking for hit testing
  *
  * Visibility is handled by processing only visible labels each frame
  * (determined by LabelGrid), so all characters in the buffer are rendered.
@@ -72,8 +28,13 @@ export abstract class LabelProgram<
     G extends Attributes = Attributes,
   >
   extends Program<Uniform, N, E, G>
-  implements AbstractLabelProgram<N, E, G>
 {
+  /**
+   * Ensure all glyphs for the given texts are generated and available.
+   * Optional — implementations may provide this for glyph caching.
+   */
+  ensureGlyphsReady?(texts: string[], fontKey?: string): void;
+
   /**
    * Screen-space bounds for each label (for hit testing).
    */
@@ -200,41 +161,12 @@ export abstract class LabelProgram<
   abstract setUniforms(params: RenderParams, programInfo: ProgramInfo): void;
 }
 
-/**
- * Type for LabelProgram class constructors.
- */
-class _LabelProgramClass<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> implements AbstractLabelProgram<N, E, G>
-{
-  constructor(_gl: WebGL2RenderingContext, _pickingBuffer: WebGLFramebuffer | null, _renderer: Sigma<N, E, G>) {
-    return this;
-  }
-
-  kill(): void {
-    return undefined;
-  }
-  reallocate(_capacity: number): void {
-    return undefined;
-  }
-  processLabel(_labelKey: string, _offset: number, _data: LabelDisplayData): number {
-    return 0;
-  }
-  getLabelAtPosition(_x: number, _y: number): string | null {
-    return null;
-  }
-  render(_params: RenderParams): void {
-    return undefined;
-  }
-  ensureGlyphsReady(_texts: string[], _fontKey?: string): void {
-    return undefined;
-  }
-}
-
 export type LabelProgramType<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
-> = typeof _LabelProgramClass<N, E, G>;
+> = new (
+  gl: WebGL2RenderingContext,
+  pickingBuffer: WebGLFramebuffer | null,
+  renderer: Sigma<N, E, G>,
+) => LabelProgram<string, N, E, G>;

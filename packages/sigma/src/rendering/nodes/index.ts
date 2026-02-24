@@ -11,7 +11,7 @@
 export { createNodeProgram } from "./factory";
 
 // Base classes and types
-export { NodeProgram, AbstractNodeProgram } from "./base";
+export { NodeProgram } from "./base";
 export type { NodeProgramType } from "./base";
 
 // Type definitions
@@ -52,7 +52,7 @@ export type { CreateLabelProgramOptions } from "./labels";
 // Backdrop program creation
 export { createBackdropProgram } from "./backdrops";
 export type { CreateBackdropProgramOptions } from "./backdrops";
-export { AbstractBackdropProgram, BackdropProgram } from "./backdrops";
+export { BackdropProgram } from "./backdrops";
 export type { BackdropProgramType, BackdropDisplayData } from "./backdrops";
 
 // Shader generators (advanced usage)

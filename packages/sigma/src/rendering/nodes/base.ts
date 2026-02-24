@@ -7,25 +7,11 @@
 import { Attributes } from "graphology-types";
 
 import Sigma from "../../sigma";
-import { NodeDisplayData, RenderParams } from "../../types";
+import { NodeDisplayData } from "../../types";
 import { indexToColor } from "../../utils";
 import { BackdropProgramType } from "./backdrops";
 import { LabelProgramType } from "./labels";
-import { AbstractProgram, Program } from "../program";
-
-export abstract class AbstractNodeProgram<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> extends AbstractProgram<N, E, G> {
-  abstract process(nodeIndex: number, offset: number, data: NodeDisplayData, textureIndex: number, nodeKey: string): void;
-
-  // Optional methods for layer attribute texture management
-  // These are implemented by factory-created programs
-  allocateNode?(_nodeKey: string): void;
-  freeNode?(_nodeKey: string): void;
-  uploadLayerTexture?(): void;
-}
+import { Program } from "../program";
 
 export abstract class NodeProgram<
     Uniform extends string = string,
@@ -34,8 +20,13 @@ export abstract class NodeProgram<
     G extends Attributes = Attributes,
   >
   extends Program<Uniform, N, E, G>
-  implements AbstractNodeProgram<N, E, G>
 {
+  // Optional methods for layer attribute texture management.
+  // These are implemented by factory-created programs.
+  allocateNode?(_nodeKey: string): void;
+  freeNode?(_nodeKey: string): void;
+  uploadLayerTexture?(): void;
+
   /**
    * Static reference to the associated LabelProgram class.
    * This is set by createNodeProgram() for programs created via the factory.
@@ -74,34 +65,16 @@ export abstract class NodeProgram<
   ): void;
 }
 
-class _NodeProgramClass<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> implements AbstractNodeProgram<N, E, G>
-{
-  static LabelProgram: LabelProgramType | undefined;
-  static BackdropProgram: BackdropProgramType | undefined;
-
-  constructor(_gl: WebGL2RenderingContext, _pickingBuffer: WebGLFramebuffer | null, _renderer: Sigma<N, E, G>) {
-    return this;
-  }
-
-  kill(): void {
-    return undefined;
-  }
-  reallocate(_capacity: number): void {
-    return undefined;
-  }
-  process(_nodeIndex: number, _offset: number, _data: NodeDisplayData, _textureIndex: number, _nodeKey: string): void {
-    return undefined;
-  }
-  render(_params: RenderParams): void {
-    return undefined;
-  }
-}
 export type NodeProgramType<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
-> = typeof _NodeProgramClass<N, E, G>;
+> = {
+  new (
+    gl: WebGL2RenderingContext,
+    pickingBuffer: WebGLFramebuffer | null,
+    renderer: Sigma<N, E, G>,
+  ): NodeProgram<string, N, E, G>;
+  LabelProgram?: LabelProgramType<N, E, G>;
+  BackdropProgram?: BackdropProgramType<N, E, G>;
+};

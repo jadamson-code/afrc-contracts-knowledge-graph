@@ -9,51 +9,14 @@ import { Attributes } from "graphology-types";
 
 import type Sigma from "../../../sigma";
 import type { EdgeLabelDisplayData, RenderParams } from "../../../types";
-import { AbstractProgram, Program } from "../../program";
+import { Program } from "../../program";
 import { InstancedProgramDefinition, ProgramDefinition, ProgramInfo } from "../../utils";
 
 /**
- * Abstract base class for edge label programs.
+ * Base class for edge label program implementations.
  *
  * Edge label programs render text labels along edge paths using WebGL (SDF-based rendering).
  * Labels are processed per-character, with each character positioned along the edge path.
- */
-export abstract class AbstractEdgeLabelProgram<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> extends AbstractProgram<N, E, G> {
-  /**
-   * Process an edge label and write its character data to the GPU buffer.
-   *
-   * @param labelKey - Unique key for the label
-   * @param offset - Starting offset in the buffer
-   * @param data - Edge label display data
-   * @returns Number of characters processed (for buffer offset calculation)
-   */
-  abstract processEdgeLabel(labelKey: string, offset: number, data: EdgeLabelDisplayData): number;
-
-  /**
-   * Get the label at a given screen position (for picking/events).
-   *
-   * @param x - Screen X coordinate
-   * @param y - Screen Y coordinate
-   * @returns Label key or null if no label at position
-   */
-  abstract getLabelAtPosition(x: number, y: number): string | null;
-
-  /**
-   * Ensure all glyphs for the given texts are generated and available.
-   */
-  ensureGlyphsReady?(texts: string[], fontKey?: string): void;
-}
-
-/**
- * Base class for concrete edge label program implementations.
- *
- * Extends Program with edge label-specific functionality:
- * - Per-character processing along edge paths
- * - Screen-space bounds tracking for hit testing
  */
 export abstract class EdgeLabelProgram<
     Uniform extends string = string,
@@ -62,8 +25,12 @@ export abstract class EdgeLabelProgram<
     G extends Attributes = Attributes,
   >
   extends Program<Uniform, N, E, G>
-  implements AbstractEdgeLabelProgram<N, E, G>
 {
+  /**
+   * Ensure all glyphs for the given texts are generated and available.
+   */
+  ensureGlyphsReady?(texts: string[], fontKey?: string): void;
+
   /**
    * Screen-space bounds for each label (for hit testing).
    */
@@ -180,41 +147,12 @@ export abstract class EdgeLabelProgram<
   abstract setUniforms(params: RenderParams, programInfo: ProgramInfo): void;
 }
 
-/**
- * Type for EdgeLabelProgram class constructors.
- */
-class _EdgeLabelProgramClass<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> implements AbstractEdgeLabelProgram<N, E, G>
-{
-  constructor(_gl: WebGL2RenderingContext, _pickingBuffer: WebGLFramebuffer | null, _renderer: Sigma<N, E, G>) {
-    return this;
-  }
-
-  kill(): void {
-    return undefined;
-  }
-  reallocate(_capacity: number): void {
-    return undefined;
-  }
-  processEdgeLabel(_labelKey: string, _offset: number, _data: EdgeLabelDisplayData): number {
-    return 0;
-  }
-  getLabelAtPosition(_x: number, _y: number): string | null {
-    return null;
-  }
-  render(_params: RenderParams): void {
-    return undefined;
-  }
-  ensureGlyphsReady(_texts: string[], _fontKey?: string): void {
-    return undefined;
-  }
-}
-
 export type EdgeLabelProgramType<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
-> = typeof _EdgeLabelProgramClass<N, E, G>;
+> = new (
+  gl: WebGL2RenderingContext,
+  pickingBuffer: WebGLFramebuffer | null,
+  renderer: Sigma<N, E, G>,
+) => EdgeLabelProgram<string, N, E, G>;

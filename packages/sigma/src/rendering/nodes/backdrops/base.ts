@@ -11,7 +11,7 @@ import { Attributes } from "graphology-types";
 
 import type Sigma from "../../../sigma";
 import type { LabelPosition, RenderParams } from "../../../types";
-import { AbstractProgram, Program } from "../../program";
+import { Program } from "../../program";
 import { InstancedProgramDefinition, ProgramDefinition, ProgramInfo } from "../../utils";
 
 export interface BackdropDisplayData {
@@ -32,14 +32,6 @@ export interface BackdropDisplayData {
   backdropPadding: number;
 }
 
-export abstract class AbstractBackdropProgram<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> extends AbstractProgram<N, E, G> {
-  abstract processBackdrop(offset: number, data: BackdropDisplayData): void;
-}
-
 export abstract class BackdropProgram<
     Uniform extends string = string,
     N extends Attributes = Attributes,
@@ -47,7 +39,6 @@ export abstract class BackdropProgram<
     G extends Attributes = Attributes,
   >
   extends Program<Uniform, N, E, G>
-  implements AbstractBackdropProgram<N, E, G>
 {
   protected totalBackdropCount = 0;
   protected bufferCapacity = 0;
@@ -81,32 +72,12 @@ export abstract class BackdropProgram<
   abstract setUniforms(params: RenderParams, programInfo: ProgramInfo): void;
 }
 
-class _BackdropProgramClass<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> implements AbstractBackdropProgram<N, E, G>
-{
-  constructor(_gl: WebGL2RenderingContext, _pickingBuffer: WebGLFramebuffer | null, _renderer: Sigma<N, E, G>) {
-    return this;
-  }
-
-  kill(): void {
-    return undefined;
-  }
-  reallocate(_capacity: number): void {
-    return undefined;
-  }
-  processBackdrop(_offset: number, _data: BackdropDisplayData): void {
-    return undefined;
-  }
-  render(_params: RenderParams): void {
-    return undefined;
-  }
-}
-
 export type BackdropProgramType<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
-> = typeof _BackdropProgramClass<N, E, G>;
+> = new (
+  gl: WebGL2RenderingContext,
+  pickingBuffer: WebGLFramebuffer | null,
+  renderer: Sigma<N, E, G>,
+) => BackdropProgram<string, N, E, G>;

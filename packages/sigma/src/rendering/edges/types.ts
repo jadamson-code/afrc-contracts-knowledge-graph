@@ -8,9 +8,6 @@
  *
  * @module
  */
-import { Attributes } from "graphology-types";
-
-import Sigma from "../../sigma";
 import { EdgeLabelFontSizeMode, EdgeLabelPosition } from "../../types";
 import { AttributeSpecification, UniformSpecification, ValueSource } from "../nodes";
 
@@ -604,59 +601,6 @@ export interface GeneratedEdgeShaders {
    */
   constantDataPerCombination?: Map<string, number[][]>;
 }
-
-/**
- * Abstract base class interface for edge programs.
- */
-export interface AbstractEdgeProgram {
-  process(
-    edgeIndex: number,
-    offset: number,
-    sourceData: Record<string, unknown>,
-    targetData: Record<string, unknown>,
-    data: Record<string, unknown>,
-  ): void;
-  render(params: Record<string, unknown>): void;
-  reallocate(capacity: number): void;
-  kill(): void;
-}
-
-/**
- * Extended program options with runtime mappings.
- * This extends EdgeProgramOptions with computed mappings for multi-path mode.
- */
-export interface EdgeProgramOptionsWithMappings extends EdgeProgramOptions {
-  /** Path name to index mapping (multi-path mode only) */
-  pathNameToIndex?: Record<string, number>;
-  /** Extremity name to index mapping (multi-extremity mode only) */
-  extremityNameToIndex?: Record<string, number>;
-  /** Vertex counts per combination - key: "path:head:tail" (multi-path mode only) */
-  vertexCounts?: Map<string, number>;
-}
-
-/**
- * Type for an EdgeProgram class constructor.
- */
-export type EdgeProgramType<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> = {
-  new (
-    gl: WebGL2RenderingContext,
-    pickingBuffer: WebGLFramebuffer | null,
-    renderer: Sigma<N, E, G>,
-  ): AbstractEdgeProgram;
-
-  /** Static reference to the generated shaders */
-  readonly generatedShaders?: GeneratedEdgeShaders;
-
-  /** Static reference to the program options with mappings */
-  readonly programOptions?: EdgeProgramOptionsWithMappings;
-
-  /** Static reference to the associated LabelProgram (if labels enabled) */
-  LabelProgram?: unknown;
-};
 
 // ============================================================================
 // Edge Program Options Normalization

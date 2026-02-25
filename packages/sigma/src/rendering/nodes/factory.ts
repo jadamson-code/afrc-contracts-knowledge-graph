@@ -111,6 +111,7 @@ export function createNodeProgram<
     rotateWithCamera,
     label: labelOptions,
     backdrop,
+    shapeGlobalIds: shapes.length > 1 ? shapeGlobalIds : undefined,
   });
 
   // Compute layout once for all instances

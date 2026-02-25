@@ -29,10 +29,12 @@ export interface BackdropShaderOptions {
   rotateWithCamera?: boolean;
   /** If true, generate per-node backdrop attributes. If false, use uniforms only. */
   useBackdropAttributes?: boolean;
+  /** Maps local shape index to global shape ID (for multi-shape programs). */
+  shapeGlobalIds?: number[];
 }
 
 export function generateBackdropVertexShader(options: BackdropShaderOptions): string {
-  const { shapes, rotateWithCamera = false, useBackdropAttributes = false } = options;
+  const { shapes, rotateWithCamera = false, useBackdropAttributes = false, shapeGlobalIds } = options;
 
   // Get all shape SDF functions (deduplicated)
   const shapeGLSL = getShapeGLSLForShapes(shapes);
@@ -62,13 +64,15 @@ export function generateBackdropVertexShader(options: BackdropShaderOptions): st
     findEdgeDistanceCode = generateFindEdgeDistance(shapeCall, rotateWithCamera);
   } else {
     // Multi-shape: generate switch-based SDF query
+    // Use global shape IDs as case values when available (a_shapeId contains global IDs)
     const cases = shapes.map((shape, index) => {
       const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
       const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
       const sdfCall = paramValues.length > 0
         ? `sdf_${shape.name}(uv, size, ${paramValues.join(", ")})`
         : `sdf_${shape.name}(uv, size)`;
-      return `    case ${index}: return ${sdfCall};`;
+      const caseId = shapeGlobalIds ? shapeGlobalIds[index] : index;
+      return `    case ${caseId}: return ${sdfCall};`;
     }).join("\n");
 
     // Default to first shape
@@ -292,7 +296,7 @@ ${useBackdropAttributes ? `  v_backdropColor = a_backdropColor;
 }
 
 export function generateBackdropFragmentShader(options: BackdropShaderOptions): string {
-  const { shapes, rotateWithCamera = false, useBackdropAttributes = false } = options;
+  const { shapes, rotateWithCamera = false, useBackdropAttributes = false, shapeGlobalIds } = options;
 
   // Get all shape SDF functions (deduplicated)
   const shapeGLSL = getShapeGLSLForShapes(shapes);
@@ -322,13 +326,15 @@ export function generateBackdropFragmentShader(options: BackdropShaderOptions): 
     shapeCallCode = `float nodeSdfNormalized = ${shapeCall};`;
   } else {
     // Multi-shape: generate switch-based SDF query
+    // Use global shape IDs as case values when available (v_shapeId contains global IDs)
     const cases = shapes.map((shape, index) => {
       const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
       const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
       const sdfCall = paramValues.length > 0
         ? `sdf_${shape.name}(nodeUV, 1.0, ${paramValues.join(", ")})`
         : `sdf_${shape.name}(nodeUV, 1.0)`;
-      return `    case ${index}: nodeSdfNormalized = ${sdfCall}; break;`;
+      const caseId = shapeGlobalIds ? shapeGlobalIds[index] : index;
+      return `    case ${caseId}: nodeSdfNormalized = ${sdfCall}; break;`;
     }).join("\n");
 
     // Default to first shape

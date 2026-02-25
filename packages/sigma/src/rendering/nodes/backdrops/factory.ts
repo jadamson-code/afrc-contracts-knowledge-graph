@@ -61,6 +61,8 @@ export interface CreateBackdropProgramOptions {
   rotateWithCamera?: boolean;
   label?: LabelOptions;
   backdrop?: BackdropOptions;
+  /** Maps local shape index to global shape ID (for multi-shape programs). */
+  shapeGlobalIds?: number[];
 }
 
 export function createBackdropProgram<
@@ -68,7 +70,7 @@ export function createBackdropProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: CreateBackdropProgramOptions): BackdropProgramType<N, E, G> {
-  const { rotateWithCamera = false, label: labelOptions = {}, shapes, backdrop } = options;
+  const { rotateWithCamera = false, label: labelOptions = {}, shapes, backdrop, shapeGlobalIds } = options;
 
   if (shapes.length === 0) {
     throw new Error("createBackdropProgram: at least one shape must be provided in 'shapes'");
@@ -82,7 +84,7 @@ export function createBackdropProgram<
   const useBackdropAttributes = hasAttributeBackdrop(backdrop);
   const backdropDefaults = resolveBackdropDefaults(backdrop);
 
-  const shaderOptions: BackdropShaderOptions = { shapes, rotateWithCamera, useBackdropAttributes };
+  const shaderOptions: BackdropShaderOptions = { shapes, rotateWithCamera, useBackdropAttributes, shapeGlobalIds };
   const generatedShaders = generateBackdropShaders(shaderOptions);
 
   type BackdropUniform = string;

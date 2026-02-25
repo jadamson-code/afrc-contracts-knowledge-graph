@@ -6,7 +6,6 @@
  *
  * Main exports:
  * - layerPiechart(): Fragment layer factory for use with createNodeProgram
- * - createNodePiechartProgram(): Program factory with circle shape
  *
  * @module
  */
@@ -27,9 +26,6 @@ registerNodeLayerFactory("piechart", layerPiechart);
 
 // Layer factory
 export { layerPiechart } from "./layer";
-
-// Program factory (for backward compatibility)
-export { createNodePiechartProgram } from "./program";
 
 // Schema
 export { piechartSchema } from "./types";

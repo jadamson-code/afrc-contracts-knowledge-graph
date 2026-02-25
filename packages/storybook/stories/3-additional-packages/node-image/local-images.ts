@@ -1,4 +1,4 @@
-import { NodeImageProgram, NodePictogramProgram } from "@sigma/node-image";
+import { layerImage } from "@sigma/node-image";
 import Graph from "graphology";
 import Sigma from "sigma";
 
@@ -37,6 +37,7 @@ export default () => {
 
   const graph = new Graph();
 
+  // Nodes with raster images use the "photo" image layer
   graph.addNode("a", {
     x: 0,
     y: 0,
@@ -44,7 +45,6 @@ export default () => {
     label: "A",
     color: "red",
     image: PNG_IMAGE,
-    type: "image",
   });
   graph.addNode("b", {
     x: 1,
@@ -53,16 +53,15 @@ export default () => {
     label: "B",
     color: "red",
     image: JPG_IMAGE,
-    type: "image",
   });
+  // Nodes with SVG pictograms use the "pictogram" image layer
   graph.addNode("c", {
     x: 3,
     y: -2,
     size: 20,
     label: "C",
     color: "red",
-    image: SVG_ICON,
-    type: "pictogram",
+    pictogram: SVG_ICON,
   });
   graph.addNode("d", {
     x: 1,
@@ -70,8 +69,7 @@ export default () => {
     size: 20,
     label: "D",
     color: "blue",
-    image: svgToDataURI(RAW_SVG_ICON),
-    type: "pictogram",
+    pictogram: svgToDataURI(RAW_SVG_ICON),
   });
   graph.addNode("e", {
     x: 3,
@@ -79,8 +77,7 @@ export default () => {
     size: 40,
     label: "E",
     color: "blue",
-    image: svgToDataURI(STRING_SVG_ICON),
-    type: "pictogram",
+    pictogram: svgToDataURI(STRING_SVG_ICON),
   });
   graph.addNode("f", {
     x: 4,
@@ -89,7 +86,6 @@ export default () => {
     label: "F",
     color: "blue",
     image: BASE_64_IMAGE,
-    type: "image",
   });
 
   graph.addEdge("a", "b", { size: 10 });
@@ -103,9 +99,20 @@ export default () => {
   graph.addEdge("f", "e", { size: 10 });
 
   const renderer = new Sigma(graph, container, {
-    nodeProgramClasses: {
-      image: NodeImageProgram,
-      pictogram: NodePictogramProgram,
+    primitives: {
+      nodes: {
+        layers: [
+          // Raster image layer (reads from "image" attribute)
+          { type: "image", imageAttribute: "image" },
+          // Pictogram layer (reads from "pictogram" attribute, colorized)
+          layerImage({
+            name: "pictogram",
+            drawingMode: "color",
+            imageAttribute: "pictogram",
+            padding: 0.2,
+          }),
+        ],
+      },
     },
   });
 

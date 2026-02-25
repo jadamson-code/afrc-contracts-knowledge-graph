@@ -71,7 +71,6 @@ export interface DisplayData {
   hidden: boolean;
   forceLabel: boolean;
   zIndex: number;
-  type: string;
   depth: string;
   labelDepth: string;
 }
@@ -382,7 +381,6 @@ export interface BufferStats {
 
 export interface BucketStats {
   type: "nodes" | "edges";
-  programType: string;
   zIndex: number;
   itemCount: number;
   capacity: number;

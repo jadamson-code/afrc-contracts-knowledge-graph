@@ -80,5 +80,3 @@ export {
 } from "./backdrops";
 export type { GeneratedBackdropShaders, BackdropShaderOptions } from "./backdrops";
 
-// Built-in node programs
-export { NodeCircleProgram, NodeSquareProgram } from "./programs";

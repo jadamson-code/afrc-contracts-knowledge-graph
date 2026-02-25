@@ -1,4 +1,4 @@
-import { NodeImageProgram } from "@sigma/node-image";
+import "@sigma/node-image";
 import Graph from "graphology";
 import Sigma from "sigma";
 
@@ -62,9 +62,10 @@ export default () => {
   graph.addEdge("f", "e", { size: 10 });
 
   const renderer = new Sigma(graph, container, {
-    defaultNodeType: "image",
-    nodeProgramClasses: {
-      image: NodeImageProgram,
+    primitives: {
+      nodes: {
+        layers: [{ type: "image" }],
+      },
     },
   });
 

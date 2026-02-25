@@ -22,12 +22,10 @@ import {
   EdgeDataTexture,
   EdgeLabelProgram,
   EdgeProgram,
-  EdgeProgramType,
   LabelProgram,
   LabelProgramType,
   NodeDataTexture,
   NodeProgram,
-  NodeProgramType,
   getShapeId,
 } from "./rendering";
 import { Settings, resolveSettings, validateSettings } from "./settings";
@@ -89,7 +87,6 @@ import { DepthRanges, addPositionToDepthRanges, removePositionFromDepthRanges } 
  */
 const X_LABEL_MARGIN = 150;
 const Y_LABEL_MARGIN = 50;
-const hasOwnProperty = Object.prototype.hasOwnProperty;
 // Texture unit for the shared node data texture (position, size, shapeId)
 const NODE_DATA_TEXTURE_UNIT = 3;
 // Texture unit for the shared edge data texture (source/target indices, thickness, curvature, etc.)
@@ -219,24 +216,21 @@ export default class Sigma<
   private needToRefreshState = false;
   private checkEdgesEventsFrame: number | null = null;
 
-  // Programs
-  private nodePrograms: { [key: string]: NodeProgram<string, N, E, G> } = {};
-  private backdropPrograms: { [key: string]: BackdropProgram<string, N, E, G> } = {};
-  private edgePrograms: { [key: string]: EdgeProgram<string, N, E, G> } = {};
-  private labelPrograms: { [key: string]: LabelProgram<string, N, E, G> } = {};
-  private edgeLabelPrograms: { [key: string]: EdgeLabelProgram<string, N, E, G> } = {};
+  // Programs (single program per item kind)
+  private nodeProgram: NodeProgram<string, N, E, G> | null = null;
+  private backdropProgram: BackdropProgram<string, N, E, G> | null = null;
+  private edgeProgram: EdgeProgram<string, N, E, G> | null = null;
+  private labelProgram: LabelProgram<string, N, E, G> | null = null;
+  private edgeLabelProgram: EdgeLabelProgram<string, N, E, G> | null = null;
 
-  // Cache mapping node type to shape slug (for edge clamping)
-  // The slug encodes shape name, params, and rotateWithCamera flag
-  private nodeTypeShapeCache: { [type: string]: string } = {};
+  // Shape slug for edge clamping (encodes shape name, params, rotateWithCamera)
+  private nodeShapeSlug: string | null = null;
 
-  // For multi-shape programs: maps node type to { shapeName -> localIndex }
-  // Used to look up the local shape index for nodes that specify a 'shape' attribute
-  private nodeTypeShapeMap: { [type: string]: Record<string, number> } = {};
+  // For multi-shape programs: { shapeName -> localIndex }
+  private nodeShapeMap: Record<string, number> | null = null;
 
-  // For multi-shape programs: maps node type to array of global shape IDs
-  // Used to convert local shape index to global ID for edge clamping
-  private nodeTypeGlobalShapeIds: { [type: string]: number[] } = {};
+  // For multi-shape programs: array of global shape IDs (local index -> global ID)
+  private nodeGlobalShapeIds: number[] | null = null;
 
   // WebGL Labels (SDF-based rendering)
   private sdfAtlas: SDFAtlasManager | null = null;
@@ -253,7 +247,7 @@ export default class Sigma<
     nodes: {},
     edges: {},
   };
-  // Track {offset, count} fragment ranges per [depth][programType] for range-rendering
+  // Track {offset, count} fragment ranges per depth for range-rendering
   private depthRanges: { nodes: DepthRanges; edges: DepthRanges } = { nodes: {}, edges: {} };
   // Depth assigned to each item during the last process() call
   private nodeBaseDepth: Record<string, string> = {};
@@ -320,14 +314,49 @@ export default class Sigma<
     // Initialize edge data texture for sharing edge data between edge and edge label programs
     this.edgeDataTexture = new EdgeDataTexture(this.webGLContext!);
 
-    // Generate and register programs from primitives (uses defaults when not provided)
-    const { program: NodeProgram, variables: nodeVariables } = generateNodeProgram<N, E, G>(this.primitives?.nodes);
-    this.nodeVariables = nodeVariables;
-    this.registerNodeProgram("default", NodeProgram);
+    // Generate programs from primitives (uses defaults when not provided)
+    const sigma = this as unknown as Sigma<N, E, G>;
+    const gl = this.webGLContext!;
 
-    const { program: EdgeProgram, variables: edgeVariables } = generateEdgeProgram<N, E, G>(this.primitives?.edges);
+    const { program: NodeProgramClass, variables: nodeVariables } = generateNodeProgram<N, E, G>(this.primitives?.nodes);
+    this.nodeVariables = nodeVariables;
+    this.nodeProgram = new NodeProgramClass(gl, null, sigma);
+
+    // Cache shape information
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nodeProgramOptions = (NodeProgramClass as any).programOptions;
+    if (nodeProgramOptions?.shapeSlug) {
+      this.nodeShapeSlug = nodeProgramOptions.shapeSlug;
+    }
+    if (nodeProgramOptions?.shapeNameToIndex) {
+      this.nodeShapeMap = nodeProgramOptions.shapeNameToIndex;
+    }
+    if (nodeProgramOptions?.shapeGlobalIds) {
+      this.nodeGlobalShapeIds = nodeProgramOptions.shapeGlobalIds;
+    }
+
+    // Create label program if the node program has one
+    const LabelProgramClass = NodeProgramClass.LabelProgram as LabelProgramType<N, E, G> | undefined;
+    if (LabelProgramClass) {
+      this.labelProgram = new LabelProgramClass(gl, null, sigma);
+    }
+
+    // Create backdrop program if the node program has one
+    const BackdropProgramClass = NodeProgramClass.BackdropProgram as BackdropProgramType<N, E, G> | undefined;
+    if (BackdropProgramClass) {
+      this.backdropProgram = new BackdropProgramClass(gl, null, sigma);
+    }
+
+    const { program: EdgeProgramClass, variables: edgeVariables } = generateEdgeProgram<N, E, G>(this.primitives?.edges);
     this.edgeVariables = edgeVariables;
-    this.registerEdgeProgram("default", EdgeProgram);
+    this.edgeProgram = new EdgeProgramClass(gl, null, sigma);
+
+    // Create edge label program if the edge program has one
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const EdgeLabelProgramClass = (EdgeProgramClass as any).LabelProgram;
+    if (EdgeLabelProgramClass) {
+      this.edgeLabelProgram = new EdgeLabelProgramClass(gl, null, sigma);
+    }
 
     // Initialize WebGL labels
     this.initializeWebGLLabels();
@@ -364,86 +393,8 @@ export default class Sigma<
    */
 
   /**
-   * Internal function used to register a node program
-   *
-   * @param  {string}           key              - The program's key, matching the related nodes "type" values.
-   * @param  {NodeProgramType}  NodeProgramClass - A nodes program class.
-   * @return {Sigma}
-   */
-  private registerNodeProgram(key: string, NodeProgramClass: NodeProgramType<N, E, G>): this {
-    if (this.nodePrograms[key]) this.nodePrograms[key].kill();
-    // Cast this since programs don't use state generics
-    const sigma = this as unknown as Sigma<N, E, G>;
-    this.nodePrograms[key] = new NodeProgramClass(this.webGLContext!, null, sigma);
-    // Register program type with bucket collection (stride will be set properly when used)
-    this.itemBuckets.nodes.registerProgram(key, 1);
-
-    // Cache shape information for this node type
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const programOptions = (NodeProgramClass as any).programOptions;
-    if (programOptions?.shapeSlug) {
-      // Primary shape slug for edge clamping (uses first shape for multi-shape programs)
-      this.nodeTypeShapeCache[key] = programOptions.shapeSlug;
-    }
-    if (programOptions?.shapeNameToIndex) {
-      // Multi-shape program: store the shape name -> local index mapping
-      this.nodeTypeShapeMap[key] = programOptions.shapeNameToIndex;
-    } else {
-      // Single-shape program: clear any previous mapping
-      delete this.nodeTypeShapeMap[key];
-    }
-    if (programOptions?.shapeGlobalIds) {
-      // Multi-shape program: store the local index -> global shape ID mapping
-      this.nodeTypeGlobalShapeIds[key] = programOptions.shapeGlobalIds;
-    } else {
-      // Single-shape program: clear any previous mapping
-      delete this.nodeTypeGlobalShapeIds[key];
-    }
-
-    // Register the associated label program if the node program has one
-    const LabelProgramClass = NodeProgramClass.LabelProgram as LabelProgramType<N, E, G> | undefined;
-    if (LabelProgramClass) {
-      this.registerLabelProgram(key, LabelProgramClass);
-    }
-
-    // Register the associated backdrop program if the node program has one
-    const BackdropProgramClass = NodeProgramClass.BackdropProgram as BackdropProgramType<N, E, G> | undefined;
-    if (BackdropProgramClass) {
-      this.registerBackdropProgram(key, BackdropProgramClass);
-    }
-
-    return this;
-  }
-
-  /**
-   * Internal function used to register an edge program
-   *
-   * @param  {string}          key              - The program's key, matching the related edges "type" values.
-   * @param  {EdgeProgramType} EdgeProgramClass - An edges program class.
-   * @return {Sigma}
-   */
-  private registerEdgeProgram(key: string, EdgeProgramClass: EdgeProgramType<N, E, G>): this {
-    if (this.edgePrograms[key]) this.edgePrograms[key].kill();
-    // Cast this since programs don't use state generics
-    const sigma = this as unknown as Sigma<N, E, G>;
-    this.edgePrograms[key] = new EdgeProgramClass(this.webGLContext!, null, sigma);
-    // Register program type with bucket collection (stride will be set properly when used)
-    this.itemBuckets.edges.registerProgram(key, 1);
-
-    // Register edge label program if the edge program has one
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const LabelProgram = (EdgeProgramClass as any).LabelProgram;
-    if (LabelProgram) {
-      if (this.edgeLabelPrograms[key]) this.edgeLabelPrograms[key].kill();
-      this.edgeLabelPrograms[key] = new LabelProgram(this.webGLContext!, null, sigma);
-    }
-
-    return this;
-  }
-
-  /**
    * Internal function used to initialize WebGL labels.
-   * Sets up the SDF atlas and registers the default label program.
+   * Sets up the SDF atlas.
    */
   private initializeWebGLLabels(): void {
     // Create SDF Atlas Manager
@@ -455,36 +406,6 @@ export default class Sigma<
       weight: "normal",
       style: "normal",
     });
-  }
-
-  /**
-   * Internal function used to register a label program
-   *
-   * @param  {string}           key               - The program's key, matching the related labels "type" values.
-   * @param  {LabelProgramType} LabelProgramClass - A labels program class.
-   * @return {Sigma}
-   */
-  private registerLabelProgram(key: string, LabelProgramClass: LabelProgramType<N, E, G>): this {
-    if (this.labelPrograms[key]) this.labelPrograms[key].kill();
-    // Cast this since programs don't use state generics
-    const sigma = this as unknown as Sigma<N, E, G>;
-    this.labelPrograms[key] = new LabelProgramClass(this.webGLContext!, null, sigma);
-    return this;
-  }
-
-  /**
-   * Internal function used to register a backdrop program
-   *
-   * @param  {string}              key                  - The program's key, matching the related node "type" values.
-   * @param  {BackdropProgramType} BackdropProgramClass - A backdrop program class.
-   * @return {Sigma}
-   */
-  private registerBackdropProgram(key: string, BackdropProgramClass: BackdropProgramType<N, E, G>): this {
-    if (this.backdropPrograms[key]) this.backdropPrograms[key].kill();
-    // Cast this since programs don't use state generics
-    const sigma = this as unknown as Sigma<N, E, G>;
-    this.backdropPrograms[key] = new BackdropProgramClass(this.webGLContext!, null, sigma);
-    return this;
   }
 
   /**
@@ -966,13 +887,13 @@ export default class Sigma<
     // TODO: it's probably better to do this explicitly or on resizes for layout and anims
     this.labelGrid.resizeAndClear(dimensions, settings.labelGridCellSize);
 
-    const nodesPerPrograms: Record<string, number> = {};
     const nodeIndices: typeof this.nodeIndices = {};
     const edgeIndices: typeof this.edgeIndices = {};
     const itemIDsIndex: typeof this.itemIDsIndex = {};
     let incrID = 1;
 
     const nodes = graph.nodes();
+    let totalNodes = 0;
 
     // Do some indexation on the whole graph
     for (let i = 0, l = nodes.length; i < l; i++) {
@@ -989,20 +910,13 @@ export default class Sigma<
       if (typeof data.label === "string" && !data.hidden)
         this.labelGrid.add(node, data.size, this.framedGraphToViewport(data, { matrix: nullCameraMatrix }));
 
-      // update count per program
-      nodesPerPrograms[data.type] = (nodesPerPrograms[data.type] || 0) + 1;
+      totalNodes++;
     }
     this.labelGrid.organize();
 
-    // Allocate memory to programs
-    for (const type in this.nodePrograms) {
-      if (!hasOwnProperty.call(this.nodePrograms, type)) {
-        throw new Error(`Sigma: could not find a suitable program for node type "${type}"!`);
-      }
-      this.nodePrograms[type].reallocate(nodesPerPrograms[type] || 0);
-      // We reset that count here, so that we can reuse it while calling the Program#process methods:
-      nodesPerPrograms[type] = 0;
-    }
+    // Allocate memory to node program
+    this.nodeProgram!.reallocate(totalNodes);
+    let nodeProcessCount = 0;
 
     // Update node data texture with position, size, and shape data
     // This must happen before addNodeToProgram so texture indices are available
@@ -1016,12 +930,10 @@ export default class Sigma<
       // - For multi-shape programs: convert local index to global ID for edge clamping
       // - For single-shape programs: use global registry ID from slug
       let shapeId: number;
-      const shapeMap = this.nodeTypeShapeMap[data.type];
-      const globalIds = this.nodeTypeGlobalShapeIds[data.type];
-      if (shapeMap && globalIds && data.shape && data.shape in shapeMap) {
+      if (this.nodeShapeMap && this.nodeGlobalShapeIds && data.shape && data.shape in this.nodeShapeMap) {
         // Multi-shape program: convert local index to global ID
-        const localIndex = shapeMap[data.shape];
-        shapeId = globalIds[localIndex];
+        const localIndex = this.nodeShapeMap[data.shape];
+        shapeId = this.nodeGlobalShapeIds[localIndex];
       } else {
         // Single-shape program or fallback: use global registry
         shapeId = getShapeId(data.shape || "circle");
@@ -1036,15 +948,13 @@ export default class Sigma<
     const maxDepthLevels = this.settings.maxDepthLevels;
     this.depthRanges.nodes = {};
     this.nodeBaseDepth = {};
-    this.itemBuckets.nodes.forEachBucketByZIndex((programType, zIndex, bucket) => {
+    this.itemBuckets.nodes.forEachBucketByZIndex((zIndex, bucket) => {
       const items = bucket.getItems();
-      const nodeProgram = this.nodePrograms[programType];
       const depthIndex = Math.floor(zIndex / maxDepthLevels);
       const depth = depthLayers[depthIndex] ?? depthLayers[0];
-      if (!this.depthRanges.nodes[depth]) this.depthRanges.nodes[depth] = {};
-      if (!this.depthRanges.nodes[depth][programType])
-        this.depthRanges.nodes[depth][programType] = [{ offset: nodesPerPrograms[programType], count: 0 }];
-      const fragments = this.depthRanges.nodes[depth][programType];
+      if (!this.depthRanges.nodes[depth])
+        this.depthRanges.nodes[depth] = [{ offset: nodeProcessCount, count: 0 }];
+      const fragments = this.depthRanges.nodes[depth];
       fragments[fragments.length - 1].count += items.size;
       for (const node of items) {
         this.nodeBaseDepth[node] = depth;
@@ -1053,9 +963,9 @@ export default class Sigma<
         incrID++;
 
         // Allocate node in the program's layer attribute texture
-        nodeProgram.allocateNode?.(node);
+        this.nodeProgram!.allocateNode?.(node);
 
-        this.addNodeToProgram(node, nodeIndices[node], nodesPerPrograms[programType]++);
+        this.addNodeToProgram(node, nodeIndices[node], nodeProcessCount++);
       }
     });
 
@@ -1063,37 +973,22 @@ export default class Sigma<
     // EDGES
     //
 
-    const edgesPerPrograms: Record<string, number> = {};
     const edges = graph.edges();
 
-    // Allocate memory to programs
-    for (let i = 0, l = edges.length; i < l; i++) {
-      const edge = edges[i];
-      const data = this.edgeDataCache[edge];
-      edgesPerPrograms[data.type] = (edgesPerPrograms[data.type] || 0) + 1;
-    }
-
-    // Allocate memory to edge programs
-    for (const type in this.edgePrograms) {
-      if (!hasOwnProperty.call(this.edgePrograms, type)) {
-        throw new Error(`Sigma: could not find a suitable program for edge type "${type}"!`);
-      }
-      this.edgePrograms[type].reallocate(edgesPerPrograms[type] || 0);
-      // We reset that count here, so that we can reuse it while calling the Program#process methods:
-      edgesPerPrograms[type] = 0;
-    }
+    // Allocate memory to edge program
+    this.edgeProgram!.reallocate(edges.length);
+    let edgeProcessCount = 0;
 
     // Add data to programs using buckets (preserves zIndex ordering)
     this.depthRanges.edges = {};
     this.edgeBaseDepth = {};
-    this.itemBuckets.edges.forEachBucketByZIndex((programType, zIndex, bucket) => {
+    this.itemBuckets.edges.forEachBucketByZIndex((zIndex, bucket) => {
       const items = bucket.getItems();
       const depthIndex = Math.floor(zIndex / maxDepthLevels);
       const depth = depthLayers[depthIndex] ?? depthLayers[0];
-      if (!this.depthRanges.edges[depth]) this.depthRanges.edges[depth] = {};
-      if (!this.depthRanges.edges[depth][programType])
-        this.depthRanges.edges[depth][programType] = [{ offset: edgesPerPrograms[programType], count: 0 }];
-      const fragments = this.depthRanges.edges[depth][programType];
+      if (!this.depthRanges.edges[depth])
+        this.depthRanges.edges[depth] = [{ offset: edgeProcessCount, count: 0 }];
+      const fragments = this.depthRanges.edges[depth];
       fragments[fragments.length - 1].count += items.size;
       for (const edge of items) {
         this.edgeBaseDepth[edge] = depth;
@@ -1101,7 +996,7 @@ export default class Sigma<
         itemIDsIndex[edgeIndices[edge]] = { type: "edge", id: edge };
         incrID++;
 
-        this.addEdgeToProgram(edge, edgeIndices[edge], edgesPerPrograms[programType]++);
+        this.addEdgeToProgram(edge, edgeIndices[edge], edgeProcessCount++);
       }
     });
 
@@ -1135,11 +1030,8 @@ export default class Sigma<
     }
 
     // Ensure all glyphs are generated (this is the expensive part we want to do once)
-    for (const type in this.labelPrograms) {
-      const program = this.labelPrograms[type];
-      if (program.ensureGlyphsReady) {
-        program.ensureGlyphsReady(labelTexts);
-      }
+    if (this.labelProgram?.ensureGlyphsReady) {
+      this.labelProgram.ensureGlyphsReady(labelTexts);
     }
   }
 
@@ -1163,11 +1055,10 @@ export default class Sigma<
    * reprocessing the program array.
    */
   private updateNodeDepthRanges(key: string, oldDepth: string, newDepth: string): void {
-    const programType = this.nodeDataCache[key].type;
     const position = this.nodeProgramIndex[key];
     if (position === undefined) return;
-    removePositionFromDepthRanges(this.depthRanges.nodes, oldDepth, programType, position);
-    addPositionToDepthRanges(this.depthRanges.nodes, newDepth, programType, position);
+    removePositionFromDepthRanges(this.depthRanges.nodes, oldDepth, position);
+    addPositionToDepthRanges(this.depthRanges.nodes, newDepth, position);
   }
 
   /**
@@ -1175,11 +1066,10 @@ export default class Sigma<
    * reprocessing the program array.
    */
   private updateEdgeDepthRanges(key: string, oldDepth: string, newDepth: string): void {
-    const programType = this.edgeDataCache[key].type;
     const position = this.edgeProgramIndex[key];
     if (position === undefined) return;
-    removePositionFromDepthRanges(this.depthRanges.edges, oldDepth, programType, position);
-    addPositionToDepthRanges(this.depthRanges.edges, newDepth, programType, position);
+    removePositionFromDepthRanges(this.depthRanges.edges, oldDepth, position);
+    addPositionToDepthRanges(this.depthRanges.edges, newDepth, position);
   }
 
   /**
@@ -1399,34 +1289,28 @@ export default class Sigma<
       visibleNodes.push(node);
     }
 
-    // Count characters per label program type
-    const charactersPerProgram: Record<string, number> = {};
+    if (!this.labelProgram) return;
+
+    // Count total characters for label program
+    let totalCharacters = 0;
     for (let i = 0, l = visibleNodes.length; i < l; i++) {
-      const node = visibleNodes[i];
-      const data = this.nodeDataCache[node];
-      const labelType = this.labelPrograms[data.type] ? data.type : "default";
-      charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + data.label!.length;
+      const data = this.nodeDataCache[visibleNodes[i]];
+      totalCharacters += data.label!.length;
     }
 
-    // Reallocate label programs based on visible character counts
-    for (const type in this.labelPrograms) {
-      this.labelPrograms[type].reallocate(charactersPerProgram[type] || 0);
-    }
+    // Reallocate label program based on visible character count
+    this.labelProgram.reallocate(totalCharacters);
 
-    // Process each visible label into its matching program's buffer
+    // Process each visible label into the program's buffer
     // TODO: These defaults should come from the styles system
     const defaultLabelSize = 14;
     const defaultLabelMargin = this.primitives?.nodes?.label?.margin ?? 5;
     const defaultLabelPosition = "right" as const;
 
-    const characterOffsets: Record<string, number> = {};
+    let characterOffset = 0;
     for (let i = 0, l = visibleNodes.length; i < l; i++) {
       const node = visibleNodes[i];
       const data = this.nodeDataCache[node];
-
-      const labelType = this.labelPrograms[data.type] ? data.type : "default";
-      const labelProgram = this.labelPrograms[labelType];
-      if (!labelProgram) continue;
 
       // Build label display data
       const labelData: LabelDisplayData = {
@@ -1440,7 +1324,7 @@ export default class Sigma<
         position: data.labelPosition ?? defaultLabelPosition,
         hidden: false,
         forceLabel: data.forceLabel ?? false,
-        type: labelType,
+        type: "default",
         zIndex: data.zIndex ?? 0,
         parentType: "node",
         parentKey: node,
@@ -1448,16 +1332,13 @@ export default class Sigma<
         nodeIndex: this.nodeDataTexture!.getIndex(node),
       };
 
-      // Process label in its matching program
-      const offset = characterOffsets[labelType] || 0;
-      const charsProcessed = labelProgram.processLabel(node, offset, labelData);
-      characterOffsets[labelType] = offset + charsProcessed;
+      // Process label in the program
+      const charsProcessed = this.labelProgram.processLabel(node, characterOffset, labelData);
+      characterOffset += charsProcessed;
     }
 
     // Render WebGL labels (programs handle two-pass rendering internally)
-    for (const type in this.labelPrograms) {
-      this.labelPrograms[type].render(params);
-    }
+    this.labelProgram.render(params);
   }
 
   /**
@@ -1467,95 +1348,84 @@ export default class Sigma<
    * @private
    */
   private renderBackdrops(params: RenderParams, depth?: string): void {
-    // Group nodes by their program type
-    const nodesByType: Record<string, string[]> = {};
+    if (!this.backdropProgram) return;
 
+    // Collect visible backdrop nodes
+    const nodes: string[] = [];
     for (const key of this.nodesWithBackdrop) {
       const data = this.nodeDataCache[key];
       if (!data || data.hidden) continue;
       if (depth && data.depth !== depth) continue;
-
-      const type = data.type || "default";
-      if (!nodesByType[type]) nodesByType[type] = [];
-      nodesByType[type].push(key);
+      nodes.push(key);
     }
 
-    // Render backdrops for each program type
-    for (const type in nodesByType) {
-      const program = this.backdropPrograms[type];
-      if (!program) continue;
+    if (nodes.length === 0) return;
 
-      const nodes = nodesByType[type];
-      program.reallocate(nodes.length);
+    this.backdropProgram.reallocate(nodes.length);
 
-      for (let i = 0; i < nodes.length; i++) {
-        const key = nodes[i];
-        const data = this.nodeDataCache[key];
+    for (let i = 0; i < nodes.length; i++) {
+      const key = nodes[i];
+      const data = this.nodeDataCache[key];
 
-        // Get label dimensions using canvas context (matches label rendering)
-        const labelSize = data.labelSize ?? 14;
-        const labelFont = "sans-serif";
-        let labelWidth = 0;
-        let labelHeight = 0;
-        if (data.label) {
-          const context = this.canvasContexts.labels;
-          context.font = `normal ${labelSize}px ${labelFont}`;
-          const textWidth = context.measureText(data.label).width;
-          // Match original canvas hover: boxWidth = textWidth + 5, boxHeight = labelSize + 4
-          labelWidth = Math.round(textWidth + 5);
-          labelHeight = Math.round(labelSize + 4);
-        }
-
-        // Get shapeId
-        const shapeMap = this.nodeTypeShapeMap[type];
-        const globalIds = this.nodeTypeGlobalShapeIds[type];
-        let shapeId: number;
-        if (shapeMap && globalIds) {
-          const localIndex = shapeMap[data.shape || Object.keys(shapeMap)[0]];
-          shapeId = globalIds[localIndex];
-        } else {
-          shapeId = getShapeId(data.shape || "circle");
-        }
-
-        // Compute backdrop values only when the program uses per-node attributes
-        // When useBackdropAttributes is false, the shader uses uniforms and ignores these values
-        const ProgramClass = program.constructor as { useBackdropAttributes?: boolean };
-        let backdropColor: [number, number, number, number] = [0, 0, 0, 0];
-        let backdropShadowColor: [number, number, number, number] = [0, 0, 0, 0];
-        let backdropShadowBlur = 0;
-        let backdropPadding = 0;
-
-        if (ProgramClass.useBackdropAttributes) {
-          const rawBgColor = data.backdropColor ? colorToArray(data.backdropColor) : [255, 255, 255, 255];
-          const rawShadowColor = data.backdropShadowColor ? colorToArray(data.backdropShadowColor) : [0, 0, 0, 128];
-          backdropColor = rawBgColor.map((c) => c / 255) as [number, number, number, number];
-          backdropShadowColor = rawShadowColor.map((c) => c / 255) as [number, number, number, number];
-          backdropShadowBlur = data.backdropShadowBlur ?? 12;
-          backdropPadding = data.backdropPadding ?? 6;
-        }
-
-        const backdropData: BackdropDisplayData = {
-          key,
-          x: data.x,
-          y: data.y,
-          size: data.size,
-          label: data.label,
-          labelWidth,
-          labelHeight,
-          type,
-          shapeId,
-          position: data.labelPosition || "right",
-          backdropColor,
-          backdropShadowColor,
-          backdropShadowBlur,
-          backdropPadding,
-        };
-
-        program.processBackdrop(i, backdropData);
+      // Get label dimensions using canvas context (matches label rendering)
+      const labelSize = data.labelSize ?? 14;
+      const labelFont = "sans-serif";
+      let labelWidth = 0;
+      let labelHeight = 0;
+      if (data.label) {
+        const context = this.canvasContexts.labels;
+        context.font = `normal ${labelSize}px ${labelFont}`;
+        const textWidth = context.measureText(data.label).width;
+        labelWidth = Math.round(textWidth + 5);
+        labelHeight = Math.round(labelSize + 4);
       }
 
-      program.render(params);
+      // Get shapeId
+      let shapeId: number;
+      if (this.nodeShapeMap && this.nodeGlobalShapeIds) {
+        const localIndex = this.nodeShapeMap[data.shape || Object.keys(this.nodeShapeMap)[0]];
+        shapeId = this.nodeGlobalShapeIds[localIndex];
+      } else {
+        shapeId = getShapeId(data.shape || "circle");
+      }
+
+      // Compute backdrop values only when the program uses per-node attributes
+      const ProgramClass = this.backdropProgram.constructor as { useBackdropAttributes?: boolean };
+      let backdropColor: [number, number, number, number] = [0, 0, 0, 0];
+      let backdropShadowColor: [number, number, number, number] = [0, 0, 0, 0];
+      let backdropShadowBlur = 0;
+      let backdropPadding = 0;
+
+      if (ProgramClass.useBackdropAttributes) {
+        const rawBgColor = data.backdropColor ? colorToArray(data.backdropColor) : [255, 255, 255, 255];
+        const rawShadowColor = data.backdropShadowColor ? colorToArray(data.backdropShadowColor) : [0, 0, 0, 128];
+        backdropColor = rawBgColor.map((c) => c / 255) as [number, number, number, number];
+        backdropShadowColor = rawShadowColor.map((c) => c / 255) as [number, number, number, number];
+        backdropShadowBlur = data.backdropShadowBlur ?? 12;
+        backdropPadding = data.backdropPadding ?? 6;
+      }
+
+      const backdropData: BackdropDisplayData = {
+        key,
+        x: data.x,
+        y: data.y,
+        size: data.size,
+        label: data.label,
+        labelWidth,
+        labelHeight,
+        type: "default",
+        shapeId,
+        position: data.labelPosition || "right",
+        backdropColor,
+        backdropShadowColor,
+        backdropShadowBlur,
+        backdropPadding,
+      };
+
+      this.backdropProgram.processBackdrop(i, backdropData);
     }
+
+    this.backdropProgram.render(params);
   }
 
   /**
@@ -1606,13 +1476,14 @@ export default class Sigma<
     const context = this.canvasContexts.edgeLabels;
     context.clearRect(0, 0, this.width, this.height);
 
+    if (!this.edgeLabelProgram) return;
+
     const displayedLabels = new Set<string>();
 
-    // Count characters per edge label program type
-    const charactersPerProgram: Record<string, number> = {};
+    // Collect edges to process and count total characters
+    let totalCharacters = 0;
     const edgesToProcess: Array<{
       edge: string;
-      type: string;
       sourceData: NodeDisplayData;
       targetData: NodeDisplayData;
       edgeData: EdgeDisplayData;
@@ -1636,14 +1507,9 @@ export default class Sigma<
       if (depth && edgeData.labelDepth !== depth) continue;
       if (!edgeData.label) continue;
 
-      // Use the edge's type to find the matching label program
-      const labelType = this.edgeLabelPrograms[edgeData.type] ? edgeData.type : "default";
-      if (!this.edgeLabelPrograms[labelType]) continue;
-
-      charactersPerProgram[labelType] = (charactersPerProgram[labelType] || 0) + edgeData.label.length;
+      totalCharacters += edgeData.label.length;
       edgesToProcess.push({
         edge,
-        type: labelType,
         sourceData,
         targetData,
         edgeData,
@@ -1653,23 +1519,18 @@ export default class Sigma<
       displayedLabels.add(edge);
     }
 
-    // Reallocate edge label programs based on visible character counts
-    for (const type in this.edgeLabelPrograms) {
-      this.edgeLabelPrograms[type].reallocate(charactersPerProgram[type] || 0);
-    }
+    // Reallocate edge label program
+    this.edgeLabelProgram.reallocate(totalCharacters);
 
-    // Process each visible edge label into its matching program's buffer
+    // Process each visible edge label into the program's buffer
     // TODO: These defaults should come from the styles system
     const defaultEdgeLabelSize = 12;
     const defaultEdgeLabelMargin = this.primitives?.edges?.label?.margin ?? 5;
     const defaultEdgeLabelPosition = "over" as const;
     const defaultEdgeLabelColor = "#000";
 
-    const characterOffsets: Record<string, number> = {};
-    for (const { edge, type, sourceData, targetData, edgeData, sourceKey, targetKey } of edgesToProcess) {
-      const labelProgram = this.edgeLabelPrograms[type];
-      if (!labelProgram) continue;
-
+    let characterOffset = 0;
+    for (const { edge, sourceData, targetData, edgeData, sourceKey, targetKey } of edgesToProcess) {
       // Get node texture indices for source and target nodes
       const sourceNodeIndex = this.nodeDataTexture!.getIndex(sourceKey);
       const targetNodeIndex = this.nodeDataTexture!.getIndex(targetKey);
@@ -1684,18 +1545,17 @@ export default class Sigma<
         y: (sourceData.y + targetData.y) / 2,
         size: defaultEdgeLabelSize,
         color: defaultEdgeLabelColor,
-        nodeSize: 0, // Not applicable for edge labels (use sourceSize/targetSize instead)
-        nodeIndex: -1, // Not applicable for edge labels (use sourceNodeIndex/targetNodeIndex instead)
+        nodeSize: 0,
+        nodeIndex: -1,
         margin: defaultEdgeLabelMargin,
         position: edgeData.labelPosition ?? defaultEdgeLabelPosition,
         hidden: false,
         forceLabel: edgeData.forceLabel ?? false,
-        type,
+        type: "default",
         zIndex: edgeData.zIndex ?? 0,
         parentType: "edge",
         parentKey: edge,
-        fontKey: "", // Empty means default font
-        // Edge-specific fields
+        fontKey: "",
         sourceX: sourceData.x,
         sourceY: sourceData.y,
         targetX: targetData.x,
@@ -1705,25 +1565,20 @@ export default class Sigma<
         sourceShape: sourceData.shape || "circle",
         targetShape: targetData.shape || "circle",
         edgeSize: edgeData.size,
-        offset: 0, // Computed by GPU based on position mode
+        offset: 0,
         curvature: (edgeData as unknown as { curvature?: number }).curvature || 0,
-        // Node texture indices for GPU-side lookup
         sourceNodeIndex,
         targetNodeIndex,
-        // Edge texture index for GPU-side lookup (shared data: thickness, curvature, head/tail ratios)
         edgeIndex,
       };
 
-      // Process label in its matching program
-      const offset = characterOffsets[type] || 0;
-      const charsProcessed = labelProgram.processEdgeLabel(edge, offset, labelData);
-      characterOffsets[type] = offset + charsProcessed;
+      // Process label in the program
+      const charsProcessed = this.edgeLabelProgram.processEdgeLabel(edge, characterOffset, labelData);
+      characterOffset += charsProcessed;
     }
 
     // Render WebGL edge labels
-    for (const type in this.edgeLabelPrograms) {
-      this.edgeLabelPrograms[type].render(params);
-    }
+    this.edgeLabelProgram.render(params);
 
     this.displayedEdgeLabels = displayedLabels;
   }
@@ -1819,15 +1674,9 @@ export default class Sigma<
     this.nodeDataTexture!.upload();
     this.edgeDataTexture!.upload();
 
-    // Upload layer attribute textures for all node programs
-    for (const type in this.nodePrograms) {
-      this.nodePrograms[type].uploadLayerTexture?.();
-    }
-
-    // Upload path attribute textures for all edge programs
-    for (const type in this.edgePrograms) {
-      (this.edgePrograms[type] as unknown as { uploadAttributeTexture?: () => void }).uploadAttributeTexture?.();
-    }
+    // Upload layer attribute textures
+    this.nodeProgram!.uploadLayerTexture?.();
+    (this.edgeProgram as unknown as { uploadAttributeTexture?: () => void })?.uploadAttributeTexture?.();
 
     // Bind data textures to their respective texture units
     this.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
@@ -1837,13 +1686,11 @@ export default class Sigma<
     this.displayedNodeLabels = new Set();
     const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
     for (const depth of depthLayers) {
-      // Edge programs in this depth
+      // Edges in this depth
       const edgeRanges = this.depthRanges.edges[depth];
       if (edgeRanges && (!this.settings.hideEdgesOnMove || !moving)) {
-        for (const type in edgeRanges) {
-          for (const { offset, count } of edgeRanges[type]) {
-            if (count > 0) this.edgePrograms[type].render(params, offset, count);
-          }
+        for (const { offset, count } of edgeRanges) {
+          if (count > 0) this.edgeProgram!.render(params, offset, count);
         }
       }
 
@@ -1855,13 +1702,11 @@ export default class Sigma<
       // Backdrops for nodes in this depth (before node programs so they appear behind)
       this.renderBackdrops(params, depth);
 
-      // Node programs in this depth
+      // Nodes in this depth
       const nodeRanges = this.depthRanges.nodes[depth];
       if (nodeRanges) {
-        for (const type in nodeRanges) {
-          for (const { offset, count } of nodeRanges[type]) {
-            if (count > 0) this.nodePrograms[type].render(params, offset, count);
-          }
+        for (const { offset, count } of nodeRanges) {
+          if (count > 0) this.nodeProgram!.render(params, offset, count);
         }
       }
 
@@ -1926,7 +1771,6 @@ export default class Sigma<
       forceLabel: resolvedStyle.labelVisibility === "visible",
       highlighted: nodeState.isHighlighted,
       zIndex: resolvedStyle.zIndex ?? 0,
-      type: "default",
       depth: resolvedStyle.depth ?? "nodes",
       labelDepth: resolvedStyle.labelDepth ?? "nodeLabels",
       shape: resolvedStyle.shape,
@@ -1952,20 +1796,14 @@ export default class Sigma<
     }
 
     // Set shape for edge clamping and multi-shape program selection
-    // For multi-shape programs: preserve user-specified shape attribute if it's valid
-    // For single-shape programs: set to the program's shape slug
-    const shapeMap = this.nodeTypeShapeMap[data.type];
-    if (shapeMap) {
+    if (this.nodeShapeMap) {
       // Multi-shape program: use user-specified shape if valid, otherwise use first shape
-      if (!data.shape || !(data.shape in shapeMap)) {
-        // Default to first shape name (the first key in shapeNameToIndex)
-        data.shape = Object.keys(shapeMap)[0];
+      if (!data.shape || !(data.shape in this.nodeShapeMap)) {
+        data.shape = Object.keys(this.nodeShapeMap)[0];
       }
-      // For edge clamping, we also need the slug for the shape registry lookup
-      // Use the primary slug (first shape) for now - edges will use this for clamping
-    } else if (this.nodeTypeShapeCache[data.type]) {
+    } else if (this.nodeShapeSlug) {
       // Single-shape program: use the program's shape slug
-      data.shape = this.nodeTypeShapeCache[data.type];
+      data.shape = this.nodeShapeSlug;
     }
 
     // Inject declared variables from primitives into display data
@@ -2000,11 +1838,11 @@ export default class Sigma<
     const oldZIndex = this.zIndexCache.nodes[key];
 
     if (oldZIndex !== undefined && oldZIndex !== newZIndex) {
-      this.itemBuckets.nodes.moveItem(data.type, oldZIndex, data.type, newZIndex, key);
+      this.itemBuckets.nodes.moveItem(oldZIndex, newZIndex, key);
     } else if (oldZIndex === undefined) {
-      this.itemBuckets.nodes.addItem(data.type, newZIndex, key);
+      this.itemBuckets.nodes.addItem(newZIndex, key);
     } else {
-      this.itemBuckets.nodes.updateItem(data.type, newZIndex, key);
+      this.itemBuckets.nodes.updateItem(newZIndex, key);
     }
     this.zIndexCache.nodes[key] = newZIndex;
   }
@@ -2033,7 +1871,7 @@ export default class Sigma<
     if (data) {
       const zIndex = this.zIndexCache.nodes[key];
       if (zIndex !== undefined) {
-        this.itemBuckets.nodes.removeItem(data.type, zIndex, key);
+        this.itemBuckets.nodes.removeItem(zIndex, key);
         delete this.zIndexCache.nodes[key];
       }
     }
@@ -2076,7 +1914,6 @@ export default class Sigma<
       hidden: resolvedStyle.visibility === "hidden",
       forceLabel: resolvedStyle.labelVisibility === "visible",
       zIndex: resolvedStyle.zIndex ?? 0,
-      type: "default",
       depth: resolvedStyle.depth ?? "edges",
       labelDepth: resolvedStyle.labelDepth ?? "edgeLabels",
       path: resolvedStyle.path,
@@ -2116,11 +1953,11 @@ export default class Sigma<
     const oldZIndex = this.zIndexCache.edges[key];
 
     if (oldZIndex !== undefined && oldZIndex !== newZIndex) {
-      this.itemBuckets.edges.moveItem(data.type, oldZIndex, data.type, newZIndex, key);
+      this.itemBuckets.edges.moveItem(oldZIndex, newZIndex, key);
     } else if (oldZIndex === undefined) {
-      this.itemBuckets.edges.addItem(data.type, newZIndex, key);
+      this.itemBuckets.edges.addItem(newZIndex, key);
     } else {
-      this.itemBuckets.edges.updateItem(data.type, newZIndex, key);
+      this.itemBuckets.edges.updateItem(newZIndex, key);
     }
     this.zIndexCache.edges[key] = newZIndex;
   }
@@ -2145,7 +1982,7 @@ export default class Sigma<
     if (data) {
       const zIndex = this.zIndexCache.edges[key];
       if (zIndex !== undefined) {
-        this.itemBuckets.edges.removeItem(data.type, zIndex, key);
+        this.itemBuckets.edges.removeItem(zIndex, key);
         delete this.zIndexCache.edges[key];
       }
     }
@@ -2246,11 +2083,9 @@ export default class Sigma<
    */
   private addNodeToProgram(node: string, fingerprint: number, position: number): void {
     const data = this.nodeDataCache[node];
-    const nodeProgram = this.nodePrograms[data.type];
-    if (!nodeProgram) throw new Error(`Sigma: could not find a suitable program for node type "${data.type}"!`);
     // Get the node's texture index (already allocated during processing)
     const textureIndex = this.nodeDataTexture!.getIndex(node);
-    nodeProgram.process(fingerprint, position, data, textureIndex, node);
+    this.nodeProgram!.process(fingerprint, position, data, textureIndex, node);
     // Saving program index
     this.nodeProgramIndex[node] = position;
   }
@@ -2264,8 +2099,6 @@ export default class Sigma<
    */
   private addEdgeToProgram(edge: string, fingerprint: number, position: number): void {
     const data = this.edgeDataCache[edge];
-    const edgeProgram = this.edgePrograms[data.type];
-    if (!edgeProgram) throw new Error(`Sigma: could not find a suitable program for edge type "${data.type}"!`);
     const extremities = this.graph.extremities(edge),
       sourceData = this.nodeDataCache[extremities[0]],
       targetData = this.nodeDataCache[extremities[1]];
@@ -2277,9 +2110,8 @@ export default class Sigma<
     // Allocate edge in edge data texture (or get existing allocation)
     const edgeTextureIndex = this.edgeDataTexture!.allocate(edge);
 
-    // Get program class static properties from registered program instance
-    const edgeProgramInstance = this.edgePrograms[data.type];
-    const programStatic = edgeProgramInstance?.constructor as unknown as {
+    // Get program class static properties
+    const programStatic = this.edgeProgram!.constructor as unknown as {
       programOptions?: { extremities?: Array<{ name: string; length: number }> };
       pathNameToIndex?: Record<string, number>;
       extremityNameToIndex?: Record<string, number>;
@@ -2332,7 +2164,7 @@ export default class Sigma<
       tailId,
     );
 
-    edgeProgram.process(fingerprint, position, sourceData, targetData, data, edgeTextureIndex);
+    this.edgeProgram!.process(fingerprint, position, sourceData, targetData, data, edgeTextureIndex);
     // Saving program index
     this.edgeProgramIndex[edge] = position;
   }
@@ -3122,10 +2954,8 @@ export default class Sigma<
 
       // Update node data texture (size may change on hover)
       let shapeId: number;
-      const shapeMap = this.nodeTypeShapeMap[data.type];
-      const globalIds = this.nodeTypeGlobalShapeIds[data.type];
-      if (shapeMap && globalIds && data.shape && data.shape in shapeMap) {
-        shapeId = globalIds[shapeMap[data.shape]];
+      if (this.nodeShapeMap && this.nodeGlobalShapeIds && data.shape && data.shape in this.nodeShapeMap) {
+        shapeId = this.nodeGlobalShapeIds[this.nodeShapeMap[data.shape]];
       } else {
         shapeId = getShapeId(data.shape || "circle");
       }
@@ -3487,26 +3317,16 @@ export default class Sigma<
     while (container.firstChild) container.removeChild(container.firstChild);
 
     // Kill programs:
-    for (const type in this.nodePrograms) {
-      this.nodePrograms[type].kill();
-    }
-    for (const type in this.edgePrograms) {
-      this.edgePrograms[type].kill();
-    }
-    for (const type in this.labelPrograms) {
-      this.labelPrograms[type].kill();
-    }
-    for (const type in this.edgeLabelPrograms) {
-      this.edgeLabelPrograms[type].kill();
-    }
-    for (const type in this.backdropPrograms) {
-      this.backdropPrograms[type].kill();
-    }
-    this.nodePrograms = {};
-    this.backdropPrograms = {};
-    this.edgePrograms = {};
-    this.labelPrograms = {};
-    this.edgeLabelPrograms = {};
+    this.nodeProgram?.kill();
+    this.edgeProgram?.kill();
+    this.labelProgram?.kill();
+    this.edgeLabelProgram?.kill();
+    this.backdropProgram?.kill();
+    this.nodeProgram = null;
+    this.edgeProgram = null;
+    this.labelProgram = null;
+    this.edgeLabelProgram = null;
+    this.backdropProgram = null;
 
     // Cleanup SDF atlas
     if (this.sdfAtlas) {
@@ -3585,38 +3405,38 @@ export default class Sigma<
       textures.push({ name: "edgeData", ...this.edgeDataTexture.getMemoryStats() });
     }
 
-    // Node programs
-    for (const [key, program] of Object.entries(this.nodePrograms)) {
-      buffers.push({ program: `nodes:${key}`, ...program.getMemoryStats() });
+    // Node program
+    if (this.nodeProgram) {
+      buffers.push({ program: "nodes", ...this.nodeProgram.getMemoryStats() });
       const layerStats = (
-        program as { getLayerTextureStats?: () => Omit<TextureStats, "name"> }
+        this.nodeProgram as { getLayerTextureStats?: () => Omit<TextureStats, "name"> }
       ).getLayerTextureStats?.();
       if (layerStats) {
-        textures.push({ name: `nodes:${key}:layerAttributes`, ...layerStats });
+        textures.push({ name: "nodes:layerAttributes", ...layerStats });
       }
     }
-    // Edge programs
-    for (const [key, program] of Object.entries(this.edgePrograms)) {
-      buffers.push({ program: `edges:${key}`, ...program.getMemoryStats() });
+    // Edge program
+    if (this.edgeProgram) {
+      buffers.push({ program: "edges", ...this.edgeProgram.getMemoryStats() });
       const attrStats = (
-        program as { getAttributeTextureStats?: () => Omit<TextureStats, "name"> | null }
+        this.edgeProgram as { getAttributeTextureStats?: () => Omit<TextureStats, "name"> | null }
       ).getAttributeTextureStats?.();
       if (attrStats) {
-        textures.push({ name: `edges:${key}:pathAttributes`, ...attrStats });
+        textures.push({ name: "edges:pathAttributes", ...attrStats });
       }
     }
 
     // Label programs
-    for (const [key, program] of Object.entries(this.labelPrograms)) {
-      buffers.push({ program: `labels:${key}`, ...program.getMemoryStats() });
+    if (this.labelProgram) {
+      buffers.push({ program: "labels", ...this.labelProgram.getMemoryStats() });
     }
-    for (const [key, program] of Object.entries(this.edgeLabelPrograms)) {
-      buffers.push({ program: `edgeLabels:${key}`, ...program.getMemoryStats() });
+    if (this.edgeLabelProgram) {
+      buffers.push({ program: "edgeLabels", ...this.edgeLabelProgram.getMemoryStats() });
     }
 
-    // Backdrop programs
-    for (const [key, program] of Object.entries(this.backdropPrograms)) {
-      buffers.push({ program: `backdrop:${key}`, ...program.getMemoryStats() });
+    // Backdrop program
+    if (this.backdropProgram) {
+      buffers.push({ program: "backdrop", ...this.backdropProgram.getMemoryStats() });
     }
 
     // Buckets
@@ -3673,38 +3493,38 @@ export default class Sigma<
       textures.push({ name: "edgeData", ...this.edgeDataTexture.getWriteStats() });
     }
 
-    // Node programs
-    for (const [key, program] of Object.entries(this.nodePrograms)) {
-      buffers.push({ program: `nodes:${key}`, ...program.getWriteStats() });
+    // Node program
+    if (this.nodeProgram) {
+      buffers.push({ program: "nodes", ...this.nodeProgram.getWriteStats() });
       const layerStats = (
-        program as { getLayerTextureWriteStats?: () => { writes: number; bytesWritten: number } }
+        this.nodeProgram as { getLayerTextureWriteStats?: () => { writes: number; bytesWritten: number } }
       ).getLayerTextureWriteStats?.();
       if (layerStats) {
-        textures.push({ name: `nodes:${key}:layerAttributes`, ...layerStats });
+        textures.push({ name: "nodes:layerAttributes", ...layerStats });
       }
     }
-    // Edge programs
-    for (const [key, program] of Object.entries(this.edgePrograms)) {
-      buffers.push({ program: `edges:${key}`, ...program.getWriteStats() });
+    // Edge program
+    if (this.edgeProgram) {
+      buffers.push({ program: "edges", ...this.edgeProgram.getWriteStats() });
       const attrStats = (
-        program as { getAttributeTextureWriteStats?: () => { writes: number; bytesWritten: number } | null }
+        this.edgeProgram as { getAttributeTextureWriteStats?: () => { writes: number; bytesWritten: number } | null }
       ).getAttributeTextureWriteStats?.();
       if (attrStats) {
-        textures.push({ name: `edges:${key}:pathAttributes`, ...attrStats });
+        textures.push({ name: "edges:pathAttributes", ...attrStats });
       }
     }
 
     // Label programs
-    for (const [key, program] of Object.entries(this.labelPrograms)) {
-      buffers.push({ program: `labels:${key}`, ...program.getWriteStats() });
+    if (this.labelProgram) {
+      buffers.push({ program: "labels", ...this.labelProgram.getWriteStats() });
     }
-    for (const [key, program] of Object.entries(this.edgeLabelPrograms)) {
-      buffers.push({ program: `edgeLabels:${key}`, ...program.getWriteStats() });
+    if (this.edgeLabelProgram) {
+      buffers.push({ program: "edgeLabels", ...this.edgeLabelProgram.getWriteStats() });
     }
 
-    // Backdrop programs
-    for (const [key, program] of Object.entries(this.backdropPrograms)) {
-      buffers.push({ program: `backdrop:${key}`, ...program.getWriteStats() });
+    // Backdrop program
+    if (this.backdropProgram) {
+      buffers.push({ program: "backdrop", ...this.backdropProgram.getWriteStats() });
     }
 
     const textureWrites = textures.reduce((sum, t) => sum + t.writes, 0);
@@ -3726,22 +3546,16 @@ export default class Sigma<
     this.nodeDataTexture?.resetWriteStats();
     this.edgeDataTexture?.resetWriteStats();
 
-    for (const program of Object.values(this.nodePrograms)) {
-      program.resetWriteStats();
-      (program as { resetLayerTextureWriteStats?: () => void }).resetLayerTextureWriteStats?.();
+    if (this.nodeProgram) {
+      this.nodeProgram.resetWriteStats();
+      (this.nodeProgram as { resetLayerTextureWriteStats?: () => void }).resetLayerTextureWriteStats?.();
     }
-    for (const program of Object.values(this.edgePrograms)) {
-      program.resetWriteStats();
-      (program as { resetAttributeTextureWriteStats?: () => void }).resetAttributeTextureWriteStats?.();
+    if (this.edgeProgram) {
+      this.edgeProgram.resetWriteStats();
+      (this.edgeProgram as { resetAttributeTextureWriteStats?: () => void }).resetAttributeTextureWriteStats?.();
     }
-    for (const program of Object.values(this.labelPrograms)) {
-      program.resetWriteStats();
-    }
-    for (const program of Object.values(this.edgeLabelPrograms)) {
-      program.resetWriteStats();
-    }
-    for (const program of Object.values(this.backdropPrograms)) {
-      program.resetWriteStats();
-    }
+    this.labelProgram?.resetWriteStats();
+    this.edgeLabelProgram?.resetWriteStats();
+    this.backdropProgram?.resetWriteStats();
   }
 }

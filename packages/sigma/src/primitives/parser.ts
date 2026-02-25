@@ -505,10 +505,6 @@ export interface GeneratedEdgeProgram<
  *   layers: ["fill", { type: "border", size: 2, color: "#fff" }],
  *   variables: { borderSize: { type: "number", default: 0 } },
  * });
- *
- * const sigma = new Sigma(graph, container, {
- *   nodeProgramClasses: { default: NodeProgram },
- * });
  * ```
  */
 export function generateNodeProgram<
@@ -548,10 +544,6 @@ export function generateNodeProgram<
  *   extremities: ["arrow"],
  *   layers: ["plain"],
  *   variables: { curvature: { type: "number", default: 0 } },
- * });
- *
- * const sigma = new Sigma(graph, container, {
- *   edgeProgramClasses: { default: EdgeProgram },
  * });
  * ```
  */

@@ -68,9 +68,6 @@ export {
   type EdgeLayerFactory,
 } from "./layers";
 
-// Built-in programs
-export { EdgeLineProgram, EdgeArrowProgram, EdgeCurveProgram, EdgeCurvedArrowProgram } from "./programs";
-
 // Shader generator (for advanced users)
 export { generateEdgeShaders, type EdgeShaderGenerationOptions } from "./generator";
 

@@ -1,6 +1,7 @@
-import { NodePictogramProgram } from "@sigma/node-image";
+import "@sigma/node-image";
 import Graph from "graphology";
 import Sigma from "sigma";
+import { layerFill } from "sigma/rendering";
 
 export default () => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -67,9 +68,19 @@ export default () => {
   graph.addEdge("f", "e", { size: 10 });
 
   const renderer = new Sigma(graph, container, {
-    defaultNodeType: "pictogram",
-    nodeProgramClasses: {
-      pictogram: NodePictogramProgram,
+    primitives: {
+      nodes: {
+        shapes: ["square"],
+        layers: [
+          layerFill({ color: "#ffffff00" }),
+          {
+            type: "image" as const,
+            drawingMode: "color" as const,
+            padding: 0.2,
+            textureManagerOptions: { size: { mode: "force" as const, value: 256 }, correctCentering: true },
+          },
+        ],
+      },
     },
   });
 

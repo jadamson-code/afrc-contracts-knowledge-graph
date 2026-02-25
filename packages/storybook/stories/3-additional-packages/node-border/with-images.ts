@@ -1,8 +1,7 @@
-import { layerBorder } from "@sigma/node-border";
+import "@sigma/node-border";
 import { layerImage } from "@sigma/node-image";
 import Graph from "graphology";
 import Sigma from "sigma";
-import { createNodeProgram, sdfCircle } from "sigma/rendering";
 
 export default () => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -74,28 +73,24 @@ export default () => {
   graph.addEdge("e", "d", { size: 10 });
   graph.addEdge("f", "e", { size: 10 });
 
-  // Create a custom node program with border and image layers
-  const NodeProgram = createNodeProgram({
-    shape: sdfCircle(),
-    layers: [
-      layerBorder({
-        borders: [
-          { size: { value: 0.1 }, color: { attribute: "pictoColor" } },
-          { size: { fill: true }, color: { attribute: "color" } },
-        ],
-      }),
-      layerImage({
-        padding: 0.3,
-        drawingMode: "color",
-        colorAttribute: "pictoColor",
-      }),
-    ],
-  });
-
   const renderer = new Sigma(graph, container, {
-    defaultNodeType: "pictogram",
-    nodeProgramClasses: {
-      pictogram: NodeProgram,
+    primitives: {
+      nodes: {
+        layers: [
+          {
+            type: "border",
+            borders: [
+              { size: { value: 0.1 }, color: { attribute: "pictoColor" } },
+              { size: 0, color: { attribute: "color" }, fill: true },
+            ],
+          },
+          layerImage({
+            padding: 0.3,
+            drawingMode: "color",
+            colorAttribute: "pictoColor",
+          }),
+        ],
+      },
     },
   });
 

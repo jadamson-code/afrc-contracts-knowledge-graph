@@ -17,7 +17,6 @@
 import chroma from "chroma-js";
 import Graph from "graphology";
 import Sigma from "sigma";
-import { NodeSquareProgram } from "sigma/rendering";
 import { DEFAULT_SETTINGS } from "sigma/settings";
 
 export default () => {
@@ -43,20 +42,21 @@ export default () => {
   }
 
   const renderer = new Sigma(graph, container, {
-    // This flag tells sigma to disable the nodes and edges sizes interpolation
-    // and instead scales them in the same way it handles positions:
-    itemSizesReference: "positions",
-    // This function tells sigma to grow sizes linearly with the zoom, instead
-    // of relatively to the zoom ratio's square root:
-    zoomToSizeRatioFunction: (x) => x,
-    // This disables the default sigma rescaling, so that by default, positions
-    // and sizes are preserved on screen (in pixels):
-    autoRescale: false,
-    // Finally, let's indicate that we want square nodes, to get a perfect
-    // grid:
-    defaultNodeType: "square",
-    nodeProgramClasses: {
-      square: NodeSquareProgram,
+    primitives: {
+      nodes: {
+        shapes: ["square"],
+      },
+    },
+    settings: {
+      // This flag tells sigma to disable the nodes and edges sizes interpolation
+      // and instead scales them in the same way it handles positions:
+      itemSizesReference: "positions",
+      // This function tells sigma to grow sizes linearly with the zoom, instead
+      // of relatively to the zoom ratio's square root:
+      zoomToSizeRatioFunction: (x) => x,
+      // This disables the default sigma rescaling, so that by default, positions
+      // and sizes are preserved on screen (in pixels):
+      autoRescale: false,
     },
   });
 

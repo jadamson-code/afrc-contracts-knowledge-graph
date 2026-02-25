@@ -32,7 +32,7 @@ export const piechartSchema = {
 export type LayerPiechartOptions = FactoryOptionsFromSchema<typeof piechartSchema>;
 
 /**
- * Options for the createNodePiechartProgram() function.
+ * Options for creating a node piechart program.
  */
 export interface CreateNodePiechartProgramOptions {
   /**
@@ -59,7 +59,7 @@ export interface CreateNodePiechartProgramOptions {
 export const DEFAULT_COLOR = "#000000";
 
 /**
- * Default options for createNodePiechartProgram.
+ * Default piechart program options.
  */
 export const DEFAULT_CREATE_NODE_PIECHART_OPTIONS: Omit<CreateNodePiechartProgramOptions, "slices"> = {
   defaultColor: DEFAULT_COLOR,

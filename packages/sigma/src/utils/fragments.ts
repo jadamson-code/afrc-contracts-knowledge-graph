@@ -1,4 +1,4 @@
-export type DepthRanges = Record<string, Record<string, { offset: number; count: number }[]>>;
+export type DepthRanges = Record<string, { offset: number; count: number }[]>;
 
 /**
  * Remove a single position from a depth range, splitting the containing
@@ -7,10 +7,9 @@ export type DepthRanges = Record<string, Record<string, { offset: number; count:
 export function removePositionFromDepthRanges(
   ranges: DepthRanges,
   depth: string,
-  programType: string,
   position: number,
 ): void {
-  const fragments = ranges[depth]?.[programType];
+  const fragments = ranges[depth];
   if (!fragments) return;
 
   for (let i = 0; i < fragments.length; i++) {
@@ -42,16 +41,14 @@ export function removePositionFromDepthRanges(
 export function addPositionToDepthRanges(
   ranges: DepthRanges,
   depth: string,
-  programType: string,
   position: number,
 ): void {
-  if (!ranges[depth]) ranges[depth] = {};
-  if (!ranges[depth][programType]) {
-    ranges[depth][programType] = [{ offset: position, count: 1 }];
+  if (!ranges[depth]) {
+    ranges[depth] = [{ offset: position, count: 1 }];
     return;
   }
 
-  const fragments = ranges[depth][programType];
+  const fragments = ranges[depth];
 
   // Find insertion point (fragments are sorted by offset)
   let insertIdx = fragments.length;

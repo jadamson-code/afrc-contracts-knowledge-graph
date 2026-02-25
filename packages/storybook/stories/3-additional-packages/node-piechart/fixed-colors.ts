@@ -1,4 +1,4 @@
-import { createNodePiechartProgram } from "@sigma/node-piechart";
+import "@sigma/node-piechart";
 import Graph from "graphology";
 import Sigma from "sigma";
 
@@ -70,18 +70,21 @@ export default () => {
   graph.addEdge("e", "d", { size: 10 });
   graph.addEdge("f", "e", { size: 10 });
 
-  const NodePiechartProgram = createNodePiechartProgram({
-    defaultColor: "#BCB7C4",
-    slices: [
-      { color: "#F05454", value: { attribute: "negative" } },
-      { color: "#7798FA", value: { attribute: "neutral" } },
-      { color: "#6DDB55", value: { attribute: "positive" } },
-    ],
-  });
   const renderer = new Sigma(graph, container, {
-    defaultNodeType: "piechart",
-    nodeProgramClasses: {
-      piechart: NodePiechartProgram,
+    primitives: {
+      nodes: {
+        layers: [
+          {
+            type: "piechart",
+            defaultColor: "#BCB7C4",
+            slices: [
+              { color: "#F05454", value: { attribute: "negative" } },
+              { color: "#7798FA", value: { attribute: "neutral" } },
+              { color: "#6DDB55", value: { attribute: "positive" } },
+            ],
+          },
+        ],
+      },
     },
   });
 

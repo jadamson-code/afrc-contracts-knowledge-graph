@@ -4,11 +4,10 @@
  */
 import { downloadAsPNG } from "@sigma/export-image";
 import { bindWebGLLayer, createContoursProgram } from "@sigma/layer-webgl";
-import { NodeImageProgram } from "@sigma/node-image";
+import "@sigma/node-image";
 import Graph from "graphology";
 import { startCase } from "lodash";
 import Sigma from "sigma";
-import { DEFAULT_NODE_PROGRAM_CLASSES } from "sigma/settings";
 
 export default () => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -71,9 +70,10 @@ export default () => {
   graph.addEdge("f", "e", { size: 10 });
 
   const renderer = new Sigma(graph, container, {
-    defaultNodeType: "image",
-    nodeProgramClasses: {
-      image: NodeImageProgram,
+    primitives: {
+      nodes: {
+        layers: [{ type: "image" }],
+      },
     },
   });
 
@@ -119,12 +119,6 @@ export default () => {
       )
       .join("")}
     <br />
-    <h4 style="margin: 0">Additional options</h4>
-    <div>
-      <input type="checkbox" id="include-images" checked />
-      <label for="include-images">Include node images</label>
-    </div>
-    <br />
     <button type="button" id="save-as-png">Save PNG snapshot</button>
   `;
   document.body.appendChild(form);
@@ -133,7 +127,6 @@ export default () => {
   const saveBtn = document.getElementById("save-as-png") as HTMLButtonElement;
   saveBtn.addEventListener("click", () => {
     const layers = allLayers.filter((id) => (document.getElementById(`layer-${id}`) as HTMLInputElement).checked);
-    const includeNodeImages = (document.getElementById(`include-images`) as HTMLInputElement).checked;
 
     downloadAsPNG(renderer, {
       layers,
@@ -141,9 +134,6 @@ export default () => {
       withTempRenderer: (tempRenderer) => {
         bindWebGLLayer(`graphContour`, tempRenderer, contoursProgram);
       },
-      sigmaSettings: !includeNodeImages
-        ? { defaultNodeType: "circle", nodeProgramClasses: DEFAULT_NODE_PROGRAM_CLASSES }
-        : {},
     });
   });
 

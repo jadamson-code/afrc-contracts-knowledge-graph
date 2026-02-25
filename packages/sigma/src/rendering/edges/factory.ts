@@ -83,14 +83,6 @@ float extremity_none(vec2 uv, float lengthRatio, float widthRatio) {
  *   layers: [layerPlain()],
  * });
  * // Edges select via: { path: "curved", head: "arrow", tail: "none" }
- *
- * const sigma = new Sigma(graph, container, {
- *   edgeProgramClasses: {
- *     line: EdgeLineProgram,
- *     arrow: EdgeArrowProgram,
- *     multi: MultiEdgeProgram,
- *   },
- * });
  * ```
  */
 export function createEdgeProgram<

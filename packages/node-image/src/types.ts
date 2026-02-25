@@ -68,8 +68,7 @@ export interface LayerImageOptions extends SchemaOptions {
 }
 
 /**
- * Options for the createNodeImageProgram() function.
- * Maintains backward compatibility with the original API.
+ * Full options for creating a node image program.
  */
 export interface CreateNodeImageProgramOptions extends TextureManagerOptions {
   /**
@@ -125,7 +124,7 @@ export const DEFAULT_LAYER_IMAGE_OPTIONS: LayerImageOptions = {
 };
 
 /**
- * Default options for createNodeImageProgram.
+ * Default image program options.
  */
 export const DEFAULT_CREATE_NODE_IMAGE_OPTIONS: CreateNodeImageProgramOptions = {
   ...DEFAULT_TEXTURE_MANAGER_OPTIONS,

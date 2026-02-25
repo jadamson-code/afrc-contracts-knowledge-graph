@@ -2,9 +2,8 @@
  * Sigma.js Bucket Class
  * ======================
  *
- * A bucket is a collection of items (nodes or edges) at a specific zIndex level
- * for a specific program type. Buckets enable efficient dirty-flag optimization
- * for depth-sorted rendering.
+ * A bucket is a collection of items (nodes or edges) at a specific zIndex level.
+ * Buckets enable efficient dirty-flag optimization for depth-sorted rendering.
  * @module
  */
 
@@ -191,21 +190,26 @@ export class Bucket {
 }
 
 /**
- * BucketCollection manages buckets organized by [programType][zIndex].
+ * BucketCollection manages buckets indexed by zIndex.
  * This provides O(1) bucket lookup and efficient iteration by depth order.
  */
 export class BucketCollection {
-  /** Map of programType -> array of buckets indexed by zIndex */
-  private buckets: Map<string, Bucket[]> = new Map();
+  /** Array of buckets indexed by zIndex */
+  private buckets: Bucket[];
 
-  /** Stride (floats per item) for each program type */
-  private strides: Map<string, number> = new Map();
+  /** Stride (floats per item) */
+  private stride: number;
 
   /** Maximum number of depth levels */
   private maxDepthLevels: number;
 
-  constructor(maxDepthLevels: number) {
+  constructor(maxDepthLevels: number, stride: number = 1) {
     this.maxDepthLevels = maxDepthLevels;
+    this.stride = stride;
+    this.buckets = [];
+    for (let z = 0; z < maxDepthLevels; z++) {
+      this.buckets.push(new Bucket(stride));
+    }
   }
 
   /**
@@ -216,7 +220,7 @@ export class BucketCollection {
   }
 
   /**
-   * Updates the maximum depth levels and resizes all bucket arrays.
+   * Updates the maximum depth levels and resizes the bucket array.
    * Items in buckets beyond the new max will be moved to the highest bucket.
    */
   setMaxDepthLevels(maxDepthLevels: number): void {
@@ -225,59 +229,38 @@ export class BucketCollection {
     const oldMax = this.maxDepthLevels;
     this.maxDepthLevels = maxDepthLevels;
 
-    for (const [programType, programBuckets] of this.buckets) {
-      const stride = this.strides.get(programType) || 1;
-
-      if (maxDepthLevels > oldMax) {
-        // Add new buckets
-        for (let z = oldMax; z < maxDepthLevels; z++) {
-          programBuckets.push(new Bucket(stride));
-        }
-      } else {
-        // Move items from removed buckets to the highest remaining bucket
-        const highestBucket = programBuckets[maxDepthLevels - 1];
-        for (let z = maxDepthLevels; z < oldMax; z++) {
-          const bucket = programBuckets[z];
-          for (const key of bucket.getItems()) {
-            highestBucket.addItem(key);
-          }
-        }
-        // Remove excess buckets
-        programBuckets.length = maxDepthLevels;
+    if (maxDepthLevels > oldMax) {
+      // Add new buckets
+      for (let z = oldMax; z < maxDepthLevels; z++) {
+        this.buckets.push(new Bucket(this.stride));
       }
+    } else {
+      // Move items from removed buckets to the highest remaining bucket
+      const highestBucket = this.buckets[maxDepthLevels - 1];
+      for (let z = maxDepthLevels; z < oldMax; z++) {
+        const bucket = this.buckets[z];
+        for (const key of bucket.getItems()) {
+          highestBucket.addItem(key);
+        }
+      }
+      // Remove excess buckets
+      this.buckets.length = maxDepthLevels;
     }
   }
 
   /**
-   * Registers a program type with its stride
+   * Gets the bucket for a specific zIndex
    */
-  registerProgram(programType: string, stride: number): void {
-    if (!this.buckets.has(programType)) {
-      this.strides.set(programType, stride);
-      const programBuckets: Bucket[] = [];
-      for (let z = 0; z < this.maxDepthLevels; z++) {
-        programBuckets.push(new Bucket(stride));
-      }
-      this.buckets.set(programType, programBuckets);
-    }
-  }
-
-  /**
-   * Gets the bucket for a specific program type and zIndex
-   */
-  getBucket(programType: string, zIndex: number): Bucket | null {
-    const programBuckets = this.buckets.get(programType);
-    if (!programBuckets) return null;
-
+  getBucket(zIndex: number): Bucket | null {
     const clampedZ = clampZIndex(zIndex, this.maxDepthLevels);
-    return programBuckets[clampedZ];
+    return this.buckets[clampedZ];
   }
 
   /**
    * Adds an item to the appropriate bucket
    */
-  addItem(programType: string, zIndex: number, key: string): void {
-    const bucket = this.getBucket(programType, zIndex);
+  addItem(zIndex: number, key: string): void {
+    const bucket = this.getBucket(zIndex);
     if (bucket) {
       bucket.addItem(key);
     }
@@ -286,41 +269,28 @@ export class BucketCollection {
   /**
    * Removes an item from a bucket
    */
-  removeItem(programType: string, zIndex: number, key: string): void {
-    const bucket = this.getBucket(programType, zIndex);
+  removeItem(zIndex: number, key: string): void {
+    const bucket = this.getBucket(zIndex);
     if (bucket) {
       bucket.removeItem(key);
     }
   }
 
   /**
-   * Moves an item between buckets.
-   * Supports both zIndex changes and program type changes.
+   * Moves an item between buckets (zIndex change).
    */
-  moveItem(oldProgramType: string, oldZIndex: number, newProgramType: string, newZIndex: number, key: string): void {
-    this.removeItem(oldProgramType, oldZIndex, key);
-    this.addItem(newProgramType, newZIndex, key);
+  moveItem(oldZIndex: number, newZIndex: number, key: string): void {
+    this.removeItem(oldZIndex, key);
+    this.addItem(newZIndex, key);
   }
 
   /**
    * Updates an item's attributes (marks the containing bucket as dirty)
    */
-  updateItem(programType: string, zIndex: number, key: string): void {
-    const bucket = this.getBucket(programType, zIndex);
+  updateItem(zIndex: number, key: string): void {
+    const bucket = this.getBucket(zIndex);
     if (bucket) {
       bucket.updateItem(key);
-    }
-  }
-
-  /**
-   * Clears all buckets for a program type
-   */
-  clearProgram(programType: string): void {
-    const programBuckets = this.buckets.get(programType);
-    if (programBuckets) {
-      for (const bucket of programBuckets) {
-        bucket.clear();
-      }
     }
   }
 
@@ -328,8 +298,8 @@ export class BucketCollection {
    * Clears all buckets
    */
   clearAll(): void {
-    for (const [programType] of this.buckets) {
-      this.clearProgram(programType);
+    for (const bucket of this.buckets) {
+      bucket.clear();
     }
   }
 
@@ -337,13 +307,11 @@ export class BucketCollection {
    * Iterates over all buckets in zIndex order (back-to-front).
    * Calls the callback for each non-empty bucket.
    */
-  forEachBucketByZIndex(callback: (programType: string, zIndex: number, bucket: Bucket) => void): void {
+  forEachBucketByZIndex(callback: (zIndex: number, bucket: Bucket) => void): void {
     for (let z = 0; z < this.maxDepthLevels; z++) {
-      for (const [programType, programBuckets] of this.buckets) {
-        const bucket = programBuckets[z];
-        if (bucket.count > 0) {
-          callback(programType, z, bucket);
-        }
+      const bucket = this.buckets[z];
+      if (bucket.count > 0) {
+        callback(z, bucket);
       }
     }
   }
@@ -351,36 +319,20 @@ export class BucketCollection {
   /**
    * Rebuilds all dirty buckets
    */
-  rebuildDirtyBuckets(getProcessItem: (programType: string) => ProcessItemFunction): void {
-    for (const [programType, programBuckets] of this.buckets) {
-      // Only create processItem function if at least one bucket is dirty
-      let processItem: ProcessItemFunction | null = null;
-      for (const bucket of programBuckets) {
-        if (bucket.isDirty) {
-          if (!processItem) {
-            processItem = getProcessItem(programType);
-          }
-          bucket.rebuild(processItem);
-        }
+  rebuildDirtyBuckets(processItem: ProcessItemFunction): void {
+    for (const bucket of this.buckets) {
+      if (bucket.isDirty) {
+        bucket.rebuild(processItem);
       }
     }
-  }
-
-  /**
-   * Returns all registered program types
-   */
-  getProgramTypes(): string[] {
-    return Array.from(this.buckets.keys());
   }
 
   /**
    * Checks if any bucket is dirty
    */
   hasDirtyBuckets(): boolean {
-    for (const [, programBuckets] of this.buckets) {
-      for (const bucket of programBuckets) {
-        if (bucket.isDirty) return true;
-      }
+    for (const bucket of this.buckets) {
+      if (bucket.isDirty) return true;
     }
     return false;
   }
@@ -388,14 +340,12 @@ export class BucketCollection {
   /**
    * Returns memory stats for all non-empty buckets.
    */
-  getMemoryStats(): { programType: string; zIndex: number; itemCount: number; capacity: number; stride: number; totalBytes: number }[] {
-    const stats: { programType: string; zIndex: number; itemCount: number; capacity: number; stride: number; totalBytes: number }[] = [];
-    for (const [programType, programBuckets] of this.buckets) {
-      for (let z = 0; z < programBuckets.length; z++) {
-        const bucket = programBuckets[z];
-        if (bucket.count > 0) {
-          stats.push({ programType, zIndex: z, ...bucket.getMemoryStats() });
-        }
+  getMemoryStats(): { zIndex: number; itemCount: number; capacity: number; stride: number; totalBytes: number }[] {
+    const stats: { zIndex: number; itemCount: number; capacity: number; stride: number; totalBytes: number }[] = [];
+    for (let z = 0; z < this.buckets.length; z++) {
+      const bucket = this.buckets[z];
+      if (bucket.count > 0) {
+        stats.push({ zIndex: z, ...bucket.getMemoryStats() });
       }
     }
     return stats;

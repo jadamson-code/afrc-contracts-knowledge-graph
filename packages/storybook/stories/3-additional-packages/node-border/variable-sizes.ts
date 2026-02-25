@@ -1,4 +1,4 @@
-import { createNodeBorderProgram } from "@sigma/node-border";
+import "@sigma/node-border";
 import Graph from "graphology";
 import Sigma from "sigma";
 
@@ -71,14 +71,18 @@ export default () => {
   graph.addEdge("f", "e", { size: 10 });
 
   const renderer = new Sigma(graph, container, {
-    defaultNodeType: "bordered",
-    nodeProgramClasses: {
-      bordered: createNodeBorderProgram({
-        borders: [
-          { size: { attribute: "borderSize", defaultValue: 0.5 }, color: { attribute: "borderColor" } },
-          { size: { fill: true }, color: { attribute: "color" } },
+    primitives: {
+      nodes: {
+        layers: [
+          {
+            type: "border",
+            borders: [
+              { size: { attribute: "borderSize", default: 0.5 }, color: { attribute: "borderColor" } },
+              { size: 0, color: { attribute: "color" }, fill: true },
+            ],
+          },
         ],
-      }),
+      },
     },
   });
 

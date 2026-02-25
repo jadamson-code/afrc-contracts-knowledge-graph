@@ -49,7 +49,7 @@ export const borderSchema = {
 export type LayerBorderOptions = FactoryOptionsFromSchema<typeof borderSchema>;
 
 /**
- * Options for the createNodeBorderProgram() function.
+ * Options for creating a node border program.
  */
 export interface CreateNodeBorderProgramOptions {
   /**
@@ -73,7 +73,7 @@ export const DEFAULT_BORDERS: NonNullable<LayerBorderOptions["borders"]> = [
 ];
 
 /**
- * Default options for createNodeBorderProgram.
+ * Default border program options.
  */
 export const DEFAULT_CREATE_NODE_BORDER_OPTIONS: CreateNodeBorderProgramOptions = {
   borders: DEFAULT_BORDERS,

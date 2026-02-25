@@ -1,14 +1,6 @@
-import { createNodeImageProgram } from "@sigma/node-image";
 import Graph from "graphology";
 import { SerializedGraph } from "graphology-types";
 import Sigma from "sigma";
-import {
-  EdgeArrowProgram,
-  EdgeCurveProgram,
-  EdgeCurvedArrowProgram,
-  EdgeLineProgram,
-  NodeCircleProgram,
-} from "sigma/rendering";
 
 // Useful data
 import ARCTIC from "../datasets/arctic.json";
@@ -55,16 +47,6 @@ const dependencies: BrowserTestDependencies = {
   Graph,
   Sigma,
   data: { arctic, lesMiserables, largeGraph },
-  nodePrograms: {
-    NodeCircleProgram,
-    NodeImageProgram: createNodeImageProgram({ debounceTimeout: null }),
-  },
-  edgePrograms: {
-    EdgeLineProgram,
-    EdgeCurveProgram,
-    EdgeArrowProgram,
-    EdgeCurvedArrowProgram,
-  },
   container,
 
   // Utils:

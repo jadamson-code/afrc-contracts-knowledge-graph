@@ -229,7 +229,8 @@ uniform float u_sizeRatio;
 uniform float u_correctionRatio;
 uniform float u_pixelRatio;
 uniform float u_cameraAngle;    // Required by node shape SDFs
-uniform float u_sdfBufferPixels; // SDF buffer size in atlas font size pixels
+// u_sdfBufferPixels kept for ABI compatibility but unused in shader
+uniform float u_sdfBufferPixels;
 uniform vec2 u_resolution;
 uniform vec2 u_atlasSize;
 uniform sampler2D u_nodeDataTexture; // Shared texture with node position/size/shape data
@@ -699,31 +700,23 @@ ${textureFetch.varyingAssignments}
   // Character size in screen pixels
   vec2 charSizePixels = charSize * fontScale;
 
-  // Character offset within the glyph (bearing adjustment)
-  // charOffset.x = bearingX (horizontal offset from origin to glyph left edge)
-  // charOffset.y = -bearingY (vertical offset from baseline to glyph top, negated)
+  // Character offset from origin to the atlas region's top-left corner.
+  // bearingX/bearingY already include the SDF buffer.
   vec2 charOffsetPixels = charOffset * fontScale;
 
   // The character's local X offset from pathPos (which is at character center)
-  // Since pathPos is at (origin + advance/2), the character origin is at pathPos - advance/2
-  // So the quad starts at -advance/2 relative to pathPos (in pixels)
   float charLocalX = -charAdvance * 0.5 * fontScale;
 
   // Build quad position:
   // - Start at character origin (charLocalX on X axis, 0 on Y axis = baseline)
-  // - Add bearing offset to get to glyph corner
-  // - Subtract SDF buffer (the atlas texture has padding around each glyph)
+  // - Add bearing offset to get to atlas region corner
   // - Add quad corner * size to get vertex position
   vec2 quadPos;
-  float sdfBufferOffset = u_sdfBufferPixels * fontScale;
-  quadPos.x = charLocalX + charOffsetPixels.x - sdfBufferOffset + a_quadCorner.x * charSizePixels.x;
-  // For Y: bearingY points UP from baseline to top of glyph
-  // charOffset.y = -bearingY, so it's negative (pointing down from baseline)
-  // We want: top of glyph at bearingY above baseline, bottom at bearingY - height
-  // With charOffset.y = -bearingY: glyph top at -charOffset.y, bottom at -charOffset.y - height
-  // Also subtract sdfBufferOffset to account for top padding in atlas texture
+  quadPos.x = charLocalX + charOffsetPixels.x + a_quadCorner.x * charSizePixels.x;
+  // charOffset.y = -bearingY (negated), so -charOffsetPixels.y = bearingY * fontScale
+  // (distance from baseline to atlas region top, positive = upward)
   // Quad corner (0,0) = bottom-left, (1,1) = top-right
-  quadPos.y = -charOffsetPixels.y + sdfBufferOffset - charSizePixels.y * (1.0 - a_quadCorner.y);
+  quadPos.y = -charOffsetPixels.y - charSizePixels.y * (1.0 - a_quadCorner.y);
 
   // Center vertically on the path by offsetting by half the visual text height
   // VERTICAL_CENTER_RATIO is the distance from baseline to visual center as a ratio of atlas font size

@@ -40,7 +40,6 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@mapbox/tiny-sdf": "^2.0.6",
     "events": "^3.3.0",
     "graphology-utils": "^2.5.2"
   },

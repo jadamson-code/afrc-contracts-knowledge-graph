@@ -357,10 +357,6 @@ export function createLabelProgram<
       const scale = labelData.size / DEFAULT_SDF_ATLAS_OPTIONS.fontSize;
 
       // -----------------------------------------------------------------------
-      // Compute character offset within the label
-      // -----------------------------------------------------------------------
-
-      // -----------------------------------------------------------------------
       // Write vertex attributes to buffer
       // -----------------------------------------------------------------------
 
@@ -371,8 +367,9 @@ export function createLabelProgram<
       array[i++] = labelData.nodeIndex;
 
       // a_charOffset: Character position relative to label origin (pixels)
-      // Include glyph bearing for proper character alignment
-      array[i++] = xOffset * scale + glyph.bearingX * scale;
+      // bearingX accounts for the SDF buffer: it points to the atlas region's
+      // left edge (buffer pixels before the glyph body).
+      array[i++] = (xOffset + glyph.bearingX) * scale;
       array[i++] = -glyph.bearingY * scale;
 
       // a_charSize: Character quad dimensions (pixels)

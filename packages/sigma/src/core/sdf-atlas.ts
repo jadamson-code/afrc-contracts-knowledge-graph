@@ -5,9 +5,13 @@
  * Manages SDF (Signed Distance Field) glyph generation and atlas packing
  * for WebGL text rendering. Supports multiple fonts in the same atlas.
  *
+ * The SDF generation is based on the Felzenszwalb & Huttenlocher EDT algorithm
+ * (https://cs.brown.edu/~pff/papers/dt-final.pdf), previously provided by
+ * @mapbox/tiny-sdf. We inline it here to fix glyph clipping bugs (see
+ * https://github.com/mapbox/tiny-sdf/issues/34).
+ *
  * @module
  */
-import TinySDF from "@mapbox/tiny-sdf";
 import { EventEmitter } from "events";
 
 /**
@@ -20,9 +24,9 @@ export interface GlyphMetrics {
   width: number;
   /** Glyph height in pixels (at base font size) */
   height: number;
-  /** Horizontal bearing (offset from origin to left edge) */
+  /** Horizontal bearing (offset from origin to atlas region left edge, includes SDF buffer) */
   bearingX: number;
-  /** Vertical bearing (offset from baseline to top edge) */
+  /** Vertical bearing (offset from baseline to atlas region top edge, includes SDF buffer) */
   bearingY: number;
   /** Horizontal advance (distance to next character origin) */
   advance: number;
@@ -91,12 +95,204 @@ export const DEFAULT_SDF_ATLAS_OPTIONS: SDFAtlasOptions = {
  */
 const GLYPH_MARGIN = 2;
 
+const INF = 1e20;
+
+// ============================================================================
+// SDF glyph generation
+// ============================================================================
+
+/**
+ * Result of generating an SDF glyph.
+ */
+interface SDFGlyph {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+  glyphWidth: number;
+  glyphHeight: number;
+  glyphTop: number;
+  glyphLeft: number;
+  glyphAdvance: number;
+}
+
+/**
+ * Per-font state for SDF generation: a canvas context configured for this
+ * font, plus reusable scratch arrays for the EDT.
+ */
+interface SDFGeneratorState {
+  ctx: CanvasRenderingContext2D;
+  canvasSize: number;
+  gridOuter: Float64Array;
+  gridInner: Float64Array;
+  f: Float64Array;
+  z: Float64Array;
+  v: Uint16Array;
+}
+
+function createSDFGenerator(
+  fontSize: number,
+  fontFamily: string,
+  fontWeight: string,
+  fontStyle: string,
+  buffer: number,
+): SDFGeneratorState {
+  const canvasSize = fontSize + buffer * 4;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasSize;
+  canvas.height = canvasSize;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
+  ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "black";
+
+  return {
+    ctx,
+    canvasSize,
+    gridOuter: new Float64Array(canvasSize * canvasSize),
+    gridInner: new Float64Array(canvasSize * canvasSize),
+    f: new Float64Array(canvasSize),
+    z: new Float64Array(canvasSize + 1),
+    v: new Uint16Array(canvasSize),
+  };
+}
+
+function generateSDFGlyph(
+  gen: SDFGeneratorState,
+  char: string,
+  buffer: number,
+  radius: number,
+  cutoff: number,
+): SDFGlyph {
+  const { ctx, canvasSize } = gen;
+
+  const metrics = ctx.measureText(char);
+  const glyphAdvance = metrics.width;
+  const { actualBoundingBoxAscent, actualBoundingBoxDescent, actualBoundingBoxLeft, actualBoundingBoxRight } = metrics;
+
+  const glyphTop = Math.ceil(actualBoundingBoxAscent);
+  // actualBoundingBoxLeft is positive when the glyph extends LEFT of origin
+  const glyphLeft = Math.ceil(actualBoundingBoxLeft);
+
+  const glyphWidth = Math.max(
+    0,
+    Math.min(canvasSize - buffer, Math.ceil(actualBoundingBoxLeft) + Math.ceil(actualBoundingBoxRight)),
+  );
+  const glyphHeight = Math.min(canvasSize - buffer, glyphTop + Math.ceil(actualBoundingBoxDescent));
+
+  const width = glyphWidth + 2 * buffer;
+  const height = glyphHeight + 2 * buffer;
+
+  const len = Math.max(width * height, 0);
+  const data = new Uint8ClampedArray(len);
+  const glyph: SDFGlyph = { data, width, height, glyphWidth, glyphHeight, glyphTop, glyphLeft, glyphAdvance };
+  if (glyphWidth === 0 || glyphHeight === 0) return glyph;
+
+  const { gridInner, gridOuter } = gen;
+
+  // Draw glyph at (buffer + glyphLeft) so the full extent is captured
+  // starting from x=buffer in the image data
+  ctx.clearRect(buffer, buffer, glyphWidth, glyphHeight);
+  ctx.fillText(char, buffer + glyphLeft, buffer + glyphTop);
+  const imgData = ctx.getImageData(buffer, buffer, glyphWidth, glyphHeight);
+
+  // Initialize grids
+  gridOuter.fill(INF, 0, len);
+  gridInner.fill(0, 0, len);
+
+  for (let y = 0; y < glyphHeight; y++) {
+    for (let x = 0; x < glyphWidth; x++) {
+      const a = imgData.data[4 * (y * glyphWidth + x) + 3] / 255;
+      if (a === 0) continue;
+
+      const j = (y + buffer) * width + x + buffer;
+
+      if (a === 1) {
+        gridOuter[j] = 0;
+        gridInner[j] = INF;
+      } else {
+        const d = 0.5 - a;
+        gridOuter[j] = d > 0 ? d * d : 0;
+        gridInner[j] = d < 0 ? d * d : 0;
+      }
+    }
+  }
+
+  edt(gridOuter, 0, 0, width, height, width, gen.f, gen.v, gen.z);
+  edt(gridInner, buffer, buffer, glyphWidth, glyphHeight, width, gen.f, gen.v, gen.z);
+
+  for (let i = 0; i < len; i++) {
+    const d = Math.sqrt(gridOuter[i]) - Math.sqrt(gridInner[i]);
+    data[i] = Math.round(255 - 255 * (d / radius + cutoff));
+  }
+
+  return glyph;
+}
+
+// 2D Euclidean squared distance transform (Felzenszwalb & Huttenlocher)
+function edt(
+  data: Float64Array,
+  x0: number,
+  y0: number,
+  width: number,
+  height: number,
+  gridSize: number,
+  f: Float64Array,
+  v: Uint16Array | Float64Array,
+  z: Float64Array,
+): void {
+  for (let x = x0; x < x0 + width; x++) edt1d(data, y0 * gridSize + x, gridSize, height, f, v, z);
+  for (let y = y0; y < y0 + height; y++) edt1d(data, y * gridSize + x0, 1, width, f, v, z);
+}
+
+// 1D squared distance transform
+function edt1d(
+  grid: Float64Array,
+  offset: number,
+  stride: number,
+  length: number,
+  f: Float64Array,
+  v: Uint16Array | Float64Array,
+  z: Float64Array,
+): void {
+  v[0] = 0;
+  z[0] = -INF;
+  z[1] = INF;
+  f[0] = grid[offset];
+
+  for (let q = 1, k = 0, s = 0; q < length; q++) {
+    f[q] = grid[offset + q * stride];
+    const q2 = q * q;
+    do {
+      const r = v[k];
+      s = (f[q] - f[r] + q2 - r * r) / (q - r) / 2;
+    } while (s <= z[k] && --k > -1);
+
+    k++;
+    v[k] = q;
+    z[k] = s;
+    z[k + 1] = INF;
+  }
+
+  for (let q = 0, k = 0; q < length; q++) {
+    while (z[k + 1] < q) k++;
+    const r = v[k];
+    const qr = q - r;
+    grid[offset + q * stride] = f[r] + qr * qr;
+  }
+}
+
+// ============================================================================
+// Atlas manager
+// ============================================================================
+
 /**
  * Internal state for a registered font.
  */
 interface FontState {
   descriptor: FontDescriptor;
-  tinySDF: TinySDF;
+  generator: SDFGeneratorState;
   glyphs: Map<number, GlyphMetrics>;
 }
 
@@ -112,20 +308,6 @@ interface AtlasCursor {
 
 /**
  * Manages SDF glyph generation and atlas packing for WebGL text rendering.
- *
- * Features:
- * - Multi-font support: Register multiple fonts, all packed into shared atlas(es)
- * - On-demand glyph generation: Glyphs are generated as needed
- * - Debounced texture updates: Batch glyph additions for performance
- * - Event-based updates: Emits events when atlas changes
- *
- * @example
- * ```typescript
- * const atlas = new SDFAtlasManager();
- * const fontKey = atlas.registerFont({ family: "Arial", weight: "normal", style: "normal" });
- * atlas.ensureGlyphs("Hello World", fontKey);
- * const textures = atlas.getTextures();
- * ```
  */
 export class SDFAtlasManager extends EventEmitter {
   /** Event emitted when atlas textures are updated */
@@ -142,8 +324,6 @@ export class SDFAtlasManager extends EventEmitter {
   private cursor: AtlasCursor = { x: 0, y: 0, rowHeight: 0, atlasIndex: 0 };
   private pendingGlyphs: Array<{ fontKey: FontKey; charCode: number }> = [];
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  // Reserved for future use (incremental update tracking)
-  // private dirty = false;
 
   constructor(options: Partial<SDFAtlasOptions> = {}) {
     super();
@@ -172,9 +352,6 @@ export class SDFAtlasManager extends EventEmitter {
 
   /**
    * Registers a font for SDF generation.
-   *
-   * @param font - Font descriptor
-   * @returns Font key for referencing this font
    */
   registerFont(font: FontDescriptor): FontKey {
     const key = this.getFontKey(font);
@@ -183,19 +360,17 @@ export class SDFAtlasManager extends EventEmitter {
       return key;
     }
 
-    const tinySDF = new TinySDF({
-      fontSize: this.options.fontSize,
-      fontFamily: font.family,
-      fontWeight: font.weight,
-      fontStyle: font.style,
-      buffer: this.options.buffer,
-      radius: this.options.radius,
-      cutoff: this.options.cutoff,
-    });
+    const generator = createSDFGenerator(
+      this.options.fontSize,
+      font.family,
+      font.weight,
+      font.style,
+      this.options.buffer,
+    );
 
     this.fonts.set(key, {
       descriptor: font,
-      tinySDF,
+      generator,
       glyphs: new Map(),
     });
 
@@ -204,9 +379,6 @@ export class SDFAtlasManager extends EventEmitter {
 
   /**
    * Ensures all characters in a string have glyphs in the atlas.
-   *
-   * @param text - Text to ensure glyphs for
-   * @param fontKey - Font to use (must be registered first)
    */
   ensureGlyphs(text: string, fontKey: FontKey): void {
     const fontState = this.fonts.get(fontKey);
@@ -233,10 +405,6 @@ export class SDFAtlasManager extends EventEmitter {
 
   /**
    * Measures the width of a text string.
-   *
-   * @param text - Text to measure
-   * @param fontKey - Font to use
-   * @returns Width in pixels at base font size
    */
   measureText(text: string, fontKey: FontKey): number {
     const fontState = this.fonts.get(fontKey);
@@ -244,7 +412,6 @@ export class SDFAtlasManager extends EventEmitter {
       throw new Error(`Font "${fontKey}" is not registered.`);
     }
 
-    // Use canvas measureText for accurate measurement
     const { family, weight, style } = fontState.descriptor;
     this.measureCtx.font = `${style} ${weight} ${this.options.fontSize}px ${family}`;
 
@@ -253,10 +420,6 @@ export class SDFAtlasManager extends EventEmitter {
 
   /**
    * Gets glyph metrics for a character.
-   *
-   * @param charCode - Unicode code point
-   * @param fontKey - Font key
-   * @returns Glyph metrics or undefined if not in atlas
    */
   getGlyph(charCode: number, fontKey: FontKey): GlyphMetrics | undefined {
     const fontState = this.fonts.get(fontKey);
@@ -266,8 +429,6 @@ export class SDFAtlasManager extends EventEmitter {
 
   /**
    * Gets all atlas textures.
-   *
-   * @returns Array of ImageData for each atlas texture
    */
   getTextures(): ImageData[] {
     return this.textures;
@@ -344,23 +505,20 @@ export class SDFAtlasManager extends EventEmitter {
   private generateTextures(): void {
     if (this.pendingGlyphs.length === 0) return;
 
-    const { maxTextureSize } = this.options;
+    const { maxTextureSize, buffer, radius, cutoff } = this.options;
 
-    // Process each pending glyph
     for (const { fontKey, charCode } of this.pendingGlyphs) {
       const fontState = this.fonts.get(fontKey);
       if (!fontState || fontState.glyphs.has(charCode)) continue;
 
-      // Generate SDF for this glyph
       const char = String.fromCodePoint(charCode);
-      const glyph = fontState.tinySDF.draw(char);
+      const glyph = generateSDFGlyph(fontState.generator, char, buffer, radius, cutoff);
 
       const glyphWidth = glyph.width;
       const glyphHeight = glyph.height;
 
       // Check if glyph fits in current row
       if (this.cursor.x + glyphWidth + GLYPH_MARGIN > maxTextureSize) {
-        // Move to next row
         this.cursor.x = 0;
         this.cursor.y += this.cursor.rowHeight + GLYPH_MARGIN;
         this.cursor.rowHeight = 0;
@@ -368,36 +526,33 @@ export class SDFAtlasManager extends EventEmitter {
 
       // Check if we need a new texture
       if (this.cursor.y + glyphHeight + GLYPH_MARGIN > maxTextureSize) {
-        // Finalize current texture and start new one
         this.finalizeCurrentTexture();
         this.cursor = { x: 0, y: 0, rowHeight: 0, atlasIndex: this.cursor.atlasIndex + 1 };
         this.ctx.clearRect(0, 0, maxTextureSize, maxTextureSize);
       }
 
-      // Draw glyph to canvas
-      // tiny-sdf returns single-channel (grayscale) data, we need to convert to RGBA
+      // Convert single-channel SDF data to RGBA for the atlas texture
       const sdfData = glyph.data;
       const rgbaData = new Uint8ClampedArray(glyphWidth * glyphHeight * 4);
       for (let i = 0; i < sdfData.length; i++) {
-        const sdfValue = sdfData[i];
         const rgbaIndex = i * 4;
-        // Store SDF value in all channels (R, G, B, A)
-        // The alpha channel contains the SDF value for the shader
-        rgbaData[rgbaIndex] = 255; // R
-        rgbaData[rgbaIndex + 1] = 255; // G
-        rgbaData[rgbaIndex + 2] = 255; // B
-        rgbaData[rgbaIndex + 3] = sdfValue; // A = SDF value
+        rgbaData[rgbaIndex] = 255;
+        rgbaData[rgbaIndex + 1] = 255;
+        rgbaData[rgbaIndex + 2] = 255;
+        rgbaData[rgbaIndex + 3] = sdfData[i];
       }
       const imageData = new ImageData(rgbaData, glyphWidth, glyphHeight);
       this.ctx.putImageData(imageData, this.cursor.x, this.cursor.y);
 
-      // Store glyph metrics
+      // bearingX/bearingY point to the atlas region's top-left corner relative
+      // to the character origin. The atlas region includes the SDF buffer, so
+      // the bearing already accounts for it.
       const metrics: GlyphMetrics = {
         charCode,
         width: glyph.glyphWidth,
         height: glyph.glyphHeight,
-        bearingX: glyph.glyphLeft,
-        bearingY: glyph.glyphTop,
+        bearingX: -glyph.glyphLeft - buffer,
+        bearingY: glyph.glyphTop + buffer,
         advance: glyph.glyphAdvance,
         atlasX: this.cursor.x,
         atlasY: this.cursor.y,
@@ -408,19 +563,14 @@ export class SDFAtlasManager extends EventEmitter {
 
       fontState.glyphs.set(charCode, metrics);
 
-      // Update cursor
       this.cursor.x += glyphWidth + GLYPH_MARGIN;
       this.cursor.rowHeight = Math.max(this.cursor.rowHeight, glyphHeight);
     }
 
-    // Update current texture
     this.finalizeCurrentTexture();
 
-    // Clear pending glyphs
     this.pendingGlyphs = [];
-    // this.dirty = true;
 
-    // Emit update event
     this.emit(SDFAtlasManager.ATLAS_UPDATED_EVENT, {
       textures: this.textures,
       glyphCount: this.getGlyphCount(),
@@ -433,18 +583,14 @@ export class SDFAtlasManager extends EventEmitter {
   private finalizeCurrentTexture(): void {
     const { maxTextureSize } = this.options;
 
-    // Calculate effective dimensions (crop to used area)
     const effectiveWidth = Math.min(
       maxTextureSize,
       Math.max(this.cursor.x, this.cursor.rowHeight > 0 ? maxTextureSize : 1),
     );
     const effectiveHeight = Math.min(maxTextureSize, this.cursor.y + this.cursor.rowHeight + GLYPH_MARGIN);
 
-    // Capture texture data
-    // The SDF values are already in the alpha channel from generateTextures()
     const textureData = this.ctx.getImageData(0, 0, effectiveWidth, effectiveHeight);
 
-    // Store or update texture
     if (this.cursor.atlasIndex >= this.textures.length) {
       this.textures.push(textureData);
     } else {

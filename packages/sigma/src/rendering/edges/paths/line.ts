@@ -29,18 +29,18 @@ export const lineDefinition = defineEdgePath("straight", lineSchema, (): EdgePat
   // language=GLSL
   const glsl = /*glsl*/ `
 // Position at parameter t ∈ [0, 1]
-vec2 path_line_position(float t, vec2 source, vec2 target) {
+vec2 path_straight_position(float t, vec2 source, vec2 target) {
   return mix(source, target, t);
 }
 
 // Total length of the path (analytical - more efficient than sampling)
-float path_line_length(vec2 source, vec2 target) {
+float path_straight_length(vec2 source, vec2 target) {
   return length(target - source);
 }
 `;
 
   return {
-    name: "line",
+    name: "straight",
     segments: 1, // Simple quad
     minBodyLengthRatio: 0, // No minimum for straight edges
     linearParameterization: true, // t maps directly to arc distance

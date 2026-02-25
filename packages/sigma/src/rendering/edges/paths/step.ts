@@ -6,9 +6,6 @@
  * The path connects nodes using only horizontal and vertical segments,
  * forming a stair-step pattern.
  *
- * This implementation uses exact geometry with perfect miter joins at corners,
- * achieved through custom generateConstantData().
- *
  * @module
  */
 import { defineEdgePath } from "./factory";
@@ -100,7 +97,6 @@ const float STEP_OFFSET = ${numberToGLSLFloat(offset)};
 const int STEP_ORIENTATION = ${orientationCode};
 const float STEP_FIXED_ANGLE = ${numberToGLSLFloat(fixedAngle)};
 const bool STEP_ROTATE_WITH_CAMERA = ${rotateWithCamera ? "true" : "false"};
-const float STEP_SQRT2 = 1.41421356237;
 
 ${generateRotate2D("step")}
 
@@ -140,22 +136,6 @@ void getStepSegmentPoints(vec2 source, vec2 target, out vec2 c1, out vec2 c2) {
     c1 = vec2(source.x, midY);
     c2 = vec2(target.x, midY);
   }
-}
-
-// ============================================================================
-// HELPER: Compute miter normal at corner between two segments
-// Returns the normal direction and miter scale factor
-// ============================================================================
-vec2 step_miterNormal(vec2 dir1, vec2 dir2, float side) {
-  // Normals for each segment
-  vec2 n1 = vec2(-dir1.y, dir1.x);
-  vec2 n2 = vec2(-dir2.y, dir2.x);
-
-  // Miter is average of normals, normalized
-  vec2 miter = normalize(n1 + n2);
-
-  // Scale factor for 90° corner: 1/cos(45°) = sqrt(2)
-  return miter * side * STEP_SQRT2;
 }
 
 // ============================================================================
@@ -240,174 +220,6 @@ float path_step_length(vec2 source, vec2 target) {
 }
 `;
 
-  // language=GLSL
-  const vertexGlsl = /*glsl*/ `
-// Step vertex processing: tail/head quads + body with miter corners
-// a_vertexId for body: 0=start, 1=corner1, 2=corner2, 3=end
-
-void step_getVertexPosition(
-  vec2 source, vec2 target,
-  float tStart, float tEnd, float tTailEnd, float tHeadStart,
-  float zone, float zoneT, float side,
-  float thickness, float aaWidth,
-  float headWidthFactor, float tailWidthFactor,
-  out vec2 position, out vec2 normal, out float outT
-) {
-  // Apply camera rotation if not rotating with camera
-  vec2 src = source;
-  vec2 tgt = target;
-  if (!STEP_ROTATE_WITH_CAMERA) {
-    src = step_rotate(source, -u_cameraAngle);
-    tgt = step_rotate(target, -u_cameraAngle);
-  }
-
-  vec2 delta = tgt - src;
-
-  // Get key positions
-  vec2 tipTail = path_step_position(tStart, source, target);
-  vec2 baseTail = path_step_position(tTailEnd, source, target);
-  vec2 baseHead = path_step_position(tHeadStart, source, target);
-  vec2 tipHead = path_step_position(tEnd, source, target);
-
-  if (!STEP_ROTATE_WITH_CAMERA) {
-    tipTail = step_rotate(tipTail, -u_cameraAngle);
-    baseTail = step_rotate(baseTail, -u_cameraAngle);
-    baseHead = step_rotate(baseHead, -u_cameraAngle);
-    tipHead = step_rotate(tipHead, -u_cameraAngle);
-  }
-
-  // Degenerate case (aligned nodes) -> straight line
-  if (abs(delta.x) < 0.0001 || abs(delta.y) < 0.0001) {
-    vec2 dir = length(delta) > 0.0001 ? normalize(delta) : vec2(1.0, 0.0);
-    vec2 n = vec2(-dir.y, dir.x);
-    vec2 pos;
-    float widthFactor;
-
-    if (zone < 0.5) {
-      pos = mix(tipTail, baseTail, zoneT); outT = mix(tStart, tTailEnd, zoneT); widthFactor = tailWidthFactor;
-    } else if (zone < 1.5) {
-      pos = mix(baseTail, baseHead, zoneT); outT = mix(tTailEnd, tHeadStart, zoneT); widthFactor = 1.0;
-    } else {
-      pos = mix(baseHead, tipHead, zoneT); outT = mix(tHeadStart, tEnd, zoneT); widthFactor = headWidthFactor;
-    }
-
-    float halfWidth = (thickness * widthFactor + aaWidth) * 0.5;
-    position = pos + n * side * halfWidth;
-    normal = n * sign(side);
-    if (!STEP_ROTATE_WITH_CAMERA) {
-      position = step_rotate(position, u_cameraAngle);
-      normal = step_rotate(normal, u_cameraAngle);
-    }
-    return;
-  }
-
-  // Corner points and t values
-  vec2 c1, c2;
-  getStepSegmentPoints(src, tgt, c1, c2);
-  float L1 = length(c1 - src), L2 = length(c2 - c1), L3 = length(tgt - c2);
-  float totalLen = L1 + L2 + L3;
-  float tCorner1 = L1 / totalLen, tCorner2 = (L1 + L2) / totalLen;
-
-  // Attachment normals for tail/head quads
-  vec2 tailTang = path_step_tangent(tTailEnd, source, target);
-  vec2 tailAttachNormal = vec2(-tailTang.y, tailTang.x);
-  vec2 headTang = path_step_tangent(tHeadStart, source, target);
-  vec2 headAttachNormal = vec2(-headTang.y, headTang.x);
-  if (!STEP_ROTATE_WITH_CAMERA) {
-    tailAttachNormal = step_rotate(tailAttachNormal, -u_cameraAngle);
-    headAttachNormal = step_rotate(headAttachNormal, -u_cameraAngle);
-  }
-
-  // Segment directions and normals for body
-  vec2 dir1 = normalize(c1 - baseTail), dir2 = normalize(c2 - c1), dir3 = normalize(baseHead - c2);
-  vec2 n1 = vec2(-dir1.y, dir1.x), n2 = vec2(-dir2.y, dir2.x), n3 = vec2(-dir3.y, dir3.x);
-
-  vec2 pos;
-  vec2 norm;
-  float widthFactor;
-
-  if (zone < 0.5) {
-    // TAIL ZONE
-    pos = mix(tipTail, baseTail, zoneT);
-    norm = tailAttachNormal;
-    outT = mix(tStart, tTailEnd, zoneT);
-    widthFactor = tailWidthFactor;
-  } else if (zone < 1.5) {
-    // BODY ZONE with miter corners
-    int vertexId = int(a_vertexId + 0.5);
-    if (vertexId == 0) {
-      pos = baseTail; norm = n1; outT = tTailEnd;
-    } else if (vertexId == 1) {
-      pos = c1; norm = step_miterNormal(dir1, dir2, 1.0); outT = tCorner1;
-    } else if (vertexId == 2) {
-      pos = c2; norm = step_miterNormal(dir2, dir3, 1.0); outT = tCorner2;
-    } else {
-      pos = baseHead; norm = n3; outT = tHeadStart;
-    }
-    widthFactor = 1.0;
-  } else {
-    // HEAD ZONE
-    pos = mix(baseHead, tipHead, zoneT);
-    norm = headAttachNormal;
-    outT = mix(tHeadStart, tEnd, zoneT);
-    widthFactor = headWidthFactor;
-  }
-
-  float halfWidth = (thickness * widthFactor + aaWidth) * 0.5;
-  position = pos + norm * side * halfWidth;
-  normal = norm * sign(side);
-
-  // Rotate back to world space if needed
-  if (!STEP_ROTATE_WITH_CAMERA) {
-    position = step_rotate(position, u_cameraAngle);
-    normal = step_rotate(normal, u_cameraAngle);
-  }
-}
-`;
-
-  /**
-   * Generate constant vertex data: tail (4) + body with corners (8) + head (4) = 16 vertices
-   * Format: [zone, zoneT, side, vertexId]
-   */
-  function generateConstantData() {
-    const FLOAT = WebGL2RenderingContext.FLOAT;
-    const TAIL = 0,
-      BODY = 1,
-      HEAD = 2;
-
-    const data: number[][] = [
-      // Tail: tip to base
-      [TAIL, 0, -1, 0],
-      [TAIL, 0, +1, 0],
-      [TAIL, 1, -1, 0],
-      [TAIL, 1, +1, 0],
-      // Body: start, corner1, corner2, end (vertexId = 0,1,2,3)
-      [BODY, 0, -1, 0],
-      [BODY, 0, +1, 0],
-      [BODY, 0.333, -1, 1],
-      [BODY, 0.333, +1, 1],
-      [BODY, 0.667, -1, 2],
-      [BODY, 0.667, +1, 2],
-      [BODY, 1, -1, 3],
-      [BODY, 1, +1, 3],
-      // Head: base to tip
-      [HEAD, 0, -1, 0],
-      [HEAD, 0, +1, 0],
-      [HEAD, 1, -1, 0],
-      [HEAD, 1, +1, 0],
-    ];
-
-    return {
-      data,
-      attributes: [
-        { name: "a_zone", size: 1, type: FLOAT },
-        { name: "a_zoneT", size: 1, type: FLOAT },
-        { name: "a_side", size: 1, type: FLOAT },
-        { name: "a_vertexId", size: 1, type: FLOAT },
-      ],
-      verticesPerEdge: 16,
-    };
-  }
 
   // language=GLSL
   const analyticalTangentGlsl = /*glsl*/ `
@@ -592,18 +404,17 @@ vec2 path_step_getCornerConcavity(vec2 source, vec2 target, float perpOffset) {
 
   return {
     name: "step",
-    segments: 1, // Not used when generateConstantData is provided
+    segments: 6, // 3 linear segments with 2 vertices each ensures corners are well-sampled
     minBodyLengthRatio: 2, // Ensure corners stay in body zone
     linearParameterization: true, // t maps linearly to arc distance (piecewise-linear path)
     glsl,
-    vertexGlsl,
+    vertexGlsl: "",
     analyticalTangentGlsl,
     cornerSkipGlsl,
     hasSharpCorners: true,
     innerCornerSkipFactor,
     uniforms: [],
     attributes: [],
-    generateConstantData,
   };
 });
 

@@ -660,6 +660,11 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
       then: "topNodes",
       else: "nodes",
     },
+    labelDepth: {
+      when: ["isHighlighted", "isHovered"],
+      then: "topNodeLabels",
+      else: "nodeLabels",
+    },
     zIndex: {
       when: "isHovered",
       then: 1,

@@ -2136,13 +2136,15 @@ export default class Sigma<
       pathId = pathNameToIndex[edgeData.path];
     }
 
-    // Override head index if edge specifies one
-    if (edgeData.head && extremityNameToIndex?.[edgeData.head] !== undefined) {
+    // Override head index if edge explicitly specifies one (skip "none" — it's the
+    // implicit default from DEFAULT_RESOLVED_EDGE_STYLE and shouldn't override the
+    // program's defaultHead setting)
+    if (edgeData.head && edgeData.head !== "none" && extremityNameToIndex?.[edgeData.head] !== undefined) {
       headId = extremityNameToIndex[edgeData.head];
     }
 
-    // Override tail index if edge specifies one
-    if (edgeData.tail && extremityNameToIndex?.[edgeData.tail] !== undefined) {
+    // Override tail index if edge explicitly specifies one (same logic)
+    if (edgeData.tail && edgeData.tail !== "none" && extremityNameToIndex?.[edgeData.tail] !== undefined) {
       tailId = extremityNameToIndex[edgeData.tail];
     }
 

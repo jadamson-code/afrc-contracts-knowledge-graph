@@ -67,7 +67,7 @@ describe("Memory Stats API", () => {
       sigma.refresh();
 
       const stats = sigma.getMemoryStats();
-      const nodeBuffer = stats.buffers.find((b) => b.program.startsWith("nodes:"));
+      const nodeBuffer = stats.buffers.find((b) => b.program === "nodes");
 
       expect(nodeBuffer).toBeDefined();
       expect(nodeBuffer!.capacity).toBeGreaterThan(0);

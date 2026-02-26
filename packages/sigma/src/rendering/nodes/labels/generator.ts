@@ -26,7 +26,6 @@ export interface GeneratedLabelShaders {
 export interface LabelShaderOptions {
   shapes: SDFShape[];
   rotateWithCamera?: boolean;
-  angle?: number;
 }
 
 // ============================================================================
@@ -159,8 +158,8 @@ float findEdgeDistance(vec2 direction, float size) {
     vec2 screenDir = getLabelDirection(a_positionMode);
 
     // Rotate by label angle to get actual offset direction
-    float la_c = cos(u_labelAngle);
-    float la_s = sin(u_labelAngle);
+    float la_c = cos(a_labelAngle);
+    float la_s = sin(a_labelAngle);
     vec2 rotatedScreenDir = mat2(la_c, -la_s, la_s, la_c) * screenDir;
 
     // Convert to SDF space: flip Y (screen Y-down -> SDF Y-up),
@@ -173,7 +172,7 @@ float findEdgeDistance(vec2 direction, float size) {
     // Find edge distance and compute offset
     float edgeDistNormalized = findEdgeDistance(shapeDir, 1.0);
     float boundaryDistPixels = nodeRadiusPixels * edgeDistNormalized;
-    positionOffset = screenDir * (boundaryDistPixels + a_margin);
+    positionOffset = screenDir * (boundaryDistPixels + margin);
   }`
     : `  // -------------------------------------------------------------------------
   // Step 3: Calculate position offset using shape SDF
@@ -185,8 +184,8 @@ float findEdgeDistance(vec2 direction, float size) {
     vec2 screenDir = getLabelDirection(a_positionMode);
 
     // Rotate by label angle to get actual offset direction
-    float la_c = cos(u_labelAngle);
-    float la_s = sin(u_labelAngle);
+    float la_c = cos(a_labelAngle);
+    float la_s = sin(a_labelAngle);
     vec2 rotatedScreenDir = mat2(la_c, -la_s, la_s, la_c) * screenDir;
 
     // Convert to SDF space: flip Y (screen Y-down -> SDF Y-up)
@@ -195,7 +194,7 @@ float findEdgeDistance(vec2 direction, float size) {
     // Find edge distance and compute offset
     float edgeDistNormalized = findEdgeDistance(sdfDir, 1.0);
     float boundaryDistPixels = nodeRadiusPixels * edgeDistNormalized;
-    positionOffset = screenDir * (boundaryDistPixels + a_margin);
+    positionOffset = screenDir * (boundaryDistPixels + margin);
   }`;
 
   // language=GLSL
@@ -215,6 +214,7 @@ in float a_margin;           // Gap between node edge and label (pixels)
 in float a_positionMode;     // Position: 0=right, 1=left, 2=above, 3=below, 4=over
 in float a_labelWidth;       // Total label width (pixels)
 in float a_labelHeight;      // Label height (pixels)
+in float a_labelAngle;       // Label rotation angle (radians)
 
 // Per-vertex (constant quad corners)
 in vec2 a_quadCorner;        // Quad corner: [-1,-1], [1,-1], [-1,1], [1,1]
@@ -227,11 +227,11 @@ uniform mat3 u_matrix;
 uniform float u_sizeRatio;
 uniform float u_correctionRatio;
 uniform float u_cameraAngle;
-uniform float u_labelAngle;
 uniform vec2 u_resolution;
 uniform vec2 u_atlasSize;
 uniform sampler2D u_nodeDataTexture;
 uniform int u_nodeDataTextureWidth;
+uniform float u_zoomLabelSizeRatio;
 ${shapeUniformDeclarations}
 
 // ============================================================================
@@ -277,6 +277,14 @@ void main() {
   float a_nodeSize = nodeData.z;
   ${shapes.length > 1 ? "g_shapeId = int(nodeData.w);  // Set global shape ID for multi-shape mode" : "// Single-shape mode - shapeId not used"}
 
+  // Apply zoom-dependent label size scaling
+  float zoomScale = u_zoomLabelSizeRatio;
+  float margin = a_margin * zoomScale;
+  vec2 charOffset = a_charOffset * zoomScale;
+  vec2 charSize = a_charSize * zoomScale;
+  float labelWidth = a_labelWidth * zoomScale;
+  float labelHeight = a_labelHeight * zoomScale;
+
   // -------------------------------------------------------------------------
   // Step 1: Transform node position to clip space
   // -------------------------------------------------------------------------
@@ -296,36 +304,36 @@ ${step3Code}
   // Step 4: Calculate final vertex position
   // -------------------------------------------------------------------------
   vec2 cornerOffset = (a_quadCorner + 1.0) * 0.5;
-  vec2 charPixelPos = positionOffset + a_charOffset + cornerOffset * a_charSize;
+  vec2 charPixelPos = positionOffset + charOffset + cornerOffset * charSize;
 
   // Apply text alignment based on position mode
-  float verticalCenter = a_labelHeight * 0.2;
-  float baselineToBottom = a_labelHeight * 0.25;
+  float verticalCenter = labelHeight * 0.2;
+  float baselineToBottom = labelHeight * 0.25;
 
   if (a_positionMode < 0.5) {
     // Right: vertically center
     charPixelPos.y += verticalCenter;
   } else if (a_positionMode < 1.5) {
     // Left: right-align and vertically center
-    charPixelPos.x -= a_labelWidth + 1.0;
+    charPixelPos.x -= labelWidth + 1.0;
     charPixelPos.y += verticalCenter;
   } else if (a_positionMode < 2.5) {
     // Above: center horizontally
-    charPixelPos.x -= a_labelWidth * 0.5;
+    charPixelPos.x -= labelWidth * 0.5;
     charPixelPos.y -= baselineToBottom;
   } else if (a_positionMode < 3.5) {
     // Below: center horizontally
-    charPixelPos.x -= a_labelWidth * 0.5;
-    charPixelPos.y += a_labelHeight - baselineToBottom;
+    charPixelPos.x -= labelWidth * 0.5;
+    charPixelPos.y += labelHeight - baselineToBottom;
   } else {
     // Over: center both
-    charPixelPos.x -= a_labelWidth * 0.5;
+    charPixelPos.x -= labelWidth * 0.5;
     charPixelPos.y += verticalCenter;
   }
 
   // Apply label angle rotation
-  float la_c = cos(u_labelAngle);
-  float la_s = sin(u_labelAngle);
+  float la_c = cos(a_labelAngle);
+  float la_s = sin(a_labelAngle);
   charPixelPos = mat2(la_c, -la_s, la_s, la_c) * charPixelPos;
 
   // Convert to NDC (flip Y: screen Y-down -> clip Y-up)
@@ -411,7 +419,6 @@ export function collectLabelUniforms(shapes: SDFShape[]): string[] {
     "u_sizeRatio",
     "u_correctionRatio",
     "u_cameraAngle",
-    "u_labelAngle",
     "u_resolution",
     "u_atlasSize",
     "u_atlas",
@@ -420,6 +427,7 @@ export function collectLabelUniforms(shapes: SDFShape[]): string[] {
     "u_pixelRatio",
     "u_nodeDataTexture",
     "u_nodeDataTextureWidth",
+    "u_zoomLabelSizeRatio",
   ];
 
   for (const shape of shapes) {

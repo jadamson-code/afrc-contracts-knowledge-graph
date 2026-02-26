@@ -36,6 +36,12 @@ export abstract class LabelProgram<
   ensureGlyphsReady?(texts: string[], fontKey?: string): void;
 
   /**
+   * Register a font for use in labels.
+   * Optional — implementations may provide this for multi-font support.
+   */
+  registerFont?(family: string, weight?: string, style?: string): string;
+
+  /**
    * Screen-space bounds for each label (for hit testing).
    */
   protected labelBounds: Map<string, { x: number; y: number; width: number; height: number }> = new Map();

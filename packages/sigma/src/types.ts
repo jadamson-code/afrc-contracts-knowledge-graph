@@ -80,6 +80,8 @@ export interface NodeDisplayData extends Coordinates, DisplayData {
   shape?: string; // Shape name for edge clamping (e.g., "circle", "square")
   labelPosition?: LabelPosition; // Label position relative to node
   labelSize?: number; // Label font size in pixels
+  labelFont?: string; // Label font family (e.g., "Georgia, serif")
+  labelAngle?: number; // Label rotation angle in radians
   backdropColor?: string; // Backdrop fill color (transparent = no backdrop)
   backdropShadowColor?: string; // Backdrop shadow color
   backdropShadowBlur?: number; // Backdrop shadow blur radius in pixels
@@ -260,6 +262,8 @@ export interface LabelDisplayData {
   margin: number;
   /** Font key for multi-font support (references registered font in atlas) */
   fontKey: string;
+  /** Label rotation angle in radians */
+  labelAngle: number;
   /** Node index in node data texture (for GPU-side lookup) */
   nodeIndex: number;
 }

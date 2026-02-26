@@ -65,7 +65,7 @@ export function createNodeProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: NodeProgramOptions): NodeProgramType<N, E, G> {
-  const { rotateWithCamera = false, label: labelOptions = {}, shapes, backdrop } = options;
+  const { rotateWithCamera = false, label: labelOptions = {}, shapes } = options;
 
   if (shapes.length === 0) {
     throw new Error("createNodeProgram: at least one shape must be provided in 'shapes'");
@@ -110,7 +110,6 @@ export function createNodeProgram<
     shapes,
     rotateWithCamera,
     label: labelOptions,
-    backdrop,
     shapeGlobalIds: shapes.length > 1 ? shapeGlobalIds : undefined,
   });
 

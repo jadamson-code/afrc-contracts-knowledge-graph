@@ -25,6 +25,7 @@ export interface BackdropDisplayData {
   type: string;
   shapeId: number;
   position: LabelPosition;
+  labelAngle: number;
   // Per-node backdrop style data
   backdropColor: [number, number, number, number]; // RGBA floats 0-1
   backdropShadowColor: [number, number, number, number]; // RGBA floats 0-1

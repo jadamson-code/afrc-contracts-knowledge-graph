@@ -78,6 +78,7 @@ import {
   identity,
   matrixFromCamera,
   multiplyVec2,
+  parseFontString,
   validateGraph,
 } from "./utils";
 import { DepthRanges, addPositionToDepthRanges, removePositionFromDepthRanges } from "./utils/fragments";
@@ -195,6 +196,7 @@ export default class Sigma<
 
   // Graph State
   private displayedNodeLabels: Set<string> = new Set();
+  private renderedNodeLabels: Set<string> = new Set();
   private displayedEdgeLabels: Set<string> = new Set();
 
   // State management (new API)
@@ -1220,25 +1222,21 @@ export default class Sigma<
    *
    * @param params - Render parameters
    */
-  private renderWebGLLabels(params: RenderParams, depth?: string): void {
+  private computeDisplayedNodeLabels(): void {
     const cameraState = this.camera.getState();
 
     // Compute viewport bounds in framed graph coordinates for early rejection
-    // We add margins and compute min/max for axis-aligned bounds
     const topLeft = this.viewportToFramedGraph({ x: -X_LABEL_MARGIN, y: -Y_LABEL_MARGIN });
     const topRight = this.viewportToFramedGraph({ x: this.width + X_LABEL_MARGIN, y: -Y_LABEL_MARGIN });
     const bottomLeft = this.viewportToFramedGraph({ x: -X_LABEL_MARGIN, y: this.height + Y_LABEL_MARGIN });
     const bottomRight = this.viewportToFramedGraph({ x: this.width + X_LABEL_MARGIN, y: this.height + Y_LABEL_MARGIN });
 
-    // Get axis-aligned bounding box in framed graph space (handles rotation)
     const graphMinX = Math.min(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x);
     const graphMaxX = Math.max(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x);
     const graphMinY = Math.min(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y);
     const graphMaxY = Math.max(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y);
 
-    // Compute viewport bounds in "null camera space" for LabelGrid query
-    // LabelGrid stores positions using framedGraphToViewport with nullCameraMatrix
-    // We need to transform current viewport corners: viewport -> framedGraph -> nullCameraViewport
+    // LabelGrid uses null-camera viewport space
     const nullCameraMatrix = matrixFromCamera(
       { x: 0.5, y: 0.5, ratio: 1, angle: 0 },
       this.getDimensions(),
@@ -1253,7 +1251,6 @@ export default class Sigma<
       };
     };
 
-    // Transform the framed graph bounds to null camera viewport space
     const nc1 = toNullCameraViewport({ x: graphMinX, y: graphMinY });
     const nc2 = toNullCameraViewport({ x: graphMaxX, y: graphMinY });
     const nc3 = toNullCameraViewport({ x: graphMinX, y: graphMaxY });
@@ -1266,7 +1263,6 @@ export default class Sigma<
       y2: Math.max(nc1.y, nc2.y, nc3.y, nc4.y),
     };
 
-    // Selecting labels to draw using LabelGrid with viewport culling
     const labelsToDisplay = this.labelGrid.getLabelsToDisplay(
       cameraState.ratio,
       this.settings.labelDensity,
@@ -1274,20 +1270,15 @@ export default class Sigma<
     );
     extend(labelsToDisplay, this.nodesWithForcedLabels);
 
-    // Collect visible nodes after viewport/threshold culling
-    const visibleNodes: string[] = [];
-
     for (let i = 0, l = labelsToDisplay.length; i < l; i++) {
       const node = labelsToDisplay[i];
       const data = this.nodeDataCache[node];
 
       if (this.displayedNodeLabels.has(node)) continue;
-      if (depth && data.labelDepth !== depth) continue;
       if (data.hidden) continue;
       if (!data.label) continue;
 
-      // Early rejection in framed graph coordinates (cheap - no matrix multiply)
-      // data.x and data.y are already in framed graph space after normalization
+      // Cheap early rejection in framed graph space (no matrix multiply)
       if (data.x < graphMinX || data.x > graphMaxX || data.y < graphMinY || data.y > graphMaxY) continue;
 
       const { x, y } = this.framedGraphToViewport(data);
@@ -1296,14 +1287,25 @@ export default class Sigma<
       if (!data.forceLabel && size < this.settings.labelRenderedSizeThreshold) continue;
 
       if (
-        x < -X_LABEL_MARGIN ||
-        x > this.width + X_LABEL_MARGIN ||
-        y < -Y_LABEL_MARGIN ||
-        y > this.height + Y_LABEL_MARGIN
+        x < -X_LABEL_MARGIN - size ||
+        x > this.width + X_LABEL_MARGIN + size ||
+        y < -Y_LABEL_MARGIN - size ||
+        y > this.height + Y_LABEL_MARGIN + size
       )
         continue;
 
       this.displayedNodeLabels.add(node);
+    }
+  }
+
+  private renderWebGLLabels(params: RenderParams, depth?: string): void {
+    // Collect visible nodes for this depth from pre-computed displayedNodeLabels
+    const visibleNodes: string[] = [];
+    for (const node of this.displayedNodeLabels) {
+      if (this.renderedNodeLabels.has(node)) continue;
+      const data = this.nodeDataCache[node];
+      if (depth && data.labelDepth !== depth) continue;
+      this.renderedNodeLabels.add(node);
       visibleNodes.push(node);
     }
 
@@ -1324,11 +1326,24 @@ export default class Sigma<
     const defaultLabelSize = 14;
     const defaultLabelMargin = this.primitives?.nodes?.label?.margin ?? 5;
     const defaultLabelPosition = "right" as const;
+    const defaultLabelFont = this.primitives?.nodes?.label?.font?.family || "sans-serif";
+
+    // Font key cache: maps font family strings to registered atlas font keys
+    const fontKeyMap = new Map<string, string>();
 
     let characterOffset = 0;
     for (let i = 0, l = visibleNodes.length; i < l; i++) {
       const node = visibleNodes[i];
       const data = this.nodeDataCache[node];
+
+      // Resolve font key for this node's font family
+      const fontString = data.labelFont || defaultLabelFont;
+      let fontKey = fontKeyMap.get(fontString);
+      if (fontKey === undefined) {
+        const { family, weight, style } = parseFontString(fontString);
+        fontKey = this.labelProgram.registerFont?.(family, weight, style) || "";
+        fontKeyMap.set(fontString, fontKey);
+      }
 
       // Build label display data
       const labelData: LabelDisplayData = {
@@ -1346,7 +1361,8 @@ export default class Sigma<
         zIndex: data.zIndex ?? 0,
         parentType: "node",
         parentKey: node,
-        fontKey: "", // Empty means default font
+        fontKey,
+        labelAngle: data.labelAngle ?? 0,
         nodeIndex: this.nodeDataTexture!.getIndex(node),
       };
 
@@ -1385,14 +1401,15 @@ export default class Sigma<
       const key = nodes[i];
       const data = this.nodeDataCache[key];
 
-      // Get label dimensions using canvas context (matches label rendering)
-      const labelSize = data.labelSize ?? 14;
-      const labelFont = "sans-serif";
+      // Only include label dimensions when the label is actually displayed
+      const labelVisible = this.displayedNodeLabels.has(key);
       let labelWidth = 0;
       let labelHeight = 0;
-      if (data.label) {
+      if (labelVisible && data.label) {
+        const labelSize = data.labelSize ?? 14;
+        const { family, weight, style } = parseFontString(data.labelFont || "sans-serif");
         const context = this.canvasContexts.labels;
-        context.font = `normal ${labelSize}px ${labelFont}`;
+        context.font = `${style} ${weight} ${labelSize}px ${family}`;
         const textWidth = context.measureText(data.label).width;
         labelWidth = Math.round(textWidth + 5);
         labelHeight = Math.round(labelSize + 4);
@@ -1407,21 +1424,12 @@ export default class Sigma<
         shapeId = getShapeId(data.shape || "circle");
       }
 
-      // Compute backdrop values only when the program uses per-node attributes
-      const ProgramClass = this.backdropProgram.constructor as { useBackdropAttributes?: boolean };
-      let backdropColor: [number, number, number, number] = [0, 0, 0, 0];
-      let backdropShadowColor: [number, number, number, number] = [0, 0, 0, 0];
-      let backdropShadowBlur = 0;
-      let backdropPadding = 0;
-
-      if (ProgramClass.useBackdropAttributes) {
-        const rawBgColor = data.backdropColor ? colorToArray(data.backdropColor) : [255, 255, 255, 255];
-        const rawShadowColor = data.backdropShadowColor ? colorToArray(data.backdropShadowColor) : [0, 0, 0, 128];
-        backdropColor = rawBgColor.map((c) => c / 255) as [number, number, number, number];
-        backdropShadowColor = rawShadowColor.map((c) => c / 255) as [number, number, number, number];
-        backdropShadowBlur = data.backdropShadowBlur ?? 12;
-        backdropPadding = data.backdropPadding ?? 6;
-      }
+      const rawBgColor = data.backdropColor ? colorToArray(data.backdropColor) : [255, 255, 255, 255];
+      const rawShadowColor = data.backdropShadowColor ? colorToArray(data.backdropShadowColor) : [0, 0, 0, 128];
+      const backdropColor = rawBgColor.map((c) => c / 255) as [number, number, number, number];
+      const backdropShadowColor = rawShadowColor.map((c) => c / 255) as [number, number, number, number];
+      const backdropShadowBlur = data.backdropShadowBlur ?? 12;
+      const backdropPadding = data.backdropPadding ?? 6;
 
       const backdropData: BackdropDisplayData = {
         key,
@@ -1434,6 +1442,7 @@ export default class Sigma<
         type: "default",
         shapeId,
         position: data.labelPosition || "right",
+        labelAngle: data.labelAngle ?? 0,
         backdropColor,
         backdropShadowColor,
         backdropShadowBlur,
@@ -1574,6 +1583,7 @@ export default class Sigma<
         parentType: "edge",
         parentKey: edge,
         fontKey: "",
+        labelAngle: 0,
         sourceX: sourceData.x,
         sourceY: sourceData.y,
         targetX: targetData.x,
@@ -1704,8 +1714,13 @@ export default class Sigma<
     this.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
     this.edgeDataTexture!.bind(EDGE_DATA_TEXTURE_UNIT);
 
-    // Render all items depth by depth (depth layers control draw order)
+    // Pre-compute which node labels will be displayed (needed by both backdrops and labels)
     this.displayedNodeLabels = new Set();
+    this.renderedNodeLabels = new Set();
+    if (this.settings.renderLabels) {
+      this.computeDisplayedNodeLabels();
+    }
+
     const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
     for (const depth of depthLayers) {
       // Edges in this depth
@@ -1798,6 +1813,8 @@ export default class Sigma<
       shape: resolvedStyle.shape,
       labelPosition: resolvedStyle.labelPosition,
       labelSize: resolvedStyle.labelSize,
+      labelFont: resolvedStyle.labelFont,
+      labelAngle: resolvedStyle.labelAngle,
       backdropColor: resolvedStyle.backdropColor,
       backdropShadowColor: resolvedStyle.backdropShadowColor,
       backdropShadowBlur: resolvedStyle.backdropShadowBlur,
@@ -2071,6 +2088,7 @@ export default class Sigma<
    */
   private clearNodeState(): void {
     this.displayedNodeLabels = new Set();
+    this.renderedNodeLabels = new Set();
     this.nodeStates.clear();
     this.hoveredNode = null;
     this.nodesWithBackdrop.clear();

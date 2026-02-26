@@ -103,16 +103,16 @@ export function createLabelProgram<
   G extends Attributes = Attributes,
 >(options: CreateLabelProgramOptions): LabelProgramType<N, E, G> {
   const { rotateWithCamera = false, label: labelOptions = {}, shapes } = options;
-  const labelAngle = labelOptions.angle ?? 0;
   const labelPosition = labelOptions.position ?? "right";
   const labelMargin = labelOptions.margin ?? 1;
+  const zoomToLabelSizeRatioFunction = labelOptions.zoomToLabelSizeRatioFunction ?? (() => 1);
 
   if (shapes.length === 0) {
     throw new Error("createLabelProgram: at least one shape must be provided in 'shapes'");
   }
 
   // Generate shaders at factory creation time (not per-instance)
-  const shaderOptions: LabelShaderOptions = { shapes, rotateWithCamera, angle: labelAngle };
+  const shaderOptions: LabelShaderOptions = { shapes, rotateWithCamera };
   const generatedShaders = generateLabelShaders(shaderOptions);
 
   // Uniform type for TypeScript
@@ -121,12 +121,12 @@ export function createLabelProgram<
     | "u_sizeRatio"
     | "u_correctionRatio"
     | "u_cameraAngle"
-    | "u_labelAngle"
     | "u_resolution"
     | "u_atlasSize"
     | "u_atlas"
     | "u_gamma"
     | "u_sdfBuffer"
+    | "u_zoomLabelSizeRatio"
     | string; // Allow shape-specific uniforms
 
   // -------------------------------------------------------------------------
@@ -139,14 +139,14 @@ export function createLabelProgram<
     /** Static reference to the generated shader code */
     static readonly generatedShaders = generatedShaders;
 
-    /** Static reference to the label angle */
-    static readonly labelAngle = labelAngle;
-
     /** Static reference to the label position */
     static readonly labelPosition = labelPosition;
 
     /** Static reference to the label margin */
     static readonly labelMargin = labelMargin;
+
+    /** Static reference to the zoom-to-label-size ratio function */
+    static readonly zoomToLabelSizeRatioFunction = zoomToLabelSizeRatioFunction;
 
     // -----------------------------------------------------------------------
     // Instance Properties
@@ -240,6 +240,7 @@ export function createLabelProgram<
           { name: "a_positionMode", size: 1, type: FLOAT },
           { name: "a_labelWidth", size: 1, type: FLOAT },
           { name: "a_labelHeight", size: 1, type: FLOAT },
+          { name: "a_labelAngle", size: 1, type: FLOAT },
         ],
         // Quad corners (same for all characters)
         CONSTANT_ATTRIBUTES: [{ name: "a_quadCorner", size: 2, type: FLOAT }],
@@ -396,6 +397,9 @@ export function createLabelProgram<
 
       // a_labelHeight: Label height in pixels (for vertical centering)
       array[i++] = labelData.size;
+
+      // a_labelAngle: Per-node label rotation angle in radians
+      array[i++] = labelData.labelAngle;
     }
 
     /**
@@ -456,7 +460,6 @@ export function createLabelProgram<
       gl.uniform1f(uniformLocations.u_sizeRatio, params.sizeRatio);
       gl.uniform1f(uniformLocations.u_correctionRatio, params.correctionRatio);
       gl.uniform1f(uniformLocations.u_cameraAngle, params.cameraAngle);
-      gl.uniform1f(uniformLocations.u_labelAngle, NodeLabelProgram.labelAngle);
 
       // Viewport size in physical pixels
       gl.uniform2f(uniformLocations.u_resolution, params.width * params.pixelRatio, params.height * params.pixelRatio);
@@ -486,6 +489,12 @@ export function createLabelProgram<
       gl.uniform1f(uniformLocations.u_gamma, this.gamma);
       gl.uniform1f(uniformLocations.u_sdfBuffer, this.sdfBuffer);
       gl.uniform1f(uniformLocations.u_pixelRatio, params.pixelRatio);
+
+      // Zoom-dependent label size ratio
+      gl.uniform1f(
+        uniformLocations.u_zoomLabelSizeRatio,
+        1 / NodeLabelProgram.zoomToLabelSizeRatioFunction(params.zoomRatio),
+      );
 
       // Shape-specific uniforms (for SDF edge detection)
       // Deduplicate uniforms across all shapes

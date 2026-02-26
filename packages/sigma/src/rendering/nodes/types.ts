@@ -397,11 +397,12 @@ export interface LabelOptions {
   color?: string;
 
   /**
-   * Label rotation angle in radians.
-   * The label text is rotated around its anchor point (closest to the node).
-   * Default: 0
+   * Function that maps camera zoom ratio to a label size ratio.
+   * The label size is divided by this value, so returning values < 1 makes labels bigger.
+   * Default: () => 1 (labels stay at fixed pixel size regardless of zoom).
+   * Example: Math.sqrt makes labels scale with zoom like nodes do.
    */
-  angle?: number;
+  zoomToLabelSizeRatioFunction?: (ratio: number) => number;
 }
 
 /**

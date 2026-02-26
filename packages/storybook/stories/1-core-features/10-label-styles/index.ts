@@ -60,7 +60,6 @@ export default (args: StoryArgs) => {
         layers: [{ type: "fill" }],
         rotateWithCamera: args.rotateWithCamera,
         label: {
-          angle: (args.labelAngle * Math.PI) / 180,
           margin: args.labelMargin,
         },
       },
@@ -71,6 +70,7 @@ export default (args: StoryArgs) => {
         {
           shape: { attribute: "shape" },
           labelPosition: { attribute: "labelPosition", defaultValue: "right" },
+          labelAngle: () => (args.labelAngle * Math.PI) / 180,
         },
       ],
     },

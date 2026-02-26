@@ -283,6 +283,96 @@ export function resolveGraphicValue<
 }
 
 /**
+ * Style dependency classification for optimization.
+ * - "static": no rules depend on state at all
+ * - "item-state": rules depend on item state (e.g. isHovered) but not graph state
+ * - "graph-state": rules may depend on graph state (conservative for opaque functions)
+ */
+export type StyleDependency = "static" | "item-state" | "graph-state";
+
+/**
+ * Classifies the state dependency of a predicate.
+ */
+function classifyPredicate(predicate: unknown): StyleDependency {
+  if (typeof predicate === "function") return "graph-state";
+  if (typeof predicate === "string" || Array.isArray(predicate)) return "item-state";
+  if (typeof predicate === "object" && predicate !== null) return "item-state";
+  return "static";
+}
+
+/**
+ * Classifies the state dependency of a single property value.
+ * Uses the same type guards as resolveGraphicValue to stay in sync.
+ */
+function classifyValue(value: unknown): StyleDependency {
+  if (value === null || value === undefined) return "static";
+  if (isInlineConditional(value)) {
+    const predDep = classifyPredicate(value.when);
+    const thenDep = classifyValue(value.then);
+    const elseDep = value.else !== undefined ? classifyValue(value.else) : "static" as StyleDependency;
+    return worstDependency(predDep, worstDependency(thenDep, elseDep));
+  }
+  if (isValueFunction(value)) return "graph-state";
+  if (isAttributeBinding(value)) return "static";
+  return "static";
+}
+
+/**
+ * Returns the "worst" (most conservative) of two dependency classifications.
+ */
+function worstDependency(a: StyleDependency, b: StyleDependency): StyleDependency {
+  if (a === "graph-state" || b === "graph-state") return "graph-state";
+  if (a === "item-state" || b === "item-state") return "item-state";
+  return "static";
+}
+
+/**
+ * Analyzes a style declaration to determine its state dependency.
+ *
+ * Returns "static" if no rules depend on item or graph state, "item-state" if
+ * rules only depend on item state (string/array/object predicates), or
+ * "graph-state" if any rule uses function predicates or value functions.
+ */
+export function analyzeStyleDependency(
+  styleDeclaration: Record<string, unknown> | Record<string, unknown>[] | undefined,
+): StyleDependency {
+  if (!styleDeclaration) return "static";
+
+  const rules = Array.isArray(styleDeclaration) ? styleDeclaration : [styleDeclaration];
+  let result: StyleDependency = "static";
+
+  for (const rule of rules) {
+    // Conditional rule with `when` predicate
+    if ("when" in rule) {
+      result = worstDependency(result, classifyPredicate(rule.when));
+      // Also check values inside `then` and `else` branches
+      const thenObj = rule.then as Record<string, unknown> | undefined;
+      if (thenObj && typeof thenObj === "object") {
+        for (const value of Object.values(thenObj)) {
+          result = worstDependency(result, classifyValue(value));
+        }
+      }
+      const elseObj = rule.else as Record<string, unknown> | undefined;
+      if (elseObj && typeof elseObj === "object") {
+        for (const value of Object.values(elseObj)) {
+          result = worstDependency(result, classifyValue(value));
+        }
+      }
+    } else {
+      // Regular rule — check each property value
+      for (const [key, value] of Object.entries(rule)) {
+        if (key === "when" || key === "then" || key === "else") continue;
+        result = worstDependency(result, classifyValue(value));
+      }
+    }
+
+    if (result === "graph-state") return result; // Can't get worse
+  }
+
+  return result;
+}
+
+/**
  * Resolved node style values (all properties resolved to concrete values).
  */
 export interface ResolvedNodeStyle {

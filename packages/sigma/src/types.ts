@@ -344,8 +344,9 @@ export {
   evaluateStatePredicate,
   evaluateNodeStyle,
   evaluateEdgeStyle,
+  analyzeStyleDependency,
 } from "./core/styles";
-export type { ResolvedNodeStyle, ResolvedEdgeStyle } from "./core/styles";
+export type { ResolvedNodeStyle, ResolvedEdgeStyle, StyleDependency } from "./core/styles";
 
 /**
  * Primitives API:

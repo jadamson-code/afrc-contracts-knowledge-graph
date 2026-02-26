@@ -11,7 +11,7 @@ import MouseCaptor from "./core/captors/mouse";
 import TouchCaptor from "./core/captors/touch";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
-import { evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
+import { StyleDependency, analyzeStyleDependency, evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
 import { PrimitivesDeclaration, VariablesDefinition, generateEdgeProgram, generateNodeProgram } from "./primitives";
 import { DEFAULT_DEPTH_LAYERS } from "./primitives/types";
 import {
@@ -216,6 +216,15 @@ export default class Sigma<
   private needToRefreshState = false;
   private checkEdgesEventsFrame: number | null = null;
 
+  // Style dependency classification (for selective refreshState)
+  private nodeStyleDependency: StyleDependency = "static";
+  private edgeStyleDependency: StyleDependency = "static";
+
+  // Dirty tracking for selective refreshState
+  private dirtyNodes: Set<string> = new Set();
+  private dirtyEdges: Set<string> = new Set();
+  private graphStateChanged = false;
+
   // Programs (single program per item kind)
   private nodeProgram: NodeProgram<string, N, E, G> | null = null;
   private backdropProgram: BackdropProgram<string, N, E, G> | null = null;
@@ -279,6 +288,15 @@ export default class Sigma<
     // Store reducers
     this.nodeReducer = nodeReducer ?? null;
     this.edgeReducer = edgeReducer ?? null;
+
+    // Analyze style dependency for selective refreshState optimization.
+    // Reducers are opaque functions that receive state, so force "graph-state".
+    this.nodeStyleDependency = this.nodeReducer
+      ? "graph-state"
+      : analyzeStyleDependency(this.stylesDeclaration!.nodes as Record<string, unknown>);
+    this.edgeStyleDependency = this.edgeReducer
+      ? "graph-state"
+      : analyzeStyleDependency(this.stylesDeclaration!.edges as Record<string, unknown>);
 
     // Resolving settings
     this.settings = resolveSettings(settings);
@@ -1609,6 +1627,10 @@ export default class Sigma<
     if (this.needToProcess) {
       this.process();
       this.needToRefreshState = false;
+      // Clear dirty tracking since process() re-evaluates everything
+      this.dirtyNodes.clear();
+      this.dirtyEdges.clear();
+      this.graphStateChanged = false;
     }
     this.needToProcess = false;
 
@@ -2592,6 +2614,9 @@ export default class Sigma<
     const newState = { ...currentState, ...state } as NS;
     this.nodeStates.set(key, newState);
 
+    // Track dirty node for selective refresh
+    this.dirtyNodes.add(key);
+
     // Update hovered node tracking for event system
     this.updateHoveredNodeTracking(key, currentState, newState);
 
@@ -2616,6 +2641,9 @@ export default class Sigma<
     const newState = { ...currentState, ...state } as ES;
     this.edgeStates.set(key, newState);
 
+    // Track dirty edge for selective refresh
+    this.dirtyEdges.add(key);
+
     // Update hovered edge tracking for event system
     this.updateHoveredEdgeTracking(key, currentState, newState);
 
@@ -2636,6 +2664,7 @@ export default class Sigma<
    */
   setGraphState(state: Partial<GS>): this {
     this.graphState = { ...this.graphState, ...state } as GS;
+    this.graphStateChanged = true;
 
     // Re-evaluate styles in-place (no reprocess)
     this.scheduleStateRefresh();
@@ -2655,6 +2684,7 @@ export default class Sigma<
       const currentState = this.getNodeState(key);
       const newState = { ...currentState, ...state } as NS;
       this.nodeStates.set(key, newState);
+      this.dirtyNodes.add(key);
       this.updateHoveredNodeTracking(key, currentState, newState);
     }
 
@@ -2679,6 +2709,7 @@ export default class Sigma<
       const currentState = this.getEdgeState(key);
       const newState = { ...currentState, ...state } as ES;
       this.edgeStates.set(key, newState);
+      this.dirtyEdges.add(key);
       this.updateHoveredEdgeTracking(key, currentState, newState);
     }
 
@@ -2701,6 +2732,7 @@ export default class Sigma<
         if (this.hoveredNode && this.hoveredNode !== key) {
           const prevState = this.getNodeState(this.hoveredNode);
           this.nodeStates.set(this.hoveredNode, { ...prevState, isHovered: false } as NS);
+          this.dirtyNodes.add(this.hoveredNode);
         }
         this.hoveredNode = key;
       } else if (this.hoveredNode === key) {
@@ -2719,6 +2751,7 @@ export default class Sigma<
         if (this.hoveredEdge && this.hoveredEdge !== key) {
           const prevState = this.getEdgeState(this.hoveredEdge);
           this.edgeStates.set(this.hoveredEdge, { ...prevState, isHovered: false } as ES);
+          this.dirtyEdges.add(this.hoveredEdge);
         }
         this.hoveredEdge = key;
       } else if (this.hoveredEdge === key) {
@@ -2743,6 +2776,10 @@ export default class Sigma<
     // Also check edges for hover
     if (!hasHovered && this.hoveredEdge) hasHovered = true;
 
+    if (this.graphState.hasHovered !== hasHovered || this.graphState.hasHighlighted !== hasHighlighted) {
+      this.graphStateChanged = true;
+    }
+
     this.graphState = {
       ...this.graphState,
       hasHovered,
@@ -2763,6 +2800,10 @@ export default class Sigma<
           break;
         }
       }
+    }
+
+    if (this.graphState.hasHovered !== hasHovered) {
+      this.graphStateChanged = true;
     }
 
     this.graphState = {
@@ -2942,56 +2983,83 @@ export default class Sigma<
   }
 
   /**
-   * Re-evaluate all item styles in-place. Called from render() when
-   * needToRefreshState is set.
+   * Re-evaluate item styles in-place. Uses dependency classification to skip
+   * items whose styles can't have changed.
    */
   private refreshState(): void {
-    const graph = this.graph;
+    const needFullNodeRefresh = this.graphStateChanged && this.nodeStyleDependency === "graph-state";
+    const needFullEdgeRefresh = this.graphStateChanged && this.edgeStyleDependency === "graph-state";
 
-    // Re-evaluate all nodes
-    graph.forEachNode((node) => {
-      const oldDepth = this.nodeDataCache[node]?.depth;
-      this.updateNode(node);
-      const data = this.nodeDataCache[node];
-
-      // Update node data texture (size may change on hover)
-      let shapeId: number;
-      if (this.nodeShapeMap && this.nodeGlobalShapeIds && data.shape && data.shape in this.nodeShapeMap) {
-        shapeId = this.nodeGlobalShapeIds[this.nodeShapeMap[data.shape]];
-      } else {
-        shapeId = getShapeId(data.shape || "circle");
+    // Nodes
+    if (needFullNodeRefresh) {
+      this.graph.forEachNode((node) => this.refreshNodeState(node));
+    } else if (this.nodeStyleDependency !== "static") {
+      for (const node of this.dirtyNodes) {
+        this.refreshNodeState(node);
       }
-      this.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
+    }
 
-      // Update fragmented depth ranges if depth changed
-      if (oldDepth && data.depth !== oldDepth) {
-        this.updateNodeDepthRanges(node, oldDepth, data.depth);
+    // Edges
+    if (needFullEdgeRefresh) {
+      this.graph.forEachEdge((edge) => this.refreshEdgeState(edge));
+    } else if (this.edgeStyleDependency !== "static") {
+      for (const edge of this.dirtyEdges) {
+        this.refreshEdgeState(edge);
       }
+    }
 
-      // Rewrite data at existing position
-      const programIndex = this.nodeProgramIndex[node];
-      if (programIndex !== undefined) {
-        this.addNodeToProgram(node, this.nodeIndices[node], programIndex);
-      }
-    });
+    this.dirtyNodes.clear();
+    this.dirtyEdges.clear();
+    this.graphStateChanged = false;
+  }
 
-    // Re-evaluate all edges
-    graph.forEachEdge((edge) => {
-      const oldDepth = this.edgeDataCache[edge]?.depth;
-      this.updateEdge(edge);
-      const newDepth = this.edgeDataCache[edge].depth;
+  /**
+   * Re-evaluate a single node's style and rewrite its GPU data.
+   */
+  private refreshNodeState(node: string): void {
+    const oldDepth = this.nodeDataCache[node]?.depth;
+    this.updateNode(node);
+    const data = this.nodeDataCache[node];
 
-      // Update fragmented depth ranges if depth changed
-      if (oldDepth && newDepth !== oldDepth) {
-        this.updateEdgeDepthRanges(edge, oldDepth, newDepth);
-      }
+    // Update node data texture (size may change on hover)
+    let shapeId: number;
+    if (this.nodeShapeMap && this.nodeGlobalShapeIds && data.shape && data.shape in this.nodeShapeMap) {
+      shapeId = this.nodeGlobalShapeIds[this.nodeShapeMap[data.shape]];
+    } else {
+      shapeId = getShapeId(data.shape || "circle");
+    }
+    this.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
 
-      // Rewrite data at existing position
-      const programIndex = this.edgeProgramIndex[edge];
-      if (programIndex !== undefined) {
-        this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
-      }
-    });
+    // Update fragmented depth ranges if depth changed
+    if (oldDepth && data.depth !== oldDepth) {
+      this.updateNodeDepthRanges(node, oldDepth, data.depth);
+    }
+
+    // Rewrite data at existing position
+    const programIndex = this.nodeProgramIndex[node];
+    if (programIndex !== undefined) {
+      this.addNodeToProgram(node, this.nodeIndices[node], programIndex);
+    }
+  }
+
+  /**
+   * Re-evaluate a single edge's style and rewrite its GPU data.
+   */
+  private refreshEdgeState(edge: string): void {
+    const oldDepth = this.edgeDataCache[edge]?.depth;
+    this.updateEdge(edge);
+    const newDepth = this.edgeDataCache[edge].depth;
+
+    // Update fragmented depth ranges if depth changed
+    if (oldDepth && newDepth !== oldDepth) {
+      this.updateEdgeDepthRanges(edge, oldDepth, newDepth);
+    }
+
+    // Rewrite data at existing position
+    const programIndex = this.edgeProgramIndex[edge];
+    if (programIndex !== undefined) {
+      this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
+    }
   }
 
   /**

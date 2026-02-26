@@ -18,6 +18,7 @@ export const MOUSE_SETTINGS_KEYS = [
   "doubleClickZoomingRatio",
   "dragTimeout",
   "draggedEventsTolerance",
+  "enableCameraMouseRotation",
   "inertiaDuration",
   "inertiaRatio",
   "zoomDuration",
@@ -69,6 +70,10 @@ export default class MouseCaptor<
   startCameraState: CameraState | null = null;
   clicks = 0;
   doubleClickTimeout: number | null = null;
+
+  isRightMouseDown = false;
+  startRotationAngle: number | null = null;
+  startCameraAngle: number | null = null;
 
   currentWheelDirection: -1 | 0 | 1 = 0;
   lastWheelTriggerTime?: number;
@@ -141,6 +146,10 @@ export default class MouseCaptor<
   handleRightClick(e: MouseEvent): void {
     if (!this.enabled) return;
 
+    if (this.settings.enableCameraMouseRotation) {
+      e.preventDefault();
+    }
+
     this.emit("rightClick", getMouseCoords(e, this.container));
   }
 
@@ -182,11 +191,31 @@ export default class MouseCaptor<
       this.isMouseDown = true;
     }
 
+    // Start rotation on right button when enabled
+    if (e.button === 2 && this.settings.enableCameraMouseRotation) {
+      const { x, y } = getPosition(e, this.container);
+      const centerX = this.container.offsetWidth / 2;
+      const centerY = this.container.offsetHeight / 2;
+
+      this.startRotationAngle = Math.atan2(y - centerY, x - centerX);
+      this.startCameraAngle = this.renderer.getCamera().getState().angle;
+      this.isRightMouseDown = true;
+    }
+
     this.emit("mousedown", getMouseCoords(e, this.container));
   }
 
   handleUp(e: MouseEvent): void {
-    if (!this.enabled || !this.isMouseDown) return;
+    if (!this.enabled || (!this.isMouseDown && !this.isRightMouseDown)) return;
+
+    // Right-click rotation: just reset state, no inertia
+    if (this.isRightMouseDown) {
+      this.isRightMouseDown = false;
+      this.startRotationAngle = null;
+      this.startCameraAngle = null;
+      this.emit("mouseup", getMouseCoords(e, this.container));
+      return;
+    }
 
     const camera = this.renderer.getCamera();
     this.isMouseDown = false;
@@ -292,6 +321,21 @@ export default class MouseCaptor<
 
       this.lastMouseX = eX;
       this.lastMouseY = eY;
+
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (this.isRightMouseDown) {
+      const { x: eX, y: eY } = getPosition(e, this.container);
+      const centerX = this.container.offsetWidth / 2;
+      const centerY = this.container.offsetHeight / 2;
+
+      const currentAngle = Math.atan2(eY - centerY, eX - centerX);
+      const angleDiff = currentAngle - (this.startRotationAngle as number);
+
+      const camera = this.renderer.getCamera();
+      camera.setState({ angle: (this.startCameraAngle as number) + angleDiff });
 
       e.preventDefault();
       e.stopPropagation();

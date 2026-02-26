@@ -6,12 +6,13 @@ import { Coordinates } from "sigma/types";
 import { createElement } from "sigma/utils";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
-import { wait } from "../_helpers";
+import { rotate, simulateMouseEvent, wait } from "../_helpers";
 
 interface SigmaTestContext {
   sigma: Sigma;
   graph: Graph;
   container: HTMLDivElement;
+  target: HTMLElement;
 }
 
 const STAGE_WIDTH = 200;
@@ -32,12 +33,15 @@ beforeEach<SigmaTestContext>(async (context) => {
   document.body.append(container);
 
   context.sigma = new Sigma(graph, container, {
-    zoomDuration: 30,
-    inertiaDuration: 30,
-    doubleClickZoomingDuration: 30,
+    settings: {
+      zoomDuration: 30,
+      inertiaDuration: 30,
+      doubleClickZoomingDuration: 30,
+    },
   });
   context.graph = graph;
   context.container = container;
+  context.target = context.sigma.getCanvases().mouse;
 });
 
 afterEach<SigmaTestContext>(async ({ sigma }) => {
@@ -114,5 +118,61 @@ describe("Sigma mouse management", () => {
       edges: [{ source: "n3", target: "n4" }],
     });
     sigma.setGraph(newGraph);
+  });
+});
+
+describe("Sigma right-click mouse rotation", () => {
+  test<SigmaTestContext>("right-click drag should not rotate when enableCameraMouseRotation is false", async ({
+    sigma,
+    target,
+  }) => {
+    sigma.setSetting("enableCameraMouseRotation", false);
+    const camera = sigma.getCamera();
+    const initialState = camera.getState();
+    const center = { x: STAGE_WIDTH / 2, y: STAGE_HEIGHT / 2 };
+
+    // Right-click drag from right of center to above center (90° rotation)
+    const start = { x: center.x + 50, y: center.y };
+    const end = rotate(start, center, Math.PI / 2);
+
+    await simulateMouseEvent(target, "mousedown", start, { button: 2 });
+    await simulateMouseEvent(target, "mousemove", end, { button: 2 });
+    await simulateMouseEvent(target, "mouseup", end, { button: 2 });
+
+    expect(camera.getState()).toEqual(initialState);
+  });
+
+  test<SigmaTestContext>("right-click drag should only change angle, not ratio", async ({ sigma, target }) => {
+    const camera = sigma.getCamera();
+    const initialState = camera.getState();
+    const center = { x: STAGE_WIDTH / 2, y: STAGE_HEIGHT / 2 };
+
+    const start = { x: center.x + 50, y: center.y };
+    const end = rotate(start, center, Math.PI / 4);
+
+    await simulateMouseEvent(target, "mousedown", start, { button: 2 });
+    await simulateMouseEvent(target, "mousemove", end, { button: 2 });
+    await simulateMouseEvent(target, "mouseup", end, { button: 2 });
+
+    expect(camera.getState().ratio).toBe(initialState.ratio);
+    expect(camera.getState().x).toBe(initialState.x);
+    expect(camera.getState().y).toBe(initialState.y);
+    expect(camera.getState().angle).not.toBe(initialState.angle);
+  });
+
+  test<SigmaTestContext>("right-click drag should rotate around the center of the stage", async ({ sigma, target }) => {
+    sigma.setSetting("enableCameraMouseRotation", true);
+    const camera = sigma.getCamera();
+    const center = { x: STAGE_WIDTH / 2, y: STAGE_HEIGHT / 2 };
+
+    // Drag from right of center to above center: 90° counter-clockwise in viewport
+    const start = { x: center.x + 50, y: center.y };
+    const end = rotate(start, center, Math.PI / 2);
+
+    await simulateMouseEvent(target, "mousedown", start, { button: 2 });
+    await simulateMouseEvent(target, "mousemove", end, { button: 2 });
+    await simulateMouseEvent(target, "mouseup", end, { button: 2 });
+
+    expect(camera.getState().angle).toBeCloseTo(Math.PI / 2, 6);
   });
 });

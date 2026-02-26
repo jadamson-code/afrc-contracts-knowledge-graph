@@ -58,6 +58,7 @@ export interface Settings {
   enableCameraZooming: boolean;
   enableCameraPanning: boolean;
   enableCameraRotation: boolean;
+  enableCameraMouseRotation: boolean;
   cameraPanBoundaries:
     | null
     | true
@@ -112,6 +113,7 @@ export const DEFAULT_SETTINGS: Settings = {
   enableCameraZooming: true,
   enableCameraPanning: true,
   enableCameraRotation: true,
+  enableCameraMouseRotation: true,
   cameraPanBoundaries: null,
 
   // Lifecycle

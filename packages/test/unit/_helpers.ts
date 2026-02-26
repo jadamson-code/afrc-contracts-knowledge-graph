@@ -126,11 +126,20 @@ export async function simulateTouchEvent(element: HTMLElement, type: TouchEventT
 }
 
 export type MouseEventType = "mousedown" | "mouseup" | "mousemove";
-export async function simulateMouseEvent(element: HTMLElement, type: MouseEventType, position: Coordinates) {
-  element.dispatchEvent(
+export async function simulateMouseEvent(
+  element: HTMLElement,
+  type: MouseEventType,
+  position: Coordinates,
+  options?: { button?: number },
+) {
+  const target = type === "mousedown" ? element : document;
+  target.dispatchEvent(
     new MouseEvent(type, {
       clientX: position.x,
       clientY: position.y,
+      button: options?.button ?? 0,
+      bubbles: true,
+      cancelable: true,
     }),
   );
 

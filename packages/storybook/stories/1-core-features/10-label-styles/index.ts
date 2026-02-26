@@ -17,7 +17,9 @@ export interface StoryArgs {
 }
 
 // Label positions for each row
-const ROW_POSITIONS: LabelPosition[] = ["right", "left", "above", "below"];
+const ROW_POSITIONS: LabelPosition[] = ["right", "left", "above", "below", "over"];
+const COLORS = ["#9242D5", "#5B8FF9", "#5AD8A6", "#F6BD16", "#E8684A"];
+const SHAPES = ["circle", "square", "triangle", "diamond"] as const;
 
 export default (args: StoryArgs) => {
   const container = document.getElementById("sigma-container") as HTMLElement;
@@ -25,12 +27,10 @@ export default (args: StoryArgs) => {
   // Grid configuration
   const SPACING = 50;
   const NODE_SIZE = 15;
-  const COLS = 4;
-  const ROWS = 4;
+  const COLS = SHAPES.length;
+  const ROWS = ROW_POSITIONS.length;
 
   // Shape names and colors
-  const SHAPES = ["circle", "square", "triangle", "diamond"] as const;
-  const COLORS = ["#5B8FF9", "#5AD8A6", "#F6BD16", "#E8684A"];
 
   // Create graph with grid of nodes
   const graph = new Graph();

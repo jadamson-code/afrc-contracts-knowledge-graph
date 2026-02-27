@@ -82,10 +82,16 @@ export interface NodeDisplayData extends Coordinates, DisplayData {
   labelSize?: number; // Label font size in pixels
   labelFont?: string; // Label font family (e.g., "Georgia, serif")
   labelAngle?: number; // Label rotation angle in radians
+  backdropVisibility?: "visible" | "hidden"; // Backdrop visibility mode
   backdropColor?: string; // Backdrop fill color (transparent = no backdrop)
   backdropShadowColor?: string; // Backdrop shadow color
   backdropShadowBlur?: number; // Backdrop shadow blur radius in pixels
   backdropPadding?: number; // Backdrop padding around node+label in pixels
+  backdropBorderColor?: string; // Backdrop border color (transparent = no border)
+  backdropBorderWidth?: number; // Backdrop border width in pixels
+  backdropCornerRadius?: number; // Backdrop corner radius in pixels
+  backdropLabelPadding?: number; // Backdrop label padding in pixels (-1 = fall back to backdropPadding)
+  backdropArea?: "both" | "node" | "label"; // Which area the backdrop covers
 }
 export interface EdgeDisplayData extends DisplayData {
   path?: string; // Path type (e.g., "straight", "curved")
@@ -341,7 +347,7 @@ export { defineSigmaOptions } from "./types/options";
 /**
  * Styles API:
  */
-export type { BaseNodeState, BaseEdgeState, BaseGraphState, StylesDeclaration } from "./types/styles";
+export type { BaseNodeState, BaseEdgeState, BaseGraphState, NodeBackdropBuiltInVariables, StylesDeclaration } from "./types/styles";
 export { DEFAULT_STYLES } from "./types/styles";
 export {
   resolveGraphicValue,

@@ -393,10 +393,16 @@ export interface ResolvedNodeStyle {
   labelPosition: "right" | "left" | "above" | "below" | "over";
   labelAngle: number;
   labelDepth: string;
+  backdropVisibility: "visible" | "hidden";
   backdropColor: string;
   backdropShadowColor: string;
   backdropShadowBlur: number;
   backdropPadding: number;
+  backdropBorderColor: string;
+  backdropBorderWidth: number;
+  backdropCornerRadius: number;
+  backdropLabelPadding: number;
+  backdropArea: "both" | "node" | "label";
   // Additional program-declared variables stored here
   [key: string]: unknown;
 }
@@ -446,10 +452,16 @@ const DEFAULT_RESOLVED_NODE_STYLE: ResolvedNodeStyle = {
   labelPosition: "right",
   labelAngle: 0,
   labelDepth: "nodeLabels",
+  backdropVisibility: "hidden",
   backdropColor: "transparent",
   backdropShadowColor: "transparent",
   backdropShadowBlur: 0,
   backdropPadding: 0,
+  backdropBorderColor: "transparent",
+  backdropBorderWidth: 0,
+  backdropCornerRadius: 0,
+  backdropLabelPadding: -1,
+  backdropArea: "both",
 };
 
 /**

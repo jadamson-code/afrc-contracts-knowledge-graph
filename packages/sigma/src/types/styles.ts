@@ -209,6 +209,19 @@ export interface NodeBuiltInVariables<
   depth?: GraphicValue<NA, NS, GS, Layer>;
   /** Z-index within the depth layer */
   zIndex?: GraphicValue<NA, NS, GS, number>;
+}
+
+/**
+ * Built-in graphic variables for node backdrops.
+ * Controls the background shape rendered behind nodes (and optionally their labels).
+ */
+export interface NodeBackdropBuiltInVariables<
+  NA extends Attributes = Attributes,
+  NS extends BaseNodeState = BaseNodeState,
+  GS extends BaseGraphState = BaseGraphState,
+> {
+  /** Backdrop visibility */
+  backdropVisibility?: GraphicValue<NA, NS, GS, "visible" | "hidden">;
   /** Backdrop fill color (transparent = no backdrop) */
   backdropColor?: GraphicValue<NA, NS, GS, string>;
   /** Backdrop shadow color */
@@ -217,6 +230,16 @@ export interface NodeBuiltInVariables<
   backdropShadowBlur?: GraphicValue<NA, NS, GS, number>;
   /** Backdrop padding around node+label in pixels */
   backdropPadding?: GraphicValue<NA, NS, GS, number>;
+  /** Backdrop border color (transparent = no border) */
+  backdropBorderColor?: GraphicValue<NA, NS, GS, string>;
+  /** Backdrop border width in pixels */
+  backdropBorderWidth?: GraphicValue<NA, NS, GS, number>;
+  /** Backdrop corner radius in pixels */
+  backdropCornerRadius?: GraphicValue<NA, NS, GS, number>;
+  /** Backdrop label padding in pixels (-1 = fall back to backdropPadding) */
+  backdropLabelPadding?: GraphicValue<NA, NS, GS, number>;
+  /** Which area the backdrop covers */
+  backdropArea?: GraphicValue<NA, NS, GS, "both" | "node" | "label">;
 }
 
 /**
@@ -257,6 +280,7 @@ export type NodeStyleProperties<
   GS extends BaseGraphState = BaseGraphState,
   ProgramVariables = EmptyVariables,
 > = NodeBuiltInVariables<NA, NS, GS> &
+  NodeBackdropBuiltInVariables<NA, NS, GS> &
   NodeLabelBuiltInVariables<NA, NS, GS> & {
     [K in keyof ProgramVariables]?: GraphicValue<NA, NS, GS, ProgramVariables[K]>;
   };
@@ -625,26 +649,15 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
       then: 1,
       else: 0,
     },
-    backdropColor: {
+    backdropVisibility: {
       when: "isHovered",
-      then: "#ffffff",
-      else: "transparent",
+      then: "visible",
+      else: "hidden",
     },
-    backdropShadowColor: {
-      when: "isHovered",
-      then: "rgba(0, 0, 0, 0.5)",
-      else: "transparent",
-    },
-    backdropShadowBlur: {
-      when: "isHovered",
-      then: 12,
-      else: 0,
-    },
-    backdropPadding: {
-      when: "isHovered",
-      then: 6,
-      else: 0,
-    },
+    backdropColor: "#ffffff",
+    backdropShadowColor: "rgba(0, 0, 0, 0.5)",
+    backdropShadowBlur: 12,
+    backdropPadding: 6,
   },
   edges: {
     size: { attribute: "size", defaultValue: 1 },

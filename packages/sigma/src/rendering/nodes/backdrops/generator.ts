@@ -12,6 +12,8 @@ import {
   GLSL_NODE_SIZE_TO_PIXELS,
   GLSL_SDF_BOX,
   GLSL_SDF_ROTATED_BOX,
+  GLSL_SDF_ROUNDED_BOX,
+  GLSL_SDF_ROUNDED_ROTATED_BOX,
   generateFindEdgeDistance,
 } from "../../glsl";
 import { getShapeGLSLForShapes } from "../../shapes";
@@ -138,6 +140,8 @@ in vec4 a_backdropColor;
 in vec4 a_backdropShadowColor;
 in float a_backdropShadowBlur;
 in float a_backdropPadding;
+in vec4 a_backdropBorderColor;
+in vec4 a_backdropExtra; // [borderWidth, cornerRadius, labelPadding, area]
 in vec2 a_quadCorner;
 
 uniform mat3 u_matrix;
@@ -162,6 +166,10 @@ out vec4 v_backdropColor;
 out vec4 v_backdropShadowColor;
 out float v_backdropShadowBlur;
 out float v_backdropPadding;
+out vec4 v_backdropBorderColor;
+out float v_backdropBorderWidth;
+out float v_backdropCornerRadius;
+out float v_backdropArea;
 
 ${shapeGLSL}
 ${findEdgeDistanceCode}
@@ -172,6 +180,13 @@ void main() {
   ${GLSL_NODE_SIZE_TO_PIXELS}
   float padding = a_backdropPadding;
   float shadowBlur = a_backdropShadowBlur;
+  // Unpack a_backdropExtra: [borderWidth, cornerRadius, labelPadding, area]
+  float borderWidth = a_backdropExtra.x;
+  float cornerRadius = a_backdropExtra.y;
+  float labelPad = a_backdropExtra.z;
+  float backdropArea = a_backdropExtra.w;
+  // Use 2x shadowBlur so the Gaussian fully decays before the quad edge
+  float totalExpansion = shadowBlur * 2.0 + borderWidth;
   float enlargedRadius = nodeRadiusPixels + padding;
 
   // Apply zoom-dependent label size scaling
@@ -180,7 +195,9 @@ void main() {
   float labelH = a_labelHeight * zoomScale;
   float labelMargin = u_labelMargin * zoomScale;
 
-  vec2 labelHalfSize = vec2(labelW * 0.5, labelH * 0.5);
+  // Only apply labelPad when a label is actually present
+  float effectiveLabelPad = labelW > 0.0 ? labelPad : 0.0;
+  vec2 labelHalfSize = vec2(labelW * 0.5 + effectiveLabelPad, labelH * 0.5 + effectiveLabelPad);
   vec2 labelOffset = vec2(0.0);
 
   float la_c = cos(a_labelAngle);
@@ -197,29 +214,38 @@ void main() {
     float labelEnd = edgeDistPixels + padding + labelMargin;
 
     if (a_positionMode < 0.5) {
-      float boxRightEdge = labelEnd + labelW;
+      float boxRightEdge = labelEnd + labelW + labelPad * 2.0;
       labelOffset = vec2(boxRightEdge * 0.5, 0.0);
       labelHalfSize.x = boxRightEdge * 0.5;
     } else if (a_positionMode < 1.5) {
-      float boxLeftEdge = labelEnd + labelW;
+      float boxLeftEdge = labelEnd + labelW + labelPad * 2.0;
       labelOffset = vec2(-boxLeftEdge * 0.5, 0.0);
       labelHalfSize.x = boxLeftEdge * 0.5;
     } else if (a_positionMode < 2.5) {
       float boxStart = labelEnd;
       float baselineOffset = labelH * 0.25;
-      labelOffset = vec2(0.0, -(boxStart + labelH * 0.5 - baselineOffset));
+      labelOffset = vec2(0.0, -(boxStart + labelH * 0.5 + labelPad - baselineOffset));
     } else if (a_positionMode < 3.5) {
       float boxStart = labelEnd;
       float baselineOffset = labelH * 0.25;
-      labelOffset = vec2(0.0, boxStart + labelH * 0.5 - baselineOffset);
+      labelOffset = vec2(0.0, boxStart + labelH * 0.5 + labelPad - baselineOffset);
     }
 
     labelOffset = labelRotMat * labelOffset;
   }
 
+  // For node-only mode, zero out label dimensions
+  if (backdropArea > 0.5 && backdropArea < 1.5) {
+    labelHalfSize = vec2(0.0);
+    labelOffset = vec2(0.0);
+  }
+
   vec2 minBound, maxBound;
 
-  if (labelW > 0.0 && a_positionMode < 4.0) {
+  bool hasLabelBounds = labelW > 0.0 && (backdropArea > 1.5 || (a_positionMode < 4.0 && backdropArea < 0.5));
+
+  if (hasLabelBounds) {
+    // Union with label bounds (area=both) or label-only bounds (area=label)
     vec2 labelMin, labelMax;
 
     if (a_labelAngle != 0.0) {
@@ -234,11 +260,20 @@ void main() {
       labelMax = labelOffset + labelHalfSize;
     }
 
-    minBound = min(-vec2(enlargedRadius), labelMin) - shadowBlur;
-    maxBound = max(vec2(enlargedRadius), labelMax) + shadowBlur;
+    if (backdropArea > 1.5) {
+      // Label-only: bounds from label rect only
+      minBound = labelMin - totalExpansion;
+      maxBound = labelMax + totalExpansion;
+    } else {
+      // Both: union of node + label
+      minBound = min(-vec2(enlargedRadius), labelMin) - totalExpansion;
+      maxBound = max(vec2(enlargedRadius), labelMax) + totalExpansion;
+    }
   } else {
-    float totalRadius = enlargedRadius + shadowBlur;
-    if (a_positionMode >= 3.5 && labelW > 0.0) {
+    // Node-only or no visible label
+    float totalRadius = enlargedRadius + totalExpansion;
+    if (a_positionMode >= 3.5 && labelW > 0.0 && backdropArea < 0.5) {
+      // "over" position with label, area=both
       vec2 rotatedHalfSize = labelHalfSize;
       if (a_labelAngle != 0.0) {
         vec2 corner1 = labelRotMat * vec2(-labelHalfSize.x, -labelHalfSize.y);
@@ -249,8 +284,8 @@ void main() {
         vec2 labelMax = max(max(corner1, corner2), max(corner3, corner4));
         rotatedHalfSize = max(abs(labelMin), abs(labelMax));
       }
-      minBound = -vec2(max(totalRadius, rotatedHalfSize.x + shadowBlur),
-                       max(totalRadius, rotatedHalfSize.y + shadowBlur));
+      minBound = -vec2(max(totalRadius, rotatedHalfSize.x + totalExpansion),
+                       max(totalRadius, rotatedHalfSize.y + totalExpansion));
       maxBound = -minBound;
     } else {
       minBound = -vec2(totalRadius);
@@ -280,6 +315,10 @@ void main() {
   v_backdropShadowColor = a_backdropShadowColor;
   v_backdropShadowBlur = a_backdropShadowBlur;
   v_backdropPadding = a_backdropPadding;
+  v_backdropBorderColor = a_backdropBorderColor;
+  v_backdropBorderWidth = borderWidth;
+  v_backdropCornerRadius = cornerRadius;
+  v_backdropArea = backdropArea;
 }
 `;
 
@@ -344,12 +383,17 @@ ${cases}
   }`;
   }
 
+  // Evaluate node SDF at effective scale (enlarged - cornerRadius) then subtract
+  // cornerRadius. This "shrink, evaluate, expand" technique rounds convex corners.
+  // When cornerRadius=0, effectiveRadius=enlargedRadius and the subtraction is a no-op.
   const nodeUVCode = rotateWithCamera
-    ? `float ca_c = cos(u_cameraAngle);
+    ? `float effectiveRadius = max(enlargedRadius - cornerRadius, 0.01);
+  float ca_c = cos(u_cameraAngle);
   float ca_s = sin(u_cameraAngle);
   vec2 rotatedScreenUV = mat2(ca_c, -ca_s, ca_s, ca_c) * screenUV;
-  vec2 nodeUV = vec2(rotatedScreenUV.x, -rotatedScreenUV.y) / v_nodeRadius;`
-    : `vec2 nodeUV = vec2(screenUV.x, -screenUV.y) / v_nodeRadius;`;
+  vec2 nodeUV = vec2(rotatedScreenUV.x, -rotatedScreenUV.y) / effectiveRadius;`
+    : `float effectiveRadius = max(enlargedRadius - cornerRadius, 0.01);
+  vec2 nodeUV = vec2(screenUV.x, -screenUV.y) / effectiveRadius;`;
 
   // language=GLSL
   const glsl = /*glsl*/ `#version 300 es
@@ -367,6 +411,10 @@ in vec4 v_backdropColor;
 in vec4 v_backdropShadowColor;
 in float v_backdropShadowBlur;
 in float v_backdropPadding;
+in vec4 v_backdropBorderColor;
+in float v_backdropBorderWidth;
+in float v_backdropCornerRadius;
+in float v_backdropArea;
 
 uniform float u_cameraAngle;
 ${shapeUniformDeclarations}
@@ -377,12 +425,17 @@ layout(location = 1) out vec4 fragPicking;
 ${shapeGLSL}
 ${GLSL_SDF_BOX}
 ${GLSL_SDF_ROTATED_BOX}
+${GLSL_SDF_ROUNDED_BOX}
+${GLSL_SDF_ROUNDED_ROTATED_BOX}
 
 void main() {
   vec4 backdropColor = v_backdropColor;
   vec4 shadowColor = v_backdropShadowColor;
   float shadowBlur = v_backdropShadowBlur;
   float padding = v_backdropPadding;
+  vec4 borderColor = v_backdropBorderColor;
+  float borderWidth = v_backdropBorderWidth;
+  float cornerRadius = v_backdropCornerRadius;
 
   float enlargedRadius = v_nodeRadius + padding;
   vec2 screenUV = v_uv - v_nodeCenter;
@@ -390,25 +443,41 @@ void main() {
 
   // Query the correct shape SDF based on shapeId
   ${shapeCallCode}
-  float nodeSdfPixels = nodeSdfNormalized * v_nodeRadius - padding;
+  float nodeSdfPixels = nodeSdfNormalized * effectiveRadius - cornerRadius;
 
-  // Is the fragment in the white rectangle behind the label?
+  // Label SDF with optional corner radius and rotation
   float labelSdfPixels;
   if (v_labelHalfSize.x > 0.0) {
-    if (v_labelAngle != 0.0) {
-      labelSdfPixels = sdfRotatedBox(v_uv - v_labelCenter, v_labelHalfSize, v_labelAngle);
-    } else {
-      labelSdfPixels = sdfBox(v_uv - v_labelCenter, v_labelHalfSize);
-    }
+    vec2 labelP = v_uv - v_labelCenter;
+    labelSdfPixels = sdfRoundedRotatedBox(labelP, v_labelHalfSize, v_labelAngle, cornerRadius);
   } else {
     labelSdfPixels = 10000.0;
   }
 
-  // Compute union of node and label
-  float combinedSdf = min(nodeSdfPixels, labelSdfPixels);
+  // Select area: 0=both, 1=node, 2=label
+  float combinedSdf;
+  if (v_backdropArea > 1.5) {
+    combinedSdf = labelSdfPixels;
+  } else if (v_backdropArea > 0.5) {
+    combinedSdf = nodeSdfPixels;
+  } else {
+    combinedSdf = min(nodeSdfPixels, labelSdfPixels);
+  }
 
-  float bgAlpha = smoothstep(v_aaWidth, -v_aaWidth, combinedSdf) * backdropColor.a;
-  vec4 background = vec4(backdropColor.rgb * bgAlpha, bgAlpha);
+  // Fill + border composite
+  float outerEdge = smoothstep(v_aaWidth, -v_aaWidth, combinedSdf);
+  vec4 background;
+  if (borderWidth > 0.5) {
+    float innerEdge = smoothstep(v_aaWidth, -v_aaWidth, combinedSdf + borderWidth);
+    float fillAlpha = innerEdge * backdropColor.a;
+    vec4 fill = vec4(backdropColor.rgb * fillAlpha, fillAlpha);
+    float borderAlpha = (outerEdge - innerEdge) * borderColor.a;
+    vec4 border = vec4(borderColor.rgb * borderAlpha, borderAlpha);
+    background = fill + border * (1.0 - fill.a);
+  } else {
+    float fillAlpha = outerEdge * backdropColor.a;
+    background = vec4(backdropColor.rgb * fillAlpha, fillAlpha);
+  }
 
   // Gaussian-like shadow falloff (mimics canvas shadowBlur)
   float shadowDist = max(0.0, combinedSdf);

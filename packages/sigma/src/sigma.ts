@@ -93,6 +93,8 @@ const NODE_DATA_TEXTURE_UNIT = 3;
 // Texture unit for the shared edge data texture (source/target indices, thickness, curvature, etc.)
 const EDGE_DATA_TEXTURE_UNIT = 4;
 
+const BACKDROP_AREA_MAP: Record<string, number> = { both: 0, node: 1, label: 2 };
+
 /**
  * Reducer types for the new API.
  */
@@ -1431,6 +1433,14 @@ export default class Sigma<
       const backdropShadowBlur = data.backdropShadowBlur ?? 12;
       const backdropPadding = data.backdropPadding ?? 6;
 
+      const rawBorderColor = data.backdropBorderColor ? colorToArray(data.backdropBorderColor) : [0, 0, 0, 0];
+      const backdropBorderColor = rawBorderColor.map((c) => c / 255) as [number, number, number, number];
+      const backdropBorderWidth = data.backdropBorderWidth ?? 0;
+      const backdropCornerRadius = data.backdropCornerRadius ?? 0;
+      const rawLabelPadding = data.backdropLabelPadding ?? -1;
+      const backdropLabelPadding = rawLabelPadding < 0 ? backdropPadding : rawLabelPadding;
+      const backdropArea = BACKDROP_AREA_MAP[data.backdropArea ?? "both"] ?? 0;
+
       const backdropData: BackdropDisplayData = {
         key,
         x: data.x,
@@ -1447,6 +1457,11 @@ export default class Sigma<
         backdropShadowColor,
         backdropShadowBlur,
         backdropPadding,
+        backdropBorderColor,
+        backdropBorderWidth,
+        backdropCornerRadius,
+        backdropLabelPadding,
+        backdropArea,
       };
 
       this.backdropProgram.processBackdrop(i, backdropData);
@@ -1815,10 +1830,16 @@ export default class Sigma<
       labelSize: resolvedStyle.labelSize,
       labelFont: resolvedStyle.labelFont,
       labelAngle: resolvedStyle.labelAngle,
+      backdropVisibility: resolvedStyle.backdropVisibility,
       backdropColor: resolvedStyle.backdropColor,
       backdropShadowColor: resolvedStyle.backdropShadowColor,
       backdropShadowBlur: resolvedStyle.backdropShadowBlur,
       backdropPadding: resolvedStyle.backdropPadding,
+      backdropBorderColor: resolvedStyle.backdropBorderColor,
+      backdropBorderWidth: resolvedStyle.backdropBorderWidth,
+      backdropCornerRadius: resolvedStyle.backdropCornerRadius,
+      backdropLabelPadding: resolvedStyle.backdropLabelPadding,
+      backdropArea: resolvedStyle.backdropArea,
     };
 
     // Validate position
@@ -1860,14 +1881,10 @@ export default class Sigma<
     this.nodesWithForcedLabels.delete(key);
     if (data.forceLabel && !data.hidden) this.nodesWithForcedLabels.add(key);
 
-    // Backdrop visibility tracking:
-    // Check if backdrop is visible by parsing colors and checking alpha
+    // Backdrop visibility tracking
     this.nodesWithBackdrop.delete(key);
-    if (!data.hidden) {
-      const bgAlpha = data.backdropColor ? colorToArray(data.backdropColor)[3] : 0;
-      const shadowAlpha = data.backdropShadowColor ? colorToArray(data.backdropShadowColor)[3] : 0;
-      const hasVisibleBackdrop = bgAlpha > 0 || (shadowAlpha > 0 && (data.backdropShadowBlur ?? 0) > 0);
-      if (hasVisibleBackdrop) this.nodesWithBackdrop.add(key);
+    if (!data.hidden && data.backdropVisibility === "visible") {
+      this.nodesWithBackdrop.add(key);
     }
 
     // Bucket management for depth ordering (depth encoded into zIndex range)

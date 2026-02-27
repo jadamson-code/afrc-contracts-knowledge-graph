@@ -31,6 +31,11 @@ export interface BackdropDisplayData {
   backdropShadowColor: [number, number, number, number]; // RGBA floats 0-1
   backdropShadowBlur: number;
   backdropPadding: number;
+  backdropBorderColor: [number, number, number, number]; // RGBA floats 0-1
+  backdropBorderWidth: number;
+  backdropCornerRadius: number;
+  backdropLabelPadding: number; // Already resolved (fallback applied)
+  backdropArea: number; // 0=both, 1=node, 2=label
 }
 
 export abstract class BackdropProgram<

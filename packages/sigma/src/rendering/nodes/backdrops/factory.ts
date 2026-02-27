@@ -77,6 +77,9 @@ export function createBackdropProgram<
           { name: "a_backdropShadowColor", size: 4, type: FLOAT },
           { name: "a_backdropShadowBlur", size: 1, type: FLOAT },
           { name: "a_backdropPadding", size: 1, type: FLOAT },
+          { name: "a_backdropBorderColor", size: 4, type: FLOAT },
+          // Packed: [borderWidth, cornerRadius, labelPadding, area]
+          { name: "a_backdropExtra", size: 4, type: FLOAT },
         ],
         CONSTANT_ATTRIBUTES: [{ name: "a_quadCorner", size: 2, type: FLOAT }],
         CONSTANT_DATA: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
@@ -106,6 +109,15 @@ export function createBackdropProgram<
       array[i++] = data.backdropShadowColor[3];
       array[i++] = data.backdropShadowBlur;
       array[i++] = data.backdropPadding;
+      array[i++] = data.backdropBorderColor[0];
+      array[i++] = data.backdropBorderColor[1];
+      array[i++] = data.backdropBorderColor[2];
+      array[i++] = data.backdropBorderColor[3];
+      // Packed vec4: [borderWidth, cornerRadius, labelPadding, area]
+      array[i++] = data.backdropBorderWidth;
+      array[i++] = data.backdropCornerRadius;
+      array[i++] = data.backdropLabelPadding;
+      array[i++] = data.backdropArea;
     }
 
     setUniforms(params: RenderParams, programInfo: ProgramInfo): void {

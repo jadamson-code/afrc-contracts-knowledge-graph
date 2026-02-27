@@ -86,6 +86,32 @@ float sdfRotatedBox(vec2 p, vec2 halfSize, float angle) {
 }
 `;
 
+/**
+ * SDF for an axis-aligned rounded box.
+ * Shrinks box by radius, computes box SDF, subtracts radius.
+ * When radius=0, equivalent to sdfBox.
+ */
+export const GLSL_SDF_ROUNDED_BOX = /*glsl*/ `
+float sdfRoundedBox(vec2 p, vec2 halfSize, float radius) {
+  vec2 d = abs(p) - halfSize + radius;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - radius;
+}
+`;
+
+/**
+ * SDF for a rotated rounded box.
+ * Rotates the point by -angle to align with the box, then computes rounded box SDF.
+ * Requires sdfRoundedBox to be defined before this.
+ */
+export const GLSL_SDF_ROUNDED_ROTATED_BOX = /*glsl*/ `
+float sdfRoundedRotatedBox(vec2 p, vec2 halfSize, float angle, float radius) {
+  float c = cos(-angle);
+  float s = sin(-angle);
+  vec2 rotatedP = mat2(c, -s, s, c) * p;
+  return sdfRoundedBox(rotatedP, halfSize, radius);
+}
+`;
+
 /** Generates findEdgeDistance GLSL function that finds shape edge via binary search. */
 export function generateFindEdgeDistance(shapeCall: string, rotateWithCamera: boolean): string {
   if (rotateWithCamera) {

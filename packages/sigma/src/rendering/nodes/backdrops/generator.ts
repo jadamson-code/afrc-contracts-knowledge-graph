@@ -211,24 +211,25 @@ void main() {
 
     float edgeDistNormalized = findEdgeDistance(sdfDir, 1.0);
     float edgeDistPixels = nodeRadiusPixels * edgeDistNormalized;
-    float labelEnd = edgeDistPixels + padding + labelMargin;
+    // labelMargin matches the label shader's margin (gap from node edge to text)
+    float labelStart = edgeDistPixels + labelMargin;
 
     if (a_positionMode < 0.5) {
-      float boxRightEdge = labelEnd + labelW + labelPad * 2.0;
+      // Right: box spans from node center to text end + padding
+      float boxRightEdge = labelStart + labelW + labelPad;
       labelOffset = vec2(boxRightEdge * 0.5, 0.0);
       labelHalfSize.x = boxRightEdge * 0.5;
     } else if (a_positionMode < 1.5) {
-      float boxLeftEdge = labelEnd + labelW + labelPad * 2.0;
+      // Left: mirror of right
+      float boxLeftEdge = labelStart + labelW + labelPad;
       labelOffset = vec2(-boxLeftEdge * 0.5, 0.0);
       labelHalfSize.x = boxLeftEdge * 0.5;
     } else if (a_positionMode < 2.5) {
-      float boxStart = labelEnd;
-      float baselineOffset = labelH * 0.25;
-      labelOffset = vec2(0.0, -(boxStart + labelH * 0.5 + labelPad - baselineOffset));
+      // Above: text bottom at labelStart, centered horizontally
+      labelOffset = vec2(0.0, -(labelStart + labelH * 0.5));
     } else if (a_positionMode < 3.5) {
-      float boxStart = labelEnd;
-      float baselineOffset = labelH * 0.25;
-      labelOffset = vec2(0.0, boxStart + labelH * 0.5 + labelPad - baselineOffset);
+      // Below: text top at labelStart, centered horizontally
+      labelOffset = vec2(0.0, labelStart + labelH * 0.5);
     }
 
     labelOffset = labelRotMat * labelOffset;

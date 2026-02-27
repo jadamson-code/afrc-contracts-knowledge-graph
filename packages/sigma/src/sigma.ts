@@ -1409,12 +1409,20 @@ export default class Sigma<
       let labelHeight = 0;
       if (labelVisible && data.label) {
         const labelSize = data.labelSize ?? 14;
-        const { family, weight, style } = parseFontString(data.labelFont || "sans-serif");
-        const context = this.canvasContexts.labels;
-        context.font = `${style} ${weight} ${labelSize}px ${family}`;
-        const textWidth = context.measureText(data.label).width;
-        labelWidth = Math.round(textWidth + 5);
-        labelHeight = Math.round(labelSize + 4);
+        if (this.labelProgram?.measureLabel) {
+          const fontString = data.labelFont || this.primitives?.nodes?.label?.font?.family || "sans-serif";
+          const { family, weight, style } = parseFontString(fontString);
+          const fontKey = this.labelProgram.registerFont?.(family, weight, style) || "";
+          const measured = this.labelProgram.measureLabel(data.label, labelSize, fontKey);
+          labelWidth = measured.width;
+          labelHeight = measured.height;
+        } else {
+          const { family, weight, style } = parseFontString(data.labelFont || "sans-serif");
+          const context = this.canvasContexts.labels;
+          context.font = `${style} ${weight} ${labelSize}px ${family}`;
+          labelWidth = context.measureText(data.label).width;
+          labelHeight = labelSize;
+        }
       }
 
       // Get shapeId

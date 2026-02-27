@@ -121,8 +121,8 @@ float findEdgeDistance(vec2 direction, float size) {
   float c = cos(-u_cameraAngle);
   float s = sin(-u_cameraAngle);
   vec2 rotatedDir = mat2(c, -s, s, c) * direction;
-  float lo = 0.0, hi = size * 1.5;
-  for (int i = 0; i < 10; i++) {
+  float lo = 0.0, hi = 2.0;
+  for (int i = 0; i < 8; i++) {
     float mid = (lo + hi) * 0.5;
     vec2 uv = rotatedDir * mid;
     if (${shapeCall} < 0.0) lo = mid; else hi = mid;
@@ -134,8 +134,8 @@ float findEdgeDistance(vec2 direction, float size) {
 
   return /*glsl*/ `
 float findEdgeDistance(vec2 direction, float size) {
-  float lo = 0.0, hi = size * 1.5;
-  for (int i = 0; i < 10; i++) {
+  float lo = 0.0, hi = 2.0;
+  for (int i = 0; i < 8; i++) {
     float mid = (lo + hi) * 0.5;
     vec2 uv = direction * mid;
     if (${shapeCall} < 0.0) lo = mid; else hi = mid;

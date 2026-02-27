@@ -42,6 +42,12 @@ export abstract class LabelProgram<
   registerFont?(family: string, weight?: string, style?: string): string;
 
   /**
+   * Measure a label using the same glyph metrics as rendering.
+   * Optional — only available when the implementation uses an SDF atlas.
+   */
+  measureLabel?(text: string, fontSize: number, fontKey?: string): { width: number; height: number };
+
+  /**
    * Screen-space bounds for each label (for hit testing).
    */
   protected labelBounds: Map<string, { x: number; y: number; width: number; height: number }> = new Map();

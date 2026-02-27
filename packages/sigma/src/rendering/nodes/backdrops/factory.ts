@@ -38,7 +38,7 @@ export function createBackdropProgram<
   }
 
   const labelPosition: LabelPosition = labelOptions.position ?? "right";
-  const labelMargin = labelOptions.margin ?? 1;
+  const labelMargin = labelOptions.margin ?? 5;
   const zoomToLabelSizeRatioFunction = labelOptions.zoomToLabelSizeRatioFunction ?? (() => 1);
 
   const shaderOptions: BackdropShaderOptions = { shapes, rotateWithCamera, shapeGlobalIds };

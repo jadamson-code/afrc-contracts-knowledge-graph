@@ -104,7 +104,7 @@ export function createLabelProgram<
 >(options: CreateLabelProgramOptions): LabelProgramType<N, E, G> {
   const { rotateWithCamera = false, label: labelOptions = {}, shapes } = options;
   const labelPosition = labelOptions.position ?? "right";
-  const labelMargin = labelOptions.margin ?? 1;
+  const labelMargin = labelOptions.margin ?? 5;
   const zoomToLabelSizeRatioFunction = labelOptions.zoomToLabelSizeRatioFunction ?? (() => 1);
 
   if (shapes.length === 0) {
@@ -547,6 +547,31 @@ export function createLabelProgram<
      */
     getAtlasManager(): SDFAtlasManager {
       return this.atlasManager;
+    }
+
+    /**
+     * Measures a label using the same glyph advance metrics as rendering.
+     */
+    measureLabel(text: string, fontSize: number, fontKey?: string): { width: number; height: number } {
+      const actualFontKey = fontKey || this.defaultFontKey;
+
+      this.atlasManager.ensureGlyphs(text, actualFontKey);
+      if (this.atlasManager.hasPendingGlyphs()) {
+        this.atlasManager.flush();
+      }
+
+      let totalWidth = 0;
+      for (const char of text) {
+        const charCode = char.codePointAt(0);
+        if (charCode === undefined) continue;
+        const glyph = this.atlasManager.getGlyph(charCode, actualFontKey);
+        if (glyph) {
+          totalWidth += glyph.advance;
+        }
+      }
+
+      const scale = fontSize / DEFAULT_SDF_ATLAS_OPTIONS.fontSize;
+      return { width: totalWidth * scale, height: fontSize };
     }
 
     /**

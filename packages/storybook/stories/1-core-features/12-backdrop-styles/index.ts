@@ -1,99 +1,58 @@
 /**
  * This example demonstrates the backdrop styles API.
- * Backdrops are shapes rendered behind nodes and their labels, typically used
- * for hover/highlight effects.
- *
- * Grid layout:
- * - Rows: Different backdrop behaviors (default hover, custom colors, always-visible, disabled)
- * - Columns: Different shapes, label positions, node sizes, and label sizes
+ * Use the Storybook controls to interactively test all backdrop properties:
+ * fill, shadow, border, corner radius, label padding, and area coverage.
  */
 import Graph from "graphology";
 import Sigma from "sigma";
 import { DEFAULT_STYLES } from "sigma/types";
 
-export default () => {
+export interface StoryArgs {
+  backdropDisplay: "always" | "hover" | "hidden";
+  backdropColor: string;
+  backdropShadowColor: string;
+  backdropShadowBlur: number;
+  backdropPadding: number;
+  backdropBorderColor: string;
+  backdropBorderWidth: number;
+  backdropCornerRadius: number;
+  backdropLabelPadding: number;
+  backdropArea: "both" | "node" | "label";
+}
+
+export default (args: StoryArgs) => {
   const container = document.getElementById("sigma-container") as HTMLElement;
 
   const graph = new Graph();
 
-  const COL_SPACING = 150;
-  const ROW_SPACING = 100;
-
-  // Column configurations: shape, labelPosition, nodeSize, labelSize
-  const columns = [
-    { shape: "circle", labelPosition: "right", nodeSize: 10, labelSize: 12 },
-    { shape: "square", labelPosition: "above", nodeSize: 14, labelSize: 16 },
-    { shape: "diamond", labelPosition: "below", nodeSize: 18, labelSize: 20 },
-    { shape: "triangle", labelPosition: "over", nodeSize: 14, labelSize: 24 },
+  // A few nodes with various shapes and label positions
+  const nodes = [
+    { id: "a", x: 0, y: 0, size: 12, shape: "circle", labelPosition: "right", label: "Circle / right" },
+    { id: "b", x: 200, y: 0, size: 16, shape: "square", labelPosition: "above", label: "Square / above" },
+    { id: "c", x: 400, y: 0, size: 14, shape: "diamond", labelPosition: "below", label: "Diamond / below" },
+    { id: "d", x: 600, y: 0, size: 14, shape: "triangle", labelPosition: "over", label: "Triangle / over" },
+    { id: "e", x: 100, y: -120, size: 10, shape: "circle", labelPosition: "left", label: "Circle / left" },
+    { id: "f", x: 300, y: -120, size: 18, shape: "square", labelPosition: "right", label: "Square / right" },
+    { id: "g", x: 500, y: -120, size: 12, shape: "diamond", labelPosition: "above", label: "Diamond / above" },
   ] as const;
 
-  // Row configurations: backdrop behavior with distinct styling
-  const rows = [
-    {
-      id: "default",
-      color: "#5B8FF9",
-      backdropLabel: "default hover",
-    },
-    {
-      id: "custom",
-      color: "#E8684A",
-      backdropLabel: "custom colors",
-      backdropColor: "#FFE4E1",
-      backdropShadowColor: "rgba(232, 104, 74, 0.6)",
-      backdropShadowBlur: 16,
-      backdropPadding: 8,
-    },
-    {
-      id: "always",
-      color: "#9270CA",
-      backdropLabel: "always visible",
-      important: true,
-    },
-    {
-      id: "none",
-      color: "#708090",
-      backdropLabel: "no backdrop",
-      noBackdrop: true,
-    },
-  ];
+  for (const node of nodes) {
+    graph.addNode(node.id, node);
+  }
 
-  // Create grid of nodes
-  rows.forEach((row, rowIndex) => {
-    columns.forEach((col, colIndex) => {
-      const nodeId = `${row.id}-${col.shape}`;
-      const label = `${col.shape} / ${col.labelPosition} / ${row.backdropLabel}`;
-
-      graph.addNode(nodeId, {
-        x: colIndex * COL_SPACING,
-        y: -rowIndex * ROW_SPACING,
-        size: col.nodeSize,
-        color: row.color,
-        label,
-        shape: col.shape,
-        labelPosition: col.labelPosition,
-        labelSize: col.labelSize,
-        // Row-specific backdrop attributes
-        ...("backdropColor" in row && { backdropColor: row.backdropColor }),
-        ...("backdropShadowColor" in row && { backdropShadowColor: row.backdropShadowColor }),
-        ...("backdropShadowBlur" in row && { backdropShadowBlur: row.backdropShadowBlur }),
-        ...("backdropPadding" in row && { backdropPadding: row.backdropPadding }),
-        ...("important" in row && { important: row.important }),
-        ...("noBackdrop" in row && { noBackdrop: row.noBackdrop }),
-      });
-    });
-  });
+  // Build backdrop visibility based on display mode
+  const backdropVisibility =
+    args.backdropDisplay === "hover"
+      ? { when: "isHovered" as const, then: "visible" as const, else: "hidden" as const }
+      : args.backdropDisplay === "hidden"
+        ? ("hidden" as const)
+        : ("visible" as const);
 
   const renderer = new Sigma(graph, container, {
     primitives: {
       nodes: {
         shapes: ["circle", "square", "diamond", "triangle"],
-        layers: [{ type: "fill", color: { attribute: "color" } }],
-        backdrop: {
-          color: { attribute: "backdropColor" },
-          shadowColor: { attribute: "backdropShadowColor" },
-          shadowBlur: { attribute: "backdropShadowBlur" },
-          padding: { attribute: "backdropPadding" },
-        },
+        layers: [{ type: "fill" }],
       },
     },
     styles: {
@@ -101,41 +60,21 @@ export default () => {
         DEFAULT_STYLES.nodes,
         {
           size: { attribute: "size", defaultValue: 10 },
-          color: { attribute: "color", defaultValue: "#999" },
           shape: { attribute: "shape", defaultValue: "circle" },
           labelPosition: { attribute: "labelPosition", defaultValue: "right" },
-          labelSize: { attribute: "labelSize", defaultValue: 14 },
         },
-        // Custom backdrop from node attributes (row 2: custom colors)
         {
-          when: "isHovered",
-          then: {
-            backdropColor: (attrs) => (attrs.backdropColor as string) || "#ffffff",
-            backdropShadowColor: (attrs) => (attrs.backdropShadowColor as string) || "rgba(0, 0, 0, 0.5)",
-            backdropShadowBlur: (attrs) => (attrs.backdropShadowBlur as number) || 12,
-            backdropPadding: (attrs) => (attrs.backdropPadding as number) || 6,
-          },
-        },
-        // Always-visible backdrops (row 3: important nodes)
-        {
-          when: (attrs) => attrs.important === true,
-          then: {
-            backdropColor: "#ffffff",
-            backdropShadowColor: "rgba(0, 0, 0, 0.6)",
-            backdropShadowBlur: 14,
-            backdropPadding: 6,
-            zIndex: 1,
-          },
-        },
-        // Disable backdrop entirely (row 4: no backdrop)
-        {
-          when: (attrs) => attrs.noBackdrop === true,
-          then: {
-            backdropColor: "transparent",
-            backdropShadowColor: "transparent",
-            backdropShadowBlur: 0,
-            backdropPadding: 0,
-          },
+          backdropVisibility,
+          backdropColor: args.backdropColor,
+          backdropShadowColor: args.backdropShadowColor,
+          backdropShadowBlur: args.backdropShadowBlur,
+          backdropPadding: args.backdropPadding,
+          backdropBorderColor: args.backdropBorderColor,
+          backdropBorderWidth: args.backdropBorderWidth,
+          backdropCornerRadius: args.backdropCornerRadius,
+          backdropLabelPadding: args.backdropLabelPadding,
+          backdropArea: args.backdropArea,
+          zIndex: 1,
         },
       ],
     },

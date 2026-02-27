@@ -35,6 +35,7 @@ export default (args: StoryArgs) => {
       const backdropStyles =
         args.showBackdrops === "all"
           ? {
+              backdropVisibility: "visible" as const,
               backdropColor: "#ffffff" as const,
               backdropShadowColor: "rgba(0, 0, 0, 0.5)" as const,
               backdropShadowBlur: 12,
@@ -42,14 +43,13 @@ export default (args: StoryArgs) => {
             }
           : args.showBackdrops === "hover"
             ? {
-                backdropColor: { when: "isHovered" as const, then: "#ffffff", else: "transparent" },
-                backdropShadowColor: { when: "isHovered" as const, then: "rgba(0, 0, 0, 0.5)", else: "transparent" },
-                backdropShadowBlur: { when: "isHovered" as const, then: 12, else: 0 },
-                backdropPadding: { when: "isHovered" as const, then: args.backdropPadding, else: 0 },
+                backdropVisibility: { when: "isHovered" as const, then: "visible" as const, else: "hidden" as const },
+                backdropColor: "#ffffff" as const,
+                backdropShadowColor: "rgba(0, 0, 0, 0.5)" as const,
+                backdropShadowBlur: 12,
+                backdropPadding: args.backdropPadding,
               }
             : {};
-
-      const GENE_LABEL_ANGLE = (15 * Math.PI) / 180;
 
       renderer = new Sigma(graph, container, {
         primitives: {
@@ -65,16 +65,27 @@ export default (args: StoryArgs) => {
         styles: {
           nodes: [
             DEFAULT_STYLES.nodes,
+            backdropStyles,
+            // "disease" nodes:
             {
-              // Disease: circles with large bold sans-serif labels over the node
-              // Gene: diamonds with small monospace labels on the right at 15°
-              shape: (attrs) => (attrs.type === "disease" ? "circle" : "diamond"),
-              labelFont: (attrs) =>
-                attrs.type === "disease" ? "bold Arial, sans-serif" : "'Courier New', monospace",
-              labelSize: (attrs) => (attrs.type === "disease" ? 16 : 10),
-              labelPosition: (attrs) => (attrs.type === "disease" ? "over" : "right"),
-              labelAngle: (attrs) => (attrs.type === "disease" ? 0 : GENE_LABEL_ANGLE),
-              ...backdropStyles,
+              when: (attrs) => attrs.type === "disease",
+              then: {
+                shape: "circle",
+                labelFont: "bold Arial, sans-serif",
+                labelSize: 16,
+                labelPosition: "over",
+              },
+            },
+            // "gene" nodes:
+            {
+              when: (attrs) => attrs.type === "gene",
+              then: {
+                shape: "diamond",
+                labelFont: "'Courier New', monospace",
+                labelSize: 10,
+                labelPosition: "right",
+                labelAngle: Math.PI / 4,
+              },
             },
           ],
         },

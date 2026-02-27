@@ -36,6 +36,7 @@ export interface BackdropDisplayData {
   backdropCornerRadius: number;
   backdropLabelPadding: number; // Already resolved (fallback applied)
   backdropArea: number; // 0=both, 1=node, 2=label
+  labelBoxOffset: [number, number]; // Shifts label box center (e.g., to cover attachment below)
 }
 
 export abstract class BackdropProgram<

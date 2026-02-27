@@ -80,6 +80,7 @@ export function createBackdropProgram<
           { name: "a_backdropBorderColor", size: 4, type: FLOAT },
           // Packed: [borderWidth, cornerRadius, labelPadding, area]
           { name: "a_backdropExtra", size: 4, type: FLOAT },
+          { name: "a_labelBoxOffset", size: 2, type: FLOAT },
         ],
         CONSTANT_ATTRIBUTES: [{ name: "a_quadCorner", size: 2, type: FLOAT }],
         CONSTANT_DATA: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
@@ -118,6 +119,8 @@ export function createBackdropProgram<
       array[i++] = data.backdropCornerRadius;
       array[i++] = data.backdropLabelPadding;
       array[i++] = data.backdropArea;
+      array[i++] = data.labelBoxOffset[0];
+      array[i++] = data.labelBoxOffset[1];
     }
 
     setUniforms(params: RenderParams, programInfo: ProgramInfo): void {

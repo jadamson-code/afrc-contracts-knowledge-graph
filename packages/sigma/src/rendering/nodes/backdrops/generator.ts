@@ -142,6 +142,7 @@ in float a_backdropShadowBlur;
 in float a_backdropPadding;
 in vec4 a_backdropBorderColor;
 in vec4 a_backdropExtra; // [borderWidth, cornerRadius, labelPadding, area]
+in vec2 a_labelBoxOffset;
 in vec2 a_quadCorner;
 
 uniform mat3 u_matrix;
@@ -233,6 +234,9 @@ void main() {
     }
 
     labelOffset = labelRotMat * labelOffset;
+
+    // Shift the label box center to cover attachments (e.g., below the label)
+    labelOffset += a_labelBoxOffset * zoomScale;
   }
 
   // For node-only mode, zero out label dimensions

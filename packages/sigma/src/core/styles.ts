@@ -403,6 +403,8 @@ export interface ResolvedNodeStyle {
   backdropCornerRadius: number;
   backdropLabelPadding: number;
   backdropArea: "both" | "node" | "label";
+  labelAttachment: string | null;
+  labelAttachmentPlacement: "below" | "above" | "left" | "right";
   // Additional program-declared variables stored here
   [key: string]: unknown;
 }
@@ -462,6 +464,8 @@ const DEFAULT_RESOLVED_NODE_STYLE: ResolvedNodeStyle = {
   backdropCornerRadius: 0,
   backdropLabelPadding: -1,
   backdropArea: "both",
+  labelAttachment: null,
+  labelAttachmentPlacement: "below",
 };
 
 /**

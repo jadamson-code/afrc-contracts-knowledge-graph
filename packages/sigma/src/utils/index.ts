@@ -15,3 +15,4 @@ export * from "./graph";
 export * from "./matrices";
 export * from "./misc";
 export * from "./normalization";
+export * from "./shelf-atlas";

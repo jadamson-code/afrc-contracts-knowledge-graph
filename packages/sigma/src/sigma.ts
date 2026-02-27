@@ -28,6 +28,10 @@ import {
   NodeProgram,
   getShapeId,
 } from "./rendering";
+import { AttachmentManager } from "./rendering/nodes/attachments/attachment-manager";
+import { AttachmentProgram, ATTACHMENT_GAP, ATTACHMENT_PLACEMENT_MAP, ATTACHMENT_TEXTURE_UNIT } from "./rendering/nodes/attachments/attachment-program";
+import { LabelAttachmentContext } from "./primitives/types";
+import { POSITION_MODE_MAP } from "./rendering/glsl";
 import { Settings, resolveSettings, validateSettings } from "./settings";
 import {
   BucketStats,
@@ -236,6 +240,12 @@ export default class Sigma<
   private labelProgram: LabelProgram<string, N, E, G> | null = null;
   private edgeLabelProgram: EdgeLabelProgram<string, N, E, G> | null = null;
 
+  // Label attachment rendering
+  private attachmentManager: AttachmentManager | null = null;
+  private attachmentProgram: AttachmentProgram<N, E, G> | null = null;
+  // Per-render-frame cache cleared at render start to avoid redundant measureText calls
+  private labelSizeCache = new Map<string, { width: number; height: number }>();
+
   // Shape slug for edge clamping (encodes shape name, params, rotateWithCamera)
   private nodeShapeSlug: string | null = null;
 
@@ -367,6 +377,13 @@ export default class Sigma<
     const BackdropProgramClass = NodeProgramClass.BackdropProgram as BackdropProgramType<N, E, G> | undefined;
     if (BackdropProgramClass) {
       this.backdropProgram = new BackdropProgramClass(gl, null, sigma);
+    }
+
+    // Create label attachment system if attachments are declared
+    const labelAttachments = this.primitives?.nodes?.labelAttachments;
+    if (labelAttachments && Object.keys(labelAttachments).length > 0) {
+      this.attachmentManager = new AttachmentManager(gl, labelAttachments, () => this.scheduleRender());
+      this.attachmentProgram = new AttachmentProgram(gl, null, sigma);
     }
 
     const { program: EdgeProgramClass, variables: edgeVariables } = generateEdgeProgram<N, E, G>(this.primitives?.edges);
@@ -876,6 +893,9 @@ export default class Sigma<
   private process(): this {
     this.emit("beforeProcess");
 
+    // Clear attachment cache since all nodes are reprocessed
+    this.attachmentManager?.clear();
+
     const graph = this.graph;
     const settings = this.settings;
     const dimensions = this.getDimensions();
@@ -1064,6 +1084,33 @@ export default class Sigma<
    */
   private getLabelColor(_data: NodeDisplayData): string {
     return "#000";
+  }
+
+  /**
+   * Measures a node's label dimensions in pixels. Uses the SDF label program
+   * when available, falling back to canvas 2D measurement.
+   */
+  private measureNodeLabel(data: NodeDisplayData): { width: number; height: number } {
+    if (!data.label) return { width: 0, height: 0 };
+
+    const labelSize = data.labelSize ?? 14;
+    const fontString = data.labelFont || this.primitives?.nodes?.label?.font?.family || "sans-serif";
+    const cacheKey = `${data.label}|${labelSize}|${fontString}`;
+    if (this.labelSizeCache.has(cacheKey)) return this.labelSizeCache.get(cacheKey)!;
+
+    const { family, weight, style } = parseFontString(fontString);
+    let result: { width: number; height: number };
+    if (this.labelProgram?.measureLabel) {
+      const fontKey = this.labelProgram.registerFont?.(family, weight, style) || "";
+      result = this.labelProgram.measureLabel(data.label, labelSize, fontKey);
+    } else {
+      const context = this.canvasContexts.labels;
+      context.font = `${style} ${weight} ${labelSize}px ${family}`;
+      result = { width: context.measureText(data.label).width, height: labelSize };
+    }
+
+    this.labelSizeCache.set(cacheKey, result);
+    return result;
   }
 
   private getDepthOffset(depth: string): number {
@@ -1405,23 +1452,27 @@ export default class Sigma<
 
       // Only include label dimensions when the label is actually displayed
       const labelVisible = this.displayedNodeLabels.has(key);
-      let labelWidth = 0;
-      let labelHeight = 0;
-      if (labelVisible && data.label) {
-        const labelSize = data.labelSize ?? 14;
-        if (this.labelProgram?.measureLabel) {
-          const fontString = data.labelFont || this.primitives?.nodes?.label?.font?.family || "sans-serif";
-          const { family, weight, style } = parseFontString(fontString);
-          const fontKey = this.labelProgram.registerFont?.(family, weight, style) || "";
-          const measured = this.labelProgram.measureLabel(data.label, labelSize, fontKey);
-          labelWidth = measured.width;
-          labelHeight = measured.height;
-        } else {
-          const { family, weight, style } = parseFontString(data.labelFont || "sans-serif");
-          const context = this.canvasContexts.labels;
-          context.font = `${style} ${weight} ${labelSize}px ${family}`;
-          labelWidth = context.measureText(data.label).width;
-          labelHeight = labelSize;
+      let { width: labelWidth, height: labelHeight } = labelVisible ? this.measureNodeLabel(data) : { width: 0, height: 0 };
+
+      // Expand label dimensions and compute box offset for attachment
+      let labelBoxOffsetX = 0;
+      let labelBoxOffsetY = 0;
+      if (labelVisible && data.labelAttachment && this.attachmentManager) {
+        const entry = this.attachmentManager.getEntry(key, data.labelAttachment);
+        if (entry) {
+          const placement = data.labelAttachmentPlacement || "below";
+          if (placement === "below" || placement === "above") {
+            const attachH = entry.height / this.pixelRatio;
+            labelHeight += attachH + ATTACHMENT_GAP;
+            labelWidth = Math.max(labelWidth, entry.width / this.pixelRatio);
+            // Shift center to keep original label at top, attachment at bottom (or vice versa)
+            labelBoxOffsetY = placement === "below" ? (attachH + ATTACHMENT_GAP) / 2 : -(attachH + ATTACHMENT_GAP) / 2;
+          } else {
+            const attachW = entry.width / this.pixelRatio;
+            labelWidth += attachW + ATTACHMENT_GAP;
+            labelHeight = Math.max(labelHeight, entry.height / this.pixelRatio);
+            labelBoxOffsetX = placement === "right" ? (attachW + ATTACHMENT_GAP) / 2 : -(attachW + ATTACHMENT_GAP) / 2;
+          }
         }
       }
 
@@ -1470,12 +1521,107 @@ export default class Sigma<
         backdropCornerRadius,
         backdropLabelPadding,
         backdropArea,
+        labelBoxOffset: [labelBoxOffsetX, labelBoxOffsetY],
       };
 
       this.backdropProgram.processBackdrop(i, backdropData);
     }
 
     this.backdropProgram.render(params);
+  }
+
+  /**
+   * Caches attachment textures for nodes with visible backdrops. Attachments
+   * are tied to backdrop visibility — they only render for backdrop nodes.
+   * Must be called before renderBackdrops so backdrop sizing includes them.
+   */
+  private cacheAttachments(depth?: string): void {
+    if (!this.attachmentManager) return;
+
+    const pixelRatio = this.pixelRatio;
+    for (const key of this.nodesWithBackdrop) {
+      if (!this.displayedNodeLabels.has(key)) continue;
+      const data = this.nodeDataCache[key];
+      if (!data || data.hidden) continue;
+      if (depth && data.depth !== depth) continue;
+      if (!data.labelAttachment) continue;
+
+      const attrs = this.graph.getNodeAttributes(key);
+      const { width: labelWidth, height: labelHeight } = this.measureNodeLabel(data);
+
+      const context: LabelAttachmentContext = {
+        node: key,
+        attributes: attrs as Record<string, unknown>,
+        pixelRatio,
+        labelWidth,
+        labelHeight,
+      };
+
+      this.attachmentManager.renderAttachment(key, data.labelAttachment, context);
+    }
+
+    this.attachmentManager.regenerateAtlas();
+  }
+
+  private renderAttachments(params: RenderParams, depth?: string): void {
+    if (!this.attachmentManager || !this.attachmentProgram) return;
+
+    // Attachments are only rendered for nodes with visible backdrops
+    const nodes: { key: string; attachmentName: string }[] = [];
+    for (const key of this.nodesWithBackdrop) {
+      if (!this.displayedNodeLabels.has(key)) continue;
+      const data = this.nodeDataCache[key];
+      if (!data || data.hidden) continue;
+      if (depth && data.labelDepth !== depth) continue;
+      if (!data.labelAttachment) continue;
+      nodes.push({ key, attachmentName: data.labelAttachment });
+    }
+
+    if (nodes.length === 0) return;
+
+    // Fill program buffer
+    let validCount = 0;
+    this.attachmentProgram.reallocateAttachments(nodes.length);
+
+    for (const { key, attachmentName } of nodes) {
+      const data = this.nodeDataCache[key];
+      const entry = this.attachmentManager.getEntry(key, attachmentName);
+      if (!entry) continue;
+
+      const nodeIndex = this.nodeIndices[key];
+      if (nodeIndex === undefined) continue;
+
+      const { width: labelWidth, height: labelHeight } = this.measureNodeLabel(data);
+
+      const positionMode = POSITION_MODE_MAP[data.labelPosition || "right"] ?? 0;
+      const attachmentPlacement = ATTACHMENT_PLACEMENT_MAP[data.labelAttachmentPlacement || "below"] ?? 0;
+
+      // Atlas dimensions are in physical pixels; convert to CSS pixels
+      // to match label dimensions from measureNodeLabel.
+      const pr = this.pixelRatio;
+      this.attachmentProgram.processAttachment(validCount, {
+        nodeIndex,
+        atlasX: entry.x,
+        atlasY: entry.y,
+        atlasW: entry.width,
+        atlasH: entry.height,
+        attachWidth: entry.width / pr,
+        attachHeight: entry.height / pr,
+        positionMode,
+        attachmentPlacement,
+        labelWidth,
+        labelHeight,
+        labelAngle: data.labelAngle ?? 0,
+      });
+      validCount++;
+    }
+
+    if (validCount === 0) return;
+
+    // Set atlas texture and render
+    this.attachmentProgram.reallocateAttachments(validCount);
+    this.attachmentManager.bindTexture(ATTACHMENT_TEXTURE_UNIT);
+    this.attachmentProgram.render(params);
   }
 
   /**
@@ -1710,6 +1856,7 @@ export default class Sigma<
     // console.log(this.graphToViewportRatio * this.correctionRatio * this.normalizationFunction.ratio * 2);
 
     const params: RenderParams = this.getRenderParams();
+    this.labelSizeCache.clear();
 
     const gl = this.webGLContext!;
 
@@ -1759,6 +1906,9 @@ export default class Sigma<
         this.renderEdgeLabelsWebGL(params, depth);
       }
 
+      // Cache attachment textures before backdrops so backdrop sizing includes them
+      this.cacheAttachments(depth);
+
       // Backdrops for nodes in this depth (before node programs so they appear behind)
       this.renderBackdrops(params, depth);
 
@@ -1769,6 +1919,9 @@ export default class Sigma<
           if (count > 0) this.nodeProgram!.render(params, offset, count);
         }
       }
+
+      // Label attachments for this depth (after nodes, before labels)
+      this.renderAttachments(params, depth);
 
       // Node labels for this depth
       if (this.settings.renderLabels) {
@@ -1848,6 +2001,8 @@ export default class Sigma<
       backdropCornerRadius: resolvedStyle.backdropCornerRadius,
       backdropLabelPadding: resolvedStyle.backdropLabelPadding,
       backdropArea: resolvedStyle.backdropArea,
+      labelAttachment: resolvedStyle.labelAttachment ?? null,
+      labelAttachmentPlacement: resolvedStyle.labelAttachmentPlacement ?? "below",
     };
 
     // Validate position
@@ -3061,8 +3216,16 @@ export default class Sigma<
    */
   private refreshNodeState(node: string): void {
     const oldDepth = this.nodeDataCache[node]?.depth;
+    const oldAttachment = this.nodeDataCache[node]?.labelAttachment;
     this.updateNode(node);
     const data = this.nodeDataCache[node];
+
+    // Invalidate attachment cache when state changes
+    if (this.attachmentManager) {
+      if (data.labelAttachment || oldAttachment) {
+        this.attachmentManager.invalidateNode(node);
+      }
+    }
 
     // Update node data texture (size may change on hover)
     let shapeId: number;
@@ -3133,8 +3296,13 @@ export default class Sigma<
       const nodes = opts.partialGraph?.nodes || [];
       for (let i = 0, l = nodes?.length || 0; i < l; i++) {
         const node = nodes[i];
+        const oldAttachment = this.nodeDataCache[node]?.labelAttachment;
         // Recompute node's data (ie. apply reducer)
         this.updateNode(node);
+        // Invalidate attachment cache since graph attributes may have changed
+        if (this.attachmentManager && (this.nodeDataCache[node]?.labelAttachment || oldAttachment)) {
+          this.attachmentManager.invalidateNode(node);
+        }
         // Add node to the program if layout is unchanged.
         // otherwise it will be done in the process function
         if (skipIndexation) {
@@ -3435,11 +3603,15 @@ export default class Sigma<
     this.labelProgram?.kill();
     this.edgeLabelProgram?.kill();
     this.backdropProgram?.kill();
+    this.attachmentProgram?.kill();
+    this.attachmentManager?.kill();
     this.nodeProgram = null;
     this.edgeProgram = null;
     this.labelProgram = null;
     this.edgeLabelProgram = null;
     this.backdropProgram = null;
+    this.attachmentProgram = null;
+    this.attachmentManager = null;
 
     // Cleanup SDF atlas
     if (this.sdfAtlas) {

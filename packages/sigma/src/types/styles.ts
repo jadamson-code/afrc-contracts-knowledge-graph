@@ -268,6 +268,10 @@ export interface NodeLabelBuiltInVariables<
   labelAngle?: GraphicValue<NA, NS, GS, number>;
   /** Depth layer for label render ordering */
   labelDepth?: GraphicValue<NA, NS, GS, Layer>;
+  /** Label attachment name (references a key in primitives.nodes.labelAttachments) */
+  labelAttachment?: GraphicValue<NA, NS, GS, string | null>;
+  /** Where to place the attachment relative to the label */
+  labelAttachmentPlacement?: GraphicValue<NA, NS, GS, "below" | "above" | "left" | "right">;
 }
 
 /**

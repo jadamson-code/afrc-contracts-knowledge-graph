@@ -92,6 +92,8 @@ export interface NodeDisplayData extends Coordinates, DisplayData {
   backdropCornerRadius?: number; // Backdrop corner radius in pixels
   backdropLabelPadding?: number; // Backdrop label padding in pixels (-1 = fall back to backdropPadding)
   backdropArea?: "both" | "node" | "label"; // Which area the backdrop covers
+  labelAttachment?: string | null; // Label attachment name (references primitives.nodes.labelAttachments)
+  labelAttachmentPlacement?: "below" | "above" | "left" | "right"; // Where to place attachment relative to label
 }
 export interface EdgeDisplayData extends DisplayData {
   path?: string; // Path type (e.g., "straight", "curved")
@@ -361,7 +363,7 @@ export type { ResolvedNodeStyle, ResolvedEdgeStyle, StyleDependency } from "./co
 /**
  * Primitives API:
  */
-export type { PrimitivesDeclaration, NodePrimitives, EdgePrimitives } from "./primitives/types";
+export type { PrimitivesDeclaration, NodePrimitives, EdgePrimitives, LabelAttachmentContent, LabelAttachmentRenderer, LabelAttachmentContext } from "./primitives/types";
 export {
   DEFAULT_PRIMITIVES,
   DEFAULT_NODE_PRIMITIVES,

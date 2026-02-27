@@ -80,3 +80,6 @@ export {
 } from "./backdrops";
 export type { GeneratedBackdropShaders, BackdropShaderOptions } from "./backdrops";
 
+// Label attachment programs
+export { AttachmentManager, AttachmentProgram } from "./attachments";
+

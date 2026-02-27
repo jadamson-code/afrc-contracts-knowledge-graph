@@ -183,6 +183,33 @@ export interface BackdropOptions {
   padding?: number | { attribute: string; default?: number };
 }
 
+/**
+ * A label attachment renderer receives context about the node and returns
+ * a drawable image source (canvas, image, etc.) or null to skip.
+ */
+export interface LabelAttachmentContext {
+  node: string;
+  attributes: Record<string, unknown>;
+  pixelRatio: number;
+  labelWidth: number;
+  labelHeight: number;
+}
+
+/**
+ * The content returned by a label attachment renderer.
+ * - "canvas": an already-rendered HTMLCanvasElement (dimensions from canvas.width/height)
+ * - "svg": an SVG string or element (dimensions parsed from width/height attributes or viewBox)
+ * - "html": an HTML string or element with explicit dimensions (rendered via SVG foreignObject)
+ */
+export type LabelAttachmentContent =
+  | { type: "canvas"; canvas: HTMLCanvasElement }
+  | { type: "svg"; svg: string | SVGElement }
+  | { type: "html"; html: string | HTMLElement; css?: string; width?: number; height?: number };
+
+export type LabelAttachmentRenderer = (
+  ctx: LabelAttachmentContext,
+) => LabelAttachmentContent | null | Promise<LabelAttachmentContent | null>;
+
 export interface NodePrimitives {
   shapes?: readonly NodeShapeSpec[] | NodeShapeSpec[];
   variables?: VariablesDefinition;
@@ -190,6 +217,7 @@ export interface NodePrimitives {
   rotateWithCamera?: boolean;
   label?: LabelOptions;
   backdrop?: BackdropOptions;
+  labelAttachments?: Record<string, LabelAttachmentRenderer>;
 }
 
 export interface EdgePrimitives {
@@ -317,6 +345,7 @@ export const DEFAULT_NODE_PRIMITIVES: Required<NodePrimitives> = {
   rotateWithCamera: false,
   label: {},
   backdrop: {},
+  labelAttachments: {},
 };
 
 export const DEFAULT_EDGE_PRIMITIVES: Required<EdgePrimitives> = {

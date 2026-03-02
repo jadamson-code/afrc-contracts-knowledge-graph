@@ -1061,19 +1061,33 @@ export default class Sigma<
    * @private
    */
   private processWebGLLabels(nodes: string[]): void {
-    // Collect all label texts for glyph pre-generation
-    const labelTexts: string[] = [];
+    if (!this.labelProgram?.ensureGlyphsReady) return;
+
+    // Group label texts by font string so glyphs are pre-generated for every
+    // font family that nodes actually use, not just the program's default font.
+    const defaultLabelFont = this.primitives?.nodes?.label?.font?.family || "sans-serif";
+    const textsByFont = new Map<string, string[]>();
+
     for (let i = 0, l = nodes.length; i < l; i++) {
       const node = nodes[i];
       const data = this.nodeDataCache[node];
 
       if (data.hidden || !data.label) continue;
-      labelTexts.push(data.label);
+
+      const fontString = data.labelFont || defaultLabelFont;
+      const existing = textsByFont.get(fontString);
+      if (existing) {
+        existing.push(data.label);
+      } else {
+        textsByFont.set(fontString, [data.label]);
+      }
     }
 
     // Ensure all glyphs are generated (this is the expensive part we want to do once)
-    if (this.labelProgram?.ensureGlyphsReady) {
-      this.labelProgram.ensureGlyphsReady(labelTexts);
+    for (const [fontString, texts] of textsByFont) {
+      const { family, weight, style } = parseFontString(fontString);
+      const fontKey = this.labelProgram.registerFont?.(family, weight, style);
+      this.labelProgram.ensureGlyphsReady(texts, fontKey);
     }
   }
 

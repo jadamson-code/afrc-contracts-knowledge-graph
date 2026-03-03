@@ -39,7 +39,7 @@ const suite = [
       graph.addEdge("upper-left", "lower-right", { color: "#f00" });
       graph.addEdge("upper-right", "lower-left", { color: "#f00" });
 
-      new Sigma(graph, container, { renderEdgeLabels: true, labelRenderedSizeThreshold: -Infinity });
+      new Sigma(graph, container, { settings: { renderEdgeLabels: true, labelRenderedSizeThreshold: -Infinity } });
     },
   },
   {
@@ -129,7 +129,7 @@ const suite = [
       graph.addEdge("Mary", "Sue", { size: 5 });
       graph.addEdge("Sue", "John", { size: 5 });
 
-      new Sigma(graph, container, { defaultNodeColor: "#7FFFD4", defaultEdgeColor: "#AA4A44" });
+      new Sigma(graph, container, { styles: { nodes: { color: "#7FFFD4" }, edges: { color: "#AA4A44" } } });
     },
   },
   {
@@ -192,7 +192,7 @@ const suite = [
       } = dependencies;
 
       const renderer = new Sigma(lesMiserables, container, {
-        zoomToSizeRatioFunction: (x: number) => x,
+        settings: { zoomToSizeRatioFunction: (x: number) => x },
       });
       renderer.getCamera().setState({ ratio: 3, x: 0.8, y: 0.7 });
     },
@@ -347,7 +347,7 @@ const suite = [
       graph.addEdge("lower-right", "lower-left", { type: "arrow", size: 5, label: "left", forceLabel: true });
       graph.addEdge("lower-left", "upper-left", { type: "arrow", size: 5, label: "up", forceLabel: true });
 
-      new Sigma(graph, container, { renderEdgeLabels: true, labelRenderedSizeThreshold: 10 });
+      new Sigma(graph, container, { settings: { renderEdgeLabels: true, labelRenderedSizeThreshold: 10 } });
     },
   },
   {

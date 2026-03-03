@@ -7,19 +7,16 @@
  * NOTE: Type test files (*.test-d.ts) are statically analyzed only - they don't execute.
  * Run with: npx vitest typecheck
  */
-// Import satellite packages to augment the types
-// These packages use module augmentation to add their primitives to the registry
-import "@sigma/node-border";
-// Import schemas from packages for verification
+// Import schemas from satellite packages for verification
 import { borderSchema } from "@sigma/node-border";
-import "@sigma/node-image";
 import { imageSchema } from "@sigma/node-image";
-import "@sigma/node-piechart";
 import { piechartSchema } from "@sigma/node-piechart";
 // Import real schema helpers from sigma/primitives
 import { colorProp, enumProp, numberProp, stringProp } from "sigma/primitives";
 // Import defineSigmaOptions from sigma/types
 import { defineSigmaOptions } from "sigma/types";
+// Import factory functions
+import { sdfCircle, sdfSquare, sdfTriangle, layerFill, pathLine, layerPlain } from "sigma/rendering";
 import { describe, expectTypeOf, test } from "vitest";
 
 // =============================================================================
@@ -82,23 +79,19 @@ describe("Satellite package schemas", () => {
 });
 
 // =============================================================================
-// TYPE TESTS: Module augmentation (after imports)
+// TYPE TESTS: Satellite package schemas are importable
 // =============================================================================
-// NOTE: These tests verify that importing satellite packages augments the types.
-// The actual type checking is implicit - if types weren't augmented, these would fail.
 
-describe("Module augmentation", () => {
-  test("importing @sigma/node-border augments NodeLayerSchemaRegistry", () => {
-    // This test passes if TypeScript recognizes "border" as a valid layer
-    // after importing @sigma/node-border at the top of the file
+describe("Satellite schema exports", () => {
+  test("@sigma/node-border exports borderSchema", () => {
     expectTypeOf(borderSchema).toMatchTypeOf<object>();
   });
 
-  test("importing @sigma/node-image augments NodeLayerSchemaRegistry", () => {
+  test("@sigma/node-image exports imageSchema", () => {
     expectTypeOf(imageSchema).toMatchTypeOf<object>();
   });
 
-  test("importing @sigma/node-piechart augments NodeLayerSchemaRegistry", () => {
+  test("@sigma/node-piechart exports piechartSchema", () => {
     expectTypeOf(piechartSchema).toMatchTypeOf<object>();
   });
 });
@@ -112,12 +105,12 @@ describe("defineSigmaOptions - Minimal Setup", () => {
     const options = defineSigmaOptions({
       primitives: {
         nodes: {
-          shapes: ["circle"],
-          layers: ["fill"],
+          shapes: [sdfCircle()],
+          layers: [layerFill()],
         },
         edges: {
-          paths: ["straight"],
-          layers: ["plain"],
+          paths: [pathLine()],
+          layers: [layerPlain()],
         },
       },
       styles: {
@@ -147,15 +140,16 @@ describe("defineSigmaOptions - With shapes and variables", () => {
       primitives: {
         nodes: {
           shapes: [
-            "circle",
-            { type: "square", cornerRadius: { attribute: "nodeCornerRadius" } },
-            { type: "triangle", rotation: Math.PI / 6 },
+            sdfCircle(),
+            sdfSquare({ cornerRadius: { attribute: "nodeCornerRadius" } }),
+            sdfTriangle({ rotation: Math.PI / 6 }),
           ],
           variables: {
             borderSize: { type: "number", default: 0 },
             borderColor: { type: "color", default: "#000" },
+            nodeCornerRadius: { type: "number", default: 0 },
           },
-          layers: ["fill"],
+          layers: [layerFill()],
         },
       },
       styles: {
@@ -182,7 +176,7 @@ describe("defineSigmaOptions - Error Cases", () => {
     defineSigmaOptions({
       primitives: {
         nodes: {
-          shapes: ["circle"],
+          shapes: [sdfCircle()],
           variables: {
             borderSize: { type: "number", default: 0 },
           },
@@ -202,7 +196,7 @@ describe("defineSigmaOptions - Error Cases", () => {
     defineSigmaOptions({
       primitives: {
         nodes: {
-          shapes: ["circle"],
+          shapes: [sdfCircle()],
           variables: {
             // These mismatches are NOT caught at compile time (would fail at runtime)
             borderSize: { type: "number", default: "large" },
@@ -217,7 +211,7 @@ describe("defineSigmaOptions - Error Cases", () => {
     defineSigmaOptions({
       primitives: {
         nodes: {
-          shapes: ["circle"],
+          shapes: [sdfCircle()],
           variables: {
             borderSize: { type: "number", default: 0 },
           },
@@ -238,7 +232,7 @@ describe("defineSigmaOptions - Error Cases", () => {
     defineSigmaOptions({
       primitives: {
         nodes: {
-          shapes: ["circle"],
+          shapes: [sdfCircle()],
         },
       },
       styles: {

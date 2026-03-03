@@ -9,21 +9,6 @@
  *
  * @module @sigma/node-image
  */
-import { registerNodeLayerFactory } from "sigma/rendering";
-
-import { layerImage } from "./layer";
-import { imageSchema } from "./types";
-
-// Module augmentation: makes "image" a recognized node layer type
-declare module "sigma/primitives" {
-  interface NodeLayerSchemaRegistry {
-    image: typeof imageSchema;
-  }
-}
-
-// Register the runtime factory
-registerNodeLayerFactory("image", layerImage);
-
 // Layer factory
 export { layerImage } from "./layer";
 

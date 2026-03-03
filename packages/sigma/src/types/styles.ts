@@ -64,7 +64,7 @@ export interface BaseGraphState {
  */
 export type StatePredicate<A extends Attributes = Attributes, S = BaseNodeState | BaseEdgeState, GS = BaseGraphState> =
   | keyof S
-  | (keyof S)[]
+  | readonly (keyof S)[]
   | Partial<S>
   | ((attributes: A, state: S, graphState: GS, graph: AbstractGraph) => boolean);
 
@@ -143,8 +143,8 @@ export type ValueFunction<A extends Attributes, S, GS, T> = (
  */
 export interface InlineConditional<A extends Attributes, S, GS, T> {
   when: StatePredicate<A, S, GS>;
-  then: T | AttributeBinding<T> | ValueFunction<A, S, GS, T>;
-  else?: T | AttributeBinding<T> | ValueFunction<A, S, GS, T>;
+  then: GraphicValue<A, S, GS, T>;
+  else?: GraphicValue<A, S, GS, T>;
 }
 
 /**

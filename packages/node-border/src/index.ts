@@ -9,21 +9,6 @@
  *
  * @module @sigma/node-border
  */
-import { registerNodeLayerFactory } from "sigma/rendering";
-
-import { layerBorder } from "./layer";
-import { borderSchema } from "./types";
-
-// Module augmentation: makes "border" a recognized node layer type
-declare module "sigma/primitives" {
-  interface NodeLayerSchemaRegistry {
-    border: typeof borderSchema;
-  }
-}
-
-// Register the runtime factory
-registerNodeLayerFactory("border", layerBorder);
-
 // Layer factory
 export { layerBorder } from "./layer";
 

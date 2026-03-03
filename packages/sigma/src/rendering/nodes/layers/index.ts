@@ -7,5 +7,4 @@
  * @module
  */
 
-export { layerFill } from "./fill";
-export { registerNodeLayerFactory, type NodeLayerFactory } from "./factory";
+export { layerFill, type LayerFillOptions } from "./fill";

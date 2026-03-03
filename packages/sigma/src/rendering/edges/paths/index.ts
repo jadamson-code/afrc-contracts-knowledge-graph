@@ -10,4 +10,3 @@ export { pathCurved, type CurvedPathOptions } from "./curved";
 export { pathCurvedS, type CurvedSPathOptions } from "./curvedS";
 export { pathStep, type StepPathOptions } from "./step";
 export { pathStepCurved, type StepCurvedPathOptions } from "./stepCurved";
-export { registerEdgePathFactory, type EdgePathFactory } from "./factory";

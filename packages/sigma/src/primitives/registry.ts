@@ -1,9 +1,8 @@
 /**
- * Sigma.js Generic Primitive Registry
- * ====================================
+ * Sigma.js Primitive Registry
+ * ===========================
  *
- * Generic factory registry for all primitive types.
- * Primitive-specific code lives in their respective rendering folders.
+ * Built-in variable name types and type utilities for the primitives system.
  *
  * @module
  */
@@ -13,7 +12,6 @@ import {
   NodeBuiltInVariables,
   NodeLabelBuiltInVariables,
 } from "../types/styles";
-import { BuiltInPrimitiveKind, PrimitiveKindOutputs } from "./kinds";
 
 // =============================================================================
 // BUILT-IN VARIABLE NAMES
@@ -36,30 +34,3 @@ export type IsCustomVariable<S, BuiltIns = BuiltInVariableNames> = S extends Bui
 export type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (k: infer I) => void
   ? I
   : never;
-
-// =============================================================================
-// GENERIC FACTORY REGISTRY
-// =============================================================================
-
-type AnyFactory = (options?: unknown) => unknown;
-const factories = new Map<string, Map<string, AnyFactory>>();
-
-export function registerFactory<K extends BuiltInPrimitiveKind>(
-  kind: K,
-  name: string,
-  factory: (options?: unknown) => PrimitiveKindOutputs[K],
-): void {
-  if (!factories.has(kind)) factories.set(kind, new Map());
-  factories.get(kind)!.set(name, factory as AnyFactory);
-}
-
-export function getFactory<K extends BuiltInPrimitiveKind>(
-  kind: K,
-  name: string,
-): ((options?: unknown) => PrimitiveKindOutputs[K]) | undefined {
-  return factories.get(kind)?.get(name) as ((options?: unknown) => PrimitiveKindOutputs[K]) | undefined;
-}
-
-export function clearFactoryRegistry(): void {
-  factories.clear();
-}

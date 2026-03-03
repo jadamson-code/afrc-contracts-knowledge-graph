@@ -8,21 +8,8 @@
  *
  * @module
  */
-import { defineEdgePath } from "./factory";
 import { numberToGLSLFloat } from "../../utils";
 import { EdgePath } from "../types";
-
-/**
- * Schema for curvedS path options (empty - options have complex union types).
- */
-export const curvedSSchema = {} as const;
-
-// Register the curvedS path schema for type inference
-declare module "../../../primitives/schema" {
-  interface EdgePathSchemaRegistry {
-    curvedS: typeof curvedSSchema;
-  }
-}
 
 /**
  * Options for S-curve path creation.
@@ -69,12 +56,24 @@ export interface CurvedSPathOptions {
 }
 
 /**
- * CurvedS path definition with schema.
+ * Creates an S-curve edge path using cubic Bézier.
+ *
+ * The path is a cubic Bézier curve with control points positioned to create
+ * smooth S-shaped transitions similar to step paths but without sharp corners.
+ *
+ * @param options - Path configuration
+ * @returns EdgePath definition for S-curve paths
+ *
+ * @example
+ * ```typescript
+ * const EdgeCurvedSProgram = createEdgeProgram({
+ *   paths: [pathCurvedS({ curveOffset: 0.4 })],
+ *   extremities: [extremityNone(), extremityArrow()],
+ *   layers: [layerPlain()],
+ * });
+ * ```
  */
-export const curvedSDefinition = defineEdgePath(
-  "curvedS",
-  curvedSSchema,
-  (options?: CurvedSPathOptions): EdgePath => {
+export function pathCurvedS(options?: CurvedSPathOptions): EdgePath {
     const {
       segments = 16,
       orientation = "automatic",
@@ -230,25 +229,4 @@ vec2 path_curvedS_position(float t, vec2 source, vec2 target) {
       uniforms: [],
       attributes: [],
     };
-  },
-);
-
-/**
- * Creates an S-curve edge path using cubic Bézier.
- *
- * The path is a cubic Bézier curve with control points positioned to create
- * smooth S-shaped transitions similar to step paths but without sharp corners.
- *
- * @param options - Path configuration
- * @returns EdgePath definition for S-curve paths
- *
- * @example
- * ```typescript
- * const EdgeCurvedSProgram = createEdgeProgram({
- *   paths: [pathCurvedS({ curveOffset: 0.4 })],
- *   extremities: [extremityNone(), extremityArrow()],
- *   layers: [layerPlain()],
- * });
- * ```
- */
-export const pathCurvedS = curvedSDefinition.factory;
+}

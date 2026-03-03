@@ -2,15 +2,12 @@
  * Sigma.js Primitive Schema
  * =========================
  *
- * Schema-based primitive definition system.
- * Provides types, helpers, and utilities for defining primitives with type-safe schemas
- * that automatically derive factory options and declarative configs.
+ * Schema-based type utilities for defining primitives with type-safe schemas
+ * that automatically derive factory options.
  *
  * @module
  */
 import { ValueSource } from "../rendering";
-import { BuiltInPrimitiveKind, PrimitiveKindOutputs } from "./kinds";
-import { registerFactory } from "./registry";
 
 // =============================================================================
 // CORE SCHEMA TYPES
@@ -49,8 +46,8 @@ export interface PropertySchema<T = unknown, PT extends PropertyType = PropertyT
 
   /**
    * Whether this property can be a variable reference in the declarative API.
-   * When true: declarative config allows `string | T` (e.g., "myVar" or 0.5)
-   * When false: declarative config only allows `T`
+   * When true: factory option allows `ValueSource<T>` (e.g., { attribute: "x" } or 0.5)
+   * When false: factory option only allows `T`
    * Default: false
    */
   variable?: V;
@@ -91,28 +88,6 @@ export type PrimitiveSchema = Record<string, PropertySchema | ArrayPropertySchem
  * Empty schema for primitives with no configurable properties.
  */
 export type EmptySchema = Record<string, never>;
-
-/**
- * Result of defining a primitive with its schema.
- *
- * @template Name - The primitive's unique name
- * @template Schema - The primitive's property schema
- * @template Result - The type returned by the factory function
- */
-export interface PrimitiveDefinition<
-  Name extends string = string,
-  Schema extends PrimitiveSchema = PrimitiveSchema,
-  Result = unknown,
-> {
-  /** Unique identifier for this primitive */
-  name: Name;
-
-  /** Schema defining configurable properties */
-  schema: Schema;
-
-  /** Factory function that creates the primitive */
-  factory: (options?: Record<string, unknown>) => Result;
-}
 
 // =============================================================================
 // SCHEMA HELPER FUNCTIONS
@@ -325,21 +300,6 @@ export function arrayProp<S extends Record<string, PropertySchema>>(
 }
 
 // =============================================================================
-// SCHEMA REGISTRIES (augmented by primitives via declare module)
-// =============================================================================
-
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface NodeShapeSchemaRegistry {}
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface NodeLayerSchemaRegistry {}
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface EdgePathSchemaRegistry {}
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface EdgeLayerSchemaRegistry {}
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface EdgeExtremitySchemaRegistry {}
-
-// =============================================================================
 // TYPE UTILITIES (re-exported from registry)
 // =============================================================================
 
@@ -425,188 +385,3 @@ export type ResolvedOptionsFromSchema<S extends PrimitiveSchema> = {
       ? FactoryOptionFromProperty<S[K]>
       : never;
 };
-
-// =============================================================================
-// DECLARATIVE CONFIG DERIVATION
-// =============================================================================
-
-/**
- * Attribute source for variable-capable properties in declarative configs.
- * Allows referencing a node/edge attribute with an optional default value.
- */
-export interface DeclarativeAttributeSource<T> {
-  /** Name of the attribute to read from */
-  attribute: string;
-  /** Default value when the attribute is missing */
-  default?: T;
-}
-
-/**
- * Derives the declarative config type from a single property schema.
- * - Variable-capable properties accept either a literal value OR an attribute source
- * - Static properties only accept literal values
- *
- * @example
- * // For a variable-capable color property:
- * color: "#ff0000"                                    // Literal value
- * color: { attribute: "borderColor" }                 // Attribute reference
- * color: { attribute: "borderColor", default: "#000" } // With default
- */
-export type DeclarativeConfigFromProperty<P extends PropertySchema> =
-  IsVariableProperty<P> extends true
-    ? TypeFromPropertySchema<P> | DeclarativeAttributeSource<TypeFromPropertySchema<P>>
-    : TypeFromPropertySchema<P>;
-
-/**
- * Derives declarative config from an item schema (for array properties).
- */
-export type DeclarativeConfigFromItemSchema<S extends Record<string, PropertySchema>> = {
-  [K in keyof S]?: DeclarativeConfigFromProperty<S[K]>;
-};
-
-/**
- * Derives declarative config from a complete primitive schema.
- * All properties are optional.
- */
-export type DeclarativeConfigFromSchema<S extends PrimitiveSchema> = {
-  [K in keyof S]?: S[K] extends ArrayPropertySchema<infer Items>
-    ? Array<DeclarativeConfigFromItemSchema<Items>>
-    : S[K] extends PropertySchema
-      ? DeclarativeConfigFromProperty<S[K]>
-      : never;
-};
-
-// =============================================================================
-// VALIDATED DECLARATIVE CONFIG (context-aware variable validation)
-// =============================================================================
-
-/**
- * Validated attribute source that restricts attribute names to allowed variables.
- */
-export interface ValidatedAttributeSource<T, AllowedVars extends string> {
-  /** Name of the attribute to read from (restricted to declared variables) */
-  attribute: AllowedVars;
-  /** Default value when the attribute is missing */
-  default?: T;
-}
-
-/**
- * Derives the validated declarative config type from a single property schema.
- * Variable-capable properties only accept declared variable names, not any string.
- *
- * @template P - The property schema
- * @template AllowedVars - Union of allowed variable names (declared + built-in)
- */
-export type ValidatedConfigFromProperty<P extends PropertySchema, AllowedVars extends string> =
-  IsVariableProperty<P> extends true
-    ? TypeFromPropertySchema<P> | ValidatedAttributeSource<TypeFromPropertySchema<P>, AllowedVars>
-    : TypeFromPropertySchema<P>;
-
-/**
- * Derives validated config from an item schema (for array properties).
- * Only allows declared variable names for variable-capable properties.
- */
-export type ValidatedConfigFromItemSchema<S extends Record<string, PropertySchema>, AllowedVars extends string> = {
-  [K in keyof S]?: ValidatedConfigFromProperty<S[K], AllowedVars>;
-};
-
-/**
- * Derives validated config from a complete primitive schema.
- * Only allows declared variable names for variable-capable properties.
- *
- * @template S - The primitive schema
- * @template AllowedVars - Union of allowed variable names
- */
-export type ValidatedConfigFromSchema<S extends PrimitiveSchema, AllowedVars extends string> = {
-  [K in keyof S]?: S[K] extends ArrayPropertySchema<infer Items>
-    ? Array<ValidatedConfigFromItemSchema<Items, AllowedVars>>
-    : S[K] extends PropertySchema
-      ? ValidatedConfigFromProperty<S[K], AllowedVars>
-      : never;
-};
-
-// =============================================================================
-// VARIABLE EXTRACTION
-// =============================================================================
-
-import { IsCustomVariable } from "./registry";
-
-/**
- * Extracts variable type from a property schema.
- */
-type VariableTypeFromProperty<P extends PropertySchema> = P["type"] extends "number"
-  ? number
-  : P["type"] extends "color" | "string"
-    ? string
-    : P["type"] extends "boolean"
-      ? boolean
-      : never;
-
-/**
- * Extracts variables from a single property in a config.
- * Returns { [varName]: type } if the value is a custom variable reference.
- * Handles both the { attribute: string } object format.
- */
-export type ExtractPropertyVariable<Value, P extends PropertySchema> =
-  IsVariableProperty<P> extends true
-    ? Value extends { attribute: infer A }
-      ? A extends string
-        ? IsCustomVariable<A> extends true
-          ? { [K in A]: VariableTypeFromProperty<P> }
-          : object
-        : object
-      : object
-    : object;
-
-/**
- * Extracts variables from an array item config.
- */
-export type ExtractItemVariables<
-  Item extends Record<string, unknown>,
-  ItemSchema extends Record<string, PropertySchema>,
-> = {
-  [K in keyof Item & keyof ItemSchema]: ExtractPropertyVariable<Item[K], ItemSchema[K]>;
-}[keyof Item & keyof ItemSchema];
-
-/**
- * Extracts all variables from a declarative config using its schema.
- * This is a generic replacement for the manual Extract*Variables types.
- */
-export type ExtractVariablesFromConfig<
-  Config extends Record<string, unknown>,
-  Schema extends PrimitiveSchema,
-> = import("./registry").UnionToIntersection<
-  {
-    [K in keyof Config & keyof Schema]: Schema[K] extends ArrayPropertySchema<infer Items>
-      ? Config[K] extends Array<infer Item>
-        ? Item extends Record<string, unknown>
-          ? ExtractItemVariables<Item, Items>
-          : object
-        : object
-      : Schema[K] extends PropertySchema
-        ? ExtractPropertyVariable<Config[K], Schema[K]>
-        : object;
-  }[keyof Config & keyof Schema]
->;
-
-// =============================================================================
-// DEFINE PRIMITIVE FUNCTION
-// =============================================================================
-
-/**
- * Defines a primitive with its schema.
- * Registers the factory at runtime and returns the definition for type-level usage.
- */
-export function definePrimitive<
-  Kind extends BuiltInPrimitiveKind,
-  Name extends string,
-  Schema extends PrimitiveSchema,
->(
-  kind: Kind,
-  name: Name,
-  schema: Schema,
-  factory: (options?: FactoryOptionsFromSchema<Schema>) => PrimitiveKindOutputs[Kind],
-): PrimitiveDefinition<Name, Schema, PrimitiveKindOutputs[Kind]> {
-  registerFactory(kind, name, factory as (options?: unknown) => PrimitiveKindOutputs[Kind]);
-  return { name, schema, factory: factory as (options?: Record<string, unknown>) => PrimitiveKindOutputs[Kind] };
-}

@@ -7,23 +7,9 @@
  *
  * @module
  */
-import { defineEdgePath } from "./factory";
 import { numberToGLSLFloat } from "../../utils";
 import { generateRotate2D } from "../shared-glsl";
 import { EdgePath } from "../types";
-
-/**
- * Schema for stepCurved path options (empty - options have complex union types).
- * Note: cornerRadius is baked into shader at factory time, not a per-edge variable.
- */
-export const stepCurvedSchema = {} as const;
-
-// Register the stepCurved path schema for type inference
-declare module "../../../primitives/schema" {
-  interface EdgePathSchemaRegistry {
-    stepCurved: typeof stepCurvedSchema;
-  }
-}
 
 /**
  * Options for step curved path creation.
@@ -63,12 +49,24 @@ export interface StepCurvedPathOptions {
 }
 
 /**
- * StepCurved path definition with schema.
+ * Creates a step (orthogonal) edge path with rounded corners.
+ *
+ * The path consists of 3 segments with 2 rounded corners using quadratic
+ * Bezier curves, forming a smooth Z-shape or step pattern.
+ *
+ * @param options - Path configuration
+ * @returns EdgePath definition for step curved paths
+ *
+ * @example
+ * ```typescript
+ * const EdgeStepCurvedProgram = createEdgeProgram({
+ *   paths: [pathStepCurved({ orientation: "horizontal" })],
+ *   extremities: [extremityNone(), extremityArrow()],
+ *   layers: [layerPlain()],
+ * });
+ * ```
  */
-export const stepCurvedDefinition = defineEdgePath(
-  "stepCurved",
-  stepCurvedSchema,
-  (options?: StepCurvedPathOptions): EdgePath => {
+export function pathStepCurved(options?: StepCurvedPathOptions): EdgePath {
     const { orientation = "automatic", rotateWithCamera = false, offset = 0.5, cornerRadius = 0.4 } = options ?? {};
 
   // Determine orientation mode:
@@ -326,25 +324,4 @@ void stepCurved_getVertexPosition(
       uniforms: [],
       attributes: [],
     };
-  },
-);
-
-/**
- * Creates a step (orthogonal) edge path with rounded corners.
- *
- * The path consists of 3 segments with 2 rounded corners using quadratic
- * Bezier curves, forming a smooth Z-shape or step pattern.
- *
- * @param options - Path configuration
- * @returns EdgePath definition for step curved paths
- *
- * @example
- * ```typescript
- * const EdgeStepCurvedProgram = createEdgeProgram({
- *   paths: [pathStepCurved({ orientation: "horizontal" })],
- *   extremities: [extremityNone(), extremityArrow()],
- *   layers: [layerPlain()],
- * });
- * ```
- */
-export const pathStepCurved = stepCurvedDefinition.factory;
+}

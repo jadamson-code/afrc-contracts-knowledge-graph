@@ -10,6 +10,9 @@ import {
   evaluateNodeStyle,
   evaluateStatePredicate,
   resolveGraphicValue,
+  type DirectAttributeBinding,
+  type NumericalAttributeBinding,
+  type GraphicValue,
 } from "sigma/types";
 import { describe, expect, test } from "vitest";
 
@@ -111,7 +114,7 @@ describe("Style evaluation system", () => {
     const attrs = { x: 10, y: 20, color: "#f00", category: "A", score: 75 };
 
     test("direct binding reads attribute value", () => {
-      const binding = { attribute: "color" };
+      const binding: DirectAttributeBinding<string> = { attribute: "color" };
       expect(resolveGraphicValue(binding, attrs, defaultNodeState, defaultGraphState, graph, "#000")).toBe("#f00");
     });
 
@@ -139,7 +142,7 @@ describe("Style evaluation system", () => {
     });
 
     test("numerical binding with range maps value", () => {
-      const binding = {
+      const binding: NumericalAttributeBinding = {
         attribute: "score",
         min: 5,
         max: 50,
@@ -151,7 +154,7 @@ describe("Style evaluation system", () => {
     });
 
     test("numerical binding clamps to range", () => {
-      const binding = {
+      const binding: NumericalAttributeBinding = {
         attribute: "score",
         min: 10,
         max: 20,
@@ -163,20 +166,20 @@ describe("Style evaluation system", () => {
     });
 
     test("numerical binding with easing function", () => {
-      const binding = {
+      const binding: NumericalAttributeBinding = {
         attribute: "score",
         min: 0,
         max: 100,
         minValue: 0,
         maxValue: 100,
-        easing: "quadraticIn" as const,
+        easing: "quadraticIn",
       };
       // score = 75, normalized to 0.75, quadraticIn = 0.75^2 = 0.5625, mapped to 56.25
       expect(resolveGraphicValue(binding, attrs, defaultNodeState, defaultGraphState, graph, 0)).toBe(56.25);
     });
 
     test("numerical binding with custom easing function", () => {
-      const binding = {
+      const binding: NumericalAttributeBinding = {
         attribute: "score",
         min: 0,
         max: 100,
@@ -256,8 +259,8 @@ describe("Style evaluation system", () => {
     test("conditional with attribute binding in then", () => {
       const state = { ...defaultNodeState, isHovered: true };
       const attrsWithColor = { ...attrs, hoverColor: "#f00" };
-      const conditional = {
-        when: "isHovered" as const,
+      const conditional: GraphicValue<typeof attrsWithColor, typeof state, BaseGraphState, string> = {
+        when: "isHovered",
         then: { attribute: "hoverColor" },
         else: "#666",
       };

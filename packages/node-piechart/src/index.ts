@@ -9,21 +9,6 @@
  *
  * @module @sigma/node-piechart
  */
-import { registerNodeLayerFactory } from "sigma/rendering";
-
-import { layerPiechart } from "./layer";
-import { piechartSchema } from "./types";
-
-// Module augmentation: makes "piechart" a recognized node layer type
-declare module "sigma/primitives" {
-  interface NodeLayerSchemaRegistry {
-    piechart: typeof piechartSchema;
-  }
-}
-
-// Register the runtime factory
-registerNodeLayerFactory("piechart", layerPiechart);
-
 // Layer factory
 export { layerPiechart } from "./layer";
 

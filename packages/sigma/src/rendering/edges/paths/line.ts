@@ -7,25 +7,26 @@
  *
  * @module
  */
-import { defineEdgePath } from "./factory";
 import { EdgePath } from "../types";
 
 /**
- * Schema for line path options (empty - no configurable properties).
+ * Creates a straight line edge path.
+ *
+ * Line edges are the most efficient, rendered as a single quad (6 vertices).
+ * All path functions have closed-form solutions.
+ *
+ * @returns EdgePath definition for straight lines
+ *
+ * @example
+ * ```typescript
+ * const EdgeLineProgram = createEdgeProgram({
+ *   paths: [pathLine()],
+ *   extremities: [extremityNone()],
+ *   layers: [layerPlain()],
+ * });
+ * ```
  */
-export const lineSchema = {} as const;
-
-// Register the line path schema for type inference
-declare module "../../../primitives/schema" {
-  interface EdgePathSchemaRegistry {
-    straight: typeof lineSchema;
-  }
-}
-
-/**
- * Line path definition with schema.
- */
-export const lineDefinition = defineEdgePath("straight", lineSchema, (): EdgePath => {
+export function pathLine(): EdgePath {
   // language=GLSL
   const glsl = /*glsl*/ `
 // Position at parameter t ∈ [0, 1]
@@ -49,23 +50,4 @@ float path_straight_length(vec2 source, vec2 target) {
     uniforms: [],
     attributes: [],
   };
-});
-
-/**
- * Creates a straight line edge path.
- *
- * Line edges are the most efficient, rendered as a single quad (6 vertices).
- * All path functions have closed-form solutions.
- *
- * @returns EdgePath definition for straight lines
- *
- * @example
- * ```typescript
- * const EdgeLineProgram = createEdgeProgram({
- *   paths: [pathLine()],
- *   extremities: [extremityNone()],
- *   layers: [layerPlain()],
- * });
- * ```
- */
-export const pathLine = lineDefinition.factory;
+}

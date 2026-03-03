@@ -2,25 +2,12 @@
  * Sigma.js v4 Primitives API - Type Definitions
  * ==============================================
  *
- * Generic types for the primitives declaration system.
- * All types are derived from schema registries, allowing external packages
- * to register new primitives via module augmentation.
+ * Types for the primitives declaration system.
  *
  * @module
  */
 import type { EdgeExtremity, EdgeLabelOptions, EdgeLayer, EdgePath } from "../rendering/edges/types";
 import type { FragmentLayer, LabelOptions, SDFShape } from "../rendering/nodes/types";
-import {
-  DeclarativeConfigFromSchema,
-  EdgeExtremitySchemaRegistry,
-  EdgeLayerSchemaRegistry,
-  EdgePathSchemaRegistry,
-  ExtractVariablesFromConfig,
-  NodeLayerSchemaRegistry,
-  NodeShapeSchemaRegistry,
-  UnionToIntersection,
-  ValidatedConfigFromSchema,
-} from "./schema";
 
 // =============================================================================
 // GRAPHIC VARIABLES
@@ -36,14 +23,8 @@ export interface GraphicVariableDefinition<T = unknown> {
 export type VariablesDefinition = Record<string, GraphicVariableDefinition>;
 
 // =============================================================================
-// NODE SHAPES (schema-derived)
+// NODE SHAPES
 // =============================================================================
-
-export type BuiltInNodeShape = keyof NodeShapeSchemaRegistry;
-
-export type DeclarativeNodeShape = {
-  [K in keyof NodeShapeSchemaRegistry]: { type: K } & DeclarativeConfigFromSchema<NodeShapeSchemaRegistry[K]>;
-}[keyof NodeShapeSchemaRegistry];
 
 export interface CustomNodeShape {
   name: string;
@@ -51,17 +32,11 @@ export interface CustomNodeShape {
   inradiusFactor?: number;
 }
 
-export type NodeShapeSpec = BuiltInNodeShape | DeclarativeNodeShape | CustomNodeShape | SDFShape;
+export type NodeShapeSpec = CustomNodeShape | SDFShape;
 
 // =============================================================================
-// NODE LAYERS (schema-derived)
+// NODE LAYERS
 // =============================================================================
-
-export type BuiltInNodeLayerType = keyof NodeLayerSchemaRegistry;
-
-export type DeclarativeNodeLayer = {
-  [K in keyof NodeLayerSchemaRegistry]: { type: K } & DeclarativeConfigFromSchema<NodeLayerSchemaRegistry[K]>;
-}[keyof NodeLayerSchemaRegistry];
 
 export interface CustomNodeLayer {
   name: string;
@@ -69,40 +44,11 @@ export interface CustomNodeLayer {
   graphicVariables: readonly GraphicVariableDefinition[];
 }
 
-export type NodeLayerSpec = BuiltInNodeLayerType | DeclarativeNodeLayer | CustomNodeLayer | FragmentLayer;
+export type NodeLayerSpec = CustomNodeLayer | FragmentLayer;
 
 // =============================================================================
-// VALIDATED NODE LAYERS (context-aware variable validation)
+// EDGE PATHS
 // =============================================================================
-
-/**
- * Validated declarative node layer that only accepts declared variable names.
- * Used by defineSigmaOptions to ensure variable references are valid.
- */
-export type ValidatedDeclarativeNodeLayer<AllowedVars extends string> = {
-  [K in keyof NodeLayerSchemaRegistry]: { type: K } & ValidatedConfigFromSchema<
-    NodeLayerSchemaRegistry[K],
-    AllowedVars
-  >;
-}[keyof NodeLayerSchemaRegistry];
-
-/**
- * Node layer spec with validated variable references.
- */
-export type ValidatedNodeLayerSpec<AllowedVars extends string> =
-  | BuiltInNodeLayerType
-  | ValidatedDeclarativeNodeLayer<AllowedVars>
-  | CustomNodeLayer;
-
-// =============================================================================
-// EDGE PATHS (schema-derived)
-// =============================================================================
-
-export type BuiltInEdgePath = keyof EdgePathSchemaRegistry;
-
-export type DeclarativeEdgePath = {
-  [K in keyof EdgePathSchemaRegistry]: { type: K } & DeclarativeConfigFromSchema<EdgePathSchemaRegistry[K]>;
-}[keyof EdgePathSchemaRegistry];
 
 export interface CustomEdgePath {
   name: string;
@@ -111,13 +57,11 @@ export interface CustomEdgePath {
   graphicVariables?: readonly GraphicVariableDefinition[];
 }
 
-export type EdgePathSpec = BuiltInEdgePath | DeclarativeEdgePath | CustomEdgePath | EdgePath;
+export type EdgePathSpec = CustomEdgePath | EdgePath;
 
 // =============================================================================
-// EDGE EXTREMITIES (schema-derived)
+// EDGE EXTREMITIES
 // =============================================================================
-
-export type BuiltInEdgeExtremity = keyof EdgeExtremitySchemaRegistry | "none";
 
 export interface CustomEdgeExtremity {
   name: string;
@@ -126,17 +70,11 @@ export interface CustomEdgeExtremity {
   widthFactor: number;
 }
 
-export type EdgeExtremitySpec = BuiltInEdgeExtremity | CustomEdgeExtremity | EdgeExtremity;
+export type EdgeExtremitySpec = CustomEdgeExtremity | EdgeExtremity;
 
 // =============================================================================
-// EDGE LAYERS (schema-derived)
+// EDGE LAYERS
 // =============================================================================
-
-export type BuiltInEdgeLayerType = keyof EdgeLayerSchemaRegistry;
-
-export type DeclarativeEdgeLayer = {
-  [K in keyof EdgeLayerSchemaRegistry]: { type: K } & DeclarativeConfigFromSchema<EdgeLayerSchemaRegistry[K]>;
-}[keyof EdgeLayerSchemaRegistry];
 
 export interface CustomEdgeLayer {
   name: string;
@@ -144,29 +82,19 @@ export interface CustomEdgeLayer {
   graphicVariables: readonly GraphicVariableDefinition[];
 }
 
-export type EdgeLayerSpec = BuiltInEdgeLayerType | DeclarativeEdgeLayer | CustomEdgeLayer | EdgeLayer;
+export type EdgeLayerSpec = CustomEdgeLayer | EdgeLayer;
 
 // =============================================================================
-// VALIDATED EDGE LAYERS (context-aware variable validation)
+// TYPE GUARDS
 // =============================================================================
 
-/**
- * Validated declarative edge layer that only accepts declared variable names.
- */
-export type ValidatedDeclarativeEdgeLayer<AllowedVars extends string> = {
-  [K in keyof EdgeLayerSchemaRegistry]: { type: K } & ValidatedConfigFromSchema<
-    EdgeLayerSchemaRegistry[K],
-    AllowedVars
-  >;
-}[keyof EdgeLayerSchemaRegistry];
+export function isCustomNodeLayer(spec: NodeLayerSpec): spec is CustomNodeLayer {
+  return typeof spec === "object" && "glsl" in spec && !("attributes" in spec);
+}
 
-/**
- * Edge layer spec with validated variable references.
- */
-export type ValidatedEdgeLayerSpec<AllowedVars extends string> =
-  | BuiltInEdgeLayerType
-  | ValidatedDeclarativeEdgeLayer<AllowedVars>
-  | CustomEdgeLayer;
+export function isCustomEdgeLayer(spec: EdgeLayerSpec): spec is CustomEdgeLayer {
+  return typeof spec === "object" && "glsl" in spec && !("attributes" in spec);
+}
 
 // =============================================================================
 // PRIMITIVES DECLARATIONS
@@ -237,52 +165,8 @@ export interface PrimitivesDeclaration {
 }
 
 // =============================================================================
-// TYPE GUARDS
+// VARIABLE EXTRACTION
 // =============================================================================
-
-export function isNodeLayerShorthand(spec: NodeLayerSpec): spec is BuiltInNodeLayerType {
-  return typeof spec === "string";
-}
-
-export function isDeclarativeNodeLayer(spec: NodeLayerSpec): spec is DeclarativeNodeLayer {
-  return typeof spec === "object" && "type" in spec;
-}
-
-export function isCustomNodeLayer(spec: NodeLayerSpec): spec is CustomNodeLayer {
-  return typeof spec === "object" && "glsl" in spec;
-}
-
-export function isEdgeLayerShorthand(spec: EdgeLayerSpec): spec is BuiltInEdgeLayerType {
-  return typeof spec === "string";
-}
-
-export function isDeclarativeEdgeLayer(spec: EdgeLayerSpec): spec is DeclarativeEdgeLayer {
-  return typeof spec === "object" && "type" in spec;
-}
-
-export function isCustomEdgeLayer(spec: EdgeLayerSpec): spec is CustomEdgeLayer {
-  return typeof spec === "object" && "glsl" in spec;
-}
-
-// =============================================================================
-// VARIABLE EXTRACTION (generic, schema-based)
-// =============================================================================
-
-type ExtractNodeShapeVariables<S> = S extends { type: infer T extends keyof NodeShapeSchemaRegistry }
-  ? ExtractVariablesFromConfig<Omit<S, "type">, NodeShapeSchemaRegistry[T]>
-  : object;
-
-type ExtractNodeLayerVariables<L> = L extends { type: infer T extends keyof NodeLayerSchemaRegistry }
-  ? ExtractVariablesFromConfig<Omit<L, "type">, NodeLayerSchemaRegistry[T]>
-  : object;
-
-type ExtractEdgePathVariables<P> = P extends { type: infer T extends keyof EdgePathSchemaRegistry }
-  ? ExtractVariablesFromConfig<Omit<P, "type">, EdgePathSchemaRegistry[T]>
-  : object;
-
-type ExtractEdgeLayerVariables<L> = L extends { type: infer T extends keyof EdgeLayerSchemaRegistry }
-  ? ExtractVariablesFromConfig<Omit<L, "type">, EdgeLayerSchemaRegistry[T]>
-  : object;
 
 type VariablesDefinitionToType<V extends VariablesDefinition> = {
   [K in keyof V]: V[K]["type"] extends "number"
@@ -294,54 +178,26 @@ type VariablesDefinitionToType<V extends VariablesDefinition> = {
         : unknown;
 };
 
-type ExtractNodeShapesVariables<Shapes extends readonly NodeShapeSpec[]> = Shapes extends readonly [
-  infer First extends NodeShapeSpec,
-  ...infer Rest extends NodeShapeSpec[],
-]
-  ? ExtractNodeShapeVariables<First> & ExtractNodeShapesVariables<Rest>
-  : object;
+export type ExtractAllNodeVariables<N extends NodePrimitives> =
+  N["variables"] extends VariablesDefinition ? VariablesDefinitionToType<N["variables"]> : object;
 
-type ExtractNodeLayersVariables<Layers extends readonly NodeLayerSpec[]> = Layers extends readonly [
-  infer First extends NodeLayerSpec,
-  ...infer Rest extends NodeLayerSpec[],
-]
-  ? ExtractNodeLayerVariables<First> & ExtractNodeLayersVariables<Rest>
-  : object;
-
-type ExtractEdgePathsVariables<Paths extends readonly EdgePathSpec[]> = Paths extends readonly [
-  infer First extends EdgePathSpec,
-  ...infer Rest extends EdgePathSpec[],
-]
-  ? ExtractEdgePathVariables<First> & ExtractEdgePathsVariables<Rest>
-  : object;
-
-type ExtractEdgeLayersVariables<Layers extends readonly EdgeLayerSpec[]> = Layers extends readonly [
-  infer First extends EdgeLayerSpec,
-  ...infer Rest extends EdgeLayerSpec[],
-]
-  ? ExtractEdgeLayerVariables<First> & ExtractEdgeLayersVariables<Rest>
-  : object;
-
-export type ExtractAllNodeVariables<N extends NodePrimitives> = UnionToIntersection<
-  | (N["variables"] extends VariablesDefinition ? VariablesDefinitionToType<N["variables"]> : object)
-  | (N["shapes"] extends readonly NodeShapeSpec[] ? ExtractNodeShapesVariables<N["shapes"]> : object)
-  | (N["layers"] extends readonly NodeLayerSpec[] ? ExtractNodeLayersVariables<N["layers"]> : object)
->;
-
-export type ExtractAllEdgeVariables<E extends EdgePrimitives> = UnionToIntersection<
-  | (E["variables"] extends VariablesDefinition ? VariablesDefinitionToType<E["variables"]> : object)
-  | (E["paths"] extends readonly EdgePathSpec[] ? ExtractEdgePathsVariables<E["paths"]> : object)
-  | (E["layers"] extends readonly EdgeLayerSpec[] ? ExtractEdgeLayersVariables<E["layers"]> : object)
->;
+export type ExtractAllEdgeVariables<E extends EdgePrimitives> =
+  E["variables"] extends VariablesDefinition ? VariablesDefinitionToType<E["variables"]> : object;
 
 // =============================================================================
 // DEFAULT VALUES
 // =============================================================================
 
+// Lazy imports to avoid circular dependencies
+import { sdfCircle } from "../rendering/nodes/shapes";
+import { layerFill } from "../rendering/nodes/layers";
+import { pathLine } from "../rendering/edges/paths";
+import { layerPlain } from "../rendering/edges/layers";
+
 export const DEFAULT_NODE_PRIMITIVES: Required<NodePrimitives> = {
-  shapes: ["circle" as BuiltInNodeShape],
+  shapes: [sdfCircle()],
   variables: {},
-  layers: ["fill" as BuiltInNodeLayerType],
+  layers: [layerFill()],
   rotateWithCamera: false,
   label: {},
   backdrop: {},
@@ -349,10 +205,10 @@ export const DEFAULT_NODE_PRIMITIVES: Required<NodePrimitives> = {
 };
 
 export const DEFAULT_EDGE_PRIMITIVES: Required<EdgePrimitives> = {
-  paths: ["straight" as BuiltInEdgePath],
-  extremities: ["none"],
+  paths: [pathLine()],
+  extremities: [],
   variables: {},
-  layers: ["plain" as BuiltInEdgeLayerType],
+  layers: [layerPlain()],
   defaultHead: "none",
   defaultTail: "none",
   label: {},

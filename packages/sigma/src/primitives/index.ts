@@ -2,15 +2,12 @@
  * Sigma.js Primitives
  * ===================
  *
- * Central module for primitive definitions, registry, and schema utilities.
+ * Central module for primitive definitions and schema utilities.
  *
  * @module
  */
 
-// Re-export primitive kinds
-export * from "./kinds";
-
-// Re-export registry
+// Re-export registry (variable names and type utilities)
 export * from "./registry";
 
 // Re-export schema utilities

@@ -42,16 +42,12 @@ export {
   type StepPathOptions,
   pathStepCurved,
   type StepCurvedPathOptions,
-  registerEdgePathFactory,
-  type EdgePathFactory,
 } from "./paths";
 
 // Extremities
 export {
   extremityArrow,
   type ArrowExtremityOptions,
-  registerEdgeExtremityFactory,
-  type EdgeExtremityFactory,
 } from "./extremities";
 
 // Layers (edge body appearance)
@@ -64,8 +60,6 @@ export {
   type GapFilling,
   type SolidExtremities,
   type SolidMargin,
-  registerEdgeLayerFactory,
-  type EdgeLayerFactory,
 } from "./layers";
 
 // Shader generator (for advanced users)

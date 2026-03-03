@@ -6,35 +6,44 @@
  *
  * @module
  */
-import { FactoryOptionsFromSchema, numberProp } from "../../../primitives";
-import { defineEdgeExtremity } from "./factory";
 import { EdgeExtremity } from "../types";
-
-/**
- * Schema for arrow extremity options.
- */
-export const arrowSchema = {
-  lengthRatio: numberProp(5),
-  widthRatio: numberProp(4.0),
-  margin: numberProp(0),
-} as const;
-
-// Register the arrow extremity schema for type inference
-declare module "../../../primitives/schema" {
-  interface EdgeExtremitySchemaRegistry {
-    arrow: typeof arrowSchema;
-  }
-}
 
 /**
  * Options for arrow extremity creation.
  */
-export type ArrowExtremityOptions = FactoryOptionsFromSchema<typeof arrowSchema>;
+export interface ArrowExtremityOptions {
+  lengthRatio?: number;
+  widthRatio?: number;
+  margin?: number;
+}
 
 /**
- * Arrow extremity definition with schema.
+ * Creates an arrow extremity (triangular arrow head).
+ *
+ * The arrow is rendered as a triangle pointing in the direction of travel.
+ * Size is relative to edge thickness.
+ *
+ * @param options - Arrow configuration
+ * @returns EdgeExtremity definition for arrow
+ *
+ * @example
+ * ```typescript
+ * // Arrow with default settings
+ * const EdgeArrowProgram = createEdgeProgram({
+ *   paths: [pathLine()],
+ *   extremities: [extremityNone(), extremityArrow()],
+ *   layers: [layerPlain()],
+ * });
+ *
+ * // Custom arrow with margin
+ * const EdgeArrowMarginProgram = createEdgeProgram({
+ *   paths: [pathLine()],
+ *   extremities: [extremityNone(), extremityArrow({ lengthRatio: 3, widthRatio: 2.5, margin: 5 })],
+ *   layers: [layerPlain()],
+ * });
+ * ```
  */
-export const arrowDefinition = defineEdgeExtremity("arrow", arrowSchema, (options): EdgeExtremity => {
+export function extremityArrow(options?: ArrowExtremityOptions): EdgeExtremity {
   const { lengthRatio = 5, widthRatio = 4.0, margin = 0 } = options ?? {};
 
   // language=GLSL
@@ -77,32 +86,4 @@ float extremity_arrow(vec2 uv, float lengthRatio, float widthRatio) {
     ],
     attributes: [],
   };
-});
-
-/**
- * Creates an arrow extremity (triangular arrow head).
- *
- * The arrow is rendered as a triangle pointing in the direction of travel.
- * Size is relative to edge thickness.
- *
- * @param options - Arrow configuration
- * @returns EdgeExtremity definition for arrow
- *
- * @example
- * ```typescript
- * // Arrow with default settings
- * const EdgeArrowProgram = createEdgeProgram({
- *   paths: [pathLine()],
- *   extremities: [extremityNone(), extremityArrow()],
- *   layers: [layerPlain()],
- * });
- *
- * // Custom arrow with margin
- * const EdgeArrowMarginProgram = createEdgeProgram({
- *   paths: [pathLine()],
- *   extremities: [extremityNone(), extremityArrow({ lengthRatio: 3, widthRatio: 2.5, margin: 5 })],
- *   layers: [layerPlain()],
- * });
- * ```
- */
-export const extremityArrow = arrowDefinition.factory;
+}

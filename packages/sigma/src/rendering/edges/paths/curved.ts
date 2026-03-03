@@ -7,36 +7,37 @@
  *
  * @module
  */
-import { numberProp, FactoryOptionsFromSchema } from "../../../primitives";
-import { defineEdgePath } from "./factory";
+import { ValueSource } from "../../nodes";
 import { EdgePath } from "../types";
-
-/**
- * Schema for curved path options.
- * - segments: Factory setting for tessellation (not variable)
- * - curvature: Per-edge variable property (can be variable reference in declarative API)
- */
-export const curvedSchema = {
-  segments: numberProp(16),
-  curvature: numberProp(0.25, { variable: true }),
-} as const;
-
-// Register the curved path schema for type inference
-declare module "../../../primitives/schema" {
-  interface EdgePathSchemaRegistry {
-    curved: typeof curvedSchema;
-  }
-}
 
 /**
  * Options for curved path creation.
  */
-export type CurvedPathOptions = FactoryOptionsFromSchema<typeof curvedSchema>;
+export interface CurvedPathOptions {
+  segments?: number;
+  curvature?: ValueSource<number>;
+}
 
 /**
- * Curved path definition with schema.
+ * Creates a simple curved edge path (single arc).
+ *
+ * The curve is controlled by a single control point positioned perpendicular
+ * to the midpoint of the straight line between source and target. The curvature
+ * parameter controls how far this control point is from the midpoint.
+ *
+ * @param options - Path configuration
+ * @returns EdgePath definition for curved edges
+ *
+ * @example
+ * ```typescript
+ * const EdgeCurvedProgram = createEdgeProgram({
+ *   paths: [pathCurved({ segments: 16 })],
+ *   extremities: [extremityNone(), extremityArrow()],
+ *   layers: [layerPlain()],
+ * });
+ * ```
  */
-export const curvedDefinition = defineEdgePath("curved", curvedSchema, (options): EdgePath => {
+export function pathCurved(options?: CurvedPathOptions): EdgePath {
   const { segments = 16 } = options ?? {};
 
   // language=GLSL
@@ -101,25 +102,4 @@ float path_curved_length(vec2 source, vec2 target) {
     uniforms: [],
     attributes: [{ name: "curvature", size: 1, type: WebGL2RenderingContext.FLOAT }],
   };
-});
-
-/**
- * Creates a simple curved edge path (single arc).
- *
- * The curve is controlled by a single control point positioned perpendicular
- * to the midpoint of the straight line between source and target. The curvature
- * parameter controls how far this control point is from the midpoint.
- *
- * @param options - Path configuration
- * @returns EdgePath definition for curved edges
- *
- * @example
- * ```typescript
- * const EdgeCurvedProgram = createEdgeProgram({
- *   paths: [pathCurved({ segments: 16 })],
- *   extremities: [extremityNone(), extremityArrow()],
- *   layers: [layerPlain()],
- * });
- * ```
- */
-export const pathCurved = curvedDefinition.factory;
+}

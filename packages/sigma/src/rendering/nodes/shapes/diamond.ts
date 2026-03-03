@@ -6,30 +6,14 @@
  *
  * @module
  */
-import { FactoryOptionsFromSchema, numberProp } from "../../../primitives";
-import { defineNodeShape } from "./factory";
+import { ValueSource } from "../types";
 import { GLSL_ROTATE_2D } from "../../glsl";
 import { SDFShape } from "../types";
 
-/**
- * Schema for diamond shape options.
- */
-export const diamondSchema = {
-  cornerRadius: numberProp(0, { variable: true }),
-  rotation: numberProp(0, { variable: true }),
-} as const;
-
-// Register the diamond shape schema for type inference
-declare module "../../../primitives/schema" {
-  interface NodeShapeSchemaRegistry {
-    diamond: typeof diamondSchema;
-  }
+export interface DiamondOptions {
+  cornerRadius?: ValueSource<number>;
+  rotation?: ValueSource<number>;
 }
-
-/**
- * Factory options derived from schema.
- */
-export type DiamondOptions = FactoryOptionsFromSchema<typeof diamondSchema>;
 
 /**
  * Extracts a number from a ValueSource or returns the default.
@@ -41,9 +25,24 @@ function resolveNumber(value: unknown, defaultValue: number): number {
 }
 
 /**
- * Diamond shape definition with schema.
+ * Creates a diamond (rhombus) SDF shape.
+ *
+ * @param options - Configuration options for the diamond
+ * @returns Diamond SDF shape definition
+ *
+ * @example
+ * ```typescript
+ * // Sharp diamond
+ * const diamond = sdfDiamond();
+ *
+ * // Rounded diamond
+ * const rounded = sdfDiamond({ cornerRadius: 0.1 });
+ *
+ * // Rotated diamond
+ * const rotated = sdfDiamond({ rotation: Math.PI / 4 });
+ * ```
  */
-export const diamondDefinition = defineNodeShape("diamond", diamondSchema, (options): SDFShape => {
+export function sdfDiamond(options?: DiamondOptions): SDFShape {
   const { cornerRadius, rotation } = options ?? {};
 
   const cornerRadiusValue = resolveNumber(cornerRadius, 0);
@@ -95,24 +94,4 @@ float sdf_diamond(vec2 uv, float size, float cornerRadius, float rotation) {
     // For diamond (square rotated 45°): inradius = circumradius * √2/2
     inradiusFactor: Math.SQRT1_2,
   };
-});
-
-/**
- * Creates a diamond (rhombus) SDF shape.
- *
- * @param options - Configuration options for the diamond
- * @returns Diamond SDF shape definition
- *
- * @example
- * ```typescript
- * // Sharp diamond
- * const diamond = sdfDiamond();
- *
- * // Rounded diamond
- * const rounded = sdfDiamond({ cornerRadius: 0.1 });
- *
- * // Rotated diamond
- * const rotated = sdfDiamond({ rotation: Math.PI / 4 });
- * ```
- */
-export const sdfDiamond = diamondDefinition.factory;
+}

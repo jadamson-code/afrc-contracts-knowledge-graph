@@ -349,7 +349,16 @@ export { defineSigmaOptions } from "./types/options";
 /**
  * Styles API:
  */
-export type { BaseNodeState, BaseEdgeState, BaseGraphState, NodeBackdropBuiltInVariables, StylesDeclaration } from "./types/styles";
+export type {
+  BaseNodeState,
+  BaseEdgeState,
+  BaseGraphState,
+  NodeBackdropBuiltInVariables,
+  StylesDeclaration,
+  DirectAttributeBinding,
+  NumericalAttributeBinding,
+  GraphicValue,
+} from "./types/styles";
 export { DEFAULT_STYLES } from "./types/styles";
 export {
   resolveGraphicValue,

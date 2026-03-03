@@ -91,7 +91,7 @@ describe("Image layer from @sigma/node-image", () => {
     test("generates compilable shaders with single texture", () => {
       const generated = generateShaders({
         shapes: [sdfCircle()],
-        layers: [layerImage({}, 1)],
+        layers: [layerImage()],
       });
 
       expectShadersToCompile(generated.vertexShader, generated.fragmentShader);
@@ -100,7 +100,7 @@ describe("Image layer from @sigma/node-image", () => {
     test("generates compilable shaders with multiple textures", () => {
       const generated = generateShaders({
         shapes: [sdfCircle()],
-        layers: [layerImage({}, 3)],
+        layers: [layerImage()],
       });
 
       expectShadersToCompile(generated.vertexShader, generated.fragmentShader);
@@ -109,7 +109,7 @@ describe("Image layer from @sigma/node-image", () => {
     test("generates compilable shaders with many textures", () => {
       const generated = generateShaders({
         shapes: [sdfCircle()],
-        layers: [layerImage({}, 8)],
+        layers: [layerImage()],
       });
 
       expectShadersToCompile(generated.vertexShader, generated.fragmentShader);
@@ -175,7 +175,7 @@ describe("Image layer from @sigma/node-image", () => {
     test("collects image-specific uniforms", () => {
       const generated = generateShaders({
         shapes: [sdfCircle()],
-        layers: [layerImage({}, 2)],
+        layers: [layerImage()],
       });
 
       // Should have u_cameraAngle uniform
@@ -214,15 +214,12 @@ describe("Image layer from @sigma/node-image", () => {
       const generated = generateShaders({
         shapes: [sdfCircle()],
         layers: [
-          layerImage(
-            {
-              drawingMode: "image",
-              padding: 0.1,
-              colorAttribute: "color",
-              imageAttribute: "image",
-            },
-            4,
-          ),
+          layerImage({
+            drawingMode: "image",
+            padding: 0.1,
+            colorAttribute: "color",
+            imageAttribute: "image",
+          }),
         ],
       });
 
@@ -233,13 +230,10 @@ describe("Image layer from @sigma/node-image", () => {
       const generated = generateShaders({
         shapes: [sdfCircle()],
         layers: [
-          layerImage(
-            {
-              drawingMode: "color",
-              padding: 0,
-            },
-            2,
-          ),
+          layerImage({
+            drawingMode: "color",
+            padding: 0,
+          }),
         ],
       });
 

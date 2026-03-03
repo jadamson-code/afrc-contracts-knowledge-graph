@@ -6,30 +6,14 @@
  *
  * @module
  */
-import { FactoryOptionsFromSchema, numberProp } from "../../../primitives";
-import { defineNodeShape } from "./factory";
+import { ValueSource } from "../types";
 import { GLSL_ROTATE_2D } from "../../glsl";
 import { SDFShape } from "../types";
 
-/**
- * Schema for triangle shape options.
- */
-export const triangleSchema = {
-  cornerRadius: numberProp(0, { variable: true }),
-  rotation: numberProp(0, { variable: true }),
-} as const;
-
-// Register the triangle shape schema for type inference
-declare module "../../../primitives/schema" {
-  interface NodeShapeSchemaRegistry {
-    triangle: typeof triangleSchema;
-  }
+export interface TriangleOptions {
+  cornerRadius?: ValueSource<number>;
+  rotation?: ValueSource<number>;
 }
-
-/**
- * Factory options derived from schema.
- */
-export type TriangleOptions = FactoryOptionsFromSchema<typeof triangleSchema>;
 
 /**
  * Extracts a number from a ValueSource or returns the default.
@@ -41,9 +25,24 @@ function resolveNumber(value: unknown, defaultValue: number): number {
 }
 
 /**
- * Triangle shape definition with schema.
+ * Creates an equilateral triangle SDF shape.
+ *
+ * @param options - Configuration options for the triangle
+ * @returns Triangle SDF shape definition
+ *
+ * @example
+ * ```typescript
+ * // Sharp triangle pointing up
+ * const triangle = sdfTriangle();
+ *
+ * // Rounded triangle
+ * const rounded = sdfTriangle({ cornerRadius: 0.1 });
+ *
+ * // Triangle pointing down
+ * const inverted = sdfTriangle({ rotation: Math.PI });
+ * ```
  */
-export const triangleDefinition = defineNodeShape("triangle", triangleSchema, (options): SDFShape => {
+export function sdfTriangle(options?: TriangleOptions): SDFShape {
   const { cornerRadius, rotation } = options ?? {};
 
   const cornerRadiusValue = resolveNumber(cornerRadius, 0);
@@ -103,24 +102,4 @@ float sdf_triangle(vec2 uv, float size, float cornerRadius, float rotation) {
     // For equilateral triangle: inradius = circumradius / 2
     inradiusFactor: 0.5,
   };
-});
-
-/**
- * Creates an equilateral triangle SDF shape.
- *
- * @param options - Configuration options for the triangle
- * @returns Triangle SDF shape definition
- *
- * @example
- * ```typescript
- * // Sharp triangle pointing up
- * const triangle = sdfTriangle();
- *
- * // Rounded triangle
- * const rounded = sdfTriangle({ cornerRadius: 0.1 });
- *
- * // Triangle pointing down
- * const inverted = sdfTriangle({ rotation: Math.PI });
- * ```
- */
-export const sdfTriangle = triangleDefinition.factory;
+}

@@ -4,8 +4,7 @@
 import Graph from "graphology";
 import Sigma from "sigma";
 import { createElement } from "sigma/utils";
-// Import rendering to ensure all primitive factories are registered
-import "sigma/rendering";
+import { sdfCircle, layerFill } from "sigma/rendering";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
 interface SigmaTestContext {
@@ -99,7 +98,7 @@ describe("Sigma v4 API", () => {
         styles: {
           nodes: {
             size: (attrs) => Math.sqrt(attrs.value as number),
-            color: (attrs, state) => (state.isHighlighted ? "#ff0000" : "#666"),
+            color: (_attrs, state) => (state.isHighlighted ? "#ff0000" : "#666"),
           },
         },
       });
@@ -175,8 +174,8 @@ describe("Sigma v4 API", () => {
       const sigma = new Sigma(graph, container, {
         primitives: {
           nodes: {
-            shapes: ["circle"],
-            layers: ["fill"],
+            shapes: [sdfCircle()],
+            layers: [layerFill()],
           },
         },
         // Not specifying edges to avoid edge program generation issues in tests
@@ -195,7 +194,7 @@ describe("Sigma v4 API", () => {
       graph.addNode("n1", { x: 0, y: 0, value: 100 });
 
       const sigma = new Sigma(graph, container, {
-        nodeReducer: (key, computed, attrs) => ({
+        nodeReducer: (_key, computed, attrs) => ({
           ...computed,
           size: Math.sqrt(attrs.value as number),
           color: "#ff0000",
@@ -220,7 +219,7 @@ describe("Sigma v4 API", () => {
       graph.addEdge("n1", "n2", { weight: 5 });
 
       const sigma = new Sigma(graph, container, {
-        edgeReducer: (key, computed, attrs) => ({
+        edgeReducer: (_key, computed, attrs) => ({
           ...computed,
           size: attrs.weight as number,
           color: "#333",
@@ -246,8 +245,8 @@ describe("Sigma v4 API", () => {
       const sigma = new Sigma(graph, container, {
         primitives: {
           nodes: {
-            shapes: ["circle"],
-            layers: ["fill"],
+            shapes: [sdfCircle()],
+            layers: [layerFill()],
           },
         },
         settings: {
@@ -277,7 +276,7 @@ describe("Sigma v4 API", () => {
             color: "#666",
           },
         },
-        nodeReducer: (key, computed, attrs, state, graphState, graph) => {
+        nodeReducer: (_key, computed, _attrs, state) => {
           reducerCalled = true;
           receivedState = state;
           // Reducer receives computed display data and can override
@@ -315,7 +314,7 @@ describe("Sigma v4 API", () => {
             color: "#333",
           },
         },
-        edgeReducer: (key, computed, attrs, state, graphState, graph) => {
+        edgeReducer: (_key, computed, _attrs, state) => {
           reducerCalled = true;
           receivedState = state;
           return {
@@ -348,7 +347,7 @@ describe("Sigma v4 API", () => {
         styles: {
           nodes: {
             size: 10,
-            color: (attrs, state) => (state.isHighlighted ? "#ff0000" : highlightedColor),
+            color: (_attrs, state) => (state.isHighlighted ? "#ff0000" : highlightedColor),
           },
         },
       });
@@ -432,7 +431,7 @@ describe("Sigma v4 API", () => {
         styles: {
           nodes: {
             // Use custom state property in style function
-            size: (attrs, state) => 5 + (state.importance ?? 0),
+            size: (_attrs, state) => 5 + (state.importance ?? 0),
             color: "#666",
           },
         },

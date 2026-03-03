@@ -10,16 +10,10 @@
  */
 import { Attributes } from "graphology-types";
 
-import { NodeBuiltInVariableNames, EdgeBuiltInVariableNames } from "../primitives/registry";
 import {
-  BuiltInEdgeExtremity,
-  BuiltInEdgePath,
-  BuiltInNodeShape,
   CustomEdgeExtremity,
   CustomEdgePath,
   CustomNodeShape,
-  DeclarativeEdgePath,
-  DeclarativeNodeShape,
   EdgeExtremitySpec,
   EdgePathSpec,
   EdgePrimitives,
@@ -28,9 +22,6 @@ import {
   NodePrimitives,
   NodeShapeSpec,
   PrimitivesDeclaration,
-  ValidatedNodeLayerSpec,
-  ValidatedEdgeLayerSpec,
-  VariablesDefinition,
 } from "../primitives/types";
 import {
   BaseEdgeState,
@@ -41,28 +32,30 @@ import {
   InlineConditional,
   NodeStyleProperties,
 } from "./styles";
+import type { SDFShape } from "../rendering/nodes/types";
+import type { EdgePath, EdgeExtremity } from "../rendering/edges/types";
+
+// =============================================================================
+// NAME EXTRACTION FROM SPECS
+// =============================================================================
 
 /**
- * Extracts the name from a shape spec (built-in string, declarative config, or custom shape).
+ * Extracts the name from a shape spec.
  */
-type ExtractShapeName<S extends NodeShapeSpec> = S extends BuiltInNodeShape
-  ? S
-  : S extends DeclarativeNodeShape
-    ? S["type"]
-    : S extends CustomNodeShape
-      ? S["name"]
-      : never;
+type ExtractShapeName<S extends NodeShapeSpec> = S extends SDFShape
+  ? S["name"]
+  : S extends CustomNodeShape
+    ? S["name"]
+    : never;
 
 /**
- * Extracts the name from a path spec (built-in string, declarative config, or custom path).
+ * Extracts the name from a path spec.
  */
-type ExtractPathName<P extends EdgePathSpec> = P extends BuiltInEdgePath
-  ? P
-  : P extends DeclarativeEdgePath
-    ? P["type"]
-    : P extends CustomEdgePath
-      ? P["name"]
-      : never;
+type ExtractPathName<P extends EdgePathSpec> = P extends EdgePath
+  ? P["name"]
+  : P extends CustomEdgePath
+    ? P["name"]
+    : never;
 
 /**
  * Extracts all shape names from an array of shape specs.
@@ -87,8 +80,8 @@ type ExtractPathNames<Paths extends readonly EdgePathSpec[]> = Paths extends rea
 /**
  * Extracts extremity names from an EdgePrimitives declaration.
  */
-type ExtractExtremityName<E extends EdgeExtremitySpec> = E extends BuiltInEdgeExtremity
-  ? E
+type ExtractExtremityName<E extends EdgeExtremitySpec> = E extends EdgeExtremity
+  ? E["name"]
   : E extends CustomEdgeExtremity
     ? E["name"]
     : never;
@@ -101,56 +94,8 @@ type ExtractExtremityNames<Extremities extends readonly EdgeExtremitySpec[]> = E
   : never;
 
 // =============================================================================
-// VARIABLE NAME EXTRACTION FROM PRIMITIVES
+// OPTIONS INPUT TYPE
 // =============================================================================
-
-/**
- * Extracts declared variable names from a VariablesDefinition.
- */
-type ExtractDeclaredVarNames<V> = V extends VariablesDefinition ? keyof V & string : never;
-
-/**
- * Computes allowed node variable names: built-ins + declared in primitives.nodes.variables.
- */
-type AllowedNodeVarNames<P extends PrimitivesDeclaration> = NodeBuiltInVariableNames | ExtractDeclaredVarNames<P["nodes"] extends { variables: infer V } ? V : never>;
-
-/**
- * Computes allowed edge variable names: built-ins + declared in primitives.edges.variables.
- */
-type AllowedEdgeVarNames<P extends PrimitivesDeclaration> = EdgeBuiltInVariableNames | ExtractDeclaredVarNames<P["edges"] extends { variables: infer V } ? V : never>;
-
-// =============================================================================
-// VALIDATED PRIMITIVES (layer variable refs must match declared vars)
-// =============================================================================
-
-/**
- * Node primitives with validated layer variable references.
- */
-interface ValidatedNodePrimitives<AllowedVars extends string> {
-  shapes?: readonly NodeShapeSpec[] | NodeShapeSpec[];
-  variables?: VariablesDefinition;
-  layers?: readonly ValidatedNodeLayerSpec<AllowedVars>[] | ValidatedNodeLayerSpec<AllowedVars>[];
-}
-
-/**
- * Edge primitives with validated layer variable references.
- */
-interface ValidatedEdgePrimitives<AllowedVars extends string> {
-  paths?: readonly EdgePathSpec[] | EdgePathSpec[];
-  extremities?: readonly EdgeExtremitySpec[] | EdgeExtremitySpec[];
-  variables?: VariablesDefinition;
-  layers?: readonly ValidatedEdgeLayerSpec<AllowedVars>[] | ValidatedEdgeLayerSpec<AllowedVars>[];
-}
-
-/**
- * Primitives declaration with validated layer variable references.
- * This type ensures that variable references in layers match declared variables.
- */
-interface ValidatedPrimitivesDeclaration<NodeVars extends string, EdgeVars extends string> {
-  nodes?: ValidatedNodePrimitives<NodeVars>;
-  edges?: ValidatedEdgePrimitives<EdgeVars>;
-  layers?: string[];
-}
 
 /**
  * Options structure for inference - separates primitives for proper type flow.
@@ -164,21 +109,6 @@ export interface SigmaOptionsInput<
   GS extends BaseGraphState = BaseGraphState,
 > {
   primitives?: P;
-  styles?: InferredStylesDeclaration<P, NA, EA, NS, ES, GS>;
-}
-
-/**
- * Validated options input that enforces variable reference constraints.
- */
-export interface ValidatedSigmaOptionsInput<
-  P extends PrimitivesDeclaration,
-  NA extends Attributes = Attributes,
-  EA extends Attributes = Attributes,
-  NS extends BaseNodeState = BaseNodeState,
-  ES extends BaseEdgeState = BaseEdgeState,
-  GS extends BaseGraphState = BaseGraphState,
-> {
-  primitives?: ValidatedPrimitivesDeclaration<AllowedNodeVarNames<P>, AllowedEdgeVarNames<P>>;
   styles?: InferredStylesDeclaration<P, NA, EA, NS, ES, GS>;
 }
 
@@ -224,7 +154,7 @@ type InferredNodeStyleProperties<
   NPV = ExtractAllNodeVariables<N>,
   Shape extends string = N["shapes"] extends readonly NodeShapeSpec[]
     ? ExtractShapeNames<N["shapes"]>
-    : BuiltInNodeShape,
+    : string,
 > = Omit<NodeStyleProperties<NA, NS, GS>, "shape"> & {
   shape?: GraphicValue<NA, NS, GS, Shape>;
 } & {
@@ -239,7 +169,7 @@ type InferredNodeStyleRule<
   NPV = ExtractAllNodeVariables<N>,
   Shape extends string = N["shapes"] extends readonly NodeShapeSpec[]
     ? ExtractShapeNames<N["shapes"]>
-    : BuiltInNodeShape,
+    : string,
 > =
   | InferredNodeStyleProperties<N, NA, NS, GS, NPV, Shape>
   | InlineConditional<NA, NS, GS, InferredNodeStyleProperties<N, NA, NS, GS, NPV, Shape>>;
@@ -269,10 +199,10 @@ type InferredEdgeStyleProperties<
   ES extends BaseEdgeState,
   GS extends BaseGraphState,
   EPV = ExtractAllEdgeVariables<E>,
-  Path extends string = E["paths"] extends readonly EdgePathSpec[] ? ExtractPathNames<E["paths"]> : BuiltInEdgePath,
+  Path extends string = E["paths"] extends readonly EdgePathSpec[] ? ExtractPathNames<E["paths"]> : string,
   Extremity extends string = E["extremities"] extends readonly EdgeExtremitySpec[]
     ? ExtractExtremityNames<E["extremities"]>
-    : BuiltInEdgeExtremity,
+    : string,
 > = Omit<EdgeStyleProperties<EA, ES, GS>, "path" | "head" | "tail"> & {
   path?: GraphicValue<EA, ES, GS, Path>;
   head?: GraphicValue<EA, ES, GS, Extremity | "none">;
@@ -287,10 +217,10 @@ type InferredEdgeStyleRule<
   ES extends BaseEdgeState,
   GS extends BaseGraphState,
   EPV = ExtractAllEdgeVariables<E>,
-  Path extends string = E["paths"] extends readonly EdgePathSpec[] ? ExtractPathNames<E["paths"]> : BuiltInEdgePath,
+  Path extends string = E["paths"] extends readonly EdgePathSpec[] ? ExtractPathNames<E["paths"]> : string,
   Extremity extends string = E["extremities"] extends readonly EdgeExtremitySpec[]
     ? ExtractExtremityNames<E["extremities"]>
-    : BuiltInEdgeExtremity,
+    : string,
 > =
   | InferredEdgeStyleProperties<E, EA, ES, GS, EPV, Path, Extremity>
   | InlineConditional<EA, ES, GS, InferredEdgeStyleProperties<E, EA, ES, GS, EPV, Path, Extremity>>;
@@ -323,48 +253,35 @@ export interface StylesDeclaration<
  *
  * This function provides type safety for sigma options with automatic inference:
  * - Shapes/paths are inferred from primitives and enforced in styles
- * - Custom variables declared in primitives or used in layers become available in styles
- * - Variable references in layers are validated against declared variables
- *
- * Note: When used with the Sigma constructor, node/edge attribute types are
- * automatically inferred from the Graphology graph instance.
+ * - Custom variables declared in primitives become available in styles
  *
  * @example
  * ```typescript
- * // Variables are inferred automatically from primitives and layers
  * const options = defineSigmaOptions({
  *   primitives: {
  *     nodes: {
- *       shapes: ["circle", "square"],
+ *       shapes: [sdfCircle(), sdfSquare()],
  *       variables: {
  *         borderSize: { type: "number", default: 2 },
  *         borderColor: { type: "color", default: "#fff" },
  *       },
- *       layers: [
- *         "fill",
- *         // Only "borderSize" and "borderColor" (+ built-ins) are valid here
- *         { type: "border", borders: [{ size: "borderSize", color: "borderColor" }] },
- *       ],
+ *       layers: [layerFill()],
  *     },
- *     edges: { paths: ["straight", "curved"] },
+ *     edges: { paths: [pathLine(), pathCurved()] },
  *   },
  *   styles: {
  *     nodes: {
  *       color: "#666",
- *       shape: "circle",    // Only "circle" | "square" allowed
+ *       shape: "circle",    // Only names from declared shapes allowed
  *       borderSize: 2,      // Inferred from variables
  *       borderColor: "#fff",
- *     },
- *     edges: {
- *       path: "straight",   // Only "straight" | "curved" allowed
  *     },
  *   },
  * });
  * ```
  */
 export function defineSigmaOptions<const P extends PrimitivesDeclaration>(
-  options: SigmaOptionsInput<P, Attributes, Attributes, BaseNodeState, BaseEdgeState, BaseGraphState> &
-    ValidatedSigmaOptionsInput<P, Attributes, Attributes, BaseNodeState, BaseEdgeState, BaseGraphState>,
+  options: SigmaOptionsInput<P, Attributes, Attributes, BaseNodeState, BaseEdgeState, BaseGraphState>,
 ): SigmaOptionsInput<P, Attributes, Attributes, BaseNodeState, BaseEdgeState, BaseGraphState> {
   return options;
 }

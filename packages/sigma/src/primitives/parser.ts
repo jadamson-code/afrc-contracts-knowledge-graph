@@ -2,7 +2,7 @@
  * Sigma.js Primitives Parser
  * ==========================
  *
- * Functions to parse primitives declarations (string, declarative, custom forms)
+ * Functions to parse primitives declarations (pre-parsed or custom forms)
  * into factory outputs (SDFShape, FragmentLayer, EdgePath, etc.).
  *
  * @module
@@ -20,79 +20,23 @@ import {
   createNodeProgram,
   createEdgeProgram,
 } from "../rendering";
-import { getFactory } from "./registry";
 import {
-  BuiltInNodeShape,
-  DeclarativeNodeShape,
   NodeShapeSpec,
   NodeLayerSpec,
-  BuiltInEdgePath,
-  DeclarativeEdgePath,
   EdgePathSpec,
   EdgeLayerSpec,
-  BuiltInEdgeExtremity,
   EdgeExtremitySpec,
   NodePrimitives,
   EdgePrimitives,
   VariablesDefinition,
-  isDeclarativeNodeLayer,
   isCustomNodeLayer,
-  isNodeLayerShorthand,
-  isDeclarativeEdgeLayer,
   isCustomEdgeLayer,
-  isEdgeLayerShorthand,
   DEFAULT_NODE_PRIMITIVES,
   DEFAULT_EDGE_PRIMITIVES,
 } from "./types";
 
 // =============================================================================
-// TYPE GUARDS FOR SHAPES
-// =============================================================================
-
-function isNodeShapeShorthand(spec: NodeShapeSpec): spec is BuiltInNodeShape {
-  return typeof spec === "string";
-}
-
-function isDeclarativeNodeShape(spec: NodeShapeSpec): spec is DeclarativeNodeShape {
-  return typeof spec === "object" && "type" in spec && !("glsl" in spec);
-}
-
-function isCustomNodeShape(spec: NodeShapeSpec): spec is { name: string; glsl: string } {
-  return typeof spec === "object" && "glsl" in spec && "name" in spec;
-}
-
-// =============================================================================
-// TYPE GUARDS FOR EDGE PATHS
-// =============================================================================
-
-function isEdgePathShorthand(spec: EdgePathSpec): spec is BuiltInEdgePath {
-  return typeof spec === "string";
-}
-
-function isDeclarativeEdgePath(spec: EdgePathSpec): spec is DeclarativeEdgePath {
-  return typeof spec === "object" && "type" in spec && !("glsl" in spec);
-}
-
-function isCustomEdgePath(spec: EdgePathSpec): spec is { name: string; glsl: string; segments: number } {
-  return typeof spec === "object" && "glsl" in spec && "name" in spec;
-}
-
-// =============================================================================
-// TYPE GUARDS FOR EDGE EXTREMITIES
-// =============================================================================
-
-function isEdgeExtremityShorthand(spec: EdgeExtremitySpec): spec is BuiltInEdgeExtremity {
-  return typeof spec === "string";
-}
-
-function isCustomEdgeExtremity(
-  spec: EdgeExtremitySpec,
-): spec is { name: string; glsl: string; length: number; widthFactor: number } {
-  return typeof spec === "object" && "glsl" in spec && "name" in spec;
-}
-
-// =============================================================================
-// SPEC PARSERS
+// TYPE GUARDS
 // =============================================================================
 
 // Type guard for already-parsed SDFShape
@@ -122,40 +66,39 @@ function isEdgeLayer(spec: EdgeLayerSpec): spec is EdgeLayer {
   return typeof spec === "object" && "uniforms" in spec && "attributes" in spec && "glsl" in spec;
 }
 
+// Type guard for custom node shape
+function isCustomNodeShape(spec: NodeShapeSpec): spec is { name: string; glsl: string; inradiusFactor?: number } {
+  return typeof spec === "object" && "glsl" in spec && "name" in spec && !("uniforms" in spec);
+}
+
+// Type guard for custom edge path
+function isCustomEdgePath(spec: EdgePathSpec): spec is { name: string; glsl: string; segments: number } {
+  return typeof spec === "object" && "glsl" in spec && "name" in spec && !("uniforms" in spec);
+}
+
+// Type guard for custom edge extremity
+function isCustomEdgeExtremity(
+  spec: EdgeExtremitySpec,
+): spec is { name: string; glsl: string; length: number; widthFactor: number } {
+  return typeof spec === "object" && "glsl" in spec && "name" in spec && !("uniforms" in spec);
+}
+
+// =============================================================================
+// SPEC PARSERS
+// =============================================================================
+
 /**
  * Parses a node shape specification into an SDFShape.
  *
- * @param spec - Shape specification (string, declarative, or custom)
+ * @param spec - Shape specification (pre-parsed SDFShape or custom GLSL)
  * @returns SDFShape instance
- * @throws Error if factory not found for built-in shapes
  */
 export function parseNodeShape(spec: NodeShapeSpec): SDFShape {
-  // Already a parsed SDFShape - return as-is
   if (isSDFShape(spec)) {
     return spec;
   }
 
-  if (isNodeShapeShorthand(spec)) {
-    // String form: "circle" -> getFactory("nodeShape", "circle")()
-    const factory = getFactory("nodeShape", spec);
-    if (!factory) {
-      throw new Error(`Unknown node shape: "${spec}". Make sure the shape is registered.`);
-    }
-    return factory();
-  }
-
-  if (isDeclarativeNodeShape(spec)) {
-    // Declarative form: { type: "circle", ... } -> getFactory("nodeShape", "circle")(config)
-    const { type, ...config } = spec;
-    const factory = getFactory("nodeShape", type);
-    if (!factory) {
-      throw new Error(`Unknown node shape: "${type}". Make sure the shape is registered.`);
-    }
-    return factory(config);
-  }
-
   if (isCustomNodeShape(spec)) {
-    // Custom form: { name: "...", glsl: "..." } -> use directly as SDFShape
     return {
       name: spec.name,
       glsl: spec.glsl,
@@ -170,39 +113,15 @@ export function parseNodeShape(spec: NodeShapeSpec): SDFShape {
 /**
  * Parses a node layer specification into a FragmentLayer.
  *
- * @param spec - Layer specification (string, declarative, or custom)
+ * @param spec - Layer specification (pre-parsed FragmentLayer or custom GLSL)
  * @returns FragmentLayer instance
- * @throws Error if factory not found for built-in layers
  */
 export function parseNodeLayer(spec: NodeLayerSpec): FragmentLayer {
-  // Already a parsed FragmentLayer - return as-is
   if (isFragmentLayer(spec)) {
     return spec;
   }
 
-  if (isNodeLayerShorthand(spec)) {
-    // String form: "fill" -> getFactory("nodeLayer", "fill")()
-    const factory = getFactory("nodeLayer", spec);
-    if (!factory) {
-      throw new Error(`Unknown node layer: "${spec}". Make sure the layer is registered.`);
-    }
-    return factory();
-  }
-
-  if (isDeclarativeNodeLayer(spec)) {
-    // Declarative form: { type: "fill", color: "myVar" } -> getFactory("nodeLayer", "fill")({ color: { attribute: "myVar" } })
-    const { type, ...config } = spec;
-    const factory = getFactory("nodeLayer", type);
-    if (!factory) {
-      throw new Error(`Unknown node layer: "${type}". Make sure the layer is registered.`);
-    }
-    // Transform variable references (strings) into attribute sources
-    const resolvedConfig = resolveVariableReferences(config);
-    return factory(resolvedConfig);
-  }
-
   if (isCustomNodeLayer(spec)) {
-    // Custom form: { name: "...", glsl: "...", graphicVariables: [...] }
     return {
       name: spec.name,
       glsl: spec.glsl,
@@ -217,43 +136,20 @@ export function parseNodeLayer(spec: NodeLayerSpec): FragmentLayer {
 /**
  * Parses an edge path specification into an EdgePath.
  *
- * @param spec - Path specification (string, declarative, or custom)
+ * @param spec - Path specification (pre-parsed EdgePath or custom GLSL)
  * @returns EdgePath instance
- * @throws Error if factory not found for built-in paths
  */
 export function parseEdgePath(spec: EdgePathSpec): EdgePath {
-  // Already a parsed EdgePath - return as-is
   if (isEdgePath(spec)) {
     return spec;
   }
 
-  if (isEdgePathShorthand(spec)) {
-    // String form: "line" -> getFactory("edgePath", "line")()
-    const factory = getFactory("edgePath", spec);
-    if (!factory) {
-      throw new Error(`Unknown edge path: "${spec}". Make sure the path is registered.`);
-    }
-    return factory();
-  }
-
-  if (isDeclarativeEdgePath(spec)) {
-    // Declarative form: { type: "curved", curvature: 0.5 }
-    const { type, ...config } = spec;
-    const factory = getFactory("edgePath", type);
-    if (!factory) {
-      throw new Error(`Unknown edge path: "${type}". Make sure the path is registered.`);
-    }
-    const resolvedConfig = resolveVariableReferences(config);
-    return factory(resolvedConfig);
-  }
-
   if (isCustomEdgePath(spec)) {
-    // Custom form: { name: "...", glsl: "...", segments: 10 }
     return {
       name: spec.name,
       glsl: spec.glsl,
       segments: spec.segments,
-      vertexGlsl: "", // Custom paths use standard parametric tessellation
+      vertexGlsl: "",
       uniforms: [],
       attributes: [],
     };
@@ -265,38 +161,15 @@ export function parseEdgePath(spec: EdgePathSpec): EdgePath {
 /**
  * Parses an edge layer specification into an EdgeLayer.
  *
- * @param spec - Layer specification (string, declarative, or custom)
+ * @param spec - Layer specification (pre-parsed EdgeLayer or custom GLSL)
  * @returns EdgeLayer instance
- * @throws Error if factory not found for built-in layers
  */
 export function parseEdgeLayer(spec: EdgeLayerSpec): EdgeLayer {
-  // Already a parsed EdgeLayer - return as-is
   if (isEdgeLayer(spec)) {
     return spec;
   }
 
-  if (isEdgeLayerShorthand(spec)) {
-    // String form: "plain" -> getFactory("edgeLayer", "plain")()
-    const factory = getFactory("edgeLayer", spec);
-    if (!factory) {
-      throw new Error(`Unknown edge layer: "${spec}". Make sure the layer is registered.`);
-    }
-    return factory();
-  }
-
-  if (isDeclarativeEdgeLayer(spec)) {
-    // Declarative form: { type: "plain", color: "#ff0000" }
-    const { type, ...config } = spec;
-    const factory = getFactory("edgeLayer", type);
-    if (!factory) {
-      throw new Error(`Unknown edge layer: "${type}". Make sure the layer is registered.`);
-    }
-    const resolvedConfig = resolveVariableReferences(config);
-    return factory(resolvedConfig);
-  }
-
   if (isCustomEdgeLayer(spec)) {
-    // Custom form: { name: "...", glsl: "...", graphicVariables: [...] }
     return {
       name: spec.name,
       glsl: spec.glsl,
@@ -311,32 +184,15 @@ export function parseEdgeLayer(spec: EdgeLayerSpec): EdgeLayer {
 /**
  * Parses an edge extremity specification into an EdgeExtremity.
  *
- * @param spec - Extremity specification (string or custom)
- * @returns EdgeExtremity instance
- * @throws Error if factory not found for built-in extremities
+ * @param spec - Extremity specification (pre-parsed EdgeExtremity or custom GLSL)
+ * @returns EdgeExtremity instance or null
  */
 export function parseEdgeExtremity(spec: EdgeExtremitySpec): EdgeExtremity | null {
-  // "none" is handled internally by createEdgeProgram, return null to skip
-  if (spec === "none") {
-    return null;
-  }
-
-  // Already a parsed EdgeExtremity - return as-is
   if (isEdgeExtremity(spec)) {
     return spec;
   }
 
-  if (isEdgeExtremityShorthand(spec)) {
-    // String form: "arrow" -> getFactory("edgeExtremity", "arrow")()
-    const factory = getFactory("edgeExtremity", spec);
-    if (!factory) {
-      throw new Error(`Unknown edge extremity: "${spec}". Make sure the extremity is registered.`);
-    }
-    return factory();
-  }
-
   if (isCustomEdgeExtremity(spec)) {
-    // Custom form: { name: "...", glsl: "...", length: 5, widthFactor: 4 }
     return {
       name: spec.name,
       glsl: spec.glsl,
@@ -417,49 +273,6 @@ export function parseEdgePrimitives(edgePrimitives?: EdgePrimitives): ParsedEdge
 }
 
 // =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
-
-/**
- * Recursively processes config for array properties that need deep handling.
- *
- * With the explicit { attribute: string } API, values are passed through as-is.
- * Users now explicitly use:
- *   { type: "fill", color: "#ff0000" }           // Literal value
- *   { type: "fill", color: { attribute: "var" } } // Variable reference
- *
- * This function only handles recursive processing of arrays and nested objects.
- */
-function resolveVariableReferences(config: Record<string, unknown>): Record<string, unknown> {
-  const resolved: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(config)) {
-    if (Array.isArray(value)) {
-      // Arrays need recursive handling for nested objects (e.g., borders array)
-      resolved[key] = value.map((item) => {
-        if (typeof item === "object" && item !== null) {
-          return resolveVariableReferences(item as Record<string, unknown>);
-        }
-        return item;
-      });
-    } else if (typeof value === "object" && value !== null) {
-      // Nested objects: if it's an attribute source { attribute: ... }, keep as-is
-      // Otherwise recurse (for nested config structures)
-      if ("attribute" in value) {
-        resolved[key] = value;
-      } else {
-        resolved[key] = resolveVariableReferences(value as Record<string, unknown>);
-      }
-    } else {
-      // Strings, numbers, booleans, etc. pass through unchanged
-      resolved[key] = value;
-    }
-  }
-
-  return resolved;
-}
-
-// =============================================================================
 // PROGRAM GENERATION
 // =============================================================================
 
@@ -497,15 +310,6 @@ export interface GeneratedEdgeProgram<
  *
  * @param nodePrimitives - Node primitives declaration
  * @returns Object containing the NodeProgram class and declared variables
- *
- * @example
- * ```typescript
- * const { program: NodeProgram, variables } = generateNodeProgram({
- *   shapes: ["circle", "square"],
- *   layers: ["fill", { type: "border", size: 2, color: "#fff" }],
- *   variables: { borderSize: { type: "number", default: 0 } },
- * });
- * ```
  */
 export function generateNodeProgram<
   N extends Attributes = Attributes,
@@ -536,16 +340,6 @@ export function generateNodeProgram<
  *
  * @param edgePrimitives - Edge primitives declaration
  * @returns Object containing the EdgeProgram class and declared variables
- *
- * @example
- * ```typescript
- * const { program: EdgeProgram, variables } = generateEdgeProgram({
- *   paths: ["line", "curved"],
- *   extremities: ["arrow"],
- *   layers: ["plain"],
- *   variables: { curvature: { type: "number", default: 0 } },
- * });
- * ```
  */
 export function generateEdgeProgram<
   N extends Attributes = Attributes,

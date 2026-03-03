@@ -6,34 +6,43 @@
  *
  * @module
  */
-import { FactoryOptionsFromSchema, colorProp } from "../../../primitives";
+import { ValueSource } from "../types";
 import { colorToGLSLString } from "../../../utils";
 import { FragmentLayer, isAttributeSource } from "../types";
-import { defineNodeLayer } from "./factory";
 
-/**
- * Schema for fill layer options.
- */
-export const fillSchema = {
-  color: colorProp("#000000", { variable: true }),
-} as const;
-
-// Register the fill layer schema for type inference
-declare module "../../../primitives/schema" {
-  interface NodeLayerSchemaRegistry {
-    fill: typeof fillSchema;
-  }
+export interface LayerFillOptions {
+  color?: ValueSource<string>;
 }
 
 /**
- * Factory options derived from schema.
+ * Creates a fill layer that fills the shape with a color.
+ * This is typically the base layer for most node programs.
+ *
+ * @param options - Optional configuration
+ * @returns Fill layer definition
+ *
+ * @example
+ * ```typescript
+ * // Use node color (default)
+ * const program = createNodeProgram({
+ *   shapes: [sdfCircle()],
+ *   layers: [layerFill()],
+ * });
+ *
+ * // Use fixed color
+ * const redProgram = createNodeProgram({
+ *   shapes: [sdfCircle()],
+ *   layers: [layerFill({ color: "#ff0000" })],
+ * });
+ *
+ * // Use a custom attribute
+ * const customProgram = createNodeProgram({
+ *   shapes: [sdfCircle()],
+ *   layers: [layerFill({ color: { attribute: "fillColor" } })],
+ * });
+ * ```
  */
-export type LayerFillOptions = FactoryOptionsFromSchema<typeof fillSchema>;
-
-/**
- * Fill layer definition with schema.
- */
-export const fillDefinition = defineNodeLayer("fill", fillSchema, (options): FragmentLayer => {
+export function layerFill(options?: LayerFillOptions): FragmentLayer {
   const { UNSIGNED_BYTE } = WebGL2RenderingContext;
 
   // Default to reading from "color" attribute
@@ -81,34 +90,4 @@ vec4 layer_fill(vec4 v_fillColor) {
     ],
     glsl,
   };
-});
-
-/**
- * Creates a fill layer that fills the shape with a color.
- * This is typically the base layer for most node programs.
- *
- * @param options - Optional configuration
- * @returns Fill layer definition
- *
- * @example
- * ```typescript
- * // Use node color (default)
- * const program = createNodeProgram({
- *   shapes: [sdfCircle()],
- *   layers: [layerFill()],
- * });
- *
- * // Use fixed color
- * const redProgram = createNodeProgram({
- *   shapes: [sdfCircle()],
- *   layers: [layerFill({ color: "#ff0000" })],
- * });
- *
- * // Use a custom attribute
- * const customProgram = createNodeProgram({
- *   shapes: [sdfCircle()],
- *   layers: [layerFill({ color: { attribute: "fillColor" } })],
- * });
- * ```
- */
-export const layerFill = fillDefinition.factory;
+}

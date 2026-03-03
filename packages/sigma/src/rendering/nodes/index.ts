@@ -38,11 +38,11 @@ export type {
 export { isAttributeSource } from "./types";
 
 // SDF Shapes
-export { sdfCircle, sdfSquare, sdfTriangle, sdfDiamond, registerNodeShapeFactory } from "./shapes";
-export type { SquareOptions, TriangleOptions, DiamondOptions, NodeShapeFactory } from "./shapes";
+export { sdfCircle, sdfSquare, sdfTriangle, sdfDiamond } from "./shapes";
+export type { SquareOptions, TriangleOptions, DiamondOptions } from "./shapes";
 
 // Fragment Layers (core)
-export { layerFill, registerNodeLayerFactory, type NodeLayerFactory } from "./layers";
+export { layerFill, type LayerFillOptions } from "./layers";
 
 // Label program creation
 export { createLabelProgram } from "./labels";

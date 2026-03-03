@@ -33,9 +33,11 @@ beforeEach<SigmaTestContext>(async (context) => {
   document.body.append(container);
 
   context.sigma = new Sigma(graph, container, {
-    zoomDuration: 30,
-    inertiaDuration: 30,
-    doubleClickZoomingDuration: 30,
+    settings: {
+      zoomDuration: 30,
+      inertiaDuration: 30,
+      doubleClickZoomingDuration: 30,
+    },
   });
   context.graph = graph;
   context.container = container;

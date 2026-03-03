@@ -10,6 +10,7 @@
 import Graph from "graphology";
 import Sigma from "sigma";
 import { createElement } from "sigma/utils";
+import { sdfCircle, layerFill, pathLine, pathCurved, layerPlain } from "sigma/rendering";
 import { afterEach, describe, expect, it } from "vitest";
 
 // Helper to create a sigma instance with given primitives
@@ -51,8 +52,8 @@ describe("Style memory footprint", () => {
       const instance = createSigma({
         nodes: {
           variables: { myColor: { type: "color", default: "#ff0000" } },
-          shapes: ["circle"],
-          layers: [{ type: "fill", color: { attribute: "myColor" } }],
+          shapes: [sdfCircle()],
+          layers: [layerFill({ color: { attribute: "myColor" } })],
         },
       });
       instances.push(instance);
@@ -71,8 +72,8 @@ describe("Style memory footprint", () => {
     it("constant fill layer still creates texture (for uniform indexing)", () => {
       const instance = createSigma({
         nodes: {
-          shapes: ["circle"],
-          layers: [{ type: "fill", color: "#ff0000" }], // Constant
+          shapes: [sdfCircle()],
+          layers: [layerFill({ color: "#ff0000" })], // Constant
         },
       });
       instances.push(instance);
@@ -94,8 +95,8 @@ describe("Style memory footprint", () => {
     it("straight path creates path attribute texture", () => {
       const instance = createSigma({
         edges: {
-          paths: [{ type: "straight" }],
-          layers: ["plain"],
+          paths: [pathLine()],
+          layers: [layerPlain()],
         },
       });
       instances.push(instance);
@@ -116,8 +117,8 @@ describe("Style memory footprint", () => {
     it("curved path tracks edge count in attribute texture", () => {
       const instance = createSigma({
         edges: {
-          paths: [{ type: "curved" }],
-          layers: ["plain"],
+          paths: [pathCurved()],
+          layers: [layerPlain()],
         },
       });
       instances.push(instance);
@@ -142,8 +143,8 @@ describe("Style memory footprint", () => {
       const instance = createSigma({
         nodes: {
           variables: { myColor: { type: "color", default: "#ff0000" } },
-          shapes: ["circle"],
-          layers: [{ type: "fill", color: { attribute: "myColor" } }],
+          shapes: [sdfCircle()],
+          layers: [layerFill({ color: { attribute: "myColor" } })],
         },
       });
       instances.push(instance);
@@ -170,8 +171,8 @@ describe("Style memory footprint", () => {
     it("edge path texture item count grows with edges", () => {
       const instance = createSigma({
         edges: {
-          paths: [{ type: "curved" }],
-          layers: ["plain"],
+          paths: [pathCurved()],
+          layers: [layerPlain()],
         },
       });
       instances.push(instance);
@@ -206,8 +207,8 @@ describe("Style memory footprint", () => {
       // Create instance with constant fill color
       const constantInstance = createSigma({
         nodes: {
-          shapes: ["circle"],
-          layers: [{ type: "fill", color: "#5B8FF9" }],
+          shapes: [sdfCircle()],
+          layers: [layerFill({ color: "#5B8FF9" })],
         },
       });
       instances.push(constantInstance);
@@ -218,8 +219,8 @@ describe("Style memory footprint", () => {
           variables: {
             nodeColor: { type: "color", default: "#5B8FF9" },
           },
-          shapes: ["circle"],
-          layers: [{ type: "fill", color: { attribute: "nodeColor" } }],
+          shapes: [sdfCircle()],
+          layers: [layerFill({ color: { attribute: "nodeColor" } })],
         },
       });
       instances.push(attributeInstance);
@@ -254,16 +255,16 @@ describe("Style memory footprint", () => {
       // Backdrop attributes are always present (no uniform-only optimization)
       const noBackdropConfig = createSigma({
         nodes: {
-          shapes: ["circle"],
-          layers: ["fill"],
+          shapes: [sdfCircle()],
+          layers: [layerFill()],
         },
       });
       instances.push(noBackdropConfig);
 
       const withBackdropConfig = createSigma({
         nodes: {
-          shapes: ["circle"],
-          layers: ["fill"],
+          shapes: [sdfCircle()],
+          layers: [layerFill()],
           backdrop: {
             color: { attribute: "backdropColor", default: "#ffffff" },
           },
@@ -290,8 +291,8 @@ describe("Style memory footprint", () => {
       // When any backdrop option uses attribute binding, all 4 must be included
       const partialInstance = createSigma({
         nodes: {
-          shapes: ["circle"],
-          layers: ["fill"],
+          shapes: [sdfCircle()],
+          layers: [layerFill()],
           backdrop: {
             color: { attribute: "backdropColor" }, // Only color uses attribute
             shadowColor: "rgba(0,0,0,0.5)", // Rest are constants
@@ -304,8 +305,8 @@ describe("Style memory footprint", () => {
 
       const fullInstance = createSigma({
         nodes: {
-          shapes: ["circle"],
-          layers: ["fill"],
+          shapes: [sdfCircle()],
+          layers: [layerFill()],
           backdrop: {
             color: { attribute: "backdropColor" },
             shadowColor: { attribute: "shadowColor" },
@@ -334,8 +335,8 @@ describe("Style memory footprint", () => {
       const instance = createSigma({
         nodes: {
           variables: { myColor: { type: "color", default: "#ff0000" } },
-          shapes: ["circle"],
-          layers: [{ type: "fill", color: { attribute: "myColor" } }],
+          shapes: [sdfCircle()],
+          layers: [layerFill({ color: { attribute: "myColor" } })],
         },
       });
       instances.push(instance);

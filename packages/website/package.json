@@ -2,41 +2,26 @@
   "name": "@sigma/website",
   "private": true,
   "scripts": {
-    "docusaurus": "docusaurus",
-    "start": "docusaurus start",
-    "build": "docusaurus build && mv build/homepage.html build/index.html",
-    "swizzle": "docusaurus swizzle",
-    "deploy": "docusaurus deploy",
-    "clear": "docusaurus clear",
-    "serve": "docusaurus serve",
-    "write-translations": "docusaurus write-translations",
-    "write-heading-ids": "docusaurus write-heading-ids"
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
   },
   "dependencies": {
-    "@docusaurus/core": "^3.7.0",
-    "@docusaurus/module-type-aliases": "^3.7.0",
-    "@docusaurus/preset-classic": "^3.7.0",
-    "@docusaurus/types": "^3.7.0",
-    "@mdx-js/react": "^3.1.0",
-    "@tsconfig/docusaurus": "^2.0.3",
-    "docusaurus-plugin-matomo": "^0.0.8",
-    "docusaurus-plugin-typedoc": "^1.2.1",
-    "prism-react-renderer": "^2.4.1",
-    "typedoc": "^0.27.6",
-    "typedoc-plugin-markdown": "^4.4.1",
-    "zero-md": "^3.1.6"
-  },
-  "browserslist": {
-    "production": [
-      ">0.5%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "@astrojs/starlight": "^0.32",
+    "@iconify-json/ph": "^1",
+    "@phosphor-icons/core": "^2",
+    "astro": "^5",
+    "astro-icon": "^1",
+    "graphology": "^0.26.0",
+    "graphology-generators": "^0.11.0",
+    "graphology-layout": "^0.6.0",
+    "graphology-layout-forceatlas2": "^0.10.0",
+    "seedrandom": "^3.0.0",
+    "sharp": "^0.33",
+    "sigma": "*",
+    "starlight-links-validator": "^0.19.2",
+    "starlight-typedoc": "^0.20",
+    "typedoc": "^0.28"
   },
   "engines": {
     "node": ">=18.14"

@@ -1,0 +1,85 @@
+---
+title: Hover and search highlight
+description: How to highlight a node's neighborhood on hover and filter nodes with a search field.
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+The most common interactive pattern in graph visualization: highlight a node and its neighbors on hover, and let users search for nodes by label.
+
+## Live example
+
+Hover any node to highlight its neighborhood. Use the search field to filter nodes by label.
+
+<SigmaExample id="hover-search" height="500px" />
+
+## How it works
+
+This example uses sigma's **v4 state management** system — no reducers needed for this pattern.
+
+### 1. Define custom state types
+
+```typescript
+interface CustomNodeState extends BaseNodeState {
+  isActive: boolean;
+}
+interface CustomEdgeState extends BaseEdgeState {
+  isActive: boolean;
+}
+interface CustomGraphState extends BaseGraphState {
+  hasActiveSubgraph: boolean;
+}
+```
+
+### 2. Use conditional style rules
+
+Styles define how elements look based on their state:
+
+```typescript
+const renderer = new Sigma(graph, container, {
+  styles: {
+    nodes: [
+      { color: { attribute: "color" }, size: { attribute: "size" } },
+      // Grey out inactive nodes when there's an active subgraph
+      {
+        when: (attrs, state, graphState) =>
+          graphState.hasActiveSubgraph && !state.isActive,
+        then: { color: "#f6f6f6", label: "" },
+      },
+      // Render active nodes on top using custom depth layers
+      {
+        when: "isActive",
+        then: { depth: "topNodes", labelVisibility: "visible" },
+      },
+    ],
+  },
+});
+```
+
+### 3. Update state on interaction
+
+```typescript
+renderer.on("enterNode", ({ node }) => {
+  const neighbors = new Set(graph.neighbors(node));
+  neighbors.add(node);
+
+  graph.forEachNode((n) => {
+    renderer.setNodeState(n, { isActive: neighbors.has(n) });
+  });
+  renderer.setGraphState({ hasActiveSubgraph: true });
+});
+
+renderer.on("leaveNode", () => {
+  graph.forEachNode((n) => renderer.setNodeState(n, { isActive: false }));
+  renderer.setGraphState({ hasActiveSubgraph: false });
+});
+```
+
+### Key concepts
+
+- **Custom state**: extend `BaseNodeState` / `BaseEdgeState` / `BaseGraphState` with your own fields
+- **Conditional styles**: use `when` predicates to apply styles based on state
+- **Depth layers**: use `primitives.depthLayers` to render highlighted elements on top of the rest
+- **`setNodeState` / `setGraphState`**: update state without touching the graph data
+
+For a deeper understanding of the styles system, see [Styles and primitives](/concepts/styles-and-primitives/).

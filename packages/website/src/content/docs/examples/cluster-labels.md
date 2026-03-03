@@ -1,10 +1,13 @@
 ---
 title: Cluster labels
-description: A complete example of adding labels to clusters of nodes.
+sidebar:
+  label: Cluster labels
 ---
 
 :::caution[Work in progress]
-This page is being written for sigma.js v4.
+This example is not yet available. It will be added in a future update.
 :::
 
-Content coming soon.
+When visualizing clustered graphs, it can be helpful to display labels for entire clusters rather than (or in addition to) individual node labels. This is typically done using HTML overlays positioned over the graph canvas.
+
+This example will show how to compute cluster positions from node coordinates and render cluster labels as HTML elements that move with the camera.

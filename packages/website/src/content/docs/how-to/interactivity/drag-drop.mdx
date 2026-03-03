@@ -1,0 +1,123 @@
+---
+title: Drag and drop
+sidebar:
+  label: "Drag & drop"
+---
+
+import SigmaExample from '../../../../components/SigmaExample.astro';
+
+Sigma does not include built-in drag-and-drop, but the event system makes it straightforward to implement. The pattern relies on three events: `downNode`, `moveBody`, and `upNode`/`upStage`.
+
+## Live example
+
+Drag any node to reposition it. Click the background to create a new node connected to its two nearest neighbors.
+
+<SigmaExample id="drag-drop" height="500px" />
+
+## How it works
+
+### 1. Track the dragged node
+
+Listen for `downNode` to start dragging. Store the node ID and optionally mark it as `highlighted` (useful if you run a force layout, so the layout pins it in place):
+
+```typescript
+let draggedNode: string | null = null;
+
+renderer.on("downNode", (e) => {
+  draggedNode = e.node;
+  graph.setNodeAttribute(draggedNode, "highlighted", true);
+});
+```
+
+### 2. Update position on move
+
+Listen for `moveBody` (fires on any pointer movement over the canvas). Convert viewport coordinates to graph coordinates with `viewportToGraph()`, then update the node's position:
+
+```typescript
+renderer.on("moveBody", ({ event }) => {
+  if (!draggedNode) return;
+
+  // Convert screen position to graph coordinates
+  const pos = renderer.viewportToGraph(event);
+  graph.setNodeAttribute(draggedNode, "x", pos.x);
+  graph.setNodeAttribute(draggedNode, "y", pos.y);
+
+  // Prevent sigma from panning the camera
+  event.preventSigmaDefault();
+  event.original.preventDefault();
+});
+```
+
+The call to `event.preventSigmaDefault()` is essential -- without it, sigma interprets the pointer movement as a camera pan and moves the viewport along with the node.
+
+### 3. Clean up on release
+
+Listen for both `upNode` and `upStage` to handle the case where the pointer is released outside the node:
+
+```typescript
+const handleUp = () => {
+  if (draggedNode) {
+    graph.removeNodeAttribute(draggedNode, "highlighted");
+  }
+  draggedNode = null;
+};
+
+renderer.on("upNode", handleUp);
+renderer.on("upStage", handleUp);
+```
+
+### Complete example
+
+```typescript
+import Graph from "graphology";
+import Sigma from "sigma";
+
+const graph = new Graph();
+graph.addNode("a", { x: 0, y: 0, size: 10, color: "#e63946" });
+graph.addNode("b", { x: 1, y: 1, size: 10, color: "#457b9d" });
+graph.addEdge("a", "b");
+
+const renderer = new Sigma(graph, container);
+
+let draggedNode: string | null = null;
+
+renderer.on("downNode", (e) => {
+  draggedNode = e.node;
+  graph.setNodeAttribute(draggedNode, "highlighted", true);
+});
+
+renderer.on("moveBody", ({ event }) => {
+  if (!draggedNode) return;
+  const pos = renderer.viewportToGraph(event);
+  graph.setNodeAttribute(draggedNode, "x", pos.x);
+  graph.setNodeAttribute(draggedNode, "y", pos.y);
+  event.preventSigmaDefault();
+  event.original.preventDefault();
+});
+
+const handleUp = () => {
+  if (draggedNode) {
+    graph.removeNodeAttribute(draggedNode, "highlighted");
+  }
+  draggedNode = null;
+};
+renderer.on("upNode", handleUp);
+renderer.on("upStage", handleUp);
+```
+
+## Integration with force layouts
+
+When using a force-directed layout (e.g. `graphology-layout-force`), set the `highlighted` attribute on the dragged node and configure the layout to pin highlighted nodes:
+
+```typescript
+import ForceSupervisor from "graphology-layout-force/worker";
+
+const layout = new ForceSupervisor(graph, {
+  isNodeFixed: (_, attr) => attr.highlighted,
+});
+layout.start();
+```
+
+This prevents the layout from overriding the user's drag position. When the node is released and `highlighted` is removed, the layout resumes acting on it.
+
+For the full list of available events, see the [Events reference](/reference/events/).

@@ -10,6 +10,7 @@
 <script>
   import Graph from "graphology";
   import Sigma from "sigma";
+  import { layerFill, sdfCircle, sdfDiamond, sdfSquare, sdfTriangle } from "sigma/rendering";
   import { DEFAULT_STYLES } from "sigma/types";
   import type { LabelPosition } from "sigma/types";
   import { registerControls } from "./_controls";
@@ -50,8 +51,8 @@
   const renderer = new Sigma(graph, container, {
     primitives: {
       nodes: {
-        shapes: ["circle", "square", "triangle", "diamond"],
-        layers: [{ type: "fill" }],
+        shapes: [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()],
+        layers: [layerFill()],
         rotateWithCamera,
         label: { margin: labelMargin },
       },

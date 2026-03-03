@@ -1,12 +1,64 @@
 ---
-title: Label styles
-description: "How to customize node labels: fonts, backdrops, and attachments."
+title: Label styles, backdrops, and attachments
+sidebar:
+  label: Styles, backdrops & attachments
 ---
 
 import SigmaExample from '../../../../components/SigmaExample.astro';
 
-:::caution[Work in progress]
-This page is being written for sigma.js v4.
-:::
+Sigma v4 gives you fine control over label rendering — including font styles, backdrop shapes, positioning, and HTML attachments.
+
+## Label positioning
+
+Labels can be placed relative to their node using the `labelPosition` style property:
+
+```js
+styles: {
+  nodes: [
+    {
+      labelPosition: "right", // "right" | "left" | "above" | "below" | "over"
+    },
+  ],
+}
+```
+
+You can also set `labelAngle` for rotated labels and `labelMargin` to control spacing.
+
+## Backdrops
+
+Backdrops are decorative shapes drawn behind labels. Configure them via `backdrop` in styles:
+
+```js
+styles: {
+  nodes: [
+    {
+      backdrop: {
+        fill: "#ffffff",
+        shadow: { color: "#00000033", blur: 4, offsetX: 0, offsetY: 2 },
+        border: { color: "#cccccc", width: 1 },
+        cornerRadius: 4,
+        padding: { top: 2, right: 6, bottom: 2, left: 6 },
+      },
+    },
+  ],
+}
+```
+
+## Attachments
+
+Label attachments let you display custom HTML content anchored to a node's label. This is useful for tooltips, info cards, or interactive UI:
+
+```js
+renderer.on("enterNode", ({ node }) => {
+  renderer.setNodeState(node, {
+    labelAttachment: {
+      position: "below",
+      html: `<div class="info-card">${graph.getNodeAttribute(node, "label")}</div>`,
+    },
+  });
+});
+```
+
+## Live example
 
 <SigmaExample id="label-styles" height="500px" />

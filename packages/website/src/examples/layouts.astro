@@ -1,0 +1,86 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import { circular } from "graphology-layout";
+  import forceAtlas2 from "graphology-layout-forceatlas2";
+  import FA2Layout from "graphology-layout-forceatlas2/worker";
+  import Sigma from "sigma";
+  import { PlainObject } from "sigma/types";
+  import { animateNodes } from "sigma/utils";
+
+  import { registerControls } from "./_controls";
+  import data from "./_data/data.json";
+
+  const graph = new Graph();
+  graph.import(data);
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  let cancelCurrentAnimation: (() => void) | null = null;
+
+  // FA2 layout in a web worker
+  const sensibleSettings = forceAtlas2.inferSettings(graph);
+  const fa2Layout = new FA2Layout(graph, { settings: sensibleSettings });
+
+  function stopFA2() {
+    fa2Layout.stop();
+  }
+  function startFA2() {
+    if (cancelCurrentAnimation) cancelCurrentAnimation();
+    fa2Layout.start();
+  }
+
+  function randomLayout() {
+    if (fa2Layout.isRunning()) stopFA2();
+    if (cancelCurrentAnimation) cancelCurrentAnimation();
+
+    const xExtents = { min: 0, max: 0 };
+    const yExtents = { min: 0, max: 0 };
+    graph.forEachNode((_node, attributes) => {
+      xExtents.min = Math.min(attributes.x, xExtents.min);
+      xExtents.max = Math.max(attributes.x, xExtents.max);
+      yExtents.min = Math.min(attributes.y, yExtents.min);
+      yExtents.max = Math.max(attributes.y, yExtents.max);
+    });
+    const randomPositions: PlainObject<PlainObject<number>> = {};
+    graph.forEachNode((node) => {
+      randomPositions[node] = {
+        x: Math.random() * (xExtents.max - xExtents.min),
+        y: Math.random() * (yExtents.max - yExtents.min),
+      };
+    });
+    cancelCurrentAnimation = animateNodes(graph, randomPositions, { duration: 2000 });
+  }
+
+  function circularLayout() {
+    if (fa2Layout.isRunning()) stopFA2();
+    if (cancelCurrentAnimation) cancelCurrentAnimation();
+
+    const circularPositions = circular(graph, { scale: 100 });
+    cancelCurrentAnimation = animateNodes(graph, circularPositions, { duration: 2000, easing: "linear" });
+  }
+
+  registerControls({
+    fa2: {
+      type: "toggle",
+      label: "ForceAtlas2",
+      default: false,
+      action: (running) => {
+        if (running) startFA2();
+        else stopFA2();
+      },
+    },
+    random: { type: "button", label: "Random", action: randomLayout },
+    circular: { type: "button", label: "Circular", action: circularLayout },
+  });
+
+  new Sigma(graph, container);
+</script>

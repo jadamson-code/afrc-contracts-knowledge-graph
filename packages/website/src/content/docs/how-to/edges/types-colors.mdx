@@ -1,0 +1,159 @@
+---
+title: Types and colors
+sidebar:
+  label: "Types & colors"
+---
+
+import SigmaExample from '../../../../components/SigmaExample.astro';
+
+Sigma v4 gives you full control over edge appearance through the **primitives** and **styles** system. You can combine different path geometries, arrow extremities, colors, and dashed layers to render edges exactly as needed.
+
+## Live example
+
+The example below shows various combinations of edge paths, extremities, and dashed layers.
+
+<SigmaExample id="edge-styles" height="500px" />
+
+## Edge paths
+
+Sigma ships with five built-in path types:
+
+| Path | Description |
+|------|-------------|
+| `pathLine()` | Direct line between source and target |
+| `pathCurved()` | Quadratic Bezier curve (configurable curvature) |
+| `pathStep()` | Right-angle step (horizontal then vertical) |
+| `pathStepCurved()` | Step with rounded corners |
+| `pathCurvedS()` | S-shaped cubic curve |
+
+Declare which paths your graph uses in `primitives.edges.paths`, then assign them per-edge via styles:
+
+```typescript
+import { pathLine, pathCurved } from "sigma/rendering";
+
+new Sigma(graph, container, {
+  primitives: {
+    edges: {
+      paths: [pathLine(), pathCurved()],
+    },
+  },
+  styles: {
+    edges: [
+      { path: { attribute: "path" } },
+    ],
+  },
+});
+```
+
+The first path in the array is the default. Edges whose `path` attribute does not match any declared path fall back to it.
+
+## Extremities (arrows)
+
+To render arrowheads, declare the extremity types in `primitives.edges.extremities` and assign them via the `head` and `tail` style properties:
+
+```typescript
+import { pathLine, extremityArrow } from "sigma/rendering";
+
+new Sigma(graph, container, {
+  primitives: {
+    edges: {
+      paths: [pathLine()],
+      extremities: [extremityArrow()],
+    },
+  },
+  styles: {
+    edges: [
+      { head: { attribute: "head" } },
+    ],
+  },
+});
+```
+
+This reads each edge's `head` attribute (e.g. `"arrow"`) to decide which extremity to draw at the target end. Use `tail` for the source end.
+
+## Edge colors
+
+Edge colors work like node colors — set them in the graph data and read them via styles:
+
+```typescript
+graph.addEdge("a", "b", { color: "#e63946" });
+
+new Sigma(graph, container, {
+  styles: {
+    edges: [
+      { color: { attribute: "color" } },
+    ],
+  },
+});
+```
+
+## Dashed edges
+
+The `layerDashed()` function from `sigma/rendering` adds a dashed overlay on top of the plain edge body. Import it and add it to the edge layers:
+
+```typescript
+import { pathLine, pathCurved, extremityArrow, layerPlain, layerDashed } from "sigma/rendering";
+
+new Sigma(graph, container, {
+  primitives: {
+    edges: {
+      paths: [pathLine(), pathCurved()],
+      extremities: [extremityArrow()],
+      layers: [
+        layerPlain(),
+        layerDashed({
+          dashSize: { value: 5, mode: "pixels" },
+          gapSize: { value: 10, mode: "pixels" },
+        }),
+      ],
+    },
+  },
+  styles: {
+    edges: [
+      {
+        path: { attribute: "path" },
+        head: { attribute: "head" },
+      },
+    ],
+  },
+});
+```
+
+The `dashSize` and `gapSize` options accept either a fixed `{ value, mode }` object or an `{ attribute }` reference to read per-edge values from graph data. Set `mode: "pixels"` for screen-space sizing.
+
+## Putting it all together
+
+A complete configuration combining paths, extremities, colors, and dashes:
+
+```typescript
+import { pathLine, pathCurved, pathStepCurved, pathCurvedS, extremityArrow, layerPlain, layerDashed } from "sigma/rendering";
+
+new Sigma(graph, container, {
+  primitives: {
+    edges: {
+      paths: [pathLine(), pathCurved(), pathStepCurved(), pathCurvedS()],
+      extremities: [extremityArrow()],
+      layers: [
+        layerPlain(),
+        layerDashed({
+          dashColor: { attribute: "dashColor" },
+          dashSize: { attribute: "dashSize", default: 0, mode: "pixels" },
+          gapSize: { value: 10, mode: "pixels" },
+        }),
+      ],
+    },
+  },
+  styles: {
+    edges: [
+      {
+        color: { attribute: "color" },
+        path: { attribute: "path" },
+        head: { attribute: "head" },
+        tail: { attribute: "tail" },
+      },
+    ],
+  },
+});
+```
+
+For more on the styles and primitives system, see [Styles and primitives](/concepts/styles-and-primitives/).

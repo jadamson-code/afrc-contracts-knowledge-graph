@@ -1,0 +1,112 @@
+---
+title: Borders
+sidebar:
+  label: "Borders"
+---
+
+import SigmaExample from '../../../../components/SigmaExample.astro';
+
+The `@sigma/node-border` package adds a border layer that renders one or more concentric borders around nodes.
+
+## Installation
+
+```bash
+npm install @sigma/node-border
+```
+
+## Basic usage
+
+Import `layerBorder` from the package and add it to your node primitives:
+
+```typescript
+import { layerBorder } from "@sigma/node-border";
+import Graph from "graphology";
+import Sigma from "sigma";
+
+const graph = new Graph();
+graph.addNode("a", {
+  x: 0, y: 0, size: 20, label: "A",
+  color: "pink", borderColor: "red",
+});
+
+new Sigma(graph, container, {
+  primitives: {
+    nodes: {
+      layers: [layerBorder()],
+    },
+  },
+});
+```
+
+By default, the border layer reads `borderColor` and `borderSize` from node attributes, with a default size of `0.1` (10% of the node radius).
+
+<SigmaExample id="node-borders" />
+
+## Per-node border attributes
+
+Each node can set its own border appearance through graph attributes:
+
+- `borderColor` -- the border color (any CSS color)
+- `borderSize` -- the border thickness as a fraction of the node radius (0 to 1)
+
+```typescript
+graph.addNode("thin", {
+  x: 0, y: 0, size: 20, color: "pink",
+  borderColor: "red", borderSize: 0.1,
+});
+graph.addNode("thick", {
+  x: 1, y: 0, size: 20, color: "yellow",
+  borderColor: "blue", borderSize: 0.5,
+});
+```
+
+## Multi-layer borders
+
+The `borders` array lets you define multiple concentric border rings, from outermost to innermost. Each entry specifies a `size`, `color`, and optional `mode` or `fill`:
+
+```typescript
+import { layerBorder } from "@sigma/node-border";
+
+new Sigma(graph, container, {
+  primitives: {
+    nodes: {
+      layers: [
+        layerBorder({
+          borders: [
+            { size: 0.15, color: "#333" },
+            { size: 0.05, color: "#fff" },
+            { size: 0, color: { attribute: "color" }, fill: true },
+          ],
+        }),
+      ],
+    },
+  },
+});
+```
+
+Setting `fill: true` on the innermost border makes it fill the remaining space (its `size` is ignored).
+
+## Variable sizes from attributes
+
+Border sizes and colors can be read from node attributes using `{ attribute: "..." }`:
+
+```typescript
+borders: [
+  {
+    size: { attribute: "borderSize", default: 0.2 },
+    color: { attribute: "borderColor" },
+  },
+  { size: 0, color: { attribute: "color" }, fill: true },
+]
+```
+
+## Pixel-based borders
+
+By default, border sizes are relative to the node radius. Set `mode: "pixels"` for a fixed pixel width regardless of node size or zoom:
+
+```typescript
+borders: [
+  { size: 3, color: "#333", mode: "pixels" },
+  { size: 0, color: { attribute: "color" }, fill: true },
+]
+```

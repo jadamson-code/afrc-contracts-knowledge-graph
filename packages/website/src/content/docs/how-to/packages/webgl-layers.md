@@ -1,10 +1,118 @@
 ---
 title: Custom WebGL layers
-description: How to add custom WebGL rendering layers like metaballs and contours.
+description: How to add custom WebGL rendering layers like contours and highlights.
+sidebar:
+  label: "WebGL layers"
 ---
 
-:::caution[Work in progress]
-This page is being written for sigma.js v4.
-:::
+The `@sigma/layer-webgl` package lets you add custom WebGL rendering layers behind the graph. The most common use case is drawing contours around groups of nodes to highlight communities.
 
-Content coming soon.
+## Installation
+
+```bash
+npm install @sigma/layer-webgl
+```
+
+## Drawing contours
+
+The built-in `createContoursProgram` renders smooth contour shapes around a set of nodes -- useful for visualizing communities or clusters.
+
+```typescript
+import Sigma from "sigma";
+import { bindWebGLLayer, createContoursProgram } from "@sigma/layer-webgl";
+
+const renderer = new Sigma(graph, container);
+
+// Draw a red contour around a group of nodes:
+const communityNodes = ["node1", "node2", "node3", "node4"];
+const clean = bindWebGLLayer(
+  "community-highlight",
+  renderer,
+  createContoursProgram(communityNodes, {
+    radius: 150,
+    border: { color: "#e22653", thickness: 8 },
+    levels: [{ color: "#e2265322", threshold: 0.5 }],
+  }),
+);
+
+// Remove the layer when no longer needed:
+clean();
+```
+
+### Contours options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `radius` | `number` | `100` | Influence radius of each node |
+| `feather` | `number` | `1.5` | Softness of the contour edges |
+| `levels` | `{ color, threshold }[]` | One gray level | Fill levels, from outermost to innermost |
+| `border` | `{ color, thickness }` | none | Optional border stroke |
+| `zoomToRadiusRatioFunction` | `(ratio) => number` | `Math.sqrt` | How the radius scales with zoom |
+
+You can define multiple fill levels to create layered contours:
+
+```typescript
+createContoursProgram(nodeIds, {
+  radius: 200,
+  levels: [
+    { color: "#e2265311", threshold: 0.3 },
+    { color: "#e2265333", threshold: 0.6 },
+    { color: "#e2265566", threshold: 0.9 },
+  ],
+  border: { color: "#e22653", thickness: 4 },
+});
+```
+
+## Multiple layers
+
+Each call to `bindWebGLLayer` requires a unique string ID. You can add as many layers as you need:
+
+```typescript
+const cleanA = bindWebGLLayer("group-a", renderer, createContoursProgram(groupA, optionsA));
+const cleanB = bindWebGLLayer("group-b", renderer, createContoursProgram(groupB, optionsB));
+
+// Remove individually:
+cleanA();
+cleanB();
+```
+
+## Custom WebGL layers
+
+For fully custom rendering, extend the `WebGLLayerProgram` class. You need to implement three methods:
+
+```typescript
+import { WebGLLayerProgram, WebGLLayerDefinition, bindWebGLLayer } from "@sigma/layer-webgl";
+import type { ProgramInfo } from "sigma/rendering";
+import type { RenderParams } from "sigma/types";
+
+class MyLayerProgram extends WebGLLayerProgram {
+  getCustomLayerDefinition(): WebGLLayerDefinition {
+    return {
+      FRAGMENT_SHADER_SOURCE: `#version 300 es
+        precision highp float;
+        out vec4 fragColor;
+        uniform float u_width;
+        uniform float u_height;
+        void main() {
+          vec2 uv = gl_FragCoord.xy / vec2(u_width, u_height);
+          fragColor = vec4(uv, 0.5, 0.3);
+        }`,
+      DATA_UNIFORMS: [],
+      CAMERA_UNIFORMS: ["u_width", "u_height"],
+    };
+  }
+
+  setCameraUniforms(params: RenderParams, { gl, uniformLocations }: ProgramInfo) {
+    gl.uniform1f(uniformLocations.u_width, gl.canvas.width);
+    gl.uniform1f(uniformLocations.u_height, gl.canvas.height);
+  }
+
+  cacheDataUniforms(_programInfo: ProgramInfo) {
+    // Set data-dependent uniforms here (called when the graph changes)
+  }
+}
+
+const clean = bindWebGLLayer("my-custom-layer", renderer, MyLayerProgram);
+```
+
+The layer renders a full-screen quad. Your fragment shader receives the camera state through `CAMERA_UNIFORMS` and graph-dependent data through `DATA_UNIFORMS`. See the `createContoursProgram` source code for a complete example.

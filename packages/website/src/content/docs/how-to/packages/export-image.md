@@ -1,10 +1,109 @@
 ---
 title: Export as image
 description: How to export the graph visualization as an image.
+sidebar:
+  label: "Export image"
 ---
 
-:::caution[Work in progress]
-This page is being written for sigma.js v4.
-:::
+The `@sigma/export-image` package lets you export the current graph visualization as a PNG or JPEG file. It works by creating a temporary offscreen renderer and compositing sigma's layers onto a single canvas.
 
-Content coming soon.
+## Installation
+
+```bash
+npm install @sigma/export-image
+```
+
+## Download as image
+
+The simplest way to export is `downloadAsImage`, which triggers a file download in the browser:
+
+```typescript
+import { downloadAsImage } from "@sigma/export-image";
+
+downloadAsImage(renderer, {
+  fileName: "my-graph",
+  format: "png",
+  backgroundColor: "#ffffff",
+});
+```
+
+There are also shorthand functions `downloadAsPNG` and `downloadAsJPEG` that lock the format:
+
+```typescript
+import { downloadAsPNG } from "@sigma/export-image";
+
+downloadAsPNG(renderer, { fileName: "my-graph", backgroundColor: "#ffffff" });
+```
+
+## Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `fileName` | `string` | `"graph"` | Output file name (without extension) |
+| `format` | `"png" \| "jpeg"` | `"png"` | Image format |
+| `backgroundColor` | `string` | `"transparent"` | Background color |
+| `width` | `number \| null` | `null` | Output width in pixels (defaults to current renderer width) |
+| `height` | `number \| null` | `null` | Output height in pixels (defaults to current renderer height) |
+| `layers` | `string[] \| null` | `null` | Which layers to include (defaults to all) |
+| `cameraState` | `CameraState \| null` | `null` | Override camera state (defaults to current) |
+| `sigmaSettings` | `Partial<Settings>` | `{}` | Override sigma settings for the export |
+
+## Custom dimensions
+
+Export at a higher resolution than the current viewport:
+
+```typescript
+downloadAsImage(renderer, {
+  width: 1920,
+  height: 1080,
+  backgroundColor: "#ffffff",
+});
+```
+
+## Selecting layers
+
+By default, all sigma layers are included. You can select specific ones:
+
+```typescript
+downloadAsImage(renderer, {
+  layers: ["edges", "nodes", "labels"],
+});
+```
+
+This is useful to exclude certain layers (like edge labels or hover overlays) from the export.
+
+## Drawing on canvas
+
+For custom processing -- like adding a watermark or feeding the image to another library -- use `drawOnCanvas` to get the raw `HTMLCanvasElement`:
+
+```typescript
+import { drawOnCanvas } from "@sigma/export-image";
+
+const canvas = await drawOnCanvas(renderer, {
+  backgroundColor: "#ffffff",
+  width: 1920,
+  height: 1080,
+});
+
+// Use the canvas for further processing:
+const ctx = canvas.getContext("2d");
+ctx.font = "16px sans-serif";
+ctx.fillText("My Graph", 20, 30);
+
+// Convert to blob manually:
+canvas.toBlob((blob) => {
+  // Upload, display, etc.
+}, "image/png");
+```
+
+## Customizing the temporary renderer
+
+The `withTempRenderer` callback gives you access to the temporary sigma instance before the layers are composited. This is useful for applying settings that only make sense during export:
+
+```typescript
+downloadAsImage(renderer, {
+  withTempRenderer: (tmpRenderer) => {
+    tmpRenderer.setSetting("labelRenderedSizeThreshold", 0);
+  },
+});
+```

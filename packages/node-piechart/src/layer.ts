@@ -132,9 +132,11 @@ ${valueAssignments}
   // Calculate angles and select color
   float total = ${totalCalc};
 
-  // Early return if all slices are zero (layer disabled)
+  // Fall back to default color if all slices are zero
   if (total <= 0.0) {
-    return vec4(0.0);
+    vec4 fallback = u_defaultColor;
+    fallback.a *= bias;
+    return fallback;
   }
 
   float angle_0 = 0.0;

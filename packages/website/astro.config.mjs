@@ -6,6 +6,21 @@ import { defineConfig } from "astro/config";
 
 export default defineConfig({
   site: "https://www.sigmajs.org",
+  redirects: {
+    "/docs": "/get-started/quickstart/",
+    "/docs/": "/get-started/quickstart/",
+    "/docs/quickstart": "/get-started/quickstart/",
+    "/docs/resources": "/get-started/quickstart/",
+    "/docs/advanced/coordinate-systems": "/concepts/coordinate-systems/",
+    "/docs/advanced/customization": "/how-to/nodes/colors-sizes-shapes/",
+    "/docs/advanced/data": "/get-started/loading-data/",
+    "/docs/advanced/events": "/how-to/interactivity/events/",
+    "/docs/advanced/lifecycle": "/concepts/lifecycle/",
+    "/docs/advanced/layers": "/concepts/layers/",
+    "/docs/advanced/migration-v2-v3": "/get-started/migration-v3-v4/",
+    "/docs/advanced/renderers": "/concepts/rendering/",
+    "/docs/advanced/publish": "/contributing/publish/",
+  },
   integrations: [
     starlight({
       plugins: [starlightLinksValidator()],
@@ -20,6 +35,12 @@ export default defineConfig({
         github: "https://github.com/jacomyal/sigma.js",
         mastodon: "https://vis.social/@sigmajs",
       },
+      head: [
+        {
+          tag: "script",
+          content: `var _paq=window._paq=window._paq||[];_paq.push(["trackPageView"]);_paq.push(["enableLinkTracking"]);(function(){var u="https://matomo.ouestware.com/";_paq.push(["setTrackerUrl",u+"matomo.php"]);_paq.push(["setSiteId","26"]);var d=document,g=d.createElement("script"),s=d.getElementsByTagName("script")[0];g.async=true;g.src=u+"matomo.js";s.parentNode.insertBefore(g,s)})();`,
+        },
+      ],
       customCss: ["./src/styles/custom.css"],
       sidebar: [
         {

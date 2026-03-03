@@ -28,7 +28,7 @@ export async function drawOnCanvas(
   document.body.appendChild(tmpRoot);
 
   // Instantiate sigma:
-  const tempRenderer = new Sigma(sigma.getGraph(), tmpRoot, { ...sigma.getSettings(), ...sigmaSettings });
+  const tempRenderer = new Sigma(sigma.getGraph(), tmpRoot, { settings: { ...sigma.getSettings(), ...sigmaSettings } });
 
   // Copy camera and force to render now, to avoid having to wait the schedule /
   // debounce frame:

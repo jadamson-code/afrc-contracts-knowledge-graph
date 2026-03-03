@@ -1,3 +1,4 @@
+/** @module @sigma/layer-leaflet */
 import Graph from "graphology";
 import { Attributes } from "graphology-types";
 import L, { MapOptions } from "leaflet";

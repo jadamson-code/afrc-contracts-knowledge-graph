@@ -1,3 +1,4 @@
+/** @module @sigma/layer-maplibre */
 import Graph from "graphology";
 import { Attributes } from "graphology-types";
 import { LngLat, Map, MapOptions } from "maplibre-gl";

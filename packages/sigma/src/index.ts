@@ -3,7 +3,7 @@
  * =========================
  *
  * The library endpoint.
- * @module
+ * @module sigma
  */
 import Camera from "./core/camera";
 import MouseCaptor from "./core/captors/mouse";

@@ -1,3 +1,4 @@
+/** @module @sigma/export-image */
 export * from "./options";
 export * from "./drawOnCanvas";
 

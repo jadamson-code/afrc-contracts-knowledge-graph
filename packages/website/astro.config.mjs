@@ -1,8 +1,7 @@
 import starlight from "@astrojs/starlight";
 import starlightLinksValidator from "starlight-links-validator";
+import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 import { defineConfig } from "astro/config";
-// TODO: Re-enable starlight-typedoc once TypeScript errors in storybook stories are resolved.
-// import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 
 export default defineConfig({
   site: "https://www.sigmajs.org",
@@ -23,7 +22,34 @@ export default defineConfig({
   },
   integrations: [
     starlight({
-      plugins: [starlightLinksValidator()],
+      plugins: [
+        starlightLinksValidator({
+          exclude: ({ link }) => link.includes("/api/"),
+        }),
+        starlightTypeDoc({
+          entryPoints: [
+            "../sigma/src/index.ts",
+            "../sigma/src/settings.ts",
+            "../sigma/src/rendering/index.ts",
+            "../sigma/src/utils/index.ts",
+            "../layer-leaflet/src/index.ts",
+            "../layer-maplibre/src/index.ts",
+            "../layer-webgl/src/index.ts",
+            "../node-border/src/index.ts",
+            "../node-image/src/index.ts",
+            "../node-piechart/src/index.ts",
+            "../export-image/src/index.ts",
+          ],
+          tsconfig: "./tsconfig.typedoc.json",
+          sidebar: {
+            label: "API reference",
+            collapsed: true,
+          },
+          typeDoc: {
+            entryFileName: "index",
+          },
+        }),
+      ],
       title: "sigma.js",
       tagline: "A JavaScript library aimed at visualizing graphs of thousands of nodes and edges",
       favicon: "/img/favicon-32x32.png",
@@ -133,10 +159,9 @@ export default defineConfig({
             { slug: "reference/settings" },
             { slug: "reference/events" },
             { slug: "reference/attributes" },
-            // TODO: Re-enable once TypeDoc integration is fixed
-            // typeDocSidebarGroup,
           ],
         },
+        typeDocSidebarGroup,
         {
           label: "Contributing",
           items: [{ slug: "contributing/publish" }, { slug: "contributing/new-packages" }],

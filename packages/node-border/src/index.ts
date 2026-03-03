@@ -7,7 +7,7 @@
  * Main exports:
  * - layerBorder(): Fragment layer factory for use with createNodeProgram
  *
- * @module
+ * @module @sigma/node-border
  */
 import { registerNodeLayerFactory } from "sigma/rendering";
 

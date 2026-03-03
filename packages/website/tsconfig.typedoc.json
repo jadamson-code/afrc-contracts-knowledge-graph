@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "../sigma" },
+    { "path": "../layer-leaflet" },
+    { "path": "../layer-maplibre" },
+    { "path": "../layer-webgl" },
+    { "path": "../node-border" },
+    { "path": "../node-image" },
+    { "path": "../node-piechart" },
+    { "path": "../utils" },
+    { "path": "../export-image" }
+  ],
+  "compilerOptions": {
+    "noFallthroughCasesInSwitch": false
+  }
+}

@@ -3,7 +3,7 @@
  * =================================
  *
  * The list of settings and some handy functions.
- * @module
+ * @module sigma/settings
  */
 import { AtLeastOne } from "./types";
 import { assign } from "./utils";

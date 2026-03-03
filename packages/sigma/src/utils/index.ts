@@ -3,7 +3,7 @@
  * ===============
  *
  * Various helper functions & classes used throughout the library.
- * @module
+ * @module sigma/utils
  */
 export * from "./animate";
 export * from "./colors";

@@ -3,6 +3,7 @@
  * ==================================
  *
  * Exports for all rendering-related functionality.
+ * @module sigma/rendering
  */
 
 // GLSL utilities

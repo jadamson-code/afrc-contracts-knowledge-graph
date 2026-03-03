@@ -7,7 +7,7 @@
  * Main exports:
  * - layerImage(): Fragment layer factory for use with createNodeProgram
  *
- * @module
+ * @module @sigma/node-image
  */
 import { registerNodeLayerFactory } from "sigma/rendering";
 

@@ -42,6 +42,8 @@ export {
   type StepPathOptions,
   pathStepCurved,
   type StepCurvedPathOptions,
+  pathLoop,
+  type LoopPathOptions,
 } from "./paths";
 
 // Extremities

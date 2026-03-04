@@ -91,6 +91,15 @@ export interface EdgePath {
   attributes: AttributeSpecification[];
 
   /**
+   * Optional variable declarations for path attributes that need to flow
+   * through the display data pipeline (graph attributes → GPU).
+   *
+   * When a path has per-edge attributes (e.g., loopRadius, loopAngle),
+   * declaring them here lets them be read from graph edge data automatically.
+   */
+  variables?: Record<string, { type: "number" | "color"; default: number | string }>;
+
+  /**
    * Optional custom constant data generator for advanced tessellation.
    * If provided, overrides the default triangle strip generation.
    *
@@ -525,8 +534,8 @@ export interface EdgeLabelOptions {
 export interface EdgeProgramOptions {
   /**
    * Array of path definitions (geometry).
-   * Edges select their path via the `path` attribute (e.g., "line", "curved").
-   * The first path is used as the default.
+   * Edges select their path via the `path` style (regular edges) or
+   * `selfLoopPath` style (self-loop edges). The first path is the default.
    */
   paths: EdgePath[];
 

@@ -402,6 +402,8 @@ out vec2 v_source;
 out vec2 v_target;
 out float v_edgeLength;
 out vec2 v_position;         // World position of the vertex (for position-based distance)
+out float v_sourceNodeSize;  // Source node size (mirrored in labels/generator.ts as plain float)
+out float v_targetNodeSize;  // Target node size (mirrored in labels/generator.ts as plain float)
 
 // Zone varyings
 out float v_zone;            // 0=tail, 1=body, 2=head
@@ -481,6 +483,10 @@ ${textureFetch.varyingAssignments}
   float a_targetSize = tgtNodeData.z;
   float a_sourceShapeId = srcNodeData.w;
   float a_targetShapeId = tgtNodeData.w;
+
+  // Assign node size varyings early (path functions like loops need them during clamping)
+  v_sourceNodeSize = a_sourceSize;
+  v_targetNodeSize = a_targetSize;
 
   // Convert thickness to WebGL units
   float minThickness = u_minEdgeThickness;
@@ -679,6 +685,8 @@ in vec2 v_source;
 in vec2 v_target;
 in float v_edgeLength;
 in vec2 v_position;          // World position of the fragment
+in float v_sourceNodeSize;   // Source node size (mirrored in labels/generator.ts as plain float)
+in float v_targetNodeSize;   // Target node size (mirrored in labels/generator.ts as plain float)
 
 // Zone varyings
 in float v_zone;            // 0=tail, 1=body, 2=head

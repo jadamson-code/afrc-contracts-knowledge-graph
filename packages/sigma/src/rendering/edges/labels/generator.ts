@@ -271,6 +271,12 @@ const float VERTICAL_CENTER_RATIO = ${numberToGLSLFloat(VERTICAL_CENTER_RATIO)};
 // variables with v_ prefix (e.g., v_curvature) for path functions to access.
 ${textureFetch.vertexVaryingDeclarations.replace(/out /g, "")}
 
+// Node size variables (set in main, used by some path functions like loops).
+// These mirror the v_sourceNodeSize / v_targetNodeSize varyings in generator.ts,
+// but are plain floats here since the label shader is vertex-only.
+float v_sourceNodeSize;
+float v_targetNodeSize;
+
 // ============================================================================
 // Node Shape SDFs (for binary search)
 // ============================================================================
@@ -392,6 +398,8 @@ ${textureFetch.varyingAssignments}
   vec2 target = tgtNodeData.xy;
   float sourceSize = srcNodeData.z;
   float targetSize = tgtNodeData.z;
+  v_sourceNodeSize = sourceSize;
+  v_targetNodeSize = targetSize;
   int sourceShapeId = int(srcNodeData.w);
   int targetShapeId = int(tgtNodeData.w);
   float charTextOffset = a_charMetrics.x;

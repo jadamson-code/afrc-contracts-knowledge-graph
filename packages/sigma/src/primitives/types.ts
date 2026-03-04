@@ -191,7 +191,7 @@ export type ExtractAllEdgeVariables<E extends EdgePrimitives> =
 // Lazy imports to avoid circular dependencies
 import { sdfCircle } from "../rendering/nodes/shapes";
 import { layerFill } from "../rendering/nodes/layers";
-import { pathLine } from "../rendering/edges/paths";
+import { pathLine, pathLoop } from "../rendering/edges/paths";
 import { layerPlain } from "../rendering/edges/layers";
 
 export const DEFAULT_NODE_PRIMITIVES: Required<NodePrimitives> = {
@@ -205,7 +205,7 @@ export const DEFAULT_NODE_PRIMITIVES: Required<NodePrimitives> = {
 };
 
 export const DEFAULT_EDGE_PRIMITIVES: Required<EdgePrimitives> = {
-  paths: [pathLine()],
+  paths: [pathLine(), pathLoop()],
   extremities: [],
   variables: {},
   layers: [layerPlain()],

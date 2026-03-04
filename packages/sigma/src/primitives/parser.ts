@@ -347,7 +347,13 @@ export function generateEdgeProgram<
   G extends Attributes = Attributes,
 >(edgePrimitives?: EdgePrimitives): GeneratedEdgeProgram<N, E, G> {
   const { paths, extremities, layers } = parseEdgePrimitives(edgePrimitives);
-  const variables = edgePrimitives?.variables || {};
+
+  // Collect variables declared by all paths
+  const variables: VariablesDefinition = {};
+  for (const path of paths) {
+    if (path.variables) Object.assign(variables, path.variables);
+  }
+  Object.assign(variables, edgePrimitives?.variables || {});
 
   const program = createEdgeProgram<N, E, G>({
     paths,

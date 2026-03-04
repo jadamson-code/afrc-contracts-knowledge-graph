@@ -417,6 +417,7 @@ export interface ResolvedEdgeStyle {
   color: string;
   opacity: number;
   path: string;
+  selfLoopPath: string;
   tail: string;
   head: string;
   visibility: "visible" | "hidden";
@@ -476,6 +477,7 @@ const DEFAULT_RESOLVED_EDGE_STYLE: ResolvedEdgeStyle = {
   color: "#ccc",
   opacity: 1,
   path: "straight",
+  selfLoopPath: "loop",
   tail: "none",
   head: "none",
   visibility: "visible",

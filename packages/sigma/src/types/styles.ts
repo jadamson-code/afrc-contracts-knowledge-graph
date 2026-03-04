@@ -300,8 +300,10 @@ export interface EdgeBuiltInVariables<
   Path extends string = string,
   Layer extends string = string,
 > {
-  /** Edge path type (must match a path declared in programs) */
+  /** Edge path type for regular edges (must match a path declared in paths) */
   path?: GraphicValue<EA, ES, GS, Path>;
+  /** Edge path type for self-loop edges (must match a path declared in paths) */
+  selfLoopPath?: GraphicValue<EA, ES, GS, string>;
   /** Edge thickness in pixels */
   size?: GraphicValue<EA, ES, GS, number>;
   /** Edge color */

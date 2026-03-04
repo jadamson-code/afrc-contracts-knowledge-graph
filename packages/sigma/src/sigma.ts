@@ -2150,6 +2150,7 @@ export default class Sigma<
       depth: resolvedStyle.depth ?? "edges",
       labelDepth: resolvedStyle.labelDepth ?? "edgeLabels",
       path: resolvedStyle.path,
+      selfLoopPath: resolvedStyle.selfLoopPath,
       head: resolvedStyle.head,
       tail: resolvedStyle.tail,
       labelPosition:
@@ -2363,11 +2364,13 @@ export default class Sigma<
     let tailId = programStatic.defaultTailIndex ?? 0;
 
     // Get edge-specified path/head/tail names
-    const edgeData = data as unknown as { path?: string; head?: string; tail?: string };
+    const edgeData = data as unknown as { path?: string; selfLoopPath?: string; head?: string; tail?: string };
 
-    // Override path index if edge specifies one
-    if (edgeData.path && pathNameToIndex?.[edgeData.path] !== undefined) {
-      pathId = pathNameToIndex[edgeData.path];
+    // For self-loops, use selfLoopPath; for regular edges, use path
+    const isSelfLoop = this.graph.source(edge) === this.graph.target(edge);
+    const pathName = isSelfLoop ? edgeData.selfLoopPath : edgeData.path;
+    if (pathName && pathNameToIndex?.[pathName] !== undefined) {
+      pathId = pathNameToIndex[pathName];
     }
 
     // Override head index if edge explicitly specifies one (skip "none" — it's the

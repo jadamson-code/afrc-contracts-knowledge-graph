@@ -280,8 +280,9 @@ export function registerControls<T extends Record<string, ControlDef>>(defs: T):
     }
   }
 
+  const stageOnly = params.has("stage-only");
   const container = document.getElementById("controls");
-  if (container) {
+  if (container && !stageOnly) {
     buildControls(container, defs, values);
   }
 

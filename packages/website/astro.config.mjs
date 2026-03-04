@@ -136,6 +136,7 @@ export default defineConfig({
         {
           label: "Examples",
           items: [
+            { slug: "examples", label: "All examples" },
             { slug: "examples/bipartite-network" },
             { slug: "examples/cluster-labels" },
             { slug: "examples/layouts" },

@@ -1,0 +1,72 @@
+---
+/**
+ * Auto-generated index of all interactive examples.
+ * Lists each example with links and cross-references to doc pages that embed it.
+ */
+
+// Collect all example IDs
+const exampleFiles = import.meta.glob("../examples/*.astro");
+const exampleIds = Object.keys(exampleFiles)
+  .map((key) => key.match(/\/([^/]+)\.astro$/)![1])
+  .sort();
+
+// Collect all doc files and find SigmaExample references
+const docFiles = import.meta.glob("../content/docs/**/*.{md,mdx}", {
+  query: "?raw",
+  eager: true,
+});
+
+const RE_SIGMA_EXAMPLE = /<SigmaExample\s[^>]*id\s*=\s*"([^"]+)"/g;
+
+const exampleToPages = new Map<string, { slug: string; title: string }[]>();
+
+for (const [path, mod] of Object.entries(docFiles)) {
+  const raw = (mod as { default: string }).default;
+  const slug = path.replace(/^\.\.\/content\/docs\//, "").replace(/\.(md|mdx)$/, "");
+
+  // Extract title from frontmatter
+  const titleMatch = raw.match(/^---[\s\S]*?title:\s*["']?(.+?)["']?\s*$/m);
+  const title = titleMatch?.[1] ?? slug;
+
+  for (const match of raw.matchAll(RE_SIGMA_EXAMPLE)) {
+    const id = match[1];
+    if (!exampleToPages.has(id)) exampleToPages.set(id, []);
+    exampleToPages.get(id)!.push({ slug, title });
+  }
+}
+---
+
+<table>
+  <thead>
+    <tr>
+      <th>Example</th>
+      <th>Links</th>
+      <th>Referenced in</th>
+    </tr>
+  </thead>
+  <tbody>
+    {exampleIds.map((id) => {
+      const pages = exampleToPages.get(id) ?? [];
+      return (
+        <tr>
+          <td><code>{id}</code></td>
+          <td>
+            <a href={`/embed/${id}/`}>embed</a>
+            {" · "}
+            <a href={`https://github.com/jacomyal/sigma.js/blob/main/packages/website/src/examples/${id}.astro`}>source</a>
+          </td>
+          <td>
+            {pages.length > 0
+              ? pages.map((p, i) => (
+                  <>
+                    {i > 0 && ", "}
+                    <a href={`/${p.slug}/`}>{p.title}</a>
+                  </>
+                ))
+              : <em>none</em>}
+          </td>
+        </tr>
+      );
+    })}
+  </tbody>
+</table>

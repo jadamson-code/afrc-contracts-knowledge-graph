@@ -98,6 +98,7 @@ export interface NodeDisplayData extends Coordinates, DisplayData {
 export interface EdgeDisplayData extends DisplayData {
   path?: string; // Path type for regular edges (e.g., "straight", "curved")
   selfLoopPath?: string; // Path type for self-loop edges (e.g., "loop")
+  parallelPath?: string; // Path type for parallel edges (e.g., "curved")
   head?: string; // Head extremity type (e.g., "arrow")
   tail?: string; // Tail extremity type (e.g., "arrow")
   labelPosition?: EdgeLabelPosition; // Label position relative to edge path

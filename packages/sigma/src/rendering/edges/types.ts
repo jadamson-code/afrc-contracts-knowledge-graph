@@ -94,6 +94,18 @@ export interface EdgePath {
   variables?: Record<string, { type: "number" | "color"; default: number | string }>;
 
   /**
+   * Optional spread definition for parallel edge separation.
+   * Defines which variable to set and how to compute its value from the
+   * edge's position in a parallel group.
+   */
+  spread?: {
+    /** The variable to set (e.g., "curvature") */
+    variable: string;
+    /** Computes the variable value from parallel edge position */
+    compute: (index: number, count: number, factor: number) => number;
+  };
+
+  /**
    * Optional custom constant data generator for advanced tessellation.
    * If provided, overrides the default triangle strip generation.
    *

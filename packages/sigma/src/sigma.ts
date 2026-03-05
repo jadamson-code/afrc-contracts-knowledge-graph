@@ -32,6 +32,7 @@ import { AttachmentManager } from "./rendering/nodes/attachments/attachment-mana
 import { AttachmentProgram, ATTACHMENT_GAP, ATTACHMENT_PLACEMENT_MAP, ATTACHMENT_TEXTURE_UNIT } from "./rendering/nodes/attachments/attachment-program";
 import { LabelAttachmentContext } from "./primitives/types";
 import { POSITION_MODE_MAP } from "./rendering/glsl";
+import { EdgePath } from "./rendering/edges/types";
 import { Settings, resolveSettings, validateSettings } from "./settings";
 import {
   BucketStats,
@@ -171,6 +172,12 @@ export default class Sigma<
   // Variables declared in primitives (for custom layer attributes)
   private nodeVariables: VariablesDefinition = {};
   private edgeVariables: VariablesDefinition = {};
+  private edgePathsByName: Map<string, EdgePath> = new Map();
+
+  // Parallel edge index: groups edges by sorted endpoint pair
+  private parallelEdgeGroups: Map<string, string[]> = new Map();
+  // Reverse lookup: edge key → group key (needed for edge drop when edge is already removed from graph)
+  private edgeToParallelGroupKey: Map<string, string> = new Map();
 
   // Indices to keep track of the index of the item inside programs
   private nodeProgramIndex: Record<string, number> = {};
@@ -386,8 +393,11 @@ export default class Sigma<
       this.attachmentProgram = new AttachmentProgram(gl, null, sigma);
     }
 
-    const { program: EdgeProgramClass, variables: edgeVariables } = generateEdgeProgram<N, E, G>(this.primitives?.edges);
+    const { program: EdgeProgramClass, variables: edgeVariables, paths: edgePaths } = generateEdgeProgram<N, E, G>(
+      this.primitives?.edges,
+    );
     this.edgeVariables = edgeVariables;
+    this.edgePathsByName = new Map(edgePaths.map((p) => [p.name, p]));
     this.edgeProgram = new EdgeProgramClass(gl, null, sigma);
 
     // Create edge label program if the edge program has one
@@ -775,13 +785,15 @@ export default class Sigma<
       this.refresh({ schedule: true });
     };
 
-    // On add edge, we remove the edge from indices and then call for a refresh
+    // On add edge, register in parallel index, process edge and siblings
     this.activeListeners.addEdgeGraphUpdate = (payload: { key: string }): void => {
       const edge = payload.key;
-      // we process the edge
+      this.registerParallelEdge(edge);
       this.addEdge(edge);
-      // schedule a render for the edge
-      this.refresh({ partialGraph: { edges: [edge] }, schedule: true });
+      // Re-process siblings whose parallel state changed
+      const siblings = this.getParallelSiblings(edge);
+      for (const sib of siblings) this.addEdge(sib);
+      this.refresh({ partialGraph: { edges: [edge, ...siblings] }, schedule: true });
     };
 
     // On update edge, we update indices and then call for a refresh
@@ -791,12 +803,14 @@ export default class Sigma<
       this.refresh({ partialGraph: { edges: [edge] }, skipIndexation: false, schedule: true });
     };
 
-    // On drop edge, we remove the edge from indices and then call for a refresh
+    // On drop edge, unregister from parallel index, remove, and update siblings
     this.activeListeners.dropEdgeGraphUpdate = (payload: { key: string }): void => {
       const edge = payload.key;
-      // we process the edge
+      const siblings = this.getParallelSiblings(edge);
+      this.unregisterParallelEdge(edge);
       this.removeEdge(edge);
-      // schedule a render for all edges
+      // Re-process remaining siblings whose parallel state changed
+      for (const sib of siblings) this.addEdge(sib);
       this.refresh({ schedule: true });
     };
 
@@ -2123,6 +2137,125 @@ export default class Sigma<
   }
 
   /**
+   * Returns the parallel group key for an edge, or null for self-loops.
+   * The key uses sorted endpoint IDs so A→B and B→A share the same group.
+   */
+  private getParallelGroupKey(edge: string): string | null {
+    const source = this.graph.source(edge);
+    const target = this.graph.target(edge);
+    if (source === target) return null;
+    return source < target ? `${source}\0${target}` : `${target}\0${source}`;
+  }
+
+  /**
+   * Registers an edge in the parallel edge index and updates states for the group.
+   */
+  private registerParallelEdge(edge: string): void {
+    const groupKey = this.getParallelGroupKey(edge);
+    if (!groupKey) return;
+
+    let group = this.parallelEdgeGroups.get(groupKey);
+    if (!group) {
+      group = [];
+      this.parallelEdgeGroups.set(groupKey, group);
+    }
+    if (!group.includes(edge)) group.push(edge);
+
+    this.edgeToParallelGroupKey.set(edge, groupKey);
+    this.sortParallelGroup(group, groupKey);
+    this.updateParallelStates(groupKey);
+  }
+
+  /**
+   * Removes an edge from the parallel edge index and updates sibling states.
+   * Uses the reverse lookup so the edge doesn't need to exist in the graph.
+   */
+  private unregisterParallelEdge(edge: string): void {
+    const groupKey = this.edgeToParallelGroupKey.get(edge);
+    if (!groupKey) return;
+
+    this.edgeToParallelGroupKey.delete(edge);
+
+    const group = this.parallelEdgeGroups.get(groupKey);
+    if (!group) return;
+
+    const idx = group.indexOf(edge);
+    if (idx !== -1) group.splice(idx, 1);
+
+    if (group.length === 0) {
+      this.parallelEdgeGroups.delete(groupKey);
+    } else {
+      this.updateParallelStates(groupKey);
+    }
+  }
+
+  /**
+   * Sorts a parallel group by direction: canonical-direction edges first, then reverse.
+   */
+  private sortParallelGroup(group: string[], groupKey: string): void {
+    const canonicalSource = groupKey.split("\0")[0];
+    group.sort((a, b) => {
+      const aForward = this.graph.source(a) === canonicalSource || !this.graph.isDirected(a) ? 0 : 1;
+      const bForward = this.graph.source(b) === canonicalSource || !this.graph.isDirected(b) ? 0 : 1;
+      return aForward - bForward;
+    });
+  }
+
+  /**
+   * Updates parallel state fields on all edges in a group.
+   */
+  private updateParallelStates(groupKey: string): void {
+    const group = this.parallelEdgeGroups.get(groupKey);
+    if (!group) return;
+
+    const count = group.length;
+    for (let i = 0; i < count; i++) {
+      const state = this.getEdgeState(group[i]);
+      state.parallelIndex = i;
+      state.parallelCount = count;
+    }
+  }
+
+  /**
+   * Returns sibling edges in the same parallel group (excluding the given edge).
+   * Uses the reverse lookup so the edge doesn't need to exist in the graph.
+   */
+  private getParallelSiblings(edge: string): string[] {
+    const groupKey = this.edgeToParallelGroupKey.get(edge);
+    if (!groupKey) return [];
+    const group = this.parallelEdgeGroups.get(groupKey);
+    if (!group) return [];
+    return group.filter((e) => e !== edge);
+  }
+
+  /**
+   * Rebuilds the entire parallel edge index from scratch.
+   */
+  private rebuildParallelEdgeIndex(): void {
+    this.parallelEdgeGroups.clear();
+    this.edgeToParallelGroupKey.clear();
+
+    this.graph.forEachEdge((edge) => {
+      const groupKey = this.getParallelGroupKey(edge);
+      if (!groupKey) return;
+
+      let group = this.parallelEdgeGroups.get(groupKey);
+      if (!group) {
+        group = [];
+        this.parallelEdgeGroups.set(groupKey, group);
+      }
+      group.push(edge);
+      this.edgeToParallelGroupKey.set(edge, groupKey);
+    });
+
+    // Sort each group and update states
+    for (const [groupKey, group] of this.parallelEdgeGroups) {
+      this.sortParallelGroup(group, groupKey);
+      this.updateParallelStates(groupKey);
+    }
+  }
+
+  /**
    * Add an edge into the internal data structures.
    * @private
    * @param key The edge's graphology ID
@@ -2151,6 +2284,7 @@ export default class Sigma<
       labelDepth: resolvedStyle.labelDepth ?? "edgeLabels",
       path: resolvedStyle.path,
       selfLoopPath: resolvedStyle.selfLoopPath,
+      parallelPath: resolvedStyle.parallelPath,
       head: resolvedStyle.head,
       tail: resolvedStyle.tail,
       labelPosition:
@@ -2170,6 +2304,26 @@ export default class Sigma<
     for (const [varName, varDef] of Object.entries(this.edgeVariables)) {
       (data as unknown as Record<string, unknown>)[varName] =
         resolvedStyle[varName] ?? attrs[varName] ?? varDef.default;
+    }
+
+    // Auto-compute spread variable for parallel edges
+    if (edgeState.parallelCount > 1 && this.graph.source(key) !== this.graph.target(key)) {
+      const pathName = resolvedStyle.parallelPath || resolvedStyle.path;
+      const path = this.edgePathsByName.get(pathName);
+      if (path?.spread) {
+        const spreadFactor = resolvedStyle.parallelSpread ?? 0.25;
+        let spreadValue = path.spread.compute(edgeState.parallelIndex, edgeState.parallelCount, spreadFactor);
+
+        // Correct for reverse-direction edges: swapping source/target flips the
+        // perpendicular direction, so we negate to keep visual consistency
+        const source = this.graph.source(key);
+        const target = this.graph.target(key);
+        if (this.graph.isDirected(key) && source > target) {
+          spreadValue = -spreadValue;
+        }
+
+        (data as unknown as Record<string, unknown>)[path.spread.variable] = spreadValue;
+      }
     }
 
     this.edgeDataCache[key] = data;
@@ -2266,6 +2420,8 @@ export default class Sigma<
     this.zIndexCache.edges = {};
     this.depthRanges.edges = {};
     this.edgeBaseDepth = {};
+    this.parallelEdgeGroups.clear();
+    this.edgeToParallelGroupKey.clear();
   }
 
   /**
@@ -2364,11 +2520,22 @@ export default class Sigma<
     let tailId = programStatic.defaultTailIndex ?? 0;
 
     // Get edge-specified path/head/tail names
-    const edgeData = data as unknown as { path?: string; selfLoopPath?: string; head?: string; tail?: string };
+    const edgeData = data as unknown as {
+      path?: string;
+      selfLoopPath?: string;
+      parallelPath?: string;
+      head?: string;
+      tail?: string;
+    };
 
-    // For self-loops, use selfLoopPath; for regular edges, use path
+    // Select path: self-loops use selfLoopPath, parallel edges use parallelPath, others use path
     const isSelfLoop = this.graph.source(edge) === this.graph.target(edge);
-    const pathName = isSelfLoop ? edgeData.selfLoopPath : edgeData.path;
+    const isParallel = !isSelfLoop && (this.getEdgeState(edge)?.parallelCount ?? 1) > 1;
+    const pathName = isSelfLoop
+      ? edgeData.selfLoopPath
+      : isParallel && edgeData.parallelPath
+        ? edgeData.parallelPath
+        : edgeData.path;
     if (pathName && pathNameToIndex?.[pathName] !== undefined) {
       pathId = pathNameToIndex[pathName];
     }
@@ -3308,6 +3475,7 @@ export default class Sigma<
       this.clearEdgeIndices();
       this.clearNodeIndices();
       this.graph.forEachNode((node) => this.addNode(node));
+      this.rebuildParallelEdgeIndex();
       this.graph.forEachEdge((edge) => this.addEdge(edge));
     } else {
       const nodes = opts.partialGraph?.nodes || [];

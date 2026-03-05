@@ -418,6 +418,8 @@ export interface ResolvedEdgeStyle {
   opacity: number;
   path: string;
   selfLoopPath: string;
+  parallelPath: string | undefined;
+  parallelSpread: number;
   tail: string;
   head: string;
   visibility: "visible" | "hidden";
@@ -478,6 +480,8 @@ const DEFAULT_RESOLVED_EDGE_STYLE: ResolvedEdgeStyle = {
   opacity: 1,
   path: "straight",
   selfLoopPath: "loop",
+  parallelPath: undefined,
+  parallelSpread: 0.25,
   tail: "none",
   head: "none",
   visibility: "visible",

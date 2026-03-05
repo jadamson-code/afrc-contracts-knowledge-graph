@@ -297,6 +297,7 @@ export interface GeneratedEdgeProgram<
 > {
   program: EdgeProgramType<N, E, G>;
   variables: VariablesDefinition;
+  paths: EdgePath[];
 }
 
 /**
@@ -363,5 +364,5 @@ export function generateEdgeProgram<
     label: edgePrimitives?.label,
   });
 
-  return { program, variables };
+  return { program, variables, paths };
 }

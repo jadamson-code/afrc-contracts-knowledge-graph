@@ -100,5 +100,12 @@ float path_curved_length(vec2 source, vec2 target) {
     glsl,
     uniforms: [],
     attributes: [{ name: "curvature", size: 1, type: WebGL2RenderingContext.FLOAT }],
+    variables: {
+      curvature: { type: "number", default: 0 },
+    },
+    spread: {
+      variable: "curvature",
+      compute: (index, count, factor) => (index - (count - 1) / 2) * factor,
+    },
   };
 }

@@ -38,6 +38,10 @@ export interface BaseEdgeState {
   isHovered: boolean;
   isHidden: boolean;
   isHighlighted: boolean;
+  /** 0-based position in the parallel edge group (direction-aware ordering) */
+  parallelIndex: number;
+  /** Total edges between the same endpoints (1 when alone) */
+  parallelCount: number;
 }
 
 /**
@@ -304,6 +308,10 @@ export interface EdgeBuiltInVariables<
   path?: GraphicValue<EA, ES, GS, Path>;
   /** Edge path type for self-loop edges (must match a path declared in paths) */
   selfLoopPath?: GraphicValue<EA, ES, GS, string>;
+  /** Edge path type for parallel edges (auto-selected when parallelCount > 1) */
+  parallelPath?: GraphicValue<EA, ES, GS, string>;
+  /** Spread factor for parallel edge separation (used with path's spread definition) */
+  parallelSpread?: GraphicValue<EA, ES, GS, number>;
   /** Edge thickness in pixels */
   size?: GraphicValue<EA, ES, GS, number>;
   /** Edge color */
@@ -571,6 +579,8 @@ export const DEFAULT_EDGE_STATE: BaseEdgeState = {
   isHovered: false,
   isHidden: false,
   isHighlighted: false,
+  parallelIndex: 0,
+  parallelCount: 1,
 };
 
 /**

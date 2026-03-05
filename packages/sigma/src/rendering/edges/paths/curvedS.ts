@@ -225,7 +225,6 @@ vec2 path_curvedS_position(float t, vec2 source, vec2 target) {
       segments,
       minBodyLengthRatio: 0, // No minimum for S-curves
       glsl,
-      vertexGlsl: "", // Uses standard parametric tessellation
       uniforms: [],
       attributes: [],
     };

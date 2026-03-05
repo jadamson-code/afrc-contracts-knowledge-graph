@@ -75,12 +75,6 @@ export interface EdgePath {
   glsl: string;
 
   /**
-   * GLSL code for vertex shader tessellation.
-   * For curved paths, this generates the triangle strip vertices along the curve.
-   */
-  vertexGlsl: string;
-
-  /**
    * Additional uniforms required by this path (e.g., curvature for Bezier).
    */
   uniforms: UniformSpecification[];

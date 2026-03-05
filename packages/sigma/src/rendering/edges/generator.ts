@@ -78,7 +78,7 @@ function collectUniformsMulti(
 /**
  * Generates GLSL code for all paths (combined).
  */
-function generateAllPathsGLSL(paths: EdgePath[], includeVertexGlsl: boolean): string {
+function generateAllPathsGLSL(paths: EdgePath[]): string {
   const seen = new Set<string>();
   const parts: string[] = [];
 
@@ -89,9 +89,6 @@ function generateAllPathsGLSL(paths: EdgePath[], includeVertexGlsl: boolean): st
       parts.push(path.glsl);
       parts.push(generateNumericalTangentNormal(path.name));
       parts.push(generatePathFallbacks(path.name, path.glsl));
-      if (includeVertexGlsl && path.vertexGlsl) {
-        parts.push(path.vertexGlsl);
-      }
     }
   }
 
@@ -432,8 +429,8 @@ ${getAllShapeGLSL()}
 // Shape selector function
 ${generateShapeSelectorGLSL()}
 
-// All path functions (including vertex-only code)
-${generateAllPathsGLSL(paths, true)}
+// All path functions
+${generateAllPathsGLSL(paths)}
 
 // Path selector functions
 ${generateAllPathSelectors(paths)}
@@ -742,8 +739,8 @@ vec4 blendOver(vec4 bg, vec4 fg) {
   return vec4(mix(bg.rgb, fg.rgb, a), bg.a + a * (1.0 - bg.a));
 }
 
-// All path functions (excluding vertex-only code)
-${generateAllPathsGLSL(paths, false)}
+// All path functions
+${generateAllPathsGLSL(paths)}
 
 // Path selector functions
 ${generateAllPathSelectors(paths)}

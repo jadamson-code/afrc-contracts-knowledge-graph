@@ -52,7 +52,7 @@ function isFragmentLayer(spec: NodeLayerSpec): spec is FragmentLayer {
 // Type guard for already-parsed EdgePath
 function isEdgePath(spec: EdgePathSpec): spec is EdgePath {
   return (
-    typeof spec === "object" && "uniforms" in spec && "attributes" in spec && "vertexGlsl" in spec && "segments" in spec
+    typeof spec === "object" && "uniforms" in spec && "attributes" in spec && "segments" in spec
   );
 }
 
@@ -149,7 +149,6 @@ export function parseEdgePath(spec: EdgePathSpec): EdgePath {
       name: spec.name,
       glsl: spec.glsl,
       segments: spec.segments,
-      vertexGlsl: "",
       uniforms: [],
       attributes: [],
     };

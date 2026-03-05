@@ -278,49 +278,10 @@ vec2 path_stepCurved_position(float t, vec2 source, vec2 target) {
 }
 `;
 
-  // language=GLSL
-  const vertexGlsl = /*glsl*/ `
-// Step curved vertex processing using parametric sampling
-void stepCurved_getVertexPosition(
-  vec2 source, vec2 target,
-  float tStart, float tEnd, float tTailEnd, float tHeadStart,
-  float zone, float zoneT, float side,
-  float thickness, float aaWidth,
-  float headWidthFactor, float tailWidthFactor,
-  out vec2 position, out vec2 normal, out float outT
-) {
-  float t;
-  float widthFactor;
-
-  if (zone < 0.5) {
-    // Tail zone
-    t = mix(tStart, tTailEnd, zoneT);
-    widthFactor = tailWidthFactor;
-  } else if (zone < 1.5) {
-    // Body zone
-    t = mix(tTailEnd, tHeadStart, zoneT);
-    widthFactor = 1.0;
-  } else {
-    // Head zone
-    t = mix(tHeadStart, tEnd, zoneT);
-    widthFactor = headWidthFactor;
-  }
-
-  vec2 pathPos = path_stepCurved_position(t, source, target);
-  vec2 pathNormal = path_stepCurved_normal(t, source, target);
-
-  float halfWidth = (thickness * widthFactor + aaWidth) * 0.5;
-  position = pathPos + pathNormal * side * halfWidth;
-  normal = pathNormal * sign(side);
-  outT = t;
-}
-`;
-
     return {
       name: "stepCurved",
       segments: 32,
       glsl,
-      vertexGlsl,
       uniforms: [],
       attributes: [],
     };

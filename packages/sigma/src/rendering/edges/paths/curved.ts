@@ -98,7 +98,6 @@ float path_curved_length(vec2 source, vec2 target) {
     name: "curved",
     segments,
     glsl,
-    vertexGlsl: "", // Uses the standard tessellation from generator
     uniforms: [],
     attributes: [{ name: "curvature", size: 1, type: WebGL2RenderingContext.FLOAT }],
   };

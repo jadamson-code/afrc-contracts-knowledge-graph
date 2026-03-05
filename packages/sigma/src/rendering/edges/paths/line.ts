@@ -46,7 +46,6 @@ float path_straight_length(vec2 source, vec2 target) {
     minBodyLengthRatio: 0, // No minimum for straight edges
     linearParameterization: true, // t maps directly to arc distance
     glsl,
-    vertexGlsl: "", // No special vertex logic needed for straight edges
     uniforms: [],
     attributes: [],
   };

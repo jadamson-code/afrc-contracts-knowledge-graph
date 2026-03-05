@@ -410,7 +410,6 @@ vec2 path_step_getCornerConcavity(vec2 source, vec2 target, float perpOffset) {
     minBodyLengthRatio: 2, // Ensure corners stay in body zone
     linearParameterization: true, // t maps linearly to arc distance (piecewise-linear path)
     glsl,
-    vertexGlsl: "",
     analyticalTangentGlsl,
     cornerSkipGlsl,
     hasSharpCorners: true,

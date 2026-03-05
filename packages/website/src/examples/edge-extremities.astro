@@ -1,0 +1,123 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+  import {
+    extremityArrow,
+    extremityBar,
+    extremityCircle,
+    extremityDiamond,
+    extremitySquare,
+    layerFill,
+    layerPlain,
+    pathCurved,
+    pathLine,
+    pathCurvedS,
+  } from "sigma/rendering";
+  import { DEFAULT_STYLES } from "sigma/types";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const graph = new Graph();
+
+  const COL_SPACING = 100;
+  const ROW_SPACING = 70;
+  const NODE_SPACING = 50;
+  const NODE_SIZE = 10;
+  const EDGE_SIZE = 5;
+  const NODE_COLOR = "#999";
+
+  const PATHS = [
+    { name: "straight", color: "#5B8FF9" },
+    { name: "curved", color: "#61DDAA", curvature: 0.3 },
+    { name: "curvedS", color: "#F6903D" },
+  ];
+
+  // Two groups side by side: head-only (left) and head+tail (right)
+  const GROUP_SPACING = PATHS.length * COL_SPACING + 40;
+
+  const GROUPS: { head?: string; tail?: string }[][] = [
+    [
+      { head: "arrow" },
+      { head: "circle" },
+      { head: "diamond" },
+      { head: "bar" },
+      { head: "square" },
+    ],
+    [
+      { head: "arrow", tail: "arrow" },
+      { head: "arrow", tail: "circle" },
+      { head: "diamond", tail: "bar" },
+      { head: "circle", tail: "square" },
+      { head: "square", tail: "diamond" },
+    ],
+  ];
+
+  for (let groupIdx = 0; groupIdx < GROUPS.length; groupIdx++) {
+    const group = GROUPS[groupIdx];
+    for (let rowIdx = 0; rowIdx < group.length; rowIdx++) {
+      const { head, tail } = group[rowIdx];
+
+      for (let colIdx = 0; colIdx < PATHS.length; colIdx++) {
+        const { name: path, color, curvature } = PATHS[colIdx];
+        const cellX = groupIdx * GROUP_SPACING + colIdx * COL_SPACING;
+        const cellY = -rowIdx * ROW_SPACING;
+
+        const sourceId = `${groupIdx}-${rowIdx}-${colIdx}-s`;
+        const targetId = `${groupIdx}-${rowIdx}-${colIdx}-t`;
+
+        graph.addNode(sourceId, {
+          x: cellX - NODE_SPACING / 2, y: cellY,
+          size: NODE_SIZE, color: NODE_COLOR,
+        });
+        graph.addNode(targetId, {
+          x: cellX + NODE_SPACING / 2, y: cellY + NODE_SPACING * 0.6,
+          size: NODE_SIZE, color: NODE_COLOR,
+        });
+        graph.addEdge(sourceId, targetId, {
+          size: EDGE_SIZE, color, path,
+          curvature: curvature ?? 0,
+          head, tail,
+        });
+      }
+    }
+  }
+
+  new Sigma(graph, container, {
+    primitives: {
+      nodes: {
+        layers: [layerFill()],
+      },
+      edges: {
+        paths: [pathLine(), pathCurved(), pathCurvedS()],
+        extremities: [
+          extremityArrow(),
+          extremityCircle(),
+          extremityDiamond(),
+          extremityBar(),
+          extremitySquare(),
+        ],
+        layers: [layerPlain()],
+      },
+    },
+    styles: {
+      nodes: [DEFAULT_STYLES.nodes],
+      edges: [
+        DEFAULT_STYLES.edges,
+        { path: { attribute: "path" }, head: { attribute: "head" }, tail: { attribute: "tail" } },
+      ],
+    },
+    settings: {
+      itemSizesReference: "positions",
+      autoRescale: true,
+    },
+  });
+</script>

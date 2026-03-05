@@ -80,10 +80,7 @@ float extremity_arrow(vec2 uv, float lengthRatio, float widthRatio) {
     length: lengthRatio,
     widthFactor: widthRatio,
     margin,
-    uniforms: [
-      { name: "u_arrowLengthRatio", type: "float", value: lengthRatio },
-      { name: "u_arrowWidthRatio", type: "float", value: widthRatio },
-    ],
+    uniforms: [],
     attributes: [],
   };
 }

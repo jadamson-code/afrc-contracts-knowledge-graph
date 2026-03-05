@@ -50,6 +50,14 @@ export {
 export {
   extremityArrow,
   type ArrowExtremityOptions,
+  extremityBar,
+  type BarExtremityOptions,
+  extremityCircle,
+  type CircleExtremityOptions,
+  extremityDiamond,
+  type DiamondExtremityOptions,
+  extremitySquare,
+  type SquareExtremityOptions,
 } from "./extremities";
 
 // Layers (edge body appearance)

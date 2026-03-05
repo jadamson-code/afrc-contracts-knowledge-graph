@@ -544,6 +544,89 @@ ${textureFetch.varyingAssignments}
   // Convert to webGL units for geometry expansion
   float aaWidthWebGL = antialiasingWidth * webGLThickness;
 
+  // Straighten factor: blend path toward straight line when the path
+  // twists significantly within extremity zones, to prevent distorted arrows.
+  // Measures the angular deviation between the extremity quad direction
+  // and the path tangent at the body/extremity boundary.
+  float straightenFactor = 0.0;
+  {
+    float maxDeviation = 0.0;
+    if (tailLengthT > 0.0001) {
+      vec2 tailTang = queryPathTangent(pathId, tTailEnd, a_source, a_target);
+      vec2 tailChord = queryPathPosition(pathId, tStart, a_source, a_target)
+                     - queryPathPosition(pathId, tTailEnd, a_source, a_target);
+      float tailChordLen = length(tailChord);
+      if (tailChordLen > 0.0001) {
+        // 1 - dot = 0 when aligned, up to 2 when opposite
+        maxDeviation = max(maxDeviation, 1.0 - dot(-tailTang, tailChord / tailChordLen));
+      }
+    }
+    if (headLengthT > 0.0001) {
+      vec2 headTang = queryPathTangent(pathId, tHeadStart, a_source, a_target);
+      vec2 headChord = queryPathPosition(pathId, tEnd, a_source, a_target)
+                     - queryPathPosition(pathId, tHeadStart, a_source, a_target);
+      float headChordLen = length(headChord);
+      if (headChordLen > 0.0001) {
+        maxDeviation = max(maxDeviation, 1.0 - dot(headTang, headChord / headChordLen));
+      }
+    }
+    // Start blending at ~15° deviation (1-cos(15°) ≈ 0.035), fully straight at ~60° (1-cos(60°) = 0.5)
+    straightenFactor = smoothstep(0.035, 0.5, maxDeviation);
+  }
+
+  // When straightening, recompute tStart/tEnd for the straight line path so
+  // extremity tips stay in contact with the node SDF boundary.
+  if (straightenFactor > 0.001) {
+    float straightLen = length(a_target - a_source);
+
+    // Binary search along straight line for source clamp
+    if (tailLengthRatio > 0.0) {
+      float srcExtent = a_sourceSize * u_correctionRatio / u_sizeRatio * 2.0;
+      float srcEffective = 1.0 - u_correctionRatio / srcExtent;
+      float lo = 0.0, hi = 0.5;
+      for (int i = 0; i < 12; i++) {
+        float mid = (lo + hi) * 0.5;
+        vec2 pos = mix(a_source, a_target, mid);
+        vec2 localPos = (pos - a_source) / srcExtent;
+        float sdf = querySDF(int(a_sourceShapeId), localPos, srcEffective);
+        if (sdf < 0.0) lo = mid; else hi = mid;
+      }
+      float straightTStart = (lo + hi) * 0.5;
+      tStart = mix(tStart, straightTStart, straightenFactor);
+    }
+
+    // Binary search along straight line for target clamp
+    if (headLengthRatio > 0.0) {
+      float tgtExtent = a_targetSize * u_correctionRatio / u_sizeRatio * 2.0;
+      float tgtEffective = 1.0 - u_correctionRatio / tgtExtent;
+      float lo = 0.5, hi = 1.0;
+      for (int i = 0; i < 12; i++) {
+        float mid = (lo + hi) * 0.5;
+        vec2 pos = mix(a_source, a_target, mid);
+        vec2 localPos = (pos - a_target) / tgtExtent;
+        float sdf = querySDF(int(a_targetShapeId), localPos, tgtEffective);
+        if (sdf < 0.0) hi = mid; else lo = mid;
+      }
+      float straightTEnd = (lo + hi) * 0.5;
+      tEnd = mix(tEnd, straightTEnd, straightenFactor);
+    }
+
+    // Recompute zone boundaries with blended tStart/tEnd
+    visibleLength = mix(pathLength, straightLen, straightenFactor) * (tEnd - tStart);
+    tTailEnd = tStart + tailLengthT;
+    tHeadStart = tEnd - headLengthT;
+    if (tTailEnd > tHeadStart) {
+      float mid = (tStart + tEnd) * 0.5;
+      tTailEnd = mid;
+      tHeadStart = mid;
+    }
+  }
+
+  // Straight-line direction and normal (for blending)
+  vec2 straightDir = length(a_target - a_source) > 0.0001
+    ? normalize(a_target - a_source) : vec2(1.0, 0.0);
+  vec2 straightNormal = vec2(-straightDir.y, straightDir.x);
+
   // Zone-based vertex processing using path selectors
   vec2 position;
   vec2 normal;
@@ -552,13 +635,17 @@ ${textureFetch.varyingAssignments}
   float zoneT = a_zoneT;
   float side = a_side;
 
+  // Scaled extremity width factors (geometry must be at least as wide as body)
+  float scaledTailWidth = max(tailWidthFactor * extremityScale, 1.0);
+  float scaledHeadWidth = max(headWidthFactor * extremityScale, 1.0);
+
   if (zone < 0.5) {
-    // TAIL ZONE: rectangular quad with width = tailWidthFactor
+    // TAIL ZONE: rectangular quad with scaled width
     vec2 tang = queryPathTangent(pathId, tTailEnd, a_source, a_target);
     normal = vec2(-tang.y, tang.x);
     vec2 centerPos = mix(queryPathPosition(pathId, tStart, a_source, a_target),
                          queryPathPosition(pathId, tTailEnd, a_source, a_target), zoneT);
-    float halfWidth = webGLThickness * tailWidthFactor * 0.5 + aaWidthWebGL;
+    float halfWidth = webGLThickness * scaledTailWidth * 0.5 + aaWidthWebGL;
     position = centerPos + normal * side * halfWidth;
     t = mix(tStart, tTailEnd, zoneT);
 
@@ -570,14 +657,23 @@ ${textureFetch.varyingAssignments}
     position = queryPathPosition(pathId, t, a_source, a_target) + normal * side * halfWidth;
 
   } else {
-    // HEAD ZONE: rectangular quad with width = headWidthFactor
+    // HEAD ZONE: rectangular quad with scaled width
     vec2 tang = queryPathTangent(pathId, tHeadStart, a_source, a_target);
     normal = vec2(-tang.y, tang.x);
     vec2 centerPos = mix(queryPathPosition(pathId, tHeadStart, a_source, a_target),
                          queryPathPosition(pathId, tEnd, a_source, a_target), zoneT);
-    float halfWidth = webGLThickness * headWidthFactor * 0.5 + aaWidthWebGL;
+    float halfWidth = webGLThickness * scaledHeadWidth * 0.5 + aaWidthWebGL;
     position = centerPos + normal * side * halfWidth;
     t = mix(tHeadStart, tEnd, zoneT);
+  }
+
+  // Blend toward straight line based on path twist in extremity zones
+  if (straightenFactor > 0.001) {
+    float zoneWidth = zone < 0.5 ? webGLThickness * scaledTailWidth * 0.5 + aaWidthWebGL :
+                      zone < 1.5 ? webGLThickness * 0.5 + aaWidthWebGL :
+                      webGLThickness * scaledHeadWidth * 0.5 + aaWidthWebGL;
+    vec2 straightPos = mix(a_source, a_target, t) + straightNormal * side * zoneWidth;
+    position = mix(position, straightPos, straightenFactor);
   }
 
   gl_Position = vec4((u_matrix * vec3(position, 1.0)).xy, 0.0, 1.0);
@@ -603,8 +699,9 @@ ${textureFetch.varyingAssignments}
   v_zoneT = zoneT;
   v_headLengthRatio = headLengthRatio * extremityScale;
   v_tailLengthRatio = tailLengthRatio * extremityScale;
-  v_headWidthRatio = headWidthFactor;
-  v_tailWidthRatio = tailWidthFactor;
+  // Scale extremity width proportionally with length when crushed
+  v_headWidthRatio = headWidthFactor * extremityScale;
+  v_tailWidthRatio = tailWidthFactor * extremityScale;
 
   // Multi-path varyings
   v_pathId = pathId;

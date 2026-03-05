@@ -373,7 +373,9 @@ vec4 layer_dashed(EdgeContext ctx) {
   // Early return when no visible dash pattern:
   // - dashSize ≈ 0: no dashes to show, return transparent (let plain layer show through)
   // - gapSize ≈ 0: all dash/no gap, effectively solid, return transparent (let plain layer handle it)
-  if (dashSize < 0.001 || gapSize < 0.001) {
+  // Threshold scales with pixelToWorld so it stays ~0.1px regardless of zoom
+  float dashThreshold = 0.1 * pixelToWorld;
+  if (dashSize < dashThreshold || gapSize < dashThreshold) {
     return vec4(0.0);
   }
 

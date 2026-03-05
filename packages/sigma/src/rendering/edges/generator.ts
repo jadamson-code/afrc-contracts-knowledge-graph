@@ -893,12 +893,31 @@ void main() {
   context.tStart = v_tStart;
   context.tEnd = v_tEnd;
 
-  // Compute arc distances using numerical integration (multi-path always uses this)
+  // Compute arc distances
   float visibleLength = v_edgeLength * (v_tEnd - v_tStart);
   float pathT = v_t;
   float pathTNorm = tNorm;
+${
+  paths.every((p) => p.linearParameterization)
+    ? `  // All paths have linear parameterization: t maps directly to arc distance
+  context.distanceFromSource = pathTNorm * visibleLength;
+  context.distanceToTarget = (1.0 - pathTNorm) * visibleLength;`
+    : paths.every((p) => !p.linearParameterization)
+      ? `  // No paths have linear parameterization: use numerical integration
   context.distanceFromSource = computeArcLengthMulti(v_pathId, v_tStart, pathT, v_source, v_target, 16);
-  context.distanceToTarget = computeArcLengthMulti(v_pathId, pathT, v_tEnd, v_source, v_target, 16);
+  context.distanceToTarget = computeArcLengthMulti(v_pathId, pathT, v_tEnd, v_source, v_target, 16);`
+      : `  // Mixed parameterization: use analytical for linear paths, numerical for others
+  if (${paths
+    .filter((p) => p.linearParameterization)
+    .map((p) => `v_pathId == ${paths.indexOf(p)}`)
+    .join(" || ")}) {
+    context.distanceFromSource = pathTNorm * visibleLength;
+    context.distanceToTarget = (1.0 - pathTNorm) * visibleLength;
+  } else {
+    context.distanceFromSource = computeArcLengthMulti(v_pathId, v_tStart, pathT, v_source, v_target, 16);
+    context.distanceToTarget = computeArcLengthMulti(v_pathId, pathT, v_tEnd, v_source, v_target, 16);
+  }`
+}
 
   // Compute SDF based on zone using extremity selector (shared pool)
   float bodySDF = distFromCenter - halfThickness;

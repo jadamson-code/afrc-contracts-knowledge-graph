@@ -73,8 +73,12 @@ export interface StepPathOptions {
  * ```
  */
 export function pathStep(options?: StepPathOptions): EdgePath {
-  const { orientation = "automatic", rotateWithCamera = false, offset = 0.5, innerCornerSkipFactor = 1.0 } =
-    options ?? {};
+  const {
+    orientation = "automatic",
+    rotateWithCamera = false,
+    offset = 0.5,
+    innerCornerSkipFactor = 1.0,
+  } = options ?? {};
 
   // Determine orientation mode:
   // 0 = automatic, 1 = horizontal, 2 = vertical, 3 = fixed angle
@@ -221,7 +225,6 @@ float path_step_length(vec2 source, vec2 target) {
   return length(c1 - src) + length(c2 - c1) + length(tgt - c2);
 }
 `;
-
 
   // language=GLSL
   const analyticalTangentGlsl = /*glsl*/ `
@@ -406,7 +409,7 @@ vec2 path_step_getCornerConcavity(vec2 source, vec2 target, float perpOffset) {
 
   return {
     name: "step",
-    segments: 6, // 3 linear segments with 2 vertices each ensures corners are well-sampled
+    segments: 64,
     minBodyLengthRatio: 2, // Ensure corners stay in body zone
     linearParameterization: true, // t maps linearly to arc distance (piecewise-linear path)
     glsl,

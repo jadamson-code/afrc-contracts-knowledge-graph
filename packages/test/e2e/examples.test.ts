@@ -1,0 +1,25 @@
+import { expect, test } from "@playwright/test";
+
+const EXAMPLES = [
+  "edge-styles",
+  "events",
+  "hover-search",
+  "label-styles",
+  "large-graph",
+  "node-borders",
+  "node-images",
+  "node-piecharts",
+  "self-loops",
+];
+
+for (const id of EXAMPLES) {
+  test(`example "${id}" renders correctly`, async ({ page }) => {
+    await page.goto(`/embed/${id}/?stage-only`);
+    await page.waitForSelector("#sigma-container canvas", { timeout: 10000 });
+    // Allow WebGL rendering to complete
+    await page.waitForTimeout(500);
+    await expect(page).toHaveScreenshot(`${id}.png`, {
+      maxDiffPixelRatio: 0.01,
+    });
+  });
+}

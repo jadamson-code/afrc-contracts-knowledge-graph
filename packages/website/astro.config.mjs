@@ -5,6 +5,9 @@ import { defineConfig } from "astro/config";
 
 export default defineConfig({
   site: "https://www.sigmajs.org",
+  vite: {
+    server: { strictPort: true },
+  },
   redirects: {
     "/docs": "/get-started/quickstart/",
     "/docs/": "/get-started/quickstart/",

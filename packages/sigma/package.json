@@ -18,6 +18,7 @@
   "sideEffects": false,
   "scripts": {
     "build-bundle": "vite build",
+    "test": "vitest run",
     "prepublishOnly": "cp ../../README.md ."
   },
   "repository": {

@@ -32,6 +32,9 @@
     }
   ],
   "license": "MIT",
+  "scripts": {
+    "test": "vitest run"
+  },
   "preconstruct": {
     "entrypoints": [
       "index.ts"

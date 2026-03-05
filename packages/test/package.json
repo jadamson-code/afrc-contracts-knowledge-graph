@@ -3,16 +3,12 @@
   "private": true,
   "dependencies": {
     "@playwright/test": "^1.49.1",
-    "@vitest/browser": "^2.1.8",
     "playwright": "^1.49.1",
-    "vite": "^6.0.7",
     "vitest": "^2.1.8"
   },
   "scripts": {
-    "test": "npm run test:unit && npm run test:type && npm run test:e2e",
-    "test:unit": "vitest run --dir unit",
+    "test": "npm run test:type && npm run test:e2e",
     "test:type": "vitest typecheck --run type && tsc --noEmit -p tsconfig.typecheck.json && tsc --noEmit -p tsconfig.typecheck-without-satellites.json",
-    "test:e2e": "playwright test",
-    "benchmark": "vitest bench --dir benchmarks"
+    "test:e2e": "playwright test"
   }
 }

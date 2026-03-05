@@ -7,3 +7,10 @@ node_modules
 .vscode
 
 *storybook.log
+
+# Vitest browser-mode screenshots (auto-generated, not baselines)
+__screenshots__
+
+# Playwright test artifacts (reports, results)
+test-results
+playwright-report

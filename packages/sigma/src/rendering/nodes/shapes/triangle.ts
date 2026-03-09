@@ -6,8 +6,8 @@
  *
  * @module
  */
-import { ValueSource } from "../types";
 import { GLSL_ROTATE_2D } from "../../glsl";
+import { ValueSource } from "../types";
 import { SDFShape } from "../types";
 
 export interface TriangleOptions {

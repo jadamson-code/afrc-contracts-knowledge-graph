@@ -1,17 +1,17 @@
 /**
  * Unit tests for the primitives parser module.
  */
-import { describe, it, expect } from "vitest";
 import {
-  parseNodeShape,
-  parseNodeLayer,
-  parseEdgePath,
-  parseEdgeLayer,
   parseEdgeExtremity,
-  parseNodePrimitives,
+  parseEdgeLayer,
+  parseEdgePath,
   parseEdgePrimitives,
+  parseNodeLayer,
+  parseNodePrimitives,
+  parseNodeShape,
 } from "sigma/primitives";
-import { sdfCircle, sdfSquare, layerFill, pathLine, pathCurved, layerPlain, extremityArrow } from "sigma/rendering";
+import { extremityArrow, layerFill, layerPlain, pathCurved, pathLine, sdfCircle, sdfSquare } from "sigma/rendering";
+import { describe, expect, it } from "vitest";
 
 // =============================================================================
 // NODE SHAPE PARSING

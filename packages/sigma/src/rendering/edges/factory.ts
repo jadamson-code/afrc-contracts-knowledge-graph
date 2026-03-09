@@ -12,12 +12,12 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { EdgeDisplayData, NodeDisplayData, RenderParams } from "../../types";
 import { colorToArray, floatColor } from "../../utils";
+import { AttributeLayout, ItemAttributeTexture, computeAttributeLayout } from "../data-texture";
 import { isAttributeSource } from "../nodes";
 import { ProgramInfo } from "../utils";
 import { EdgeProgram as BaseEdgeProgram, EdgeProgramType } from "./base";
 import { generateEdgeShaders } from "./generator";
 import { type EdgeLabelProgramType, createEdgeLabelProgram } from "./labels";
-import { AttributeLayout, ItemAttributeTexture, computeAttributeLayout } from "../data-texture";
 import { EDGE_ATTRIBUTE_TEXTURE_UNIT } from "./path-attribute-texture";
 import {
   EdgeExtremity,

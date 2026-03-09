@@ -67,7 +67,7 @@ export interface StepCurvedPathOptions {
  * ```
  */
 export function pathStepCurved(options?: StepCurvedPathOptions): EdgePath {
-    const { orientation = "automatic", rotateWithCamera = false, offset = 0.5, cornerRadius = 0.4 } = options ?? {};
+  const { orientation = "automatic", rotateWithCamera = false, offset = 0.5, cornerRadius = 0.4 } = options ?? {};
 
   // Determine orientation mode:
   // 0 = automatic, 1 = horizontal, 2 = vertical, 3 = fixed angle
@@ -278,11 +278,11 @@ vec2 path_stepCurved_position(float t, vec2 source, vec2 target) {
 }
 `;
 
-    return {
-      name: "stepCurved",
-      segments: 32,
-      glsl,
-      uniforms: [],
-      attributes: [],
-    };
+  return {
+    name: "stepCurved",
+    segments: 32,
+    glsl,
+    uniforms: [],
+    attributes: [],
+  };
 }

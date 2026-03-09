@@ -23,6 +23,8 @@ import {
   NodeShapeSpec,
   PrimitivesDeclaration,
 } from "../primitives/types";
+import type { EdgeExtremity, EdgePath } from "../rendering/edges/types";
+import type { SDFShape } from "../rendering/nodes/types";
 import {
   BaseEdgeState,
   BaseGraphState,
@@ -32,8 +34,6 @@ import {
   InlineConditional,
   NodeStyleProperties,
 } from "./styles";
-import type { SDFShape } from "../rendering/nodes/types";
-import type { EdgePath, EdgeExtremity } from "../rendering/edges/types";
 
 // =============================================================================
 // NAME EXTRACTION FROM SPECS
@@ -152,9 +152,7 @@ type InferredNodeStyleProperties<
   NS extends BaseNodeState,
   GS extends BaseGraphState,
   NPV = ExtractAllNodeVariables<N>,
-  Shape extends string = N["shapes"] extends readonly NodeShapeSpec[]
-    ? ExtractShapeNames<N["shapes"]>
-    : string,
+  Shape extends string = N["shapes"] extends readonly NodeShapeSpec[] ? ExtractShapeNames<N["shapes"]> : string,
 > = Omit<NodeStyleProperties<NA, NS, GS>, "shape"> & {
   shape?: GraphicValue<NA, NS, GS, Shape>;
 } & {
@@ -167,9 +165,7 @@ type InferredNodeStyleRule<
   NS extends BaseNodeState,
   GS extends BaseGraphState,
   NPV = ExtractAllNodeVariables<N>,
-  Shape extends string = N["shapes"] extends readonly NodeShapeSpec[]
-    ? ExtractShapeNames<N["shapes"]>
-    : string,
+  Shape extends string = N["shapes"] extends readonly NodeShapeSpec[] ? ExtractShapeNames<N["shapes"]> : string,
 > =
   | InferredNodeStyleProperties<N, NA, NS, GS, NPV, Shape>
   | InlineConditional<NA, NS, GS, InferredNodeStyleProperties<N, NA, NS, GS, NPV, Shape>>;

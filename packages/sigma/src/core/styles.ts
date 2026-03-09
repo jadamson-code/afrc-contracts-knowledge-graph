@@ -9,8 +9,8 @@
 import { AbstractGraph } from "graphology-types";
 
 import {
-  Attributes,
   AttributeBinding,
+  Attributes,
   BaseEdgeState,
   BaseGraphState,
   BaseNodeState,
@@ -19,12 +19,12 @@ import {
   EasingFunction,
   GraphicValue,
   InlineConditional,
-  isAttributeBinding,
-  isInlineConditional,
-  isValueFunction,
   NumericalAttributeBinding,
   StatePredicate,
   ValueFunction,
+  isAttributeBinding,
+  isInlineConditional,
+  isValueFunction,
 } from "../types/styles";
 
 /**
@@ -169,10 +169,7 @@ function resolveNumericalBinding(
 /**
  * Resolves a categorical attribute binding via dictionary lookup.
  */
-function resolveCategoricalBinding<T>(
-  binding: CategoricalAttributeBinding<T>,
-  attributes: Attributes,
-): T | undefined {
+function resolveCategoricalBinding<T>(binding: CategoricalAttributeBinding<T>, attributes: Attributes): T | undefined {
   const value = attributes[binding.attribute];
   if (value === undefined) {
     return binding.defaultValue;
@@ -309,7 +306,7 @@ function classifyValue(value: unknown): StyleDependency {
   if (isInlineConditional(value)) {
     const predDep = classifyPredicate(value.when);
     const thenDep = classifyValue(value.then);
-    const elseDep = value.else !== undefined ? classifyValue(value.else) : "static" as StyleDependency;
+    const elseDep = value.else !== undefined ? classifyValue(value.else) : ("static" as StyleDependency);
     return worstDependency(predDep, worstDependency(thenDep, elseDep));
   }
   if (isValueFunction(value)) return "graph-state";
@@ -554,11 +551,7 @@ export function evaluateNodeStyle<
 /**
  * Applies a single style rule to the result object.
  */
-function applyNodeStyleRule<
-  NA extends Attributes,
-  NS extends BaseNodeState,
-  GS extends BaseGraphState,
->(
+function applyNodeStyleRule<NA extends Attributes, NS extends BaseNodeState, GS extends BaseGraphState>(
   result: ResolvedNodeStyle,
   rule: Record<string, unknown>,
   attributes: NA,
@@ -637,11 +630,7 @@ export function evaluateEdgeStyle<
 /**
  * Applies a single style rule to the result object.
  */
-function applyEdgeStyleRule<
-  EA extends Attributes,
-  ES extends BaseEdgeState,
-  GS extends BaseGraphState,
->(
+function applyEdgeStyleRule<EA extends Attributes, ES extends BaseEdgeState, GS extends BaseGraphState>(
   result: ResolvedEdgeStyle,
   rule: Record<string, unknown>,
   attributes: EA,

@@ -83,7 +83,12 @@ export function createBackdropProgram<
           { name: "a_labelBoxOffset", size: 2, type: FLOAT },
         ],
         CONSTANT_ATTRIBUTES: [{ name: "a_quadCorner", size: 2, type: FLOAT }],
-        CONSTANT_DATA: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
+        CONSTANT_DATA: [
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+          [1, 1],
+        ],
       };
     }
 
@@ -135,10 +140,7 @@ export function createBackdropProgram<
       gl.uniform1f(uniformLocations.u_labelMargin, NodeBackdropProgram.labelMargin);
 
       // Zoom-dependent label size ratio
-      gl.uniform1f(
-        uniformLocations.u_zoomLabelSizeRatio,
-        1 / zoomToLabelSizeRatioFunction(params.zoomRatio),
-      );
+      gl.uniform1f(uniformLocations.u_zoomLabelSizeRatio, 1 / zoomToLabelSizeRatioFunction(params.zoomRatio));
 
       // Shape-specific uniforms
       const seenUniforms = new Set<string>();

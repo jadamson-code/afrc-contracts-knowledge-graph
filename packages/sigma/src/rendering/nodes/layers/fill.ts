@@ -6,8 +6,8 @@
  *
  * @module
  */
-import { ValueSource } from "../types";
 import { colorToGLSLString } from "../../../utils";
+import { ValueSource } from "../types";
 import { FragmentLayer, isAttributeSource } from "../types";
 
 export interface LayerFillOptions {

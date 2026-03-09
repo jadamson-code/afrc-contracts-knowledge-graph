@@ -10,29 +10,29 @@
 import { Attributes } from "graphology-types";
 
 import {
-  SDFShape,
-  FragmentLayer,
-  EdgePath,
-  EdgeLayer,
   EdgeExtremity,
-  NodeProgramType,
+  EdgeLayer,
+  EdgePath,
   EdgeProgramType,
-  createNodeProgram,
+  FragmentLayer,
+  NodeProgramType,
+  SDFShape,
   createEdgeProgram,
+  createNodeProgram,
 } from "../rendering";
 import {
-  NodeShapeSpec,
-  NodeLayerSpec,
-  EdgePathSpec,
-  EdgeLayerSpec,
-  EdgeExtremitySpec,
-  NodePrimitives,
-  EdgePrimitives,
-  VariablesDefinition,
-  isCustomNodeLayer,
-  isCustomEdgeLayer,
-  DEFAULT_NODE_PRIMITIVES,
   DEFAULT_EDGE_PRIMITIVES,
+  DEFAULT_NODE_PRIMITIVES,
+  EdgeExtremitySpec,
+  EdgeLayerSpec,
+  EdgePathSpec,
+  EdgePrimitives,
+  NodeLayerSpec,
+  NodePrimitives,
+  NodeShapeSpec,
+  VariablesDefinition,
+  isCustomEdgeLayer,
+  isCustomNodeLayer,
 } from "./types";
 
 // =============================================================================
@@ -51,9 +51,7 @@ function isFragmentLayer(spec: NodeLayerSpec): spec is FragmentLayer {
 
 // Type guard for already-parsed EdgePath
 function isEdgePath(spec: EdgePathSpec): spec is EdgePath {
-  return (
-    typeof spec === "object" && "uniforms" in spec && "attributes" in spec && "segments" in spec
-  );
+  return typeof spec === "object" && "uniforms" in spec && "attributes" in spec && "segments" in spec;
 }
 
 // Type guard for already-parsed EdgeExtremity
@@ -256,9 +254,7 @@ export function parseEdgePrimitives(edgePrimitives?: EdgePrimitives): ParsedEdge
   const layersSpecs = edgePrimitives?.layers ?? DEFAULT_EDGE_PRIMITIVES.layers;
 
   const paths = pathsSpecs.map(parseEdgePath);
-  const extremities = extremitiesSpecs
-    .map(parseEdgeExtremity)
-    .filter((e): e is EdgeExtremity => e !== null);
+  const extremities = extremitiesSpecs.map(parseEdgeExtremity).filter((e): e is EdgeExtremity => e !== null);
   const layers = layersSpecs.map(parseEdgeLayer);
 
   if (paths.length === 0) {

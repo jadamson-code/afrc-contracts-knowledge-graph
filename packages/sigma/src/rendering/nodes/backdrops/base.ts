@@ -40,13 +40,11 @@ export interface BackdropDisplayData {
 }
 
 export abstract class BackdropProgram<
-    Uniform extends string = string,
-    N extends Attributes = Attributes,
-    E extends Attributes = Attributes,
-    G extends Attributes = Attributes,
-  >
-  extends Program<Uniform, N, E, G>
-{
+  Uniform extends string = string,
+  N extends Attributes = Attributes,
+  E extends Attributes = Attributes,
+  G extends Attributes = Attributes,
+> extends Program<Uniform, N, E, G> {
   protected totalBackdropCount = 0;
   protected bufferCapacity = 0;
 

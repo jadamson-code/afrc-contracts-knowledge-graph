@@ -12,27 +12,37 @@ import TouchCaptor from "./core/captors/touch";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
 import { StyleDependency, analyzeStyleDependency, evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
-import { PrimitivesDeclaration, VariablesDefinition, generateEdgeProgram, generateNodeProgram } from "./primitives";
-import { DEFAULT_DEPTH_LAYERS } from "./primitives/types";
 import {
+  DEFAULT_DEPTH_LAYERS,
+  LabelAttachmentContext,
+  PrimitivesDeclaration,
+  VariablesDefinition,
+  generateEdgeProgram,
+  generateNodeProgram,
+} from "./primitives";
+import {
+  AttachmentManager,
   BackdropDisplayData,
   BackdropProgram,
   BackdropProgramType,
   BucketCollection,
   EdgeDataTexture,
   EdgeLabelProgram,
+  EdgePath,
   EdgeProgram,
   LabelProgram,
   LabelProgramType,
   NodeDataTexture,
   NodeProgram,
+  POSITION_MODE_MAP,
   getShapeId,
 } from "./rendering";
-import { AttachmentManager } from "./rendering/nodes/attachments/attachment-manager";
-import { AttachmentProgram, ATTACHMENT_GAP, ATTACHMENT_PLACEMENT_MAP, ATTACHMENT_TEXTURE_UNIT } from "./rendering/nodes/attachments/attachment-program";
-import { LabelAttachmentContext } from "./primitives/types";
-import { POSITION_MODE_MAP } from "./rendering/glsl";
-import { EdgePath } from "./rendering/edges/types";
+import {
+  ATTACHMENT_GAP,
+  ATTACHMENT_PLACEMENT_MAP,
+  ATTACHMENT_TEXTURE_UNIT,
+  AttachmentProgram,
+} from "./rendering/nodes/attachments";
 import { Settings, resolveSettings, validateSettings } from "./settings";
 import {
   BucketStats,
@@ -70,7 +80,9 @@ import {
   createNodeState,
 } from "./types/styles";
 import {
+  DepthRanges,
   NormalizationFunction,
+  addPositionToDepthRanges,
   colorToArray,
   colorToIndex,
   createElement,
@@ -84,9 +96,9 @@ import {
   matrixFromCamera,
   multiplyVec2,
   parseFontString,
+  removePositionFromDepthRanges,
   validateGraph,
 } from "./utils";
-import { DepthRanges, addPositionToDepthRanges, removePositionFromDepthRanges } from "./utils/fragments";
 
 /**
  * Constants.
@@ -357,7 +369,9 @@ export default class Sigma<
     const sigma = this as unknown as Sigma<N, E, G>;
     const gl = this.webGLContext!;
 
-    const { program: NodeProgramClass, variables: nodeVariables } = generateNodeProgram<N, E, G>(this.primitives?.nodes);
+    const { program: NodeProgramClass, variables: nodeVariables } = generateNodeProgram<N, E, G>(
+      this.primitives?.nodes,
+    );
     this.nodeVariables = nodeVariables;
     this.nodeProgram = new NodeProgramClass(gl, null, sigma);
 
@@ -393,9 +407,11 @@ export default class Sigma<
       this.attachmentProgram = new AttachmentProgram(gl, null, sigma);
     }
 
-    const { program: EdgeProgramClass, variables: edgeVariables, paths: edgePaths } = generateEdgeProgram<N, E, G>(
-      this.primitives?.edges,
-    );
+    const {
+      program: EdgeProgramClass,
+      variables: edgeVariables,
+      paths: edgePaths,
+    } = generateEdgeProgram<N, E, G>(this.primitives?.edges);
     this.edgeVariables = edgeVariables;
     this.edgePathsByName = new Map(edgePaths.map((p) => [p.name, p]));
     this.edgeProgram = new EdgeProgramClass(gl, null, sigma);
@@ -1008,8 +1024,7 @@ export default class Sigma<
       const items = bucket.getItems();
       const depthIndex = Math.floor(zIndex / maxDepthLevels);
       const depth = depthLayers[depthIndex] ?? depthLayers[0];
-      if (!this.depthRanges.nodes[depth])
-        this.depthRanges.nodes[depth] = [{ offset: nodeProcessCount, count: 0 }];
+      if (!this.depthRanges.nodes[depth]) this.depthRanges.nodes[depth] = [{ offset: nodeProcessCount, count: 0 }];
       const fragments = this.depthRanges.nodes[depth];
       fragments[fragments.length - 1].count += items.size;
       for (const node of items) {
@@ -1042,8 +1057,7 @@ export default class Sigma<
       const items = bucket.getItems();
       const depthIndex = Math.floor(zIndex / maxDepthLevels);
       const depth = depthLayers[depthIndex] ?? depthLayers[0];
-      if (!this.depthRanges.edges[depth])
-        this.depthRanges.edges[depth] = [{ offset: edgeProcessCount, count: 0 }];
+      if (!this.depthRanges.edges[depth]) this.depthRanges.edges[depth] = [{ offset: edgeProcessCount, count: 0 }];
       const fragments = this.depthRanges.edges[depth];
       fragments[fragments.length - 1].count += items.size;
       for (const edge of items) {
@@ -1480,7 +1494,9 @@ export default class Sigma<
 
       // Only include label dimensions when the label is actually displayed
       const labelVisible = this.displayedNodeLabels.has(key);
-      let { width: labelWidth, height: labelHeight } = labelVisible ? this.measureNodeLabel(data) : { width: 0, height: 0 };
+      let { width: labelWidth, height: labelHeight } = labelVisible
+        ? this.measureNodeLabel(data)
+        : { width: 0, height: 0 };
 
       // Expand label dimensions and compute box offset for attachment
       let labelBoxOffsetX = 0;

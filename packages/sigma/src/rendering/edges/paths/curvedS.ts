@@ -74,13 +74,13 @@ export interface CurvedSPathOptions {
  * ```
  */
 export function pathCurvedS(options?: CurvedSPathOptions): EdgePath {
-    const {
-      segments = 16,
-      orientation = "automatic",
-      rotateWithCamera = false,
-      curveOffset = 0.5,
-      curvePosition = 0.5,
-    } = options ?? {};
+  const {
+    segments = 16,
+    orientation = "automatic",
+    rotateWithCamera = false,
+    curveOffset = 0.5,
+    curvePosition = 0.5,
+  } = options ?? {};
 
   // Determine orientation mode:
   // 0 = automatic, 1 = horizontal, 2 = vertical, 3 = fixed angle
@@ -220,12 +220,12 @@ vec2 path_curvedS_position(float t, vec2 source, vec2 target) {
 }
 `;
 
-    return {
-      name: "curvedS",
-      segments,
-      minBodyLengthRatio: 0, // No minimum for S-curves
-      glsl,
-      uniforms: [],
-      attributes: [],
-    };
+  return {
+    name: "curvedS",
+    segments,
+    minBodyLengthRatio: 0, // No minimum for S-curves
+    glsl,
+    uniforms: [],
+    attributes: [],
+  };
 }

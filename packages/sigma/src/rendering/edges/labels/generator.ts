@@ -19,10 +19,10 @@
  * @module
  */
 import { DEFAULT_SDF_ATLAS_OPTIONS } from "../../../core/sdf-atlas";
+import { computeAttributeLayout } from "../../data-texture";
 import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../../shapes";
 import { numberToGLSLFloat } from "../../utils";
 import { layerPlain } from "../layers";
-import { computeAttributeLayout } from "../../data-texture";
 import { generateEdgeAttributeTextureFetch } from "../path-attribute-texture";
 import {
   generateFindSourceClampT,
@@ -143,10 +143,16 @@ float queryFindTargetClampT(int pathId, vec2 source, vec2 target, float targetSi
 }`;
   } else {
     const sourceCases = paths
-      .map((p, i) => `    case ${i}: return findSourceClampT_${p.name}(source, sourceSize, sourceShapeId, target, margin);`)
+      .map(
+        (p, i) =>
+          `    case ${i}: return findSourceClampT_${p.name}(source, sourceSize, sourceShapeId, target, margin);`,
+      )
       .join("\n");
     const targetCases = paths
-      .map((p, i) => `    case ${i}: return findTargetClampT_${p.name}(source, target, targetSize, targetShapeId, margin);`)
+      .map(
+        (p, i) =>
+          `    case ${i}: return findTargetClampT_${p.name}(source, target, targetSize, targetShapeId, margin);`,
+      )
       .join("\n");
 
     selectors = `

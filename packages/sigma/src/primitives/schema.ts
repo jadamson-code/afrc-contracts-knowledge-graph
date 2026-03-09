@@ -59,7 +59,9 @@ export interface PropertySchema<T = unknown, PT extends PropertyType = PropertyT
  *
  * @template ItemSchema - Schema for each array item
  */
-export interface ArrayPropertySchema<ItemSchema extends Record<string, PropertySchema> = Record<string, PropertySchema>> {
+export interface ArrayPropertySchema<
+  ItemSchema extends Record<string, PropertySchema> = Record<string, PropertySchema>,
+> {
   type: "array";
 
   /** Schema for each item in the array */
@@ -72,9 +74,7 @@ export interface ArrayPropertySchema<ItemSchema extends Record<string, PropertyS
 /**
  * Type guard to check if a schema entry is an array property.
  */
-export function isArrayPropertySchema(
-  schema: PropertySchema | ArrayPropertySchema,
-): schema is ArrayPropertySchema {
+export function isArrayPropertySchema(schema: PropertySchema | ArrayPropertySchema): schema is ArrayPropertySchema {
   return (schema as ArrayPropertySchema).type === "array";
 }
 

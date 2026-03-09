@@ -22,13 +22,11 @@ import { InstancedProgramDefinition, ProgramDefinition, ProgramInfo } from "../.
  * (determined by LabelGrid), so all characters in the buffer are rendered.
  */
 export abstract class LabelProgram<
-    Uniform extends string = string,
-    N extends Attributes = Attributes,
-    E extends Attributes = Attributes,
-    G extends Attributes = Attributes,
-  >
-  extends Program<Uniform, N, E, G>
-{
+  Uniform extends string = string,
+  N extends Attributes = Attributes,
+  E extends Attributes = Attributes,
+  G extends Attributes = Attributes,
+> extends Program<Uniform, N, E, G> {
   /**
    * Ensure all glyphs for the given texts are generated and available.
    * Optional — implementations may provide this for glyph caching.
@@ -121,13 +119,7 @@ export abstract class LabelProgram<
    *
    * Called during rendering to keep bounds in sync with camera.
    */
-  protected updateLabelBounds(
-    labelKey: string,
-    screenX: number,
-    screenY: number,
-    width: number,
-    height: number,
-  ): void {
+  protected updateLabelBounds(labelKey: string, screenX: number, screenY: number, width: number, height: number): void {
     this.labelBounds.set(labelKey, { x: screenX, y: screenY, width, height });
   }
 

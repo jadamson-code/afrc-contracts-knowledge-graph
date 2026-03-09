@@ -33,4 +33,3 @@ export function assign<T>(target: Partial<T> | undefined, ...objects: Array<Part
 
   return target as T;
 }
-

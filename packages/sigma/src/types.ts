@@ -26,7 +26,6 @@ export type PartialButFor<T, K extends keyof T> = Pick<T, K> & Partial<Omit<T, K
  */
 export type AtLeastOne<T, U = { [K in keyof T]: Pick<T, K> }> = Partial<T> & U[keyof U];
 
-
 export interface Coordinates {
   x: number;
   y: number;
@@ -374,12 +373,15 @@ export type { ResolvedNodeStyle, ResolvedEdgeStyle, StyleDependency } from "./co
 /**
  * Primitives API:
  */
-export type { PrimitivesDeclaration, NodePrimitives, EdgePrimitives, LabelAttachmentContent, LabelAttachmentRenderer, LabelAttachmentContext } from "./primitives/types";
-export {
-  DEFAULT_PRIMITIVES,
-  DEFAULT_NODE_PRIMITIVES,
-  DEFAULT_EDGE_PRIMITIVES,
+export type {
+  PrimitivesDeclaration,
+  NodePrimitives,
+  EdgePrimitives,
+  LabelAttachmentContent,
+  LabelAttachmentRenderer,
+  LabelAttachmentContext,
 } from "./primitives/types";
+export { DEFAULT_PRIMITIVES, DEFAULT_NODE_PRIMITIVES, DEFAULT_EDGE_PRIMITIVES } from "./primitives/types";
 
 /**
  * Memory Stats API:

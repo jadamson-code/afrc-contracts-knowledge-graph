@@ -9,18 +9,16 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { NodeDisplayData } from "../../types";
 import { indexToColor } from "../../utils";
+import { Program } from "../program";
 import { BackdropProgramType } from "./backdrops";
 import { LabelProgramType } from "./labels";
-import { Program } from "../program";
 
 export abstract class NodeProgram<
-    Uniform extends string = string,
-    N extends Attributes = Attributes,
-    E extends Attributes = Attributes,
-    G extends Attributes = Attributes,
-  >
-  extends Program<Uniform, N, E, G>
-{
+  Uniform extends string = string,
+  N extends Attributes = Attributes,
+  E extends Attributes = Attributes,
+  G extends Attributes = Attributes,
+> extends Program<Uniform, N, E, G> {
   // Optional methods for layer attribute texture management.
   // These are implemented by factory-created programs.
   allocateNode?(_nodeKey: string): void;

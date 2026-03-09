@@ -8,10 +8,10 @@
  *
  * @module
  */
+import { computeAttributeLayout } from "../data-texture";
 import { isAttributeSource } from "../nodes";
 import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../shapes";
 import { numberToGLSLFloat } from "../utils";
-import { computeAttributeLayout } from "../data-texture";
 import { generateEdgeAttributeTextureFetch } from "./path-attribute-texture";
 import {
   generateFindSourceClampT,
@@ -43,11 +43,7 @@ export type EdgeShaderGenerationOptions = EdgeProgramOptions;
 /**
  * Collects all uniforms from multiple paths, extremities, and layers.
  */
-function collectUniformsMulti(
-  paths: EdgePath[],
-  extremities: EdgeExtremity[],
-  layers: EdgeLayer[],
-): string[] {
+function collectUniformsMulti(paths: EdgePath[], extremities: EdgeExtremity[], layers: EdgeLayer[]): string[] {
   const standardUniforms = new Set([
     "u_matrix",
     "u_sizeRatio",
@@ -129,11 +125,41 @@ interface PathSelectorConfig {
  * Path selector configurations for all path functions.
  */
 const PATH_SELECTOR_CONFIGS: PathSelectorConfig[] = [
-  { queryName: "queryPathPosition", pathFunc: "position", returnType: "vec2", params: "float t, vec2 source, vec2 target", args: "t, source, target" },
-  { queryName: "queryPathTangent", pathFunc: "tangent", returnType: "vec2", params: "float t, vec2 source, vec2 target", args: "t, source, target" },
-  { queryName: "queryPathNormal", pathFunc: "normal", returnType: "vec2", params: "float t, vec2 source, vec2 target", args: "t, source, target" },
-  { queryName: "queryPathLength", pathFunc: "length", returnType: "float", params: "vec2 source, vec2 target", args: "source, target" },
-  { queryName: "queryPathClosestT", pathFunc: "closest_t", returnType: "float", params: "vec2 p, vec2 source, vec2 target", args: "p, source, target" },
+  {
+    queryName: "queryPathPosition",
+    pathFunc: "position",
+    returnType: "vec2",
+    params: "float t, vec2 source, vec2 target",
+    args: "t, source, target",
+  },
+  {
+    queryName: "queryPathTangent",
+    pathFunc: "tangent",
+    returnType: "vec2",
+    params: "float t, vec2 source, vec2 target",
+    args: "t, source, target",
+  },
+  {
+    queryName: "queryPathNormal",
+    pathFunc: "normal",
+    returnType: "vec2",
+    params: "float t, vec2 source, vec2 target",
+    args: "t, source, target",
+  },
+  {
+    queryName: "queryPathLength",
+    pathFunc: "length",
+    returnType: "float",
+    params: "vec2 source, vec2 target",
+    args: "source, target",
+  },
+  {
+    queryName: "queryPathClosestT",
+    pathFunc: "closest_t",
+    returnType: "float",
+    params: "vec2 p, vec2 source, vec2 target",
+    args: "p, source, target",
+  },
 ];
 
 /**
@@ -148,9 +174,7 @@ function generatePathSelector(paths: EdgePath[], config: PathSelectorConfig): st
 }`;
   }
 
-  const cases = paths
-    .map((p, i) => `    case ${i}: return path_${p.name}_${pathFunc}(${args});`)
-    .join("\n");
+  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_${pathFunc}(${args});`).join("\n");
 
   return `${returnType} ${queryName}(int pathId, ${params}) {
   switch (pathId) {
@@ -299,7 +323,6 @@ function generateZonedConstantData(
     verticesPerEdge: data.length,
   };
 }
-
 
 /**
  * Generates the vertex shader for multi-path edge rendering.
@@ -718,11 +741,7 @@ ${textureFetch.varyingAssignments}
  * Uses query functions (selectors) for path and extremity operations.
  * Supports multiple layers with "over" alpha compositing.
  */
-function generateFragmentShaderMulti(
-  paths: EdgePath[],
-  extremities: EdgeExtremity[],
-  layers: EdgeLayer[],
-): string {
+function generateFragmentShaderMulti(paths: EdgePath[], extremities: EdgeExtremity[], layers: EdgeLayer[]): string {
   // Compute attribute layout for path/layer attributes from texture
   const attributeLayout = computeAttributeLayout([...paths, ...layers]);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);

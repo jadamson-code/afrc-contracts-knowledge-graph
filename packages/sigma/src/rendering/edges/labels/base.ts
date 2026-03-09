@@ -19,13 +19,11 @@ import { InstancedProgramDefinition, ProgramDefinition, ProgramInfo } from "../.
  * Labels are processed per-character, with each character positioned along the edge path.
  */
 export abstract class EdgeLabelProgram<
-    Uniform extends string = string,
-    N extends Attributes = Attributes,
-    E extends Attributes = Attributes,
-    G extends Attributes = Attributes,
-  >
-  extends Program<Uniform, N, E, G>
-{
+  Uniform extends string = string,
+  N extends Attributes = Attributes,
+  E extends Attributes = Attributes,
+  G extends Attributes = Attributes,
+> extends Program<Uniform, N, E, G> {
   /**
    * Ensure all glyphs for the given texts are generated and available.
    */
@@ -101,13 +99,7 @@ export abstract class EdgeLabelProgram<
   /**
    * Update screen-space bounds for a label.
    */
-  protected updateLabelBounds(
-    labelKey: string,
-    screenX: number,
-    screenY: number,
-    width: number,
-    height: number,
-  ): void {
+  protected updateLabelBounds(labelKey: string, screenX: number, screenY: number, width: number, height: number): void {
     this.labelBounds.set(labelKey, { x: screenX, y: screenY, width, height });
   }
 

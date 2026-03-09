@@ -22,9 +22,9 @@ import { DEFAULT_SDF_ATLAS_OPTIONS, GlyphMetrics, SDFAtlasManager } from "../../
 import type Sigma from "../../../sigma";
 import type { EdgeLabelDisplayData, EdgeLabelPosition, RenderParams } from "../../../types";
 import { floatColor } from "../../../utils";
+import { ItemAttributeTexture, computeAttributeLayout } from "../../data-texture";
 import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
 import { layerPlain } from "../layers";
-import { ItemAttributeTexture, computeAttributeLayout } from "../../data-texture";
 import { EDGE_ATTRIBUTE_TEXTURE_UNIT } from "../path-attribute-texture";
 import type { EdgeLabelOptions, EdgePath } from "../types";
 import { EdgeLabelProgram } from "./base";

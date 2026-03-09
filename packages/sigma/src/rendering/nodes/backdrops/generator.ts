@@ -56,32 +56,47 @@ export function generateBackdropVertexShader(options: BackdropShaderOptions): st
 
   if (shapes.length === 1) {
     const shape = shapes[0];
-    const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+    const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{
+      name: string;
+      type: "float";
+      value: number;
+    }>;
     const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
-    const shapeCall = paramValues.length > 0
-      ? `sdf_${shape.name}(uv, size, ${paramValues.join(", ")})`
-      : `sdf_${shape.name}(uv, size)`;
+    const shapeCall =
+      paramValues.length > 0 ? `sdf_${shape.name}(uv, size, ${paramValues.join(", ")})` : `sdf_${shape.name}(uv, size)`;
     findEdgeDistanceCode = generateFindEdgeDistance(shapeCall, rotateWithCamera);
   } else {
     // Multi-shape: generate switch-based SDF query
     // Use global shape IDs as case values when available (a_shapeId contains global IDs)
-    const cases = shapes.map((shape, index) => {
-      const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
-      const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
-      const sdfCall = paramValues.length > 0
-        ? `sdf_${shape.name}(uv, size, ${paramValues.join(", ")})`
-        : `sdf_${shape.name}(uv, size)`;
-      const caseId = shapeGlobalIds ? shapeGlobalIds[index] : index;
-      return `    case ${caseId}: return ${sdfCall};`;
-    }).join("\n");
+    const cases = shapes
+      .map((shape, index) => {
+        const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{
+          name: string;
+          type: "float";
+          value: number;
+        }>;
+        const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+        const sdfCall =
+          paramValues.length > 0
+            ? `sdf_${shape.name}(uv, size, ${paramValues.join(", ")})`
+            : `sdf_${shape.name}(uv, size)`;
+        const caseId = shapeGlobalIds ? shapeGlobalIds[index] : index;
+        return `    case ${caseId}: return ${sdfCall};`;
+      })
+      .join("\n");
 
     // Default to first shape
     const defaultShape = shapes[0];
-    const defaultFloatUniforms = defaultShape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+    const defaultFloatUniforms = defaultShape.uniforms.filter((u) => u.type === "float") as Array<{
+      name: string;
+      type: "float";
+      value: number;
+    }>;
     const defaultParams = defaultFloatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
-    const defaultCall = defaultParams.length > 0
-      ? `sdf_${defaultShape.name}(uv, size, ${defaultParams.join(", ")})`
-      : `sdf_${defaultShape.name}(uv, size)`;
+    const defaultCall =
+      defaultParams.length > 0
+        ? `sdf_${defaultShape.name}(uv, size, ${defaultParams.join(", ")})`
+        : `sdf_${defaultShape.name}(uv, size)`;
 
     // Generate queryShapeSDF function
     const queryShapeSDF = /*glsl*/ `
@@ -100,7 +115,9 @@ ${cases}
     uv = mat2(c, -s, s, c) * uv;`
       : "";
 
-    findEdgeDistanceCode = queryShapeSDF + /*glsl*/ `
+    findEdgeDistanceCode =
+      queryShapeSDF +
+      /*glsl*/ `
 
 // Global shape ID set by main() before calling findEdgeDistance
 int g_shapeId;
@@ -353,32 +370,49 @@ export function generateBackdropFragmentShader(options: BackdropShaderOptions): 
 
   if (shapes.length === 1) {
     const shape = shapes[0];
-    const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+    const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{
+      name: string;
+      type: "float";
+      value: number;
+    }>;
     const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
-    const shapeCall = paramValues.length > 0
-      ? `sdf_${shape.name}(nodeUV, 1.0, ${paramValues.join(", ")})`
-      : `sdf_${shape.name}(nodeUV, 1.0)`;
+    const shapeCall =
+      paramValues.length > 0
+        ? `sdf_${shape.name}(nodeUV, 1.0, ${paramValues.join(", ")})`
+        : `sdf_${shape.name}(nodeUV, 1.0)`;
     shapeCallCode = `float nodeSdfNormalized = ${shapeCall};`;
   } else {
     // Multi-shape: generate switch-based SDF query
     // Use global shape IDs as case values when available (v_shapeId contains global IDs)
-    const cases = shapes.map((shape, index) => {
-      const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
-      const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
-      const sdfCall = paramValues.length > 0
-        ? `sdf_${shape.name}(nodeUV, 1.0, ${paramValues.join(", ")})`
-        : `sdf_${shape.name}(nodeUV, 1.0)`;
-      const caseId = shapeGlobalIds ? shapeGlobalIds[index] : index;
-      return `    case ${caseId}: nodeSdfNormalized = ${sdfCall}; break;`;
-    }).join("\n");
+    const cases = shapes
+      .map((shape, index) => {
+        const floatUniforms = shape.uniforms.filter((u) => u.type === "float") as Array<{
+          name: string;
+          type: "float";
+          value: number;
+        }>;
+        const paramValues = floatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
+        const sdfCall =
+          paramValues.length > 0
+            ? `sdf_${shape.name}(nodeUV, 1.0, ${paramValues.join(", ")})`
+            : `sdf_${shape.name}(nodeUV, 1.0)`;
+        const caseId = shapeGlobalIds ? shapeGlobalIds[index] : index;
+        return `    case ${caseId}: nodeSdfNormalized = ${sdfCall}; break;`;
+      })
+      .join("\n");
 
     // Default to first shape
     const defaultShape = shapes[0];
-    const defaultFloatUniforms = defaultShape.uniforms.filter((u) => u.type === "float") as Array<{ name: string; type: "float"; value: number }>;
+    const defaultFloatUniforms = defaultShape.uniforms.filter((u) => u.type === "float") as Array<{
+      name: string;
+      type: "float";
+      value: number;
+    }>;
     const defaultParams = defaultFloatUniforms.map((u) => numberToGLSLFloat(u.value ?? 0));
-    const defaultCall = defaultParams.length > 0
-      ? `sdf_${defaultShape.name}(nodeUV, 1.0, ${defaultParams.join(", ")})`
-      : `sdf_${defaultShape.name}(nodeUV, 1.0)`;
+    const defaultCall =
+      defaultParams.length > 0
+        ? `sdf_${defaultShape.name}(nodeUV, 1.0, ${defaultParams.join(", ")})`
+        : `sdf_${defaultShape.name}(nodeUV, 1.0)`;
 
     shapeCallCode = `float nodeSdfNormalized;
   int shapeId = int(v_shapeId);

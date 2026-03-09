@@ -11,9 +11,9 @@
 import { Attributes } from "graphology-types";
 
 import type { RenderParams } from "../../../types";
+import { GLSL_GET_LABEL_DIRECTION, GLSL_ROTATE_2D } from "../../glsl";
 import { Program } from "../../program";
 import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
-import { GLSL_GET_LABEL_DIRECTION, GLSL_ROTATE_2D } from "../../glsl";
 
 // Gap (in CSS pixels) between the label and the attachment.
 // Shared between the GLSL shader and JS backdrop sizing logic.
@@ -36,6 +36,7 @@ const ATTACHMENT_UNIFORMS = [
 type AttachmentUniform = (typeof ATTACHMENT_UNIFORMS)[number];
 
 // Attachment placement: 0=below, 1=above, 2=left, 3=right (relative to label)
+// language=GLSL
 const VERTEX_SHADER = /*glsl*/ `#version 300 es
 precision highp float;
 
@@ -218,12 +219,10 @@ export const ATTACHMENT_PLACEMENT_MAP: Record<string, number> = {
 };
 
 export class AttachmentProgram<
-    N extends Attributes = Attributes,
-    E extends Attributes = Attributes,
-    G extends Attributes = Attributes,
-  >
-  extends Program<AttachmentUniform, N, E, G>
-{
+  N extends Attributes = Attributes,
+  E extends Attributes = Attributes,
+  G extends Attributes = Attributes,
+> extends Program<AttachmentUniform, N, E, G> {
   private totalCount = 0;
   private bufferCapacity = 0;
 

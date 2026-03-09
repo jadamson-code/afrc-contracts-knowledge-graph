@@ -9,14 +9,16 @@
  */
 import Graph from "graphology";
 import Sigma from "sigma";
+import { layerFill, layerPlain, pathCurved, pathLine, sdfCircle } from "sigma/rendering";
 import { createElement } from "sigma/utils";
-import { sdfCircle, layerFill, pathLine, pathCurved, layerPlain } from "sigma/rendering";
 import { afterEach, describe, expect, it } from "vitest";
 
 // Helper to create a sigma instance with given primitives
-function createSigma(
-  primitives: NonNullable<ConstructorParameters<typeof Sigma>[2]>["primitives"],
-): { sigma: Sigma; graph: Graph; cleanup: () => void } {
+function createSigma(primitives: NonNullable<ConstructorParameters<typeof Sigma>[2]>["primitives"]): {
+  sigma: Sigma;
+  graph: Graph;
+  cleanup: () => void;
+} {
   const graph = new Graph();
   const container = createElement("div", { width: "100px", height: "100px" });
   document.body.append(container);

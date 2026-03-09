@@ -13,13 +13,13 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { NodeDisplayData, RenderParams } from "../../types";
 import { colorToArray } from "../../utils";
+import { ItemAttributeTexture, computeAttributeLayout } from "../data-texture";
 import { getShapeId, registerShapeInstance } from "../shapes";
 import { ProgramInfo } from "../utils";
+import { createBackdropProgram } from "./backdrops";
 import { NodeProgram, NodeProgramType } from "./base";
 import { generateShaders } from "./generator";
-import { createBackdropProgram } from "./backdrops";
 import { createLabelProgram } from "./labels";
-import { ItemAttributeTexture, computeAttributeLayout } from "../data-texture";
 import { FragmentLayer, LayerLifecycleContext, LayerLifecycleHooks, NodeProgramOptions } from "./types";
 
 // Texture unit for layer attribute texture (units 0-4 used by sigma, unit 5 for layer attributes)

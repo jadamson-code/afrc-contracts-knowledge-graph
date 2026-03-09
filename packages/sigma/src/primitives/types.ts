@@ -6,7 +6,11 @@
  *
  * @module
  */
+import { layerPlain } from "../rendering/edges/layers";
+import { pathLine, pathLoop } from "../rendering/edges/paths";
 import type { EdgeExtremity, EdgeLabelOptions, EdgeLayer, EdgePath } from "../rendering/edges/types";
+import { layerFill } from "../rendering/nodes/layers";
+import { sdfCircle } from "../rendering/nodes/shapes";
 import type { FragmentLayer, LabelOptions, SDFShape } from "../rendering/nodes/types";
 
 // =============================================================================
@@ -178,21 +182,17 @@ type VariablesDefinitionToType<V extends VariablesDefinition> = {
         : unknown;
 };
 
-export type ExtractAllNodeVariables<N extends NodePrimitives> =
-  N["variables"] extends VariablesDefinition ? VariablesDefinitionToType<N["variables"]> : object;
+export type ExtractAllNodeVariables<N extends NodePrimitives> = N["variables"] extends VariablesDefinition
+  ? VariablesDefinitionToType<N["variables"]>
+  : object;
 
-export type ExtractAllEdgeVariables<E extends EdgePrimitives> =
-  E["variables"] extends VariablesDefinition ? VariablesDefinitionToType<E["variables"]> : object;
+export type ExtractAllEdgeVariables<E extends EdgePrimitives> = E["variables"] extends VariablesDefinition
+  ? VariablesDefinitionToType<E["variables"]>
+  : object;
 
 // =============================================================================
-// DEFAULT VALUES
-// =============================================================================
 
-// Lazy imports to avoid circular dependencies
-import { sdfCircle } from "../rendering/nodes/shapes";
-import { layerFill } from "../rendering/nodes/layers";
-import { pathLine, pathLoop } from "../rendering/edges/paths";
-import { layerPlain } from "../rendering/edges/layers";
+// =============================================================================
 
 export const DEFAULT_NODE_PRIMITIVES: Required<NodePrimitives> = {
   shapes: [sdfCircle()],

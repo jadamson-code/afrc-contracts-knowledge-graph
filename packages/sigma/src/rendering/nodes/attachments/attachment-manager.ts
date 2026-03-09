@@ -116,6 +116,7 @@ export class AttachmentManager {
     this.atlas = atlas;
 
     if (remaining.length > 0) {
+      // eslint-disable-next-line no-console
       console.warn(
         `Sigma: ${remaining.length} label attachment(s) could not fit in the ${ATLAS_SIZE}x${ATLAS_SIZE} atlas and will not be rendered.`,
       );

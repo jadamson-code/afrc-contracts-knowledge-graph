@@ -4,11 +4,7 @@ export type DepthRanges = Record<string, { offset: number; count: number }[]>;
  * Remove a single position from a depth range, splitting the containing
  * fragment if needed.
  */
-export function removePositionFromDepthRanges(
-  ranges: DepthRanges,
-  depth: string,
-  position: number,
-): void {
+export function removePositionFromDepthRanges(ranges: DepthRanges, depth: string, position: number): void {
   const fragments = ranges[depth];
   if (!fragments) return;
 
@@ -38,11 +34,7 @@ export function removePositionFromDepthRanges(
  * Add a single position to a depth range, merging with adjacent fragments
  * when possible.
  */
-export function addPositionToDepthRanges(
-  ranges: DepthRanges,
-  depth: string,
-  position: number,
-): void {
+export function addPositionToDepthRanges(ranges: DepthRanges, depth: string, position: number): void {
   if (!ranges[depth]) {
     ranges[depth] = [{ offset: position, count: 1 }];
     return;

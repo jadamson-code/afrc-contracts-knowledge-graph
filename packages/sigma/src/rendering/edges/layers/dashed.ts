@@ -168,17 +168,17 @@ function parseSolidMargin(value: SolidMargin | undefined): { tail: number; head:
  * @returns EdgeLayer definition for dashed edges
  */
 export function layerDashed(options?: LayerDashedOptions): EdgeLayer {
-    const opts = options ?? {};
-    const dashColor = opts.dashColor ?? { attribute: "color" };
-    const gapColor = opts.gapColor ?? 0;
-    const sizes = {
-      dashSize: opts.dashSize ?? { value: 10, mode: "pixels" },
-      gapSize: opts.gapSize ?? { value: 10, mode: "pixels" },
-      dashOffset: opts.dashOffset ?? { value: 0, mode: "pixels" },
-    };
-    const align = opts.align ?? 0.5;
-    const solidExtremities = parseSolidExtremities(opts.solidExtremities);
-    const solidMargin = parseSolidMargin(opts.solidMargin);
+  const opts = options ?? {};
+  const dashColor = opts.dashColor ?? { attribute: "color" };
+  const gapColor = opts.gapColor ?? 0;
+  const sizes = {
+    dashSize: opts.dashSize ?? { value: 10, mode: "pixels" },
+    gapSize: opts.gapSize ?? { value: 10, mode: "pixels" },
+    dashOffset: opts.dashOffset ?? { value: 0, mode: "pixels" },
+  };
+  const align = opts.align ?? 0.5;
+  const solidExtremities = parseSolidExtremities(opts.solidExtremities);
+  const solidMargin = parseSolidMargin(opts.solidMargin);
 
   // Parse custom dash color if provided
   const hasCustomColor = typeof dashColor === "string";
@@ -427,10 +427,10 @@ ${gapColorGLSL}
 }
 `;
 
-    return {
-      name: "dashed",
-      glsl,
-      uniforms,
-      attributes,
-    };
+  return {
+    name: "dashed",
+    glsl,
+    uniforms,
+    attributes,
+  };
 }

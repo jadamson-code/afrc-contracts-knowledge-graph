@@ -91,6 +91,7 @@ export async function svgToCanvas(svg: string | SVGElement, pixelRatio = 1): Pro
   }
 
   if (!(width > 0) || !(height > 0)) {
+    // eslint-disable-next-line no-console
     console.warn("Sigma: SVG label attachment has no parseable dimensions — skipped.");
     return null;
   }
@@ -183,7 +184,10 @@ async function htmlToCanvas(
  * Canvas content resolves immediately (user is responsible for pixelRatio scaling).
  * SVG and HTML content are rendered asynchronously.
  */
-export async function contentToCanvas(content: LabelAttachmentContent, pixelRatio = 1): Promise<HTMLCanvasElement | null> {
+export async function contentToCanvas(
+  content: LabelAttachmentContent,
+  pixelRatio = 1,
+): Promise<HTMLCanvasElement | null> {
   switch (content.type) {
     case "canvas":
       return content.canvas;

@@ -49,13 +49,11 @@ function insertPickingModeDefine(shaderSource: string): string {
 }
 
 export abstract class Program<
-    Uniform extends string = string,
-    N extends Attributes = Attributes,
-    E extends Attributes = Attributes,
-    G extends Attributes = Attributes,
-  >
-  implements InstancedProgramDefinition
-{
+  Uniform extends string = string,
+  N extends Attributes = Attributes,
+  E extends Attributes = Attributes,
+  G extends Attributes = Attributes,
+> implements InstancedProgramDefinition {
   VERTICES: number;
   VERTEX_SHADER_SOURCE: string;
   FRAGMENT_SHADER_SOURCE: string;
@@ -310,7 +308,13 @@ export abstract class Program<
     return this.verticesCount === 0;
   }
 
-  getMemoryStats(): { type: "vertex" | "constant"; itemCount: number; capacity: number; stride: number; totalBytes: number } {
+  getMemoryStats(): {
+    type: "vertex" | "constant";
+    itemCount: number;
+    capacity: number;
+    stride: number;
+    totalBytes: number;
+  } {
     return {
       type: "vertex",
       itemCount: this.capacity,

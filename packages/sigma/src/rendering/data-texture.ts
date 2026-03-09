@@ -103,17 +103,7 @@ export abstract class DataTexture {
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
 
     // RGBA32F format for full float precision, 2D layout
-    gl.texImage2D(
-      gl.TEXTURE_2D,
-      0,
-      gl.RGBA32F,
-      this.textureWidth,
-      this.textureHeight,
-      0,
-      gl.RGBA,
-      gl.FLOAT,
-      this.data,
-    );
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, this.textureWidth, this.textureHeight, 0, gl.RGBA, gl.FLOAT, this.data);
 
     // No filtering needed - we use texelFetch for exact lookups
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
@@ -331,7 +321,14 @@ export abstract class DataTexture {
   /**
    * Returns memory usage stats for this texture.
    */
-  getMemoryStats(): { width: number; height: number; bytesPerTexel: number; totalBytes: number; itemCount: number; capacity: number } {
+  getMemoryStats(): {
+    width: number;
+    height: number;
+    bytesPerTexel: number;
+    totalBytes: number;
+    itemCount: number;
+    capacity: number;
+  } {
     return {
       width: this.textureWidth,
       height: this.textureHeight,
@@ -532,9 +529,7 @@ export function generateAttributeTextureFetch(
     lines.push(
       `  ivec2 ${varPrefix}Coord${t} = ivec2((${varPrefix}BaseTexel + ${t}) % ${textureWidthUniform}, (${varPrefix}BaseTexel + ${t}) / ${textureWidthUniform});`,
     );
-    lines.push(
-      `  vec4 ${varPrefix}Texel${t} = texelFetch(${textureSamplerUniform}, ${varPrefix}Coord${t}, 0);`,
-    );
+    lines.push(`  vec4 ${varPrefix}Texel${t} = texelFetch(${textureSamplerUniform}, ${varPrefix}Coord${t}, 0);`);
   }
   lines.push("");
 

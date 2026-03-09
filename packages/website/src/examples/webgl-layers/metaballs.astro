@@ -1,0 +1,59 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import { bindWebGLLayer, createContoursProgram } from "@sigma/layer-webgl";
+  import Graph from "graphology";
+  import { parse } from "graphology-gexf/browser";
+  import louvain from "graphology-communities-louvain";
+  import Sigma from "sigma";
+
+  import { registerControls } from "../_controls";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const gexfRes = await fetch("/data/arctic.gexf");
+  const gexf = await gexfRes.text();
+  const graph = parse(Graph, gexf);
+
+  louvain.assign(graph, { nodeCommunityAttribute: "community" });
+  const communities = new Set<string>();
+  graph.forEachNode((_, attrs) => communities.add(attrs.community));
+  const communitiesArray = Array.from(communities);
+
+  const renderer = new Sigma(graph, container);
+
+  let cleanLayer: (() => void) | null = null;
+
+  function showCommunity(community: string) {
+    if (cleanLayer) cleanLayer();
+    cleanLayer = bindWebGLLayer(
+      "metaball",
+      renderer,
+      createContoursProgram(graph.filterNodes((_, attr) => attr.community === community)),
+    );
+  }
+
+  const options = communitiesArray.map((c, i) => ({ label: `Community ${i + 1}`, value: c }));
+  options.unshift({ label: "No community", value: "" });
+
+  registerControls({
+    community: {
+      type: "select",
+      label: "Community",
+      default: communitiesArray[0],
+      options,
+    },
+  });
+
+  // Read the selected value and show the contour
+  const params = new URLSearchParams(location.search);
+  const selected = params.get("community") ?? communitiesArray[0];
+  if (selected) showCommunity(selected);
+</script>

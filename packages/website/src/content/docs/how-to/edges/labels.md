@@ -28,12 +28,12 @@ graph.addEdge("a", "b", { label: "connects to" });
 
 Edge labels can be placed in four positions relative to the edge path:
 
-| Position | Description |
-|----------|-------------|
-| `"over"` | Centered directly on the edge path |
-| `"above"` | Offset above the edge path |
-| `"below"` | Offset below the edge path |
-| `"auto"` | GPU picks above or below based on which node is leftmost on screen |
+| Position  | Description                                                        |
+| --------- | ------------------------------------------------------------------ |
+| `"over"`  | Centered directly on the edge path                                 |
+| `"above"` | Offset above the edge path                                         |
+| `"below"` | Offset below the edge path                                         |
+| `"auto"`  | GPU picks above or below based on which node is leftmost on screen |
 
 Set the position globally via styles, or read it per-edge from an attribute:
 
@@ -41,9 +41,7 @@ Set the position globally via styles, or read it per-edge from an attribute:
 new Sigma(graph, container, {
   settings: { renderEdgeLabels: true },
   styles: {
-    edges: [
-      { labelPosition: "above" },
-    ],
+    edges: [{ labelPosition: "above" }],
   },
 });
 ```
@@ -57,9 +55,7 @@ graph.addEdge("b", "c", { label: "below", labelPosition: "below" });
 new Sigma(graph, container, {
   settings: { renderEdgeLabels: true },
   styles: {
-    edges: [
-      { labelPosition: { attribute: "labelPosition" } },
-    ],
+    edges: [{ labelPosition: { attribute: "labelPosition" } }],
   },
 });
 ```
@@ -72,9 +68,7 @@ By default, edge labels follow the same auto-visibility logic as node labels —
 new Sigma(graph, container, {
   settings: { renderEdgeLabels: true },
   styles: {
-    edges: [
-      { labelVisibility: "visible" },
-    ],
+    edges: [{ labelVisibility: "visible" }],
   },
 });
 ```
@@ -88,22 +82,32 @@ Edge labels support two font size modes:
 - **`"fixed"`** (default) — Labels stay at a constant pixel size regardless of zoom level.
 - **`"scaled"`** — Labels scale with the camera zoom, growing when you zoom in and shrinking when you zoom out.
 
-Font size mode is configured at the primitives level when setting up edge label rendering options.
+Font size mode is configured in `primitives.edges.label`:
+
+```typescript
+new Sigma(graph, container, {
+  primitives: {
+    edges: {
+      label: { fontSizeMode: "scaled" },
+    },
+  },
+});
+```
 
 ## Text border for "over" labels
 
-When labels are positioned `"over"` the edge, they can be hard to read against the edge color. The `textBorder` option adds an SDF-rendered border around each character for better legibility:
+When labels are positioned `"over"` the edge, they can be hard to read against the edge color. The `textBorder` option adds an SDF-rendered border around each character for better legibility. Configure it in `primitives.edges.label`:
 
 ```typescript
-import { createEdgeLabelProgram } from "sigma/rendering";
-
-// When configuring edge label options:
-{
-  textBorder: {
-    width: 2,
-    color: "#ffffff",
+new Sigma(graph, container, {
+  primitives: {
+    edges: {
+      label: {
+        textBorder: { width: 2, color: "#ffffff" },
+      },
+    },
   },
-}
+});
 ```
 
 This renders a white outline around each character, making the label readable against any edge color.

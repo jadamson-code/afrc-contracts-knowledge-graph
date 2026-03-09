@@ -13,9 +13,9 @@ Three settings control how users can manipulate the camera:
 ```typescript
 new Sigma(graph, container, {
   settings: {
-    enableCameraZooming: true,   // Scroll to zoom (default: true)
-    enableCameraPanning: true,   // Drag to pan (default: true)
-    enableCameraRotation: true,  // Rotate gesture (default: true)
+    enableCameraZooming: true, // Scroll to zoom (default: true)
+    enableCameraPanning: true, // Drag to pan (default: true)
+    enableCameraRotation: true, // Rotate gesture (default: true)
   },
 });
 ```
@@ -39,8 +39,8 @@ Constrain how far users can zoom in or out with `minCameraRatio` and `maxCameraR
 ```typescript
 new Sigma(graph, container, {
   settings: {
-    minCameraRatio: 0.1,  // Maximum zoom in (10x)
-    maxCameraRatio: 2,    // Maximum zoom out (0.5x)
+    minCameraRatio: 0.1, // Maximum zoom in (10x)
+    maxCameraRatio: 2, // Maximum zoom out (0.5x)
   },
 });
 ```
@@ -91,10 +91,7 @@ camera.animate({ x: 0.5, y: 0.5, ratio: 0.5 });
 camera.animate({ angle: Math.PI / 4 });
 
 // With custom animation options
-camera.animate(
-  { x: 0.3, y: 0.7, ratio: 0.2 },
-  { duration: 1000 },
-);
+camera.animate({ x: 0.3, y: 0.7, ratio: 0.2 }, { duration: 1000 });
 ```
 
 The `animate()` method returns a `Promise` that resolves when the animation completes. Camera coordinates use the normalized coordinate system where `(0.5, 0.5)` is the center of the graph.
@@ -110,8 +107,8 @@ const camera = renderer.getCamera();
 camera.animatedReset();
 
 // Zoom in / out by a factor
-camera.animatedZoom(2);    // 2x zoom in
-camera.animatedUnzoom(2);  // 2x zoom out
+camera.animatedZoom(2); // 2x zoom in
+camera.animatedUnzoom(2); // 2x zoom out
 ```
 
 ### Instant updates

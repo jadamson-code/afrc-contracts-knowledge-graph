@@ -25,9 +25,9 @@ export default [
       "**/build/*",
       "**/node_modules/*",
       // Doc and examples
-      "**/storybook-static/*",
       "**/typedoc",
       "**/.docusaurus",
+      "**/.astro",
     ],
   },
   ...compat.extends(
@@ -35,7 +35,6 @@ export default [
     "plugin:@typescript-eslint/recommended",
     "plugin:@typescript-eslint/eslint-recommended",
     "prettier",
-    "plugin:storybook/recommended",
   ),
   {
     plugins: {

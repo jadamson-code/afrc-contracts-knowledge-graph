@@ -19,14 +19,13 @@ const { id, height = "500px" } = Astro.props;
 ---
 
 <div class="sigma-example">
-  <iframe
-    src={`/embed/${id}/`}
-    style={`height: ${height}`}
-    title={`sigma.js example: ${id}`}
-    loading="lazy"
-  ></iframe>
+  <iframe src={`/embed/${id}/`} style={`height: ${height}`} title={`sigma.js example: ${id}`} loading="lazy"></iframe>
   <div class="sigma-example-toolbar">
-    <a href={`https://github.com/jacomyal/sigma.js/blob/main/packages/website/src/examples/${id}.astro`} target="_blank" rel="noopener">View source on GitHub</a>
+    <a
+      href={`https://github.com/jacomyal/sigma.js/blob/v4/packages/website/src/examples/${id}.astro`}
+      target="_blank"
+      rel="noopener">View source on GitHub</a
+    >
     <span class="sigma-example-toolbar-sep"></span>
     <a href={`/embed/${id}/`} target="_blank" rel="noopener">Open in new tab</a>
   </div>

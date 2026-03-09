@@ -1,0 +1,49 @@
+---
+title: Viewport utilities
+sidebar:
+  label: Viewport utilities
+---
+
+import SigmaExample from "../../../components/SigmaExample.astro";
+
+The `@sigma/utils` package provides viewport-related utilities. This example demonstrates two of them: **fitting the viewport to a subset of nodes** and **querying which nodes are currently visible**.
+
+<SigmaExample id="core/viewport-utilities" height="500px" />
+
+## How it works
+
+### Community detection and coloring
+
+Communities are detected using the [Louvain algorithm](https://en.wikipedia.org/wiki/Louvain_method). Each community gets a distinct color from a hardcoded palette.
+
+### Fit viewport to a node subset
+
+`fitViewportToNodes()` animates the camera to frame a given set of nodes:
+
+```typescript
+import { fitViewportToNodes } from "@sigma/utils";
+
+fitViewportToNodes(
+  renderer,
+  graph.filterNodes((_, attrs) => attrs.community === community),
+  { animate: true },
+);
+```
+
+### Query visible nodes
+
+`getNodesInViewport()` returns the list of nodes currently visible in the viewport:
+
+```typescript
+import { getNodesInViewport } from "@sigma/utils";
+
+setInterval(() => {
+  const count = getNodesInViewport(renderer).length;
+  infoEl.textContent = `${count} visible nodes`;
+}, 200);
+```
+
+### Key concepts
+
+- **`fitViewportToNodes(renderer, nodeKeys, options)`**: computes the bounding box of the given nodes and animates the camera to fit them
+- **`getNodesInViewport(renderer)`**: returns node keys visible in the current viewport — useful for dynamic UI or lazy data loading

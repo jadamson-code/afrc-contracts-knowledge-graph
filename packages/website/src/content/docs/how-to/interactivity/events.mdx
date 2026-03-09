@@ -11,7 +11,7 @@ Sigma.js emits events when users interact with the graph. You can listen for cli
 
 Interact with the graph below — every event is logged in the overlay panel.
 
-<SigmaExample id="events" height="500px" />
+<SigmaExample id="core/events" height="500px" />
 
 ## How it works
 
@@ -21,7 +21,7 @@ Interact with the graph below — every event is logged in the overlay panel.
 
 **Edge events:** `enterEdge`, `leaveEdge`, `downEdge`, `clickEdge`, `rightClickEdge`, `doubleClickEdge`, `wheelEdge`
 
-**Stage events:** `downStage`, `clickStage`, `rightClickStage`, `doubleClickStage`, `wheelStage`
+**Stage events:** `enterStage`, `leaveStage`, `downStage`, `upStage`, `clickStage`, `rightClickStage`, `doubleClickStage`, `wheelStage`
 
 ### Enabling edge events
 
@@ -29,7 +29,7 @@ Edge events are disabled by default for performance reasons. Enable them with th
 
 ```typescript
 const renderer = new Sigma(graph, container, {
-  enableEdgeEvents: true,
+  settings: { enableEdgeEvents: true },
 });
 ```
 

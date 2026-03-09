@@ -1,0 +1,206 @@
+---
+/**
+ * Example viewer page.
+ * Renders an example with its source code side-by-side (>1200px) or as tabs.
+ * Each example gets a permalink at /embed/{id}/.
+ * Also used as the iframe source in doc pages.
+ */
+import { Code } from "astro-expressive-code/components";
+
+export async function getStaticPaths() {
+  const examples = import.meta.glob("../../examples/**/*.astro", { eager: true });
+  const sources = import.meta.glob("../../examples/**/*.astro", { query: "?raw", eager: true });
+
+  return Object.keys(examples).map((key) => {
+    // Extract topic/name from path like "../../examples/core/events.astro"
+    const match = key.match(/\/examples\/(.+)\.astro$/);
+    const id = match![1];
+    return {
+      params: { id },
+      props: {
+        Component: (examples[key] as { default: any }).default,
+        source: (sources[key] as { default: string })?.default ?? "",
+      },
+    };
+  });
+}
+
+const { id } = Astro.params;
+const { Component, source } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>sigma.js — {id}</title>
+    <link rel="stylesheet" href="/embed-base.css" />
+    <script is:inline>
+      if (new URLSearchParams(location.search).has("stage-only")) document.documentElement.dataset.stageOnly = "";
+    </script>
+  </head>
+  <body>
+    <div class="viewer">
+      <nav class="tabs">
+        <button class="tab active" data-tab="result">Result</button>
+        <button class="tab" data-tab="source">Source</button>
+      </nav>
+
+      <div class="panels">
+        <div class="panel panel-result active" data-panel="result">
+          <div id="controls"></div>
+          <Component />
+        </div>
+        <div class="panel panel-source" data-panel="source">
+          <Code code={source} lang="astro" />
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.querySelectorAll<HTMLButtonElement>(".tabs .tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const tabName = tab.dataset.tab!;
+          document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === tabName));
+          document
+            .querySelectorAll(".panel")
+            .forEach((p) =>
+              (p as HTMLElement).classList.toggle("active", (p as HTMLElement).dataset.panel === tabName),
+            );
+        });
+      });
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  /* Viewer layout */
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .viewer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Tabs (visible only on small screens) */
+  .tabs {
+    display: flex;
+    flex-shrink: 0;
+    border-bottom: 1px solid #e0e0e0;
+    background: #f8f8f8;
+  }
+
+  .tabs .tab {
+    padding: 0.5rem 1rem;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: #666;
+    border-bottom: 2px solid transparent;
+  }
+
+  .tabs .tab.active {
+    color: var(--ruby);
+    border-bottom-color: var(--ruby);
+  }
+
+  /* Panels */
+  .panels {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .panel {
+    display: none;
+    min-height: 0;
+  }
+
+  .panel.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .panel-result {
+    position: relative;
+  }
+
+  /* Controls sit at the top; the example fills the rest */
+  #controls {
+    flex-shrink: 0;
+  }
+
+  .panel-result > :last-child {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+  }
+
+  .panel-source {
+    overflow: auto;
+  }
+
+  /* Make Expressive Code fill the panel */
+  .panel-source .expressive-code {
+    margin: 0;
+    height: 100%;
+  }
+
+  .panel-source .expressive-code .frame {
+    border: none;
+    border-radius: 0;
+    height: 100%;
+  }
+
+  .panel-source .expressive-code pre {
+    height: 100%;
+    max-height: none;
+  }
+
+  /* Stage-only mode: hide all chrome, show only the rendered example */
+  html[data-stage-only] .tabs,
+  html[data-stage-only] .panel-source,
+  html[data-stage-only] #controls {
+    display: none !important;
+  }
+
+  html[data-stage-only] .panel-result {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  /* Wide layout: side-by-side, tabs hidden */
+  @media (min-width: 1200px) {
+    .tabs {
+      display: none;
+    }
+
+    .panels {
+      flex-direction: row;
+    }
+
+    .panel {
+      display: flex !important;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .panel-source {
+      border-left: 1px solid #e0e0e0;
+      flex: 0 0 45%;
+    }
+  }
+</style>

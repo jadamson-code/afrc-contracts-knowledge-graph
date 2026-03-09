@@ -38,4 +38,4 @@ This function downloads a snapshot of the sigma instance as an image file.
 
 These functions are simple sugar around `downloadAsImage`, without having to specify the `"format"` option.
 
-Please check the related [Storybook](https://github.com/jacomyal/sigma.js/tree/main/packages/storybook/stories/3-additional-packages/export-image) for more advanced examples.
+Please check the [website examples](https://www.sigmajs.org/examples/) for more advanced examples.

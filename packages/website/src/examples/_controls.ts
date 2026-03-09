@@ -9,11 +9,13 @@
  *
  *   import { registerControls } from "./_controls";
  *
- *   const { order, size } = registerControls({
+ *   const { order, size, setToggle } = registerControls({
  *     order: { type: "number", label: "Nodes", default: 5000, min: 100, step: 100 },
- *     size: { type: "number", label: "Edges", default: 10000, min: 100, step: 100 },
  *     fa2: { type: "toggle", label: "ForceAtlas2", default: false, action: (running) => { ... } },
  *   });
+ *
+ *   // Programmatically set a toggle's state (updates both visual and calls action):
+ *   setToggle("fa2", false);
  */
 import ICON_RESET from "@phosphor-icons/core/assets/bold/arrow-counter-clockwise-bold.svg?raw";
 import ICON_APPLY from "@phosphor-icons/core/assets/bold/arrow-right-bold.svg?raw";
@@ -72,6 +74,10 @@ type ControlValues<T extends Record<string, ControlDef>> = {
   [K in keyof T]: ControlValue<T[K]>;
 };
 
+type RegisterControlsResult<T extends Record<string, ControlDef>> = ControlValues<T> & {
+  setToggle: (key: string, active: boolean) => void;
+};
+
 function readValue(def: ValueControlDef, raw: string | null): number | boolean | string {
   if (raw === null) return def.default;
 
@@ -89,6 +95,9 @@ function getFormValue(def: ValueControlDef, el: HTMLInputElement | HTMLSelectEle
   if (def.type === "boolean") return String((el as HTMLInputElement).checked);
   return el.value;
 }
+
+// Stores toggle setters keyed by control key, populated during buildControls
+const toggleSetters: Record<string, (active: boolean) => void> = {};
 
 function buildControls(
   container: HTMLElement,
@@ -254,6 +263,14 @@ function buildControls(
           btn.classList.toggle("active", active);
           def.action(active);
         });
+
+        // Register a setter so external code can sync the toggle
+        toggleSetters[key] = (newActive: boolean) => {
+          if (newActive === active) return;
+          active = newActive;
+          btn.classList.toggle("active", active);
+          def.action(active);
+        };
       }
 
       actions.appendChild(btn);
@@ -265,7 +282,7 @@ function buildControls(
   container.appendChild(wrapper);
 }
 
-export function registerControls<T extends Record<string, ControlDef>>(defs: T): ControlValues<T> {
+export function registerControls<T extends Record<string, ControlDef>>(defs: T): RegisterControlsResult<T> {
   const params = new URLSearchParams(location.search);
   const values: Record<string, number | boolean | string | void> = {};
 
@@ -284,7 +301,17 @@ export function registerControls<T extends Record<string, ControlDef>>(defs: T):
   const container = document.getElementById("controls");
   if (container && !stageOnly) {
     buildControls(container, defs, values);
+    // Trigger resize so sigma re-measures its container after controls are injected
+    window.dispatchEvent(new Event("resize"));
   }
 
-  return values as ControlValues<T>;
+  const result = {
+    ...values,
+    setToggle: (key: string, active: boolean) => {
+      const setter = toggleSetters[key];
+      if (setter) setter(active);
+    },
+  };
+
+  return result as RegisterControlsResult<T>;
 }

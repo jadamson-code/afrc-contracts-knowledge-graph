@@ -37,16 +37,16 @@ downloadAsPNG(renderer, { fileName: "my-graph", backgroundColor: "#ffffff" });
 
 ## Options
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `fileName` | `string` | `"graph"` | Output file name (without extension) |
-| `format` | `"png" \| "jpeg"` | `"png"` | Image format |
-| `backgroundColor` | `string` | `"transparent"` | Background color |
-| `width` | `number \| null` | `null` | Output width in pixels (defaults to current renderer width) |
-| `height` | `number \| null` | `null` | Output height in pixels (defaults to current renderer height) |
-| `layers` | `string[] \| null` | `null` | Which layers to include (defaults to all) |
-| `cameraState` | `CameraState \| null` | `null` | Override camera state (defaults to current) |
-| `sigmaSettings` | `Partial<Settings>` | `{}` | Override sigma settings for the export |
+| Option            | Type                  | Default         | Description                                                   |
+| ----------------- | --------------------- | --------------- | ------------------------------------------------------------- |
+| `fileName`        | `string`              | `"graph"`       | Output file name (without extension)                          |
+| `format`          | `"png" \| "jpeg"`     | `"png"`         | Image format                                                  |
+| `backgroundColor` | `string`              | `"transparent"` | Background color                                              |
+| `width`           | `number \| null`      | `null`          | Output width in pixels (defaults to current renderer width)   |
+| `height`          | `number \| null`      | `null`          | Output height in pixels (defaults to current renderer height) |
+| `layers`          | `string[] \| null`    | `null`          | Which layers to include (defaults to all)                     |
+| `cameraState`     | `CameraState \| null` | `null`          | Override camera state (defaults to current)                   |
+| `sigmaSettings`   | `Partial<Settings>`   | `{}`            | Override sigma settings for the export                        |
 
 ## Custom dimensions
 

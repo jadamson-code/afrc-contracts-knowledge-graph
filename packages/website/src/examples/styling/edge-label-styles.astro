@@ -1,0 +1,154 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+  import {
+    extremityArrow,
+    layerFill,
+    layerPlain,
+    pathCurved,
+    pathLine,
+    pathStep,
+    pathStepCurved,
+    sdfDiamond,
+    sdfTriangle,
+  } from "sigma/rendering";
+  import { DEFAULT_STYLES } from "sigma/types";
+  import type { EdgeLabelFontSizeMode, EdgeLabelPosition } from "sigma/types";
+
+  import { registerControls } from "../_controls";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const COL_POSITIONS: EdgeLabelPosition[] = ["over", "above", "below", "auto"];
+  const PATHS = [
+    { name: "straight", label: "Straight" },
+    { name: "curved", label: "Curved" },
+    { name: "step", label: "Step" },
+    { name: "stepCurved", label: "Step Curved" },
+  ] as const;
+
+  const COL_SPACING = 100;
+  const ROW_SPACING = 80;
+  const NODE_SPACING = 50;
+  const NODE_SIZE = 10;
+  const EDGE_SIZE = 5;
+  const EDGE_COLOR = "#999999";
+  const NODE_COLORS = ["#5B8FF9", "#5AD8A6", "#F6BD16", "#E8684A"];
+
+  const { fontSizeMode, headType, tailType } = registerControls({
+    fontSizeMode: {
+      type: "select",
+      label: "Font size mode",
+      default: "fixed",
+      options: [
+        { label: "Fixed", value: "fixed" },
+        { label: "Scaled", value: "scaled" },
+      ],
+    },
+    headType: {
+      type: "select",
+      label: "Head extremity",
+      default: "arrow",
+      options: [
+        { label: "None", value: "none" },
+        { label: "Arrow", value: "arrow" },
+      ],
+    },
+    tailType: {
+      type: "select",
+      label: "Tail extremity",
+      default: "none",
+      options: [
+        { label: "None", value: "none" },
+        { label: "Arrow", value: "arrow" },
+      ],
+    },
+  });
+
+  const graph = new Graph();
+
+  for (let row = 0; row < PATHS.length; row++) {
+    for (let col = 0; col < COL_POSITIONS.length; col++) {
+      const pathInfo = PATHS[row];
+      const position = COL_POSITIONS[col];
+      const cellX = col * COL_SPACING;
+      const cellY = -row * ROW_SPACING;
+
+      const sourceId = `${pathInfo.name}-${col}-source`;
+      graph.addNode(sourceId, {
+        x: cellX - NODE_SPACING / 2,
+        y: cellY,
+        size: NODE_SIZE,
+        color: NODE_COLORS[row],
+        label: "",
+        shape: "diamond",
+      });
+
+      const targetId = `${pathInfo.name}-${col}-target`;
+      graph.addNode(targetId, {
+        x: cellX + NODE_SPACING / 2,
+        y: cellY + NODE_SPACING / 2,
+        size: NODE_SIZE,
+        color: NODE_COLORS[row],
+        label: "",
+        shape: "triangle",
+      });
+
+      graph.addEdge(sourceId, targetId, {
+        size: EDGE_SIZE,
+        color: EDGE_COLOR,
+        label: `${pathInfo.label} / ${position}`,
+        path: pathInfo.name,
+        labelPosition: position,
+        curvature: pathInfo.name === "curved" ? 0.3 : 0,
+      });
+    }
+  }
+
+  new Sigma(graph, container, {
+    primitives: {
+      nodes: {
+        shapes: [sdfDiamond(), sdfTriangle()],
+        layers: [layerFill()],
+      },
+      edges: {
+        paths: [pathLine(), pathCurved(), pathStep(), pathStepCurved()],
+        extremities: [extremityArrow()],
+        layers: [layerPlain()],
+        defaultHead: headType === "none" ? undefined : headType,
+        defaultTail: tailType === "none" ? undefined : tailType,
+        variables: { curvature: { type: "number", default: 0 } },
+        label: {
+          fontSizeMode: fontSizeMode as EdgeLabelFontSizeMode,
+          color: "#000",
+          textBorder: { width: 8, color: "#ffffff" },
+        },
+      },
+    },
+    styles: {
+      nodes: [DEFAULT_STYLES.nodes, { shape: { attribute: "shape" } }],
+      edges: [
+        DEFAULT_STYLES.edges,
+        {
+          path: { attribute: "path" },
+          labelVisibility: "visible",
+          labelPosition: { attribute: "labelPosition", defaultValue: "over" },
+        },
+      ],
+    },
+    settings: {
+      renderEdgeLabels: true,
+      itemSizesReference: "positions",
+      autoRescale: true,
+    },
+  });
+</script>

@@ -11,7 +11,7 @@ The most common interactive pattern in graph visualization: highlight a node and
 
 Hover any node to highlight its neighborhood. Use the search field to filter nodes by label.
 
-<SigmaExample id="hover-search" height="500px" />
+<SigmaExample id="core/hover-search" height="500px" />
 
 ## How it works
 
@@ -42,8 +42,7 @@ const renderer = new Sigma(graph, container, {
       { color: { attribute: "color" }, size: { attribute: "size" } },
       // Grey out inactive nodes when there's an active subgraph
       {
-        when: (attrs, state, graphState) =>
-          graphState.hasActiveSubgraph && !state.isActive,
+        when: (attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive,
         then: { color: "#f6f6f6", label: "" },
       },
       // Render active nodes on top using custom depth layers
@@ -81,5 +80,42 @@ renderer.on("leaveNode", () => {
 - **Conditional styles**: use `when` predicates to apply styles based on state
 - **Depth layers**: use `primitives.depthLayers` to render highlighted elements on top of the rest
 - **`setNodeState` / `setGraphState`**: update state without touching the graph data
+
+### Alternative: using reducers
+
+The approach above handles everything through conditional style rules. For more complex logic — such as neighbor lookups or cross-referencing multiple state fields — you can use **reducers** as an escape hatch. Reducers receive the full context (key, computed styles, attributes, state, graph state, graph) and return modified display data:
+
+```typescript
+// Extend graph state with a custom field to track the hovered node
+interface MyGraphState extends BaseGraphState {
+  hoveredNode: string | null;
+}
+
+const renderer = new Sigma<object, object, object, BaseNodeState, BaseEdgeState, MyGraphState>(graph, container, {
+  nodeReducer: (key, computed, _attrs, _state, graphState, graph) => {
+    const { hoveredNode } = graphState;
+    if (hoveredNode && key !== hoveredNode && !graph.neighbors(hoveredNode).includes(key)) {
+      return { ...computed, label: "", color: "#f6f6f6" };
+    }
+    return computed;
+  },
+  edgeReducer: (key, computed, _attrs, _state, graphState, graph) => {
+    const { hoveredNode } = graphState;
+    if (hoveredNode) {
+      const [source, target] = graph.extremities(key);
+      if (source !== hoveredNode && target !== hoveredNode) {
+        return { ...computed, hidden: true };
+      }
+    }
+    return computed;
+  },
+});
+
+// Update the custom graph state on hover
+renderer.on("enterNode", ({ node }) => renderer.setGraphState({ hoveredNode: node }));
+renderer.on("leaveNode", () => renderer.setGraphState({ hoveredNode: null }));
+```
+
+Reducers are more powerful but harder to optimize — prefer conditional styles when they suffice.
 
 For a deeper understanding of the styles system, see [Styles and primitives](/concepts/styles-and-primitives/).

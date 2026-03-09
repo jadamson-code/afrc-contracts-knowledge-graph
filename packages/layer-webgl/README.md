@@ -37,4 +37,4 @@ const renderer = new Sigma(graph, container);
 bindWebGLLayer("metaballs", renderer, createContoursProgram(graph.nodes()));
 ```
 
-Please check the related [Storybook](https://github.com/jacomyal/sigma.js/tree/main/packages/storybook/stories/3-additional-packages/layer-webgl) for more advanced examples.
+Please check the [website examples](https://www.sigmajs.org/examples/) for more advanced examples.

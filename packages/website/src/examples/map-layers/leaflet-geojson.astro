@@ -1,0 +1,41 @@
+<div id="sigma-container"></div>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import bindLeafletLayer, { graphToLatlng } from "@sigma/layer-leaflet";
+  import type { FeatureCollection } from "geojson";
+  import Graph from "graphology";
+  import L from "leaflet";
+  import Sigma from "sigma";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+  const graph = new Graph();
+  graph.addNode("b-cycle-51", { x: 0, y: 0, lat: 39.7471494, lng: -104.9998241, size: 20, color: "#e22352" });
+  graph.addNode("b-cycle-52", { x: 0, y: 0, lat: 39.7502833, lng: -104.9983545, size: 20, color: "#e22352" });
+  graph.addEdge("b-cycle-51", "b-cycle-52");
+
+  const renderer = new Sigma(graph, container);
+  const { map } = bindLeafletLayer(renderer);
+
+  // Add GeoJSON layer to the map
+  const geojsonRes = await fetch("/data/sample-geojson.json");
+  const geojson = await geojsonRes.json();
+  L.geoJSON(geojson as FeatureCollection).addTo(map);
+
+  // Click on the stage to place a marker
+  let markerOnClick: null | L.Marker = null;
+  renderer.on("clickStage", (e) => {
+    const graphCoords = renderer.viewportToGraph({ x: e.event.x, y: e.event.y });
+    const geoCoords = graphToLatlng(map, graphCoords);
+    if (markerOnClick) markerOnClick.remove();
+    markerOnClick = L.marker(geoCoords);
+    markerOnClick.addTo(map);
+  });
+</script>

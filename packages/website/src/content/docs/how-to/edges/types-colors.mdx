@@ -4,7 +4,7 @@ sidebar:
   label: "Types & colors"
 ---
 
-import SigmaExample from '../../../../components/SigmaExample.astro';
+import SigmaExample from "../../../../components/SigmaExample.astro";
 
 Sigma v4 gives you full control over edge appearance through the **primitives** and **styles** system. You can combine different path geometries, arrow extremities, colors, and dashed layers to render edges exactly as needed.
 
@@ -12,24 +12,24 @@ Sigma v4 gives you full control over edge appearance through the **primitives** 
 
 The example below shows various combinations of edge paths, extremities, and dashed layers.
 
-<SigmaExample id="edge-styles" height="500px" />
+<SigmaExample id="styling/edge-styles" height="500px" />
 
 ## Edge paths
 
 Sigma ships with five built-in path types:
 
-| Path | Description |
-|------|-------------|
-| `pathLine()` | Direct line between source and target |
-| `pathCurved()` | Quadratic Bezier curve (configurable curvature) |
-| `pathStep()` | Right-angle step (horizontal then vertical) |
-| `pathStepCurved()` | Step with rounded corners |
-| `pathCurvedS()` | S-shaped cubic curve |
+| Path               | Description                                     |
+| ------------------ | ----------------------------------------------- |
+| `pathLine()`       | Direct line between source and target           |
+| `pathCurved()`     | Quadratic Bezier curve (configurable curvature) |
+| `pathStep()`       | Right-angle step (horizontal then vertical)     |
+| `pathStepCurved()` | Step with rounded corners                       |
+| `pathCurvedS()`    | S-shaped cubic curve                            |
 
 Declare which paths your graph uses in `primitives.edges.paths`, then assign them per-edge via styles:
 
 ```typescript
-import { pathLine, pathCurved } from "sigma/rendering";
+import { pathCurved, pathLine } from "sigma/rendering";
 
 new Sigma(graph, container, {
   primitives: {
@@ -38,9 +38,7 @@ new Sigma(graph, container, {
     },
   },
   styles: {
-    edges: [
-      { path: { attribute: "path" } },
-    ],
+    edges: [{ path: { attribute: "path" } }],
   },
 });
 ```
@@ -52,7 +50,7 @@ The first path in the array is the default. Edges whose `path` attribute does no
 To render arrowheads, declare the extremity types in `primitives.edges.extremities` and assign them via the `head` and `tail` style properties:
 
 ```typescript
-import { pathLine, extremityArrow } from "sigma/rendering";
+import { extremityArrow, pathLine } from "sigma/rendering";
 
 new Sigma(graph, container, {
   primitives: {
@@ -62,9 +60,7 @@ new Sigma(graph, container, {
     },
   },
   styles: {
-    edges: [
-      { head: { attribute: "head" } },
-    ],
+    edges: [{ head: { attribute: "head" } }],
   },
 });
 ```
@@ -80,9 +76,7 @@ graph.addEdge("a", "b", { color: "#e63946" });
 
 new Sigma(graph, container, {
   styles: {
-    edges: [
-      { color: { attribute: "color" } },
-    ],
+    edges: [{ color: { attribute: "color" } }],
   },
 });
 ```
@@ -92,7 +86,7 @@ new Sigma(graph, container, {
 The `layerDashed()` function from `sigma/rendering` adds a dashed overlay on top of the plain edge body. Import it and add it to the edge layers:
 
 ```typescript
-import { pathLine, pathCurved, extremityArrow, layerPlain, layerDashed } from "sigma/rendering";
+import { extremityArrow, layerDashed, layerPlain, pathCurved, pathLine } from "sigma/rendering";
 
 new Sigma(graph, container, {
   primitives: {
@@ -126,7 +120,15 @@ The `dashSize` and `gapSize` options accept either a fixed `{ value, mode }` obj
 A complete configuration combining paths, extremities, colors, and dashes:
 
 ```typescript
-import { pathLine, pathCurved, pathStepCurved, pathCurvedS, extremityArrow, layerPlain, layerDashed } from "sigma/rendering";
+import {
+  extremityArrow,
+  layerDashed,
+  layerPlain,
+  pathCurved,
+  pathCurvedS,
+  pathLine,
+  pathStepCurved,
+} from "sigma/rendering";
 
 new Sigma(graph, container, {
   primitives: {
@@ -157,3 +159,9 @@ new Sigma(graph, container, {
 ```
 
 For more on the styles and primitives system, see [Styles and primitives](/concepts/styles-and-primitives/).
+
+## Edge labels
+
+Sigma can render labels along edges. Enable it with `renderEdgeLabels: true` in settings, and use the `label` primitives option to configure font size mode and text border:
+
+<SigmaExample id="styling/edge-label-styles" height="500px" />

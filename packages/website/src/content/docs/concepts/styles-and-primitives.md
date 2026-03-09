@@ -44,12 +44,12 @@ primitives: {
 
 **Layers** are composited from back to front to build up the node's appearance. Built-in layer types include:
 
-| Layer                | Package                | Description                                    |
-| -------------------- | ---------------------- | ---------------------------------------------- |
-| `layerFill()`        | `sigma/rendering`      | Solid color fill using the node's `color`       |
-| `layerBorder()`      | `@sigma/node-border`   | Configurable concentric borders                |
-| `layerImage()`       | `@sigma/node-image`    | Image or pictogram rendered inside the shape   |
-| `layerPiechart()`    | `@sigma/node-piechart` | Pie chart slices                               |
+| Layer             | Package                | Description                                  |
+| ----------------- | ---------------------- | -------------------------------------------- |
+| `layerFill()`     | `sigma/rendering`      | Solid color fill using the node's `color`    |
+| `layerBorder()`   | `@sigma/node-border`   | Configurable concentric borders              |
+| `layerImage()`    | `@sigma/node-image`    | Image or pictogram rendered inside the shape |
+| `layerPiechart()` | `@sigma/node-piechart` | Pie chart slices                             |
 
 Layers automatically disable themselves when they have no data -- for example, an `image` layer on a node with no `image` attribute renders as transparent. This means all nodes share the same WebGL program regardless of which layers they use.
 
@@ -272,7 +272,7 @@ Here is a complete example combining primitives and styles to render nodes with 
 import { layerBorder } from "@sigma/node-border";
 import Graph from "graphology";
 import Sigma from "sigma";
-import { sdfCircle, layerFill, pathLine, extremityArrow } from "sigma/rendering";
+import { extremityArrow, layerFill, pathLine, sdfCircle } from "sigma/rendering";
 
 const graph = new Graph();
 graph.addNode("a", { x: 0, y: 0, size: 15, color: "#e22653", label: "Alice" });
@@ -316,9 +316,7 @@ const renderer = new Sigma(graph, document.getElementById("container"), {
         },
       },
     ],
-    edges: [
-      { color: "#ccc", size: 2, head: "arrow" },
-    ],
+    edges: [{ color: "#ccc", size: 2, head: "arrow" }],
   },
 });
 ```

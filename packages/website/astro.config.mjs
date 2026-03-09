@@ -1,7 +1,9 @@
 import starlight from "@astrojs/starlight";
+import { defineConfig } from "astro/config";
 import starlightLinksValidator from "starlight-links-validator";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
-import { defineConfig } from "astro/config";
+
+const isDev = process.argv.includes("dev");
 
 export default defineConfig({
   site: "https://www.sigmajs.org",
@@ -10,7 +12,6 @@ export default defineConfig({
   },
   redirects: {
     "/docs": "/get-started/quickstart/",
-    "/docs/": "/get-started/quickstart/",
     "/docs/quickstart": "/get-started/quickstart/",
     "/docs/resources": "/get-started/quickstart/",
     "/docs/advanced/coordinate-systems": "/concepts/coordinate-systems/",
@@ -29,29 +30,33 @@ export default defineConfig({
         starlightLinksValidator({
           exclude: ({ link }) => link.includes("/api/"),
         }),
-        starlightTypeDoc({
-          entryPoints: [
-            "../sigma/src/index.ts",
-            "../sigma/src/settings.ts",
-            "../sigma/src/rendering/index.ts",
-            "../sigma/src/utils/index.ts",
-            "../layer-leaflet/src/index.ts",
-            "../layer-maplibre/src/index.ts",
-            "../layer-webgl/src/index.ts",
-            "../node-border/src/index.ts",
-            "../node-image/src/index.ts",
-            "../node-piechart/src/index.ts",
-            "../export-image/src/index.ts",
-          ],
-          tsconfig: "./tsconfig.typedoc.json",
-          sidebar: {
-            label: "API reference",
-            collapsed: true,
-          },
-          typeDoc: {
-            entryFileName: "index",
-          },
-        }),
+        ...(isDev
+          ? []
+          : [
+              starlightTypeDoc({
+                entryPoints: [
+                  "../sigma/src/index.ts",
+                  "../sigma/src/settings.ts",
+                  "../sigma/src/rendering/index.ts",
+                  "../sigma/src/utils/index.ts",
+                  "../layer-leaflet/src/index.ts",
+                  "../layer-maplibre/src/index.ts",
+                  "../layer-webgl/src/index.ts",
+                  "../node-border/src/index.ts",
+                  "../node-image/src/index.ts",
+                  "../node-piechart/src/index.ts",
+                  "../export-image/src/index.ts",
+                ],
+                tsconfig: "./tsconfig.typedoc.json",
+                sidebar: {
+                  label: "API reference",
+                  collapsed: true,
+                },
+                typeDoc: {
+                  entryFileName: "index",
+                },
+              }),
+            ]),
       ],
       title: "sigma.js",
       tagline: "A JavaScript library aimed at visualizing graphs of thousands of nodes and edges",
@@ -94,10 +99,7 @@ export default defineConfig({
             },
             {
               label: "Edges",
-              items: [
-                { slug: "how-to/edges/types-colors" },
-                { slug: "how-to/edges/labels" },
-              ],
+              items: [{ slug: "how-to/edges/types-colors" }, { slug: "how-to/edges/labels" }],
             },
             {
               label: "Labels",
@@ -129,22 +131,13 @@ export default defineConfig({
             },
             {
               label: "Technical",
-              items: [
-                { slug: "how-to/technical/custom-sizes" },
-                { slug: "how-to/technical/shadow-dom" },
-              ],
+              items: [{ slug: "how-to/technical/custom-sizes" }, { slug: "how-to/technical/shadow-dom" }],
             },
           ],
         },
         {
           label: "Examples",
-          items: [
-            { slug: "examples", label: "All examples" },
-            { slug: "examples/bipartite-network" },
-            { slug: "examples/cluster-labels" },
-            { slug: "examples/layouts" },
-            { slug: "examples/load-rdf" },
-          ],
+          items: [{ slug: "examples", label: "All examples" }],
         },
         {
           label: "Concepts",
@@ -159,13 +152,9 @@ export default defineConfig({
         },
         {
           label: "Reference",
-          items: [
-            { slug: "reference/settings" },
-            { slug: "reference/events" },
-            { slug: "reference/attributes" },
-          ],
+          items: [{ slug: "reference/settings" }, { slug: "reference/events" }, { slug: "reference/attributes" }],
         },
-        typeDocSidebarGroup,
+        ...(isDev ? [] : [typeDocSidebarGroup]),
         {
           label: "Contributing",
           items: [{ slug: "contributing/publish" }, { slug: "contributing/new-packages" }],

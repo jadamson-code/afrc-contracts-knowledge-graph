@@ -1,0 +1,64 @@
+---
+title: CSV to network map
+sidebar:
+  label: CSV to network map
+---
+
+import SigmaExample from "../../../components/SigmaExample.astro";
+
+This example shows how to transform a CSV dataset into a network visualization without any intermediate steps. Starting from a dataset of French political science institutions, it builds a bipartite graph connecting institutions to their research subjects.
+
+<SigmaExample id="cookbook/csv-to-network" height="500px" />
+
+## How it works
+
+### 1. Parse CSV and build a bipartite graph
+
+Each CSV row represents an institution with a `subject_terms` column. The code creates two types of nodes (institutions and subjects) and connects them with edges.
+
+```typescript
+Papa.parse("/data.csv", {
+  download: true,
+  header: true,
+  complete: (results) => {
+    const graph = new Graph();
+
+    results.data.forEach((line) => {
+      graph.addNode(line.name, { nodeType: "institution", label: line.name });
+
+      const subjects = parseSubjects(line.subject_terms);
+      subjects.forEach((subject) => {
+        if (!graph.hasNode(subject)) graph.addNode(subject, { nodeType: "subject", label: subject });
+        graph.addEdge(line.name, subject);
+      });
+    });
+  },
+});
+```
+
+### 2. Clean, style, and layout
+
+```typescript
+// Keep only the main connected component
+cropToLargestConnectedComponent(graph);
+
+// Color by type: red for institutions, blue for subjects
+graph.forEachNode((node, attrs) => graph.setNodeAttribute(node, "color", COLORS[attrs.nodeType]));
+
+// Size by degree
+graph.forEachNode((node) => {
+  const degree = graph.degree(node);
+  graph.setNodeAttribute(node, "size", scaleByDegree(degree));
+});
+
+// Initial circular layout, then ForceAtlas2 for refinement
+circular.assign(graph);
+forceAtlas2.assign(graph, { settings, iterations: 600 });
+```
+
+### Key concepts
+
+- **[papaparse](https://www.papaparse.com/)**: lightweight CSV parser with streaming and header support
+- **Bipartite graph**: two node types (institutions, subjects) with edges only between types
+- **`cropToLargestConnectedComponent()`**: removes disconnected fragments for a cleaner visualization
+- **Two-pass layout**: circular layout gives structure, ForceAtlas2 refines positions

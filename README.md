@@ -4,7 +4,7 @@
 
 ![Sigma.js](packages/website/static/img/logo-sigma-text.svg)
 
-**[Website](https://www.sigmajs.org/)** | **[Documentation](https://www.sigmajs.org/docs)** | **[Storybook](https://www.sigmajs.org/storybook)** | <strong><a rel="me" href="https://vis.social/@sigmajs">Mastodon</a></strong>
+**[Website](https://www.sigmajs.org/)** | **[Documentation](https://www.sigmajs.org/docs)** | <strong><a rel="me" href="https://vis.social/@sigmajs">Mastodon</a></strong>
 
 ---
 
@@ -40,7 +40,7 @@ To integrate sigma into your project, follow these simple steps:
 
 ## How to develop locally
 
-To run the [Storybook](https://storybook.js.org/) locally:
+To run the website locally:
 
 ```bash
 git clone git@github.com:jacomyal/sigma.js.git
@@ -49,14 +49,13 @@ npm install
 npm run start
 ```
 
-This will open the Storybook in your web browser, which live reloads when you modify the stories or the package sources.
+This will open the website in your web browser, which live reloads when you modify the examples or the package sources.
 
 ## Resources
 
 - **GitHub Project:** The source code and collaborative development efforts for Sigma.js are hosted on [GitHub](https://github.com/jacomyal/sigma.js).
 - **Website:** The official website, [sigmajs.org](https://sigmajs.org), kindly designed by [Robin de Mourat](https://github.com/robindemourat/) from the [Sciences-Po médialab](https://medialab.sciencespo.fr/en/) team, showcases the library's capabilities.
-- **Documentation:** A detailed documentation, built with [Docusaurus](https://docusaurus.io/), is available at [sigmajs.org/docs](https://sigmajs.org/docs). It provides extensive guides and API references for users.
-- **Storybook:** Interactive examples can be found at [sigmajs.org/storybook](https://sigmajs.org/storybook).
+- **Documentation:** A detailed documentation is available at [sigmajs.org/docs](https://sigmajs.org/docs). It provides extensive guides, interactive examples, and API references for users.
 - **Demo:** A comprehensive demo, available at [sigmajs.org/demo](https://sigmajs.org/demo), features a full-featured React-based web application utilizing Sigma.js.
 
 ## How to contribute

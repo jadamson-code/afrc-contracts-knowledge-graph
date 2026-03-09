@@ -1,0 +1,22 @@
+{
+  "core": {
+    "title": "Core features",
+    "description": "Events, camera, viewport and performance"
+  },
+  "styling": {
+    "title": "Styling",
+    "description": "Nodes, edges and labels appearance"
+  },
+  "cookbook": {
+    "title": "Cookbook",
+    "description": "Recipes for common graph visualization tasks"
+  },
+  "map-layers": {
+    "title": "Map layers",
+    "description": "Geographic maps with Leaflet and MapLibre"
+  },
+  "webgl-layers": {
+    "title": "WebGL layers",
+    "description": "Custom WebGL rendering layers and contours"
+  }
+}

@@ -4,7 +4,7 @@ sidebar:
   label: Styles, backdrops & attachments
 ---
 
-import SigmaExample from '../../../../components/SigmaExample.astro';
+import SigmaExample from "../../../../components/SigmaExample.astro";
 
 Sigma v4 gives you fine control over label rendering — including font styles, backdrop shapes, positioning, and HTML attachments.
 
@@ -22,27 +22,29 @@ styles: {
 }
 ```
 
-You can also set `labelAngle` for rotated labels and `labelMargin` to control spacing.
+You can also set `labelAngle` for rotated labels.
 
 ## Backdrops
 
-Backdrops are decorative shapes drawn behind labels. Configure them via `backdrop` in styles:
+Backdrops are decorative shapes drawn behind node labels. Configure them via flat `backdrop*` style properties:
 
 ```js
 styles: {
   nodes: [
     {
-      backdrop: {
-        fill: "#ffffff",
-        shadow: { color: "#00000033", blur: 4, offsetX: 0, offsetY: 2 },
-        border: { color: "#cccccc", width: 1 },
-        cornerRadius: 4,
-        padding: { top: 2, right: 6, bottom: 2, left: 6 },
-      },
+      backdropColor: "#ffffff",
+      backdropPadding: 6,
+      backdropCornerRadius: 4,
+      backdropBorderColor: "#cccccc",
+      backdropBorderWidth: 1,
+      backdropShadowColor: "#00000033",
+      backdropShadowBlur: 4,
     },
   ],
 }
 ```
+
+Use `backdropVisibility` to control when backdrops appear (`"visible"` or `"hidden"`), `backdropArea` to choose what the backdrop covers (`"both"`, `"node"`, or `"label"`), and `backdropLabelPadding` to set a separate padding for the label portion.
 
 ## Attachments
 
@@ -59,6 +61,16 @@ renderer.on("enterNode", ({ node }) => {
 });
 ```
 
-## Live example
+## Live examples
 
-<SigmaExample id="label-styles" height="500px" />
+### Label positioning
+
+<SigmaExample id="styling/label-styles" height="500px" />
+
+### Backdrop styles
+
+<SigmaExample id="styling/backdrop-styles" height="500px" />
+
+### Label attachments
+
+<SigmaExample id="styling/label-attachments" height="500px" />

@@ -28,92 +28,92 @@ These are the built-in style properties available for nodes:
 
 ### Position and geometry
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `x` | `number` | X coordinate in graph space |
-| `y` | `number` | Y coordinate in graph space |
-| `size` | `number` | Node diameter in pixels |
-| `shape` | `string` | Shape name (e.g. `"circle"`, `"square"`). Must match a shape declared in `primitives.nodes.shapes` |
+| Property | Type     | Description                                                                                        |
+| -------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `x`      | `number` | X coordinate in graph space                                                                        |
+| `y`      | `number` | Y coordinate in graph space                                                                        |
+| `size`   | `number` | Node diameter in pixels                                                                            |
+| `shape`  | `string` | Shape name (e.g. `"circle"`, `"square"`). Must match a shape declared in `primitives.nodes.shapes` |
 
 ### Appearance
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `color` | `string` | Node fill color |
-| `opacity` | `number` | Opacity from 0 (transparent) to 1 (opaque) |
-| `visibility` | `"visible" \| "hidden"` | Whether the node is visible |
+| Property     | Type                    | Description                                |
+| ------------ | ----------------------- | ------------------------------------------ |
+| `color`      | `string`                | Node fill color                            |
+| `opacity`    | `number`                | Opacity from 0 (transparent) to 1 (opaque) |
+| `visibility` | `"visible" \| "hidden"` | Whether the node is visible                |
 
 ### Ordering
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `depth` | `string` | Depth layer for render ordering (must match a layer in `primitives.depthLayers`) |
-| `zIndex` | `number` | Z-index within the depth layer |
+| Property | Type     | Description                                                                      |
+| -------- | -------- | -------------------------------------------------------------------------------- |
+| `depth`  | `string` | Depth layer for render ordering (must match a layer in `primitives.depthLayers`) |
+| `zIndex` | `number` | Z-index within the depth layer                                                   |
 
 ### Label properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `label` | `string` | Label text content |
-| `labelColor` | `string` | Label text color |
-| `labelSize` | `number` | Label font size in pixels |
-| `labelFont` | `string` | Label font family (e.g. `"Georgia, serif"`) |
-| `labelVisibility` | `"auto" \| "visible" \| "hidden"` | `"auto"` uses density-based culling, `"visible"` forces display |
-| `labelPosition` | `"right" \| "left" \| "above" \| "below" \| "over"` | Label position relative to node |
-| `labelAngle` | `number` | Label rotation angle in radians |
-| `labelDepth` | `string` | Depth layer for label rendering |
-| `labelAttachment` | `string \| null` | Label attachment name (references `primitives.nodes.labelAttachments`) |
-| `labelAttachmentPlacement` | `"below" \| "above" \| "left" \| "right"` | Attachment position relative to label |
+| Property                   | Type                                                | Description                                                            |
+| -------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------- |
+| `label`                    | `string`                                            | Label text content                                                     |
+| `labelColor`               | `string`                                            | Label text color                                                       |
+| `labelSize`                | `number`                                            | Label font size in pixels                                              |
+| `labelFont`                | `string`                                            | Label font family (e.g. `"Georgia, serif"`)                            |
+| `labelVisibility`          | `"auto" \| "visible" \| "hidden"`                   | `"auto"` uses density-based culling, `"visible"` forces display        |
+| `labelPosition`            | `"right" \| "left" \| "above" \| "below" \| "over"` | Label position relative to node                                        |
+| `labelAngle`               | `number`                                            | Label rotation angle in radians                                        |
+| `labelDepth`               | `string`                                            | Depth layer for label rendering                                        |
+| `labelAttachment`          | `string \| null`                                    | Label attachment name (references `primitives.nodes.labelAttachments`) |
+| `labelAttachmentPlacement` | `"below" \| "above" \| "left" \| "right"`           | Attachment position relative to label                                  |
 
 ### Backdrop properties
 
 Backdrops render a background shape behind nodes and their labels, typically used for hover effects.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `backdropVisibility` | `"visible" \| "hidden"` | Whether the backdrop is shown |
-| `backdropColor` | `string` | Backdrop fill color |
-| `backdropShadowColor` | `string` | Shadow color |
-| `backdropShadowBlur` | `number` | Shadow blur radius in pixels |
-| `backdropPadding` | `number` | Padding around the node and label in pixels |
-| `backdropBorderColor` | `string` | Border color |
-| `backdropBorderWidth` | `number` | Border width in pixels |
-| `backdropCornerRadius` | `number` | Corner radius in pixels |
-| `backdropLabelPadding` | `number` | Label-specific padding (`-1` falls back to `backdropPadding`) |
-| `backdropArea` | `"both" \| "node" \| "label"` | Which area the backdrop covers |
+| Property               | Type                          | Description                                                   |
+| ---------------------- | ----------------------------- | ------------------------------------------------------------- |
+| `backdropVisibility`   | `"visible" \| "hidden"`       | Whether the backdrop is shown                                 |
+| `backdropColor`        | `string`                      | Backdrop fill color                                           |
+| `backdropShadowColor`  | `string`                      | Shadow color                                                  |
+| `backdropShadowBlur`   | `number`                      | Shadow blur radius in pixels                                  |
+| `backdropPadding`      | `number`                      | Padding around the node and label in pixels                   |
+| `backdropBorderColor`  | `string`                      | Border color                                                  |
+| `backdropBorderWidth`  | `number`                      | Border width in pixels                                        |
+| `backdropCornerRadius` | `number`                      | Corner radius in pixels                                       |
+| `backdropLabelPadding` | `number`                      | Label-specific padding (`-1` falls back to `backdropPadding`) |
+| `backdropArea`         | `"both" \| "node" \| "label"` | Which area the backdrop covers                                |
 
 ## Edge style properties
 
 ### Appearance
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `size` | `number` | Edge thickness in pixels |
-| `color` | `string` | Edge color |
-| `opacity` | `number` | Opacity from 0 to 1 |
-| `visibility` | `"visible" \| "hidden"` | Whether the edge is visible |
-| `path` | `string` | Path type (e.g. `"straight"`, `"curved"`). Must match a path in `primitives.edges.paths` |
-| `head` | `string` | Head (target) extremity type (e.g. `"arrow"`, `"none"`) |
-| `tail` | `string` | Tail (source) extremity type |
+| Property     | Type                    | Description                                                                              |
+| ------------ | ----------------------- | ---------------------------------------------------------------------------------------- |
+| `size`       | `number`                | Edge thickness in pixels                                                                 |
+| `color`      | `string`                | Edge color                                                                               |
+| `opacity`    | `number`                | Opacity from 0 to 1                                                                      |
+| `visibility` | `"visible" \| "hidden"` | Whether the edge is visible                                                              |
+| `path`       | `string`                | Path type (e.g. `"straight"`, `"curved"`). Must match a path in `primitives.edges.paths` |
+| `head`       | `string`                | Head (target) extremity type (e.g. `"arrow"`, `"none"`)                                  |
+| `tail`       | `string`                | Tail (source) extremity type                                                             |
 
 ### Ordering
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `depth` | `string` | Depth layer for render ordering |
-| `zIndex` | `number` | Z-index within the depth layer |
+| Property | Type     | Description                     |
+| -------- | -------- | ------------------------------- |
+| `depth`  | `string` | Depth layer for render ordering |
+| `zIndex` | `number` | Z-index within the depth layer  |
 
 ### Label properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `label` | `string` | Label text content |
-| `labelColor` | `string` | Label text color |
-| `labelSize` | `number` | Label font size in pixels |
-| `labelFont` | `string` | Label font family |
-| `labelVisibility` | `"auto" \| "visible" \| "hidden"` | Label visibility mode |
-| `labelPosition` | `"over" \| "above" \| "below" \| "auto"` | Position relative to the edge path |
-| `labelDepth` | `string` | Depth layer for label rendering |
+| Property          | Type                                     | Description                        |
+| ----------------- | ---------------------------------------- | ---------------------------------- |
+| `label`           | `string`                                 | Label text content                 |
+| `labelColor`      | `string`                                 | Label text color                   |
+| `labelSize`       | `number`                                 | Label font size in pixels          |
+| `labelFont`       | `string`                                 | Label font family                  |
+| `labelVisibility` | `"auto" \| "visible" \| "hidden"`        | Label visibility mode              |
+| `labelPosition`   | `"over" \| "above" \| "below" \| "auto"` | Position relative to the edge path |
+| `labelDepth`      | `string`                                 | Depth layer for label rendering    |
 
 ## Custom variables
 
@@ -129,10 +129,7 @@ const renderer = new Sigma(graph, container, {
         borderSize: { type: "number", default: 2 },
         borderColor: { type: "color", default: "#ffffff" },
       },
-      layers: [
-        layerFill(),
-        layerBorder({ borders: [{ size: "borderSize", color: "borderColor" }] }),
-      ],
+      layers: [layerFill(), layerBorder({ borders: [{ size: "borderSize", color: "borderColor" }] })],
     },
   },
   styles: {

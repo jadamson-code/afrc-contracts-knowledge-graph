@@ -1,0 +1,75 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import { parse } from "graphology-gexf/browser";
+  import Sigma from "sigma";
+  import { layerFill, sdfCircle, sdfDiamond } from "sigma/rendering";
+  import { DEFAULT_STYLES } from "sigma/types";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const res = await fetch("/data/diseasome.gexf");
+  const gexf = await res.text();
+  const graph = parse(Graph, gexf);
+
+  new Sigma(graph, container, {
+    primitives: {
+      nodes: {
+        shapes: [sdfCircle(), sdfDiamond()],
+        layers: [layerFill()],
+        label: {
+          margin: 5,
+        },
+      },
+    },
+    styles: {
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          when: "isHovered",
+          then: {
+            backdropVisibility: "visible",
+            backdropColor: "#ffffff",
+            backdropShadowColor: "rgba(0, 0, 0, 0.5)",
+            backdropShadowBlur: 12,
+            backdropPadding: 6,
+          },
+        },
+        // Disease nodes: circles with bold labels rendered over them
+        {
+          when: (attrs) => attrs.type === "disease",
+          then: {
+            shape: "circle",
+            labelFont: "bold Arial, sans-serif",
+            labelSize: 16,
+            labelPosition: "over",
+          },
+        },
+        // Gene nodes: diamonds with small monospace labels at an angle
+        {
+          when: (attrs) => attrs.type === "gene",
+          then: {
+            shape: "diamond",
+            labelFont: "'Courier New', monospace",
+            labelSize: 10,
+            labelPosition: "right",
+            labelAngle: Math.PI / 4,
+          },
+        },
+      ],
+    },
+    settings: {
+      itemSizesReference: "positions",
+      zoomToSizeRatioFunction: (x: number) => x,
+      autoRescale: true,
+    },
+  });
+</script>

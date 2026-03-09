@@ -1,0 +1,95 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import { bindWebGLLayer, createContoursProgram } from "@sigma/layer-webgl";
+  import Graph from "graphology";
+  import louvain from "graphology-communities-louvain";
+  import Sigma from "sigma";
+
+  import { registerControls } from "../_controls";
+  import data from "../_data/data.json";
+
+  const COMMUNITY_COLORS = [
+    "#e63946",
+    "#457b9d",
+    "#2a9d8f",
+    "#e9c46a",
+    "#f4a261",
+    "#6a4c93",
+    "#8ac926",
+    "#ff6b6b",
+    "#4cc9f0",
+    "#b5838d",
+  ];
+
+  const graph = new Graph();
+  graph.import(data);
+
+  // Detect communities
+  louvain.assign(graph, { nodeCommunityAttribute: "community" });
+  const communities = new Set<string>();
+  graph.forEachNode((_, attrs) => communities.add(attrs.community));
+  const communitiesArray = Array.from(communities);
+
+  // Assign colors per community
+  const palette: Record<string, string> = {};
+  communitiesArray.forEach((c, i) => (palette[c] = COMMUNITY_COLORS[i % COMMUNITY_COLORS.length]));
+  graph.forEachNode((node, attrs) => graph.setNodeAttribute(node, "color", palette[attrs.community]));
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+  const renderer = new Sigma(graph, container);
+
+  // Track active contour layer cleanup functions
+  const activeLayers: Record<string, (() => void) | null> = {};
+
+  function showContour(community: string) {
+    if (activeLayers[community]) return;
+    activeLayers[community] = bindWebGLLayer(
+      `community-${community}`,
+      renderer,
+      createContoursProgram(
+        graph.filterNodes((_, attr) => attr.community === community),
+        {
+          radius: 150,
+          border: { color: palette[community], thickness: 8 },
+          levels: [{ color: palette[community] + "22", threshold: 0.5 }],
+        },
+      ),
+    );
+  }
+
+  function hideContour(community: string) {
+    if (activeLayers[community]) {
+      activeLayers[community]!();
+      activeLayers[community] = null;
+    }
+  }
+
+  // Register a toggle per community
+  const controls: Record<
+    string,
+    { type: "toggle"; label: string; default: boolean; action: (active: boolean) => void }
+  > = {};
+  communitiesArray.forEach((community, i) => {
+    controls[`community-${i}`] = {
+      type: "toggle",
+      label: `Group ${i + 1}`,
+      default: i === 0,
+      action: (active) => {
+        if (active) showContour(community);
+        else hideContour(community);
+      },
+    };
+  });
+  registerControls(controls);
+
+  // Show the first community's contour on load
+  showContour(communitiesArray[0]);
+</script>

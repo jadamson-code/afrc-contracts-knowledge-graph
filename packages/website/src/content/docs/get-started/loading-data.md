@@ -35,6 +35,7 @@ Graphology has a built-in serialization format. You can import JSON data that ma
 ```typescript
 import Graph from "graphology";
 import Sigma from "sigma";
+
 import data from "./data.json";
 
 const graph = new Graph();
@@ -51,9 +52,7 @@ The expected JSON structure looks like this:
     { "key": "n1", "attributes": { "x": 0, "y": 0, "size": 10, "label": "Node 1", "color": "#e22653" } },
     { "key": "n2", "attributes": { "x": 1, "y": 1, "size": 10, "label": "Node 2", "color": "#666" } }
   ],
-  "edges": [
-    { "source": "n1", "target": "n2", "attributes": { "size": 2 } }
-  ]
+  "edges": [{ "source": "n1", "target": "n2", "attributes": { "size": 2 } }]
 }
 ```
 

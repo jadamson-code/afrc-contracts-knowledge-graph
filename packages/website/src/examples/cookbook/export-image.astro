@@ -1,0 +1,83 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import { downloadAsImage } from "@sigma/export-image";
+  import Graph from "graphology";
+  import ForceSupervisor from "graphology-layout-force/worker";
+  import Sigma from "sigma";
+
+  import { registerControls } from "../_controls";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const graph = new Graph();
+
+  const RED = "#FA4F40";
+  const BLUE = "#727EE0";
+  const GREEN = "#5DB346";
+
+  graph.addNode("John", { size: 15, label: "John", color: RED });
+  graph.addNode("Mary", { size: 15, label: "Mary", color: RED });
+  graph.addNode("Suzan", { size: 15, label: "Suzan", color: RED });
+  graph.addNode("Nantes", { size: 15, label: "Nantes", color: BLUE });
+  graph.addNode("New-York", { size: 15, label: "New-York", color: BLUE });
+  graph.addNode("Sushis", { size: 7, label: "Sushis", color: GREEN });
+  graph.addNode("Falafels", { size: 7, label: "Falafels", color: GREEN });
+  graph.addNode("Kouign Amann", { size: 7, label: "Kouign Amann", color: GREEN });
+
+  graph.addEdge("John", "Mary", { label: "works with", size: 5 });
+  graph.addEdge("Mary", "Suzan", { label: "works with", size: 5 });
+  graph.addEdge("Mary", "Nantes", { label: "lives in", size: 5 });
+  graph.addEdge("John", "New-York", { label: "lives in", size: 5 });
+  graph.addEdge("Suzan", "New-York", { label: "lives in", size: 5 });
+  graph.addEdge("John", "Falafels", { label: "eats", size: 5 });
+  graph.addEdge("Mary", "Sushis", { label: "eats", size: 5 });
+  graph.addEdge("Suzan", "Kouign Amann", { label: "eats", size: 5 });
+
+  graph.nodes().forEach((node, i) => {
+    const angle = (i * 2 * Math.PI) / graph.order;
+    graph.setNodeAttribute(node, "x", 100 * Math.cos(angle));
+    graph.setNodeAttribute(node, "y", 100 * Math.sin(angle));
+  });
+
+  const { format, resetCamera } = registerControls({
+    format: {
+      type: "select",
+      label: "Format",
+      default: "png",
+      options: [
+        { label: "PNG", value: "png" },
+        { label: "JPEG", value: "jpeg" },
+      ],
+    },
+    resetCamera: { type: "boolean", label: "Reset camera", default: false },
+    save: {
+      type: "button",
+      label: "Save image",
+      action: () => {
+        downloadAsImage(renderer, {
+          format: format as "png" | "jpeg",
+          fileName: "graph",
+          backgroundColor: "#ffffff",
+          cameraState: resetCamera ? { x: 0.5, y: 0.5, angle: 0, ratio: 1 } : undefined,
+        });
+      },
+    },
+  });
+
+  const renderer = new Sigma(graph, container, {
+    settings: {
+      renderEdgeLabels: true,
+    },
+  });
+
+  const layout = new ForceSupervisor(graph);
+  layout.start();
+</script>

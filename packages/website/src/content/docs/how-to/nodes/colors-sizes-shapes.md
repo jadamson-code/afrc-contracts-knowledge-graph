@@ -20,9 +20,7 @@ graph.addNode("b", { x: 1, y: 1, size: 25, color: "#0055ff", label: "Node B" });
 
 new Sigma(graph, container, {
   styles: {
-    nodes: [
-      { color: { attribute: "color" }, size: { attribute: "size" } },
-    ],
+    nodes: [{ color: { attribute: "color" }, size: { attribute: "size" } }],
   },
 });
 ```
@@ -53,7 +51,7 @@ styles: {
 By default, sigma renders all nodes as circles. To use other shapes, declare them in `primitives.nodes.shapes` and assign shapes to nodes via a style rule:
 
 ```typescript
-import { sdfCircle, sdfSquare, sdfTriangle, sdfDiamond } from "sigma/rendering";
+import { sdfCircle, sdfDiamond, sdfSquare, sdfTriangle } from "sigma/rendering";
 
 new Sigma(graph, container, {
   primitives: {
@@ -98,9 +96,7 @@ new Sigma(graph, container, {
     },
   },
   styles: {
-    nodes: [
-      { shape: "square", color: { attribute: "color" }, size: { attribute: "size" } },
-    ],
+    nodes: [{ shape: "square", color: { attribute: "color" }, size: { attribute: "size" } }],
   },
 });
 ```

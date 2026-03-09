@@ -1,0 +1,58 @@
+---
+title: Cluster labels
+sidebar:
+  label: Cluster labels
+---
+
+import SigmaExample from "../../../components/SigmaExample.astro";
+
+When visualizing clustered graphs, it can be helpful to display labels for entire clusters rather than (or in addition to) individual node labels. This example shows how to render cluster labels as HTML overlays that move with the camera.
+
+<SigmaExample id="cookbook/cluster-labels" height="500px" />
+
+## How it works
+
+The dataset is a European institutions network where each node belongs to a country. Cluster labels are positioned at the barycenter of each country's nodes and rendered as absolutely-positioned HTML elements.
+
+### Computing cluster centroids
+
+```typescript
+const countryClusters: Record<string, Cluster> = {};
+
+// Collect node positions per cluster
+graph.forEachNode((node, atts) => {
+  const cluster = countryClusters[atts.country];
+  cluster.positions.push({ x: atts.x, y: atts.y });
+});
+
+// Compute barycenters
+for (const country in countryClusters) {
+  const c = countryClusters[country];
+  c.x = c.positions.reduce((acc, p) => acc + p.x, 0) / c.positions.length;
+  c.y = c.positions.reduce((acc, p) => acc + p.y, 0) / c.positions.length;
+}
+```
+
+### Updating label positions on render
+
+The HTML overlay must track camera movements. Use `graphToViewport()` in an `afterRender` callback:
+
+```typescript
+renderer.on("afterRender", () => {
+  for (const country in countryClusters) {
+    const cluster = countryClusters[country];
+    const el = document.getElementById(`cluster-${cluster.label}`);
+    if (el) {
+      const viewportPos = renderer.graphToViewport(cluster as Coordinates);
+      el.style.top = `${viewportPos.y}px`;
+      el.style.left = `${viewportPos.x}px`;
+    }
+  }
+});
+```
+
+### Key concepts
+
+- **HTML overlays**: insert a positioned `<div>` layer inside the sigma container
+- **`graphToViewport()`**: converts graph-space coordinates to viewport pixels
+- **`afterRender` event**: keeps overlay positions in sync with the camera

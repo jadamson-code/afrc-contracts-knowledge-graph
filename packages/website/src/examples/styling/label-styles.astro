@@ -1,0 +1,78 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+  import { layerFill, sdfCircle, sdfDiamond, sdfSquare, sdfTriangle } from "sigma/rendering";
+  import { DEFAULT_STYLES } from "sigma/types";
+  import type { LabelPosition } from "sigma/types";
+  import { registerControls } from "../_controls";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const ROW_POSITIONS: LabelPosition[] = ["right", "left", "above", "below", "over"];
+  const COLORS = ["#9242D5", "#5B8FF9", "#5AD8A6", "#F6BD16", "#E8684A"];
+  const SHAPES = ["circle", "square", "triangle", "diamond"] as const;
+
+  const SPACING = 50;
+  const NODE_SIZE = 15;
+
+  const graph = new Graph();
+
+  for (let row = 0; row < ROW_POSITIONS.length; row++) {
+    const position = ROW_POSITIONS[row];
+    for (let col = 0; col < SHAPES.length; col++) {
+      const shape = SHAPES[col];
+      graph.addNode(`node-${row}-${col}`, {
+        x: col * SPACING,
+        y: -row * SPACING,
+        size: NODE_SIZE,
+        color: COLORS[row],
+        label: `${shape} / ${position}`,
+        shape,
+        labelPosition: position,
+      });
+    }
+  }
+
+  const { labelAngle, labelMargin, rotateWithCamera } = registerControls({
+    labelAngle: { type: "number", label: "Angle (°)", default: 0, min: -180, max: 180, step: 5 },
+    labelMargin: { type: "number", label: "Margin (px)", default: 5, min: 0, max: 50, step: 1 },
+    rotateWithCamera: { type: "boolean", label: "Rotate with camera", default: false },
+  });
+
+  const renderer = new Sigma(graph, container, {
+    primitives: {
+      nodes: {
+        shapes: [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()],
+        layers: [layerFill()],
+        rotateWithCamera,
+        label: { margin: labelMargin },
+      },
+    },
+    styles: {
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          shape: { attribute: "shape" },
+          labelPosition: { attribute: "labelPosition", defaultValue: "right" },
+          labelAngle: () => (labelAngle * Math.PI) / 180,
+        },
+      ],
+    },
+    settings: {
+      itemSizesReference: "positions",
+      zoomToSizeRatioFunction: (x: number) => x,
+      autoRescale: true,
+    },
+  });
+
+  renderer.getCamera().setState({ angle: 0.1 });
+</script>

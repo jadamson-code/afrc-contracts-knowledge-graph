@@ -1,13 +1,14 @@
 ---
 /**
- * Auto-generated index of all interactive examples.
- * Lists each example with links and cross-references to doc pages that embed it.
+ * Auto-generated index of all interactive examples, grouped by topic.
+ * Reads topic metadata from _topics.json and cross-references doc pages.
  */
+import topics from "../examples/_topics.json";
 
-// Collect all example IDs
-const exampleFiles = import.meta.glob("../examples/*.astro");
+// Collect all example IDs (nested: "core/events", "styling/edge-styles", etc.)
+const exampleFiles = import.meta.glob("../examples/**/*.astro");
 const exampleIds = Object.keys(exampleFiles)
-  .map((key) => key.match(/\/([^/]+)\.astro$/)![1])
+  .map((key) => key.match(/\/examples\/(.+)\.astro$/)![1])
   .sort();
 
 // Collect all doc files and find SigmaExample references
@@ -23,8 +24,6 @@ const exampleToPages = new Map<string, { slug: string; title: string }[]>();
 for (const [path, mod] of Object.entries(docFiles)) {
   const raw = (mod as { default: string }).default;
   const slug = path.replace(/^\.\.\/content\/docs\//, "").replace(/\.(md|mdx)$/, "");
-
-  // Extract title from frontmatter
   const titleMatch = raw.match(/^---[\s\S]*?title:\s*["']?(.+?)["']?\s*$/m);
   const title = titleMatch?.[1] ?? slug;
 
@@ -34,39 +33,87 @@ for (const [path, mod] of Object.entries(docFiles)) {
     exampleToPages.get(id)!.push({ slug, title });
   }
 }
+
+// Build pre-computed data for the template
+const topicOrder = Object.keys(topics) as (keyof typeof topics)[];
+
+interface ExampleEntry {
+  id: string;
+  name: string;
+  embedUrl: string;
+  sourceUrl: string;
+  pages: { slug: string; title: string }[];
+}
+
+interface TopicGroup {
+  key: string;
+  title: string;
+  description: string;
+  examples: ExampleEntry[];
+}
+
+const groups: TopicGroup[] = [];
+
+for (const topicKey of topicOrder) {
+  const meta = topics[topicKey];
+  const ids = exampleIds.filter((id) => id.startsWith(topicKey + "/"));
+  if (ids.length === 0) continue;
+
+  groups.push({
+    key: topicKey,
+    title: meta.title,
+    description: meta.description,
+    examples: ids.map((id) => ({
+      id,
+      name: id.split("/").pop()!,
+      embedUrl: "/embed/" + id + "/",
+      sourceUrl: "https://github.com/jacomyal/sigma.js/blob/v4/packages/website/src/examples/" + id + ".astro",
+      pages: exampleToPages.get(id) ?? [],
+    })),
+  });
+}
 ---
 
-<table>
-  <thead>
-    <tr>
-      <th>Example</th>
-      <th>Links</th>
-      <th>Referenced in</th>
-    </tr>
-  </thead>
-  <tbody>
-    {exampleIds.map((id) => {
-      const pages = exampleToPages.get(id) ?? [];
-      return (
-        <tr>
-          <td><code>{id}</code></td>
-          <td>
-            <a href={`/embed/${id}/`}>embed</a>
-            {" · "}
-            <a href={`https://github.com/jacomyal/sigma.js/blob/main/packages/website/src/examples/${id}.astro`}>source</a>
-          </td>
-          <td>
-            {pages.length > 0
-              ? pages.map((p, i) => (
-                  <>
-                    {i > 0 && ", "}
-                    <a href={`/${p.slug}/`}>{p.title}</a>
-                  </>
-                ))
-              : <em>none</em>}
-          </td>
-        </tr>
-      );
-    })}
-  </tbody>
-</table>
+{
+  groups.map((group) => (
+    <section>
+      <h3>{group.title}</h3>
+      <p>{group.description}</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Example</th>
+            <th>Links</th>
+            <th>Referenced in</th>
+          </tr>
+        </thead>
+        <tbody>
+          {group.examples.map((ex) => (
+            <tr>
+              <td>
+                <code>{ex.name}</code>
+              </td>
+              <td>
+                <a href={ex.embedUrl}>embed</a>
+                {" · "}
+                <a href={ex.sourceUrl}>source</a>
+              </td>
+              <td>
+                {ex.pages.length > 0 ? (
+                  ex.pages.map((p, i) => (
+                    <span>
+                      {i > 0 && ", "}
+                      <a href={"/" + p.slug + "/"}>{p.title}</a>
+                    </span>
+                  ))
+                ) : (
+                  <em>none</em>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  ))
+}

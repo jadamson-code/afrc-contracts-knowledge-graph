@@ -4,7 +4,7 @@ sidebar:
   label: "Images & pictograms"
 ---
 
-import SigmaExample from '../../../../components/SigmaExample.astro';
+import SigmaExample from "../../../../components/SigmaExample.astro";
 
 The `@sigma/node-image` package adds an image layer that can render photos or SVG pictograms inside nodes.
 
@@ -25,7 +25,10 @@ import Sigma from "sigma";
 
 const graph = new Graph();
 graph.addNode("a", {
-  x: 0, y: 0, size: 20, label: "Alice",
+  x: 0,
+  y: 0,
+  size: 20,
+  label: "Alice",
   image: "https://example.com/alice.jpg",
 });
 
@@ -40,7 +43,7 @@ new Sigma(graph, container, {
 
 The image is clipped to the node shape (circle by default) and rendered on top of the node fill color.
 
-<SigmaExample id="node-images" />
+<SigmaExample id="styling/node-images" />
 
 ## Rendering SVG pictograms
 
@@ -67,7 +70,10 @@ Set each node's `image` attribute to an SVG URL, and its `color` attribute to th
 
 ```typescript
 graph.addNode("person", {
-  x: 0, y: 0, size: 20, color: "#e22653",
+  x: 0,
+  y: 0,
+  size: 20,
+  color: "#e22653",
   image: "https://icons.getbootstrap.com/assets/icons/person.svg",
 });
 ```
@@ -78,9 +84,9 @@ The `padding` option (0 to 1) adds space between the icon and the node edge. A v
 
 The image layer accepts these options:
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `drawingMode` | `"image"` | `"image"` renders as-is, `"color"` colorizes with node color |
-| `padding` | `0` | Space around the image (0-1 fraction of diameter) |
-| `imageAttribute` | `"image"` | Node attribute to read the image URL from |
+| Option           | Default   | Description                                                  |
+| ---------------- | --------- | ------------------------------------------------------------ |
+| `drawingMode`    | `"image"` | `"image"` renders as-is, `"color"` colorizes with node color |
+| `padding`        | `0`       | Space around the image (0-1 fraction of diameter)            |
+| `imageAttribute` | `"image"` | Node attribute to read the image URL from                    |
 | `colorAttribute` | `"color"` | Node attribute to read the tint color from (color mode only) |

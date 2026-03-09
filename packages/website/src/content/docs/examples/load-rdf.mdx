@@ -1,0 +1,47 @@
+---
+title: Load RDF
+sidebar:
+  label: Load RDF
+---
+
+import SigmaExample from "../../../components/SigmaExample.astro";
+
+RDF (Resource Description Framework) and JSON-LD are standard formats for representing linked data as graphs of subject–predicate–object triples. This example loads a JSON-LD file describing a piña colada recipe, parses it recursively, and renders the resulting directed graph.
+
+<SigmaExample id="cookbook/load-rdf" height="500px" />
+
+## How it works
+
+A recursive function walks the JSON-LD structure, creating a node for each object and edges for each property linking to another object or value.
+
+### Parsing JSON-LD
+
+```typescript
+function parseJsonLd(item: Record<string, unknown>, graph: Graph): string {
+  const id = (item["@id"] as string) || (item["@value"] as string) || `${item["@type"] || "blank"}#${globalId++}`;
+  graph.mergeNode(id, { x: Math.random(), y: Math.random(), size: 10, label: id });
+
+  for (const [predicate, value] of Object.entries(item)) {
+    if (predicate.startsWith("@")) continue;
+    const values = Array.isArray(value) ? value : [value];
+    for (const v of values) {
+      if (v === null || v === undefined) continue;
+      let targetId: string;
+      if (typeof v === "object") {
+        targetId = parseJsonLd(v as Record<string, unknown>, graph);
+      } else {
+        targetId = `${v}#${globalId++}`;
+        graph.mergeNode(targetId, { x: Math.random(), y: Math.random(), size: 6, label: String(v) });
+      }
+      graph.addDirectedEdge(id, targetId, { label: predicate });
+    }
+  }
+  return id;
+}
+```
+
+### Key concepts
+
+- **Recursive parsing**: walk the JSON-LD tree to build nodes and directed edges
+- **Directed multi-graph**: use `new Graph({ type: "directed", multi: true })` since RDF naturally produces directed edges and multiple edges between the same nodes are common
+- **Force-directed layout**: start ForceAtlas2 in a web worker to untangle the random initial positions

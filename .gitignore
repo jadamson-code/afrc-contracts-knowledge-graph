@@ -6,8 +6,6 @@ node_modules
 .idea
 .vscode
 
-*storybook.log
-
 # Vitest browser-mode screenshots (auto-generated, not baselines)
 __screenshots__
 

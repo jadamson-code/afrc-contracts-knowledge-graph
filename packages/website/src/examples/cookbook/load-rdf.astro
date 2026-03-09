@@ -1,0 +1,80 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import forceAtlas2 from "graphology-layout-forceatlas2";
+  import FA2Layout from "graphology-layout-forceatlas2/worker";
+  import Sigma from "sigma";
+
+  import { registerControls } from "../_controls";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  let globalId = 0;
+
+  // Recursively parse a JSON-LD object into graph nodes and edges.
+  // Each object with @type becomes a node; each property linking to
+  // another object or value becomes an edge.
+  function parseJsonLd(item: Record<string, unknown>, graph: Graph): string {
+    globalId++;
+    const id = (item["@id"] as string) || (item["@value"] as string) || `${item["@type"] || "blank"}#${globalId}`;
+    graph.mergeNode(id, { x: Math.random(), y: Math.random(), size: 10, label: id });
+
+    for (const [predicate, value] of Object.entries(item)) {
+      if (predicate.startsWith("@")) continue;
+
+      const values = Array.isArray(value) ? value : [value];
+      for (const v of values) {
+        if (v === null || v === undefined) continue;
+        let targetId: string;
+        if (typeof v === "object") {
+          targetId = parseJsonLd(v as Record<string, unknown>, graph);
+        } else {
+          globalId++;
+          targetId = `${v}#${globalId}`;
+          graph.mergeNode(targetId, { x: Math.random(), y: Math.random(), size: 6, label: String(v) });
+        }
+        graph.addDirectedEdge(id, targetId, { label: predicate });
+      }
+    }
+    return id;
+  }
+
+  const res = await fetch("/data/pina-colada.jsonld");
+  const rdf = await res.json();
+  const graph = new Graph({ type: "directed", multi: true });
+
+  parseJsonLd(rdf, graph);
+
+  // Set up FA2 layout
+  const sensibleSettings = forceAtlas2.inferSettings(graph);
+  const fa2Layout = new FA2Layout(graph, { settings: sensibleSettings });
+
+  registerControls({
+    fa2: {
+      type: "toggle",
+      label: "ForceAtlas2",
+      default: true,
+      action: (running) => {
+        if (running) fa2Layout.start();
+        else fa2Layout.stop();
+      },
+    },
+  });
+
+  new Sigma(graph, container, {
+    settings: {
+      minCameraRatio: 0.08,
+      maxCameraRatio: 3,
+    },
+  });
+
+  fa2Layout.start();
+</script>

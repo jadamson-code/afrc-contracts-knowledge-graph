@@ -20,7 +20,7 @@ If your node sizes are already in pixel values and you want sigma to use them as
 
 ```typescript
 const renderer = new Sigma(graph, container, {
-  autoRescale: false,
+  settings: { autoRescale: false },
 });
 ```
 
@@ -33,7 +33,7 @@ The `zoomToSizeRatioFunction` setting controls how sizes change as you zoom. The
 ```typescript
 // Default: sizes grow with the square root of the zoom ratio
 const renderer = new Sigma(graph, container, {
-  zoomToSizeRatioFunction: Math.sqrt,
+  settings: { zoomToSizeRatioFunction: Math.sqrt },
 });
 ```
 
@@ -41,7 +41,7 @@ For sizes that stay constant regardless of zoom:
 
 ```typescript
 const renderer = new Sigma(graph, container, {
-  zoomToSizeRatioFunction: () => 1,
+  settings: { zoomToSizeRatioFunction: () => 1 },
 });
 ```
 
@@ -49,7 +49,7 @@ For sizes that scale linearly with zoom (items grow and shrink at the same rate 
 
 ```typescript
 const renderer = new Sigma(graph, container, {
-  zoomToSizeRatioFunction: (ratio) => ratio,
+  settings: { zoomToSizeRatioFunction: (ratio) => ratio },
 });
 ```
 
@@ -59,7 +59,7 @@ By default, sizes are in screen pixels (`itemSizesReference: "screen"`). If you 
 
 ```typescript
 const renderer = new Sigma(graph, container, {
-  itemSizesReference: "positions",
+  settings: { itemSizesReference: "positions" },
 });
 ```
 
@@ -67,13 +67,13 @@ With `"positions"`, a node with `size: 1` occupies 1 unit in graph space. As you
 
 ## When to use these settings
 
-| Scenario | Settings |
-|---|---|
-| Default graph exploration | (defaults) |
-| Pixel-precise layout (dashboard, grid) | `autoRescale: false` |
-| Fixed-size markers on a map | `autoRescale: false`, `zoomToSizeRatioFunction: () => 1` |
-| Sizes meaningful in graph space | `itemSizesReference: "positions"` |
-| Linear zoom behavior | `zoomToSizeRatioFunction: (ratio) => ratio` |
+| Scenario                               | Settings                                                 |
+| -------------------------------------- | -------------------------------------------------------- |
+| Default graph exploration              | (defaults)                                               |
+| Pixel-precise layout (dashboard, grid) | `autoRescale: false`                                     |
+| Fixed-size markers on a map            | `autoRescale: false`, `zoomToSizeRatioFunction: () => 1` |
+| Sizes meaningful in graph space        | `itemSizesReference: "positions"`                        |
+| Linear zoom behavior                   | `zoomToSizeRatioFunction: (ratio) => ratio`              |
 
 ## Combining settings
 
@@ -81,8 +81,10 @@ These settings compose naturally. For example, to build a grid where each cell i
 
 ```typescript
 const renderer = new Sigma(graph, container, {
-  autoRescale: false,
-  itemSizesReference: "positions",
+  settings: {
+    autoRescale: false,
+    itemSizesReference: "positions",
+  },
 });
 ```
 
@@ -90,7 +92,9 @@ For a geographic map where markers should stay the same pixel size at every zoom
 
 ```typescript
 const renderer = new Sigma(graph, container, {
-  autoRescale: false,
-  zoomToSizeRatioFunction: () => 1,
+  settings: {
+    autoRescale: false,
+    zoomToSizeRatioFunction: () => 1,
+  },
 });
 ```

@@ -1,0 +1,113 @@
+<div id="sigma-container"></div>
+
+<style is:global>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  .clusters-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .cluster-label {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    font-family: sans-serif;
+    font-variant: small-caps;
+    font-weight: 400;
+    font-size: 1.8rem;
+    text-shadow:
+      2px 2px 1px white,
+      -2px -2px 1px white,
+      -2px 2px 1px white,
+      2px -2px 1px white;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import type { SerializedGraph } from "graphology-types";
+  import iwanthue from "iwanthue";
+  import Sigma from "sigma";
+  import type { Coordinates } from "sigma/types";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const res = await fetch("/data/euroSIS.json");
+  const data = await res.json();
+  const graph = Graph.from(data as SerializedGraph);
+
+  // Cluster definition
+  interface Cluster {
+    label: string;
+    x?: number;
+    y?: number;
+    color?: string;
+    positions: { x: number; y: number }[];
+  }
+
+  // Initialize clusters from graph data
+  const countryClusters: Record<string, Cluster> = {};
+  graph.forEachNode((_node, atts) => {
+    if (!countryClusters[atts.country]) countryClusters[atts.country] = { label: atts.country, positions: [] };
+  });
+
+  // Assign one color per cluster
+  const palette = iwanthue(Object.keys(countryClusters).length, { seed: "eurSISCountryClusters" });
+  for (const country in countryClusters) {
+    countryClusters[country].color = palette.pop();
+  }
+
+  // Style nodes by cluster
+  graph.forEachNode((node, atts) => {
+    const cluster = countryClusters[atts.country];
+    atts.color = cluster.color;
+    atts.size = Math.sqrt(graph.degree(node)) / 2;
+    cluster.positions.push({ x: atts.x, y: atts.y });
+  });
+
+  // Compute cluster centroids
+  for (const country in countryClusters) {
+    const c = countryClusters[country];
+    c.x = c.positions.reduce((acc, p) => acc + p.x, 0) / c.positions.length;
+    c.y = c.positions.reduce((acc, p) => acc + p.y, 0) / c.positions.length;
+  }
+
+  const renderer = new Sigma(graph, container);
+
+  // Create HTML overlay layer for cluster labels
+  const clustersLayer = document.createElement("div");
+  clustersLayer.className = "clusters-layer";
+
+  for (const country in countryClusters) {
+    const cluster = countryClusters[country];
+    const viewportPos = renderer.graphToViewport(cluster as Coordinates);
+    const el = document.createElement("div");
+    el.className = "cluster-label";
+    el.style.top = `${viewportPos.y}px`;
+    el.style.left = `${viewportPos.x}px`;
+    el.style.color = cluster.color!;
+    el.dataset.country = country;
+    el.textContent = cluster.label;
+    clustersLayer.appendChild(el);
+  }
+
+  container.appendChild(clustersLayer);
+
+  // Update label positions on each render
+  renderer.on("afterRender", () => {
+    for (const country in countryClusters) {
+      const cluster = countryClusters[country];
+      const el = clustersLayer.querySelector(`[data-country="${country}"]`) as HTMLElement | null;
+      if (el) {
+        const viewportPos = renderer.graphToViewport(cluster as Coordinates);
+        el.style.top = `${viewportPos.y}px`;
+        el.style.left = `${viewportPos.x}px`;
+      }
+    }
+  });
+</script>

@@ -24,4 +24,4 @@ const sigma = new Sigma(graph, container);
 bindLeafletLayer(sigma);
 ```
 
-Please check the related [Storybook](https://github.com/jacomyal/sigma.js/tree/main/packages/storybook/stories/3-additional-packages/layer-leaflet) for more advanced examples.
+Please check the [website examples](https://www.sigmajs.org/examples/) for more advanced examples.

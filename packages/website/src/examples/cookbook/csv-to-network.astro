@@ -1,0 +1,88 @@
+<div id="sigma-container"></div>
+<div id="loader"><span>Loading CSV data...</span></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+  #loader {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    color: #666;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import { cropToLargestConnectedComponent } from "graphology-components";
+  import forceAtlas2 from "graphology-layout-forceatlas2";
+  import circular from "graphology-layout/circular";
+  import Papa from "papaparse";
+  import Sigma from "sigma";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  Papa.parse<{ name: string; acronym: string; subject_terms: string }>("/data/data.csv", {
+    download: true,
+    header: true,
+    delimiter: ",",
+    complete: (results) => {
+      const graph = new Graph();
+
+      // Build a bipartite graph: institution ↔ subject
+      results.data.forEach((line) => {
+        const institution = line.name;
+        const acronym = line.acronym;
+
+        graph.addNode(institution, {
+          nodeType: "institution",
+          label: [acronym, institution].filter((s) => !!s).join(" - "),
+        });
+
+        const subjects = (line.subject_terms.match(/(?:\* )[^\n\r]*/g) || []).map((str) => str.replace(/^\* /, ""));
+        subjects.forEach((subject) => {
+          if (!graph.hasNode(subject)) graph.addNode(subject, { nodeType: "subject", label: subject });
+          graph.addEdge(institution, subject, { weight: 1 });
+        });
+      });
+
+      // Keep only the largest connected component
+      cropToLargestConnectedComponent(graph);
+
+      // Color nodes by type
+      const COLORS: Record<string, string> = { institution: "#FA5A3D", subject: "#5A75DB" };
+      graph.forEachNode((node, attrs) => graph.setNodeAttribute(node, "color", COLORS[attrs.nodeType as string]));
+
+      // Size nodes by degree
+      const degrees = graph.nodes().map((node) => graph.degree(node));
+      const minDegree = Math.min(...degrees);
+      const maxDegree = Math.max(...degrees);
+      const MIN_SIZE = 2;
+      const MAX_SIZE = 15;
+      graph.forEachNode((node) => {
+        const degree = graph.degree(node);
+        graph.setNodeAttribute(
+          node,
+          "size",
+          MIN_SIZE + ((degree - minDegree) / (maxDegree - minDegree)) * (MAX_SIZE - MIN_SIZE),
+        );
+      });
+
+      // Apply circular layout, then run ForceAtlas2
+      circular.assign(graph);
+      const settings = forceAtlas2.inferSettings(graph);
+      forceAtlas2.assign(graph, { settings, iterations: 600 });
+
+      // Hide loader and render
+      const loader = document.getElementById("loader") as HTMLElement;
+      loader.style.display = "none";
+
+      new Sigma(graph, container);
+    },
+  });
+</script>

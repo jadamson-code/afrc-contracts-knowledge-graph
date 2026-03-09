@@ -12,7 +12,7 @@ Sigma.js v4 replaces the imperative, class-based rendering system with a declara
 Node rendering is now configured through **primitives** -- a declarative description of shapes, layers, and variables. Instead of picking a specific program class per node type, you describe what rendering capabilities your graph needs, and sigma generates a single optimized WebGL program.
 
 ```typescript
-import { sdfCircle, sdfSquare, layerFill } from "sigma/rendering";
+import { layerFill, sdfCircle, sdfSquare } from "sigma/rendering";
 
 // v4: One program renders circles, squares, borders, and images
 const renderer = new Sigma(graph, container, {
@@ -77,9 +77,7 @@ const renderer = new Sigma(graph, container, {
     depthLayers: ["edges", "nodes", "nodeLabels", "topEdges", "topNodes", "topNodeLabels"],
   },
   styles: {
-    nodes: [
-      { when: "isActive", then: { depth: "topNodes", labelDepth: "topNodeLabels" } },
-    ],
+    nodes: [{ when: "isActive", then: { depth: "topNodes", labelDepth: "topNodeLabels" } }],
   },
 });
 ```
@@ -89,7 +87,7 @@ const renderer = new Sigma(graph, container, {
 Edges support multiple path types and extremities in a single program:
 
 ```typescript
-import { pathLine, pathCurved, pathStepCurved, extremityArrow } from "sigma/rendering";
+import { extremityArrow, pathCurved, pathLine, pathStepCurved } from "sigma/rendering";
 
 const renderer = new Sigma(graph, container, {
   primitives: {
@@ -99,9 +97,7 @@ const renderer = new Sigma(graph, container, {
     },
   },
   styles: {
-    edges: [
-      { path: { attribute: "path" }, head: { attribute: "head" } },
-    ],
+    edges: [{ path: { attribute: "path" }, head: { attribute: "head" } }],
   },
 });
 ```

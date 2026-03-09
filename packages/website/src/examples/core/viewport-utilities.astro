@@ -1,0 +1,97 @@
+<div id="sigma-container"></div>
+
+<style is:global>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  .visible-nodes-info {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-family: sans-serif;
+    font-size: 0.85rem;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    pointer-events: none;
+  }
+</style>
+
+<script>
+  import { fitViewportToNodes, getNodesInViewport } from "@sigma/utils";
+  import Graph from "graphology";
+  import louvain from "graphology-communities-louvain";
+  import Sigma from "sigma";
+
+  import { registerControls } from "../_controls";
+  import data from "../_data/data.json";
+
+  // Hardcoded color palette with readable names
+  const COMMUNITY_COLORS: { color: string; name: string }[] = [
+    { color: "#e63946", name: "red" },
+    { color: "#457b9d", name: "blue" },
+    { color: "#2a9d8f", name: "teal" },
+    { color: "#e9c46a", name: "yellow" },
+    { color: "#f4a261", name: "orange" },
+    { color: "#6a4c93", name: "purple" },
+    { color: "#8ac926", name: "green" },
+    { color: "#ff6b6b", name: "pink" },
+    { color: "#4cc9f0", name: "cyan" },
+    { color: "#b5838d", name: "mauve" },
+  ];
+
+  const graph = new Graph();
+  graph.import(data);
+
+  // Detect communities
+  louvain.assign(graph, { nodeCommunityAttribute: "community" });
+  const communities = new Set<string>();
+  graph.forEachNode((_, attrs) => communities.add(attrs.community));
+  const communitiesArray = Array.from(communities);
+
+  // Assign colors per community
+  const palette: Record<string, { color: string; name: string }> = {};
+  communitiesArray.forEach((c, i) => (palette[c] = COMMUNITY_COLORS[i % COMMUNITY_COLORS.length]));
+  graph.forEachNode((node, attrs) => graph.setNodeAttribute(node, "color", palette[attrs.community].color));
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+  const renderer = new Sigma(graph, container);
+
+  // Register a button per community to fit viewport
+  const controls: Record<string, { type: "button"; label: string; action: () => void }> = {};
+  communitiesArray.forEach((community) => {
+    const { name } = palette[community];
+    controls[`community-${name}`] = {
+      type: "button",
+      label: `Fit ${name}`,
+      action: () => {
+        fitViewportToNodes(
+          renderer,
+          graph.filterNodes((_, attrs) => attrs.community === community),
+          { animate: true },
+        );
+      },
+    };
+  });
+  controls["fit-all"] = {
+    type: "button",
+    label: "Fit all",
+    action: () => {
+      renderer.getCamera().animate({ x: 0.5, y: 0.5, ratio: 1 }, { duration: 300 });
+    },
+  };
+  registerControls(controls);
+
+  // Display live count of visible nodes in the bottom-left
+  const infoEl = document.createElement("div");
+  infoEl.className = "visible-nodes-info";
+  container.appendChild(infoEl);
+
+  setInterval(() => {
+    const count = getNodesInViewport(renderer).length;
+    infoEl.textContent = count === 0 ? "No visible nodes" : count === 1 ? "1 visible node" : `${count} visible nodes`;
+  }, 200);
+</script>

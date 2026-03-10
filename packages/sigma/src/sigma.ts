@@ -329,9 +329,14 @@ export default class Sigma<
     const { primitives, styles, settings = {}, nodeReducer, edgeReducer } = options;
 
     // Store primitives and styles declarations for v4 API
-    // Use DEFAULT_STYLES when styles not provided
+    // Use DEFAULT_STYLES when styles not provided, merging at nodes/edges level
     this.primitives = primitives ?? DEFAULT_PRIMITIVES;
-    this.stylesDeclaration = styles ?? (DEFAULT_STYLES as unknown as StylesDeclaration<N, E, NS, ES, GS>);
+    this.stylesDeclaration = styles
+      ? ({
+          nodes: styles.nodes ?? DEFAULT_STYLES.nodes,
+          edges: styles.edges ?? DEFAULT_STYLES.edges,
+        } as StylesDeclaration<N, E, NS, ES, GS>)
+      : (DEFAULT_STYLES as unknown as StylesDeclaration<N, E, NS, ES, GS>);
 
     // Store reducers
     this.nodeReducer = nodeReducer ?? null;

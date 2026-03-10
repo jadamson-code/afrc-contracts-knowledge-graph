@@ -1,0 +1,156 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+  import type { BaseEdgeState, BaseGraphState, BaseNodeState } from "sigma/types";
+  import { DEFAULT_STYLES } from "sigma/types";
+  import type { Attributes } from "graphology-types";
+
+  const GRID_SIZE = 8;
+  const SNAP_SIZE = GRID_SIZE / 4;
+  const GRID_COLS = 6;
+  const GRID_ROWS = 6;
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+  const graph = new Graph();
+
+  // Create a grid of nodes
+  for (let row = 0; row < GRID_ROWS; row++) {
+    for (let col = 0; col < GRID_COLS; col++) {
+      const id = `${row}-${col}`;
+      graph.addNode(id, {
+        x: col * GRID_SIZE,
+        y: row * GRID_SIZE,
+      });
+    }
+  }
+
+  // Connect neighbors (right and down)
+  for (let row = 0; row < GRID_ROWS; row++) {
+    for (let col = 0; col < GRID_COLS; col++) {
+      const id = `${row}-${col}`;
+      if (col < GRID_COLS - 1) graph.addEdge(id, `${row}-${col + 1}`);
+      if (row < GRID_ROWS - 1) graph.addEdge(id, `${row + 1}-${col}`);
+    }
+  }
+
+  const renderer = new Sigma<
+    Attributes,
+    Attributes,
+    Attributes,
+    BaseNodeState & { isSelected?: boolean },
+    BaseEdgeState,
+    BaseGraphState & { selectionSize?: number }
+  >(graph, container, {
+    settings: {
+      autoRescale: "once",
+      itemSizesReference: "positions",
+      enableNodeDrag: true,
+      // Multi-node drag: if the dragged node is selected, drag the whole selection
+      getDraggedNodes: (node) => {
+        if (renderer.getNodeState(node).isSelected) {
+          const selected: string[] = [];
+          graph.forEachNode((n) => {
+            if (renderer.getNodeState(n).isSelected) selected.push(n);
+          });
+          return selected;
+        }
+        return [node];
+      },
+      // Snap positions to sub-grid
+      dragPositionToAttributes: (position) => ({
+        x: Math.round(position.x / SNAP_SIZE) * SNAP_SIZE,
+        y: Math.round(position.y / SNAP_SIZE) * SNAP_SIZE,
+      }),
+    },
+    styles: {
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          color: "grey",
+          size: 2,
+          backdropColor: "#ffffff",
+          backdropShadowColor: "transparent",
+          backdropBorderColor: "black",
+          backdropBorderWidth: 2,
+          backdropPadding: 4,
+        },
+        {
+          when: (_, state, graphState) =>
+            (!!graphState.selectionSize && !state.isSelected) ||
+            (!graphState.selectionSize && graphState.isDragging && !state.isDragged),
+          then: {
+            color: "lightgrey",
+          },
+        },
+        // Selected nodes
+        {
+          when: "isSelected",
+          then: {
+            backdropVisibility: "visible",
+          },
+        },
+        // Dragged nodes appear on top
+        {
+          when: "isDragged",
+          then: {
+            depth: "topNodes",
+            labelDepth: "topNodeLabels",
+          },
+        },
+      ],
+      edges: {
+        size: 1,
+        color: (_, _state, graphState) => (graphState.selectionSize || graphState.isDragging ? "lightgrey" : "grey"),
+      },
+    },
+  });
+
+  // Click to toggle selection, shift+click for multi-select
+  renderer.on("clickNode", ({ node, event }) => {
+    const isSelected = renderer.getNodeState(node).isSelected;
+    let selectionSize = renderer.getGraphState().selectionSize ?? 0;
+
+    if (!event.original.shiftKey) {
+      // Clear previous selection
+      selectionSize = 0;
+      graph.forEachNode((n) => {
+        if (renderer.getNodeState(n).isSelected) {
+          renderer.setNodeState(n, { isSelected: false });
+        }
+      });
+    }
+
+    selectionSize += !isSelected ? 1 : -1;
+    renderer.setNodeState(node, { isSelected: !isSelected });
+    renderer.setGraphState({ selectionSize: Math.max(selectionSize, 0) });
+  });
+
+  // Click on stage clears selection
+  renderer.on("clickStage", () => {
+    renderer.setGraphState({ selectionSize: 0 });
+    graph.forEachNode((n) => {
+      if (renderer.getNodeState(n).isSelected) {
+        renderer.setNodeState(n, { isSelected: false });
+      }
+    });
+  });
+
+  // Reset selection state on start dragging an unselected node
+  renderer.on("nodeDragStart", ({ node }) => {
+    if (!renderer.getNodeState(node).isSelected) {
+      graph.forEachNode((n) => {
+        renderer.setNodeState(n, { isSelected: false });
+      });
+      renderer.setGraphState({ selectionSize: 0 });
+    }
+  });
+</script>

@@ -28,6 +28,7 @@ export interface BaseNodeState {
   isHovered: boolean;
   isHidden: boolean;
   isHighlighted: boolean;
+  isDragged: boolean;
 }
 
 /**
@@ -570,6 +571,7 @@ export const DEFAULT_NODE_STATE: BaseNodeState = {
   isHovered: false,
   isHidden: false,
   isHighlighted: false,
+  isDragged: false,
 };
 
 /**

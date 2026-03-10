@@ -281,13 +281,18 @@ export default class MouseCaptor<
       this.emit("mousemove", mouseCoords);
     }
 
+    // Count drag events even when sigma default is prevented, so that
+    // click suppression works correctly after node drags:
+    if (this.isMouseDown) {
+      this.draggedEvents++;
+    }
+
     if (mouseCoords.sigmaDefaultPrevented) return;
 
     // Handle the case when "isMouseDown" all the time, to allow dragging the
     // stage while the mouse is not hover the container:
     if (this.isMouseDown) {
       this.isMoving = true;
-      this.draggedEvents++;
 
       if (typeof this.movingTimeout === "number") {
         clearTimeout(this.movingTimeout);

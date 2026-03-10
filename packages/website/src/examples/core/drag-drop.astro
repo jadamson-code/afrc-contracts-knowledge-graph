@@ -12,81 +12,42 @@
   import ForceSupervisor from "graphology-layout-force/worker";
   import Sigma from "sigma";
 
-  const COLORS = ["#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4", "#42d4f4", "#f032e6", "#bfef45"];
-  let colorIndex = 0;
-  let nodeCounter = 0;
+  import data from "../_data/data.json";
+  import { DEFAULT_STYLES } from "sigma/types";
 
   const container = document.getElementById("sigma-container") as HTMLElement;
 
   const graph = new Graph();
-  graph.addNode("n1", { x: 0, y: 0, size: 10, color: COLORS[colorIndex++ % COLORS.length] });
-  graph.addNode("n2", { x: -5, y: 5, size: 10, color: COLORS[colorIndex++ % COLORS.length] });
-  graph.addNode("n3", { x: 5, y: 5, size: 10, color: COLORS[colorIndex++ % COLORS.length] });
-  graph.addNode("n4", { x: 0, y: 10, size: 10, color: COLORS[colorIndex++ % COLORS.length] });
-  graph.addEdge("n1", "n2");
-  graph.addEdge("n2", "n4");
-  graph.addEdge("n4", "n3");
-  graph.addEdge("n3", "n1");
-
-  // Spring layout keeps the graph organized
-  const layout = new ForceSupervisor(graph, { isNodeFixed: (_, attr) => attr.highlighted });
-  layout.start();
+  graph.import(data);
 
   const renderer = new Sigma(graph, container, {
-    settings: { minCameraRatio: 0.5, maxCameraRatio: 2 },
+    settings: {
+      autoRescale: "once",
+      itemSizesReference: "positions",
+      enableNodeDrag: true,
+    },
+    styles: {
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        { size: attributes => attributes.size / 2 },
+        {
+          when: "isDragged",
+          then: {
+            labelVisibility: "visible",
+            backdropVisibility: "visible",
+          },
+        },
+      ],
+    },
   });
 
-  // Drag'n'drop
-  let draggedNode: string | null = null;
-  let isDragging = false;
-
-  renderer.on("downNode", (e) => {
-    isDragging = true;
-    draggedNode = e.node;
-    graph.setNodeAttribute(draggedNode, "highlighted", true);
-    if (!renderer.getCustomBBox()) renderer.setCustomBBox(renderer.getBBox());
+  // Force layout: pin nodes while they are being dragged
+  const layout = new ForceSupervisor(graph, {
+    settings: {
+      repulsion: 0.2,
+      attraction: 0.0002,
+    },
+    isNodeFixed: (node) => renderer.getNodeState(node).isDragged,
   });
-
-  renderer.on("moveBody", ({ event }) => {
-    if (!isDragging || !draggedNode) return;
-    const pos = renderer.viewportToGraph(event);
-    graph.setNodeAttribute(draggedNode, "x", pos.x);
-    graph.setNodeAttribute(draggedNode, "y", pos.y);
-    event.preventSigmaDefault();
-    event.original.preventDefault();
-    event.original.stopPropagation();
-  });
-
-  const handleUp = () => {
-    if (draggedNode) graph.removeNodeAttribute(draggedNode, "highlighted");
-    isDragging = false;
-    draggedNode = null;
-  };
-  renderer.on("upNode", handleUp);
-  renderer.on("upStage", handleUp);
-
-  // Click on stage to create a node connected to 2 nearest nodes
-  renderer.on("clickStage", ({ event }) => {
-    const coordForGraph = renderer.viewportToGraph({ x: event.x, y: event.y });
-
-    const node = {
-      ...coordForGraph,
-      size: 10,
-      color: COLORS[colorIndex++ % COLORS.length],
-    };
-
-    const closestNodes = graph
-      .nodes()
-      .map((nodeId) => {
-        const attrs = graph.getNodeAttributes(nodeId);
-        const distance = Math.pow(node.x - attrs.x, 2) + Math.pow(node.y - attrs.y, 2);
-        return { nodeId, distance };
-      })
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, 2);
-
-    const id = `node-${++nodeCounter}`;
-    graph.addNode(id, node);
-    closestNodes.forEach((e) => graph.addEdge(id, e.nodeId));
-  });
+  layout.start();
 </script>

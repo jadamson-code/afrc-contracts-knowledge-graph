@@ -6,118 +6,154 @@ sidebar:
 
 import SigmaExample from "../../../../components/SigmaExample.astro";
 
-Sigma does not include built-in drag-and-drop, but the event system makes it straightforward to implement. The pattern relies on three events: `downNode`, `moveBody`, and `upNode`/`upStage`.
+Sigma includes built-in node drag support via the `enableNodeDrag` setting. Combined with `autoRescale: "once"`, it handles coordinate conversion, camera panning suppression, and state management automatically.
 
 ## Live example
 
-Drag any node to reposition it. Click the background to create a new node connected to its two nearest neighbors.
+Drag any node to reposition it. The force layout pins dragged nodes and resumes when released.
 
 <SigmaExample id="core/drag-drop" height="500px" />
 
-## How it works
+## Basic setup
 
-### 1. Track the dragged node
-
-Listen for `downNode` to start dragging. Store the node ID and optionally mark it as `highlighted` (useful if you run a force layout, so the layout pins it in place):
+Enable drag with two settings:
 
 ```typescript
-let draggedNode: string | null = null;
-
-renderer.on("downNode", (e) => {
-  draggedNode = e.node;
-  graph.setNodeAttribute(draggedNode, "highlighted", true);
+const renderer = new Sigma(graph, container, {
+  settings: {
+    autoRescale: "once",
+    enableNodeDrag: true,
+  },
 });
 ```
 
-### 2. Update position on move
+`autoRescale: "once"` freezes the coordinate system after the first render, preventing the viewport from rescaling as nodes are dragged outside the original bounding box.
 
-Listen for `moveBody` (fires on any pointer movement over the canvas). Convert viewport coordinates to graph coordinates with `viewportToGraph()`, then update the node's position:
+## Styling dragged nodes
 
-```typescript
-renderer.on("moveBody", ({ event }) => {
-  if (!draggedNode) return;
-
-  // Convert screen position to graph coordinates
-  const pos = renderer.viewportToGraph(event);
-  graph.setNodeAttribute(draggedNode, "x", pos.x);
-  graph.setNodeAttribute(draggedNode, "y", pos.y);
-
-  // Prevent sigma from panning the camera
-  event.preventSigmaDefault();
-  event.original.preventDefault();
-});
-```
-
-The call to `event.preventSigmaDefault()` is essential -- without it, sigma interprets the pointer movement as a camera pan and moves the viewport along with the node.
-
-### 3. Clean up on release
-
-Listen for both `upNode` and `upStage` to handle the case where the pointer is released outside the node:
+Sigma exposes `isDragged` as a node state flag and `isDragging` as a graph state flag, both usable in the styles API:
 
 ```typescript
-const handleUp = () => {
-  if (draggedNode) {
-    graph.removeNodeAttribute(draggedNode, "highlighted");
-  }
-  draggedNode = null;
-};
-
-renderer.on("upNode", handleUp);
-renderer.on("upStage", handleUp);
-```
-
-### Complete example
-
-```typescript
-import Graph from "graphology";
-import Sigma from "sigma";
-
-const graph = new Graph();
-graph.addNode("a", { x: 0, y: 0, size: 10, color: "#e63946" });
-graph.addNode("b", { x: 1, y: 1, size: 10, color: "#457b9d" });
-graph.addEdge("a", "b");
-
-const renderer = new Sigma(graph, container);
-
-let draggedNode: string | null = null;
-
-renderer.on("downNode", (e) => {
-  draggedNode = e.node;
-  graph.setNodeAttribute(draggedNode, "highlighted", true);
+const renderer = new Sigma(graph, container, {
+  settings: {
+    autoRescale: "once",
+    enableNodeDrag: true,
+  },
+  styles: {
+    nodes: {
+      // Dragged nodes appear on top with their label visible
+      depth: {
+        when: "isDragged",
+        then: "topNodes",
+        else: "nodes",
+      },
+      labelVisibility: {
+        when: "isDragged",
+        then: "visible",
+        else: "auto",
+      },
+    },
+  },
 });
-
-renderer.on("moveBody", ({ event }) => {
-  if (!draggedNode) return;
-  const pos = renderer.viewportToGraph(event);
-  graph.setNodeAttribute(draggedNode, "x", pos.x);
-  graph.setNodeAttribute(draggedNode, "y", pos.y);
-  event.preventSigmaDefault();
-  event.original.preventDefault();
-});
-
-const handleUp = () => {
-  if (draggedNode) {
-    graph.removeNodeAttribute(draggedNode, "highlighted");
-  }
-  draggedNode = null;
-};
-renderer.on("upNode", handleUp);
-renderer.on("upStage", handleUp);
 ```
 
 ## Integration with force layouts
 
-When using a force-directed layout (e.g. `graphology-layout-force`), set the `highlighted` attribute on the dragged node and configure the layout to pin highlighted nodes:
+Since sigma tracks the `isDragged` state on each node, the force layout can read it directly via `getNodeState()` — no event handlers or extra attributes needed:
 
 ```typescript
 import ForceSupervisor from "graphology-layout-force/worker";
 
+const renderer = new Sigma(graph, container, {
+  settings: { autoRescale: "once", enableNodeDrag: true },
+});
+
 const layout = new ForceSupervisor(graph, {
-  isNodeFixed: (_, attr) => attr.highlighted,
+  isNodeFixed: (node) => renderer.getNodeState(node).isDragged,
 });
 layout.start();
 ```
 
-This prevents the layout from overriding the user's drag position. When the node is released and `highlighted` is removed, the layout resumes acting on it.
+## Cancelling drag for specific nodes
 
-For the full list of available events, see the [Events reference](/reference/events/).
+Use `preventSigmaDefault()` on the `nodeDragStart` event to make certain nodes non-draggable:
+
+```typescript
+renderer.on("nodeDragStart", ({ node, preventSigmaDefault }) => {
+  if (graph.getNodeAttribute(node, "locked")) {
+    preventSigmaDefault();
+  }
+});
+```
+
+## Multi-node drag with selection and grid snapping
+
+The following example combines several drag features on a grid graph:
+
+- **Click** a node to select it, **shift+click** for multi-select, click the **stage** to clear
+- **Drag** a selected node to move the entire selection
+- Positions **snap** to a sub-grid via `dragPositionToAttributes`
+- Selection state is managed through **custom sigma state types** (`isSelected` on nodes, `selectionSize` on the graph)
+- Non-selected nodes and edges are **dimmed** when a selection exists
+
+<SigmaExample id="core/multi-node-drag" height="500px" />
+
+### Custom state types
+
+The example extends sigma's built-in state with application-specific flags:
+
+```typescript
+const renderer = new Sigma<
+  Attributes, Attributes, Attributes,
+  BaseNodeState & { isSelected?: boolean },
+  BaseEdgeState,
+  BaseGraphState & { selectionSize?: number }
+>(graph, container, { ... });
+```
+
+These custom flags can then be used in style predicates (`"isSelected"`) and read/written via `getNodeState()` / `setNodeState()` / `setGraphState()`.
+
+### The `getDraggedNodes` setting
+
+This callback connects your selection state to drag. When the dragged node is selected, all selected nodes move together:
+
+```typescript
+getDraggedNodes: (node) => {
+  if (renderer.getNodeState(node).isSelected) {
+    const selected: string[] = [];
+    graph.forEachNode((n) => {
+      if (renderer.getNodeState(n).isSelected) selected.push(n);
+    });
+    return selected;
+  }
+  return [node];
+},
+```
+
+### Position constraints
+
+`dragPositionToAttributes` transforms positions before they are written to the graph. It receives the computed graph-space position and returns the attributes to set:
+
+```typescript
+const SNAP_SIZE = 0.5;
+
+dragPositionToAttributes: (position) => ({
+  x: Math.round(position.x / SNAP_SIZE) * SNAP_SIZE,
+  y: Math.round(position.y / SNAP_SIZE) * SNAP_SIZE,
+}),
+```
+
+When position attributes differ from `x`/`y` (e.g. via styles mapping `x: { attribute: "lng" }`), sigma infers the correct attribute names automatically. Use `dragPositionToAttributes` when you need to transform values (snapping, scaling) or write to different attributes than the ones used for reading.
+
+## Events
+
+Three events are available for observing the drag lifecycle. All payloads include `node`, `allDraggedNodes`, and the wrapped `MouseCoords` event:
+
+| Event | Description |
+|---|---|
+| `nodeDragStart` | Fired when drag begins. Call `preventSigmaDefault()` to cancel. |
+| `nodeDrag` | Fired on every pointer move during drag. |
+| `nodeDragEnd` | Fired when the pointer is released. |
+
+- `node` is the node under the pointer (the one the user grabbed).
+- `allDraggedNodes` is the full set of nodes being moved (from `getDraggedNodes`).

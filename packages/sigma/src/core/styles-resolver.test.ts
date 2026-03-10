@@ -30,6 +30,7 @@ const defaultNodeState: BaseNodeState = {
   isHovered: false,
   isHidden: false,
   isHighlighted: false,
+  isDragged: false,
 };
 
 const defaultGraphState: BaseGraphState = {

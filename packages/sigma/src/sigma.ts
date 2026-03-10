@@ -11,7 +11,7 @@ import MouseCaptor from "./core/captors/mouse";
 import TouchCaptor from "./core/captors/touch";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
-import { StyleDependency, analyzeStyleDependency, evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
+import { StyleAnalysis, analyzeStyleDeclaration, evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
 import {
   DEFAULT_DEPTH_LAYERS,
   LabelAttachmentContext,
@@ -63,6 +63,7 @@ import {
   NodeDisplayData,
   PlainObject,
   RenderParams,
+  SigmaEventPayload,
   SigmaEvents,
   TextureStats,
   TouchCoords,
@@ -233,6 +234,20 @@ export default class Sigma<
   private hoveredNode: string | null = null;
   private hoveredEdge: string | null = null;
 
+  // Node drag state
+  private pendingDragNode: string | null = null;
+  private dragSession: {
+    node: string;
+    allNodes: string[];
+    startPosition: Coordinates;
+    startNodePositions: Map<string, Coordinates>;
+    xAttr: string;
+    yAttr: string;
+  } | null = null;
+
+  // Tracks whether autoRescale:"once" has already captured the extent
+  private autoRescaleFrozen = false;
+
   // New v4 API: primitives and styles declarations
   private primitives: PrimitivesDeclaration | null = null;
   private stylesDeclaration: StylesDeclaration<N, E, NS, ES, GS> | null = null;
@@ -243,9 +258,9 @@ export default class Sigma<
   private needToRefreshState = false;
   private checkEdgesEventsFrame: number | null = null;
 
-  // Style dependency classification (for selective refreshState)
-  private nodeStyleDependency: StyleDependency = "static";
-  private edgeStyleDependency: StyleDependency = "static";
+  // Pre-computed style metadata (dependency level, position attribute names)
+  private nodeStyleAnalysis: StyleAnalysis = { dependency: "static", xAttribute: null, yAttribute: null };
+  private edgeStyleAnalysis: StyleAnalysis = { dependency: "static", xAttribute: null, yAttribute: null };
 
   // Dirty tracking for selective refreshState
   private dirtyNodes: Set<string> = new Set();
@@ -322,20 +337,28 @@ export default class Sigma<
     this.nodeReducer = nodeReducer ?? null;
     this.edgeReducer = edgeReducer ?? null;
 
-    // Analyze style dependency for selective refreshState optimization.
+    // Analyze style declarations for dependency level and position attribute names.
     // Reducers are opaque functions that receive state, so force "graph-state".
-    this.nodeStyleDependency = this.nodeReducer
-      ? "graph-state"
-      : analyzeStyleDependency(this.stylesDeclaration!.nodes as Record<string, unknown>);
-    this.edgeStyleDependency = this.edgeReducer
-      ? "graph-state"
-      : analyzeStyleDependency(this.stylesDeclaration!.edges as Record<string, unknown>);
+    this.nodeStyleAnalysis = analyzeStyleDeclaration(this.stylesDeclaration!.nodes as Record<string, unknown>);
+    if (this.nodeReducer) this.nodeStyleAnalysis.dependency = "graph-state";
+    this.edgeStyleAnalysis = analyzeStyleDeclaration(this.stylesDeclaration!.edges as Record<string, unknown>);
+    if (this.edgeReducer) this.edgeStyleAnalysis.dependency = "graph-state";
 
     // Resolving settings
     this.settings = resolveSettings(settings);
 
     // Validating
     validateSettings(this.settings);
+    if (this.settings.enableNodeDrag) {
+      const { xAttribute, yAttribute } = this.nodeStyleAnalysis;
+      if ((!xAttribute || !yAttribute) && !this.settings.dragPositionToAttributes) {
+        throw new Error(
+          "Sigma: `enableNodeDrag` is true but position attribute names could not be inferred from styles. " +
+            'Either use attribute bindings for x/y in your node styles (e.g. `x: { attribute: "x" }`), ' +
+            "or provide a `dragPositionToAttributes` setting.",
+        );
+      }
+    }
     validateGraph(graph);
     if (!(container instanceof HTMLElement)) throw new Error("Sigma: container should be an html element.");
 
@@ -640,6 +663,32 @@ export default class Sigma<
     this.activeListeners.handleMoveBody = (e: MouseCoords | TouchCoords): void => {
       const event = cleanMouseCoords(e);
 
+      // Initiate drag on first movement after downNode
+      if (this.pendingDragNode && !this.dragSession) {
+        this.startNodeDrag(this.pendingDragNode, event);
+        this.pendingDragNode = null;
+      }
+
+      // Handle node drag movement
+      if (this.dragSession) {
+        const currentPosition = this.viewportToGraph(event);
+        const totalDelta = {
+          x: currentPosition.x - this.dragSession.startPosition.x,
+          y: currentPosition.y - this.dragSession.startPosition.y,
+        };
+
+        this.applyNodeDrag(totalDelta);
+
+        this.emit("nodeDrag", {
+          node: this.dragSession.node,
+          allDraggedNodes: this.dragSession.allNodes,
+          event,
+        });
+
+        // Prevent camera panning during node drag
+        event.preventSigmaDefault();
+      }
+
       this.emit("moveBody", {
         event,
         preventSigmaDefault(): void {
@@ -744,6 +793,32 @@ export default class Sigma<
     this.touchCaptor.on("tap", this.activeListeners.handleClick);
     this.touchCaptor.on("doubletap", this.activeListeners.handleDoubleClick);
     this.touchCaptor.on("touchmove", this.activeListeners.handleMoveBody);
+
+    // Node drag: prepare on downNode, actual start deferred to first moveBody
+    this.on("downNode", ({ node }) => {
+      if (!this.settings.enableNodeDrag) return;
+      this.pendingDragNode = node;
+    });
+
+    // Node drag: end on upNode or upStage
+    const handleDragEnd = ({ event, preventSigmaDefault }: SigmaEventPayload) => {
+      // Clear pending drag if pointer was released before movement
+      this.pendingDragNode = null;
+
+      if (!this.dragSession) return;
+
+      const { node, allNodes } = this.dragSession;
+      this.endDrag();
+
+      this.emit("nodeDragEnd", {
+        node,
+        allDraggedNodes: allNodes,
+        event,
+        preventSigmaDefault,
+      });
+    };
+    this.on("upNode", handleDragEnd);
+    this.on("upStage", handleDragEnd);
 
     return this;
   }
@@ -933,8 +1008,14 @@ export default class Sigma<
     //
     // NODES
     //
-    this.nodeExtent = graphExtent(this.graph);
-    if (!this.settings.autoRescale) {
+    // Skip extent recomputation when autoRescale is "once" and already frozen
+    if (this.settings.autoRescale !== "once" || !this.autoRescaleFrozen) {
+      this.nodeExtent = graphExtent(this.graph);
+      if (this.settings.autoRescale === "once") {
+        this.autoRescaleFrozen = true;
+      }
+    }
+    if (this.settings.autoRescale === false) {
       const { width, height } = dimensions;
       const { x, y } = this.nodeExtent;
 
@@ -1847,19 +1928,15 @@ export default class Sigma<
     this.resize();
 
     // Do we need to reprocess data?
-    if (this.needToProcess) {
-      this.process();
-      this.needToRefreshState = false;
-      // Clear dirty tracking since process() re-evaluates everything
-      this.dirtyNodes.clear();
-      this.dirtyEdges.clear();
-      this.graphStateChanged = false;
-    }
+    if (this.needToProcess) this.process();
     this.needToProcess = false;
 
     // Do we need to refresh state (styles in-place, no reprocess)?
     if (this.needToRefreshState) this.refreshState();
     this.needToRefreshState = false;
+    this.dirtyNodes.clear();
+    this.dirtyEdges.clear();
+    this.graphStateChanged = false;
 
     // Clearing the canvases
     this.clear();
@@ -2124,6 +2201,87 @@ export default class Sigma<
   }
 
   /**
+   * Initialize a node drag session. Called on first pointer movement after downNode.
+   * @private
+   */
+  private startNodeDrag(node: string, moveEvent: MouseCoords): void {
+    const allNodes = this.settings.getDraggedNodes(node);
+
+    // Allow cancellation via preventSigmaDefault
+    let cancelled = false;
+    this.emit("nodeDragStart", {
+      node,
+      allDraggedNodes: allNodes,
+      event: moveEvent,
+      preventSigmaDefault() {
+        cancelled = true;
+      },
+    });
+
+    if (cancelled) return;
+
+    // Resolve position attribute names (validated at construction time)
+    const { xAttribute, yAttribute } = this.nodeStyleAnalysis;
+    const xAttr = xAttribute || "x";
+    const yAttr = yAttribute || "y";
+
+    // Snapshot initial positions for absolute-based computation
+    const startNodePositions = new Map<string, Coordinates>();
+    for (const n of allNodes) {
+      startNodePositions.set(n, {
+        x: this.graph.getNodeAttribute(n, xAttr) as number,
+        y: this.graph.getNodeAttribute(n, yAttr) as number,
+      });
+    }
+
+    this.dragSession = {
+      node,
+      allNodes,
+      startPosition: this.viewportToGraph(moveEvent),
+      startNodePositions,
+      xAttr,
+      yAttr,
+    };
+
+    this.setNodesState(allNodes, { isDragged: true } as Partial<NS>);
+  }
+
+  /**
+   * End an in-progress drag session. Safe to call when no drag is active.
+   * @private
+   */
+  private endDrag(): void {
+    if (this.dragSession) {
+      this.setNodesState(this.dragSession.allNodes, { isDragged: false } as Partial<NS>);
+    }
+    this.pendingDragNode = null;
+    this.dragSession = null;
+  }
+
+  /**
+   * Apply drag displacement to all currently dragged nodes.
+   * @private
+   */
+  private applyNodeDrag(totalDelta: Coordinates): void {
+    const { allNodes, startNodePositions, xAttr, yAttr } = this.dragSession!;
+    const { dragPositionToAttributes } = this.settings;
+
+    for (const node of allNodes) {
+      const startPos = startNodePositions.get(node);
+      if (!startPos || !this.graph.hasNode(node)) continue;
+
+      const newPosition = { x: startPos.x + totalDelta.x, y: startPos.y + totalDelta.y };
+
+      if (dragPositionToAttributes) {
+        this.graph.mergeNodeAttributes(node, dragPositionToAttributes(newPosition, node) as Partial<N>);
+      } else {
+        this.graph.setNodeAttribute(node, xAttr, newPosition.x as N[string]);
+        this.graph.setNodeAttribute(node, yAttr, newPosition.y as N[string]);
+      }
+    }
+  }
+
+  /**
    * Remove a node from the internal data structures.
    * @private
    * @param key The node's graphology ID
@@ -2144,6 +2302,15 @@ export default class Sigma<
     delete this.nodeProgramIndex[key];
     // Remove from node state
     this.nodeStates.delete(key);
+    // Remove from dirty tracking
+    this.dirtyNodes.delete(key);
+    // Clean up drag state if this node is involved
+    if (key === this.pendingDragNode || (this.dragSession && key === this.dragSession.node)) {
+      this.endDrag();
+    } else if (this.dragSession?.allNodes.includes(key)) {
+      this.dragSession.allNodes = this.dragSession.allNodes.filter((n) => n !== key);
+      this.dragSession.startNodePositions.delete(key);
+    }
     // Remove from hovered
     if (this.hoveredNode === key) this.hoveredNode = null;
     // Remove from forced label
@@ -2398,6 +2565,8 @@ export default class Sigma<
     this.edgeDataTexture!.free(key);
     // Remove from edge state
     this.edgeStates.delete(key);
+    // Remove from dirty tracking
+    this.dirtyEdges.delete(key);
     // Remove from hovered
     if (this.hoveredEdge === key) this.hoveredEdge = null;
     // Remove from forced label
@@ -2459,6 +2628,10 @@ export default class Sigma<
     this.nodeStates.clear();
     this.hoveredNode = null;
     this.nodesWithBackdrop.clear();
+    // Reset drag and rescale state (skip setNodesState since nodeStates was just cleared)
+    this.pendingDragNode = null;
+    this.dragSession = null;
+    this.autoRescaleFrozen = false;
   }
 
   /**
@@ -3164,17 +3337,23 @@ export default class Sigma<
   private updateGraphStateFromNodes(): void {
     let hasHovered = false;
     let hasHighlighted = false;
+    let isDragging = false;
 
     for (const [, state] of this.nodeStates) {
       if (state.isHovered) hasHovered = true;
       if (state.isHighlighted) hasHighlighted = true;
-      if (hasHovered && hasHighlighted) break;
+      if (state.isDragged) isDragging = true;
+      if (hasHovered && hasHighlighted && isDragging) break;
     }
 
     // Also check edges for hover
     if (!hasHovered && this.hoveredEdge) hasHovered = true;
 
-    if (this.graphState.hasHovered !== hasHovered || this.graphState.hasHighlighted !== hasHighlighted) {
+    if (
+      this.graphState.hasHovered !== hasHovered ||
+      this.graphState.hasHighlighted !== hasHighlighted ||
+      this.graphState.isDragging !== isDragging
+    ) {
       this.graphStateChanged = true;
     }
 
@@ -3182,6 +3361,7 @@ export default class Sigma<
       ...this.graphState,
       hasHovered,
       hasHighlighted,
+      isDragging,
     } as GS;
   }
 
@@ -3385,13 +3565,13 @@ export default class Sigma<
    * items whose styles can't have changed.
    */
   private refreshState(): void {
-    const needFullNodeRefresh = this.graphStateChanged && this.nodeStyleDependency === "graph-state";
-    const needFullEdgeRefresh = this.graphStateChanged && this.edgeStyleDependency === "graph-state";
+    const needFullNodeRefresh = this.graphStateChanged && this.nodeStyleAnalysis.dependency === "graph-state";
+    const needFullEdgeRefresh = this.graphStateChanged && this.edgeStyleAnalysis.dependency === "graph-state";
 
     // Nodes
     if (needFullNodeRefresh) {
       this.graph.forEachNode((node) => this.refreshNodeState(node));
-    } else if (this.nodeStyleDependency !== "static") {
+    } else if (this.nodeStyleAnalysis.dependency !== "static") {
       for (const node of this.dirtyNodes) {
         this.refreshNodeState(node);
       }
@@ -3400,7 +3580,7 @@ export default class Sigma<
     // Edges
     if (needFullEdgeRefresh) {
       this.graph.forEachEdge((edge) => this.refreshEdgeState(edge));
-    } else if (this.edgeStyleDependency !== "static") {
+    } else if (this.edgeStyleAnalysis.dependency !== "static") {
       for (const edge of this.dirtyEdges) {
         this.refreshEdgeState(edge);
       }

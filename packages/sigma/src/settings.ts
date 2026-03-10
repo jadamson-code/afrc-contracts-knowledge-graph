@@ -5,7 +5,7 @@
  * The list of settings and some handy functions.
  * @module sigma/settings
  */
-import { AtLeastOne } from "./types";
+import { AtLeastOne, Coordinates } from "./types";
 import { assign } from "./utils";
 
 /**
@@ -43,8 +43,13 @@ export interface Settings {
   // Size and scaling
   zoomToSizeRatioFunction: (ratio: number) => number;
   itemSizesReference: "screen" | "positions";
-  autoRescale: boolean;
+  autoRescale: boolean | "once";
   autoCenter: boolean;
+
+  // Node drag
+  enableNodeDrag: boolean;
+  getDraggedNodes: (draggedNode: string) => string[];
+  dragPositionToAttributes: ((position: Coordinates, node: string) => Record<string, unknown>) | null;
 
   // Label rendering optimization
   labelDensity: number;
@@ -100,6 +105,11 @@ export const DEFAULT_SETTINGS: Settings = {
   itemSizesReference: "screen",
   autoRescale: true,
   autoCenter: true,
+
+  // Node drag
+  enableNodeDrag: false,
+  getDraggedNodes: (node: string) => [node],
+  dragPositionToAttributes: null,
 
   // Label rendering optimization
   labelDensity: 1,

@@ -288,6 +288,17 @@ export function resolveGraphicValue<
 export type StyleDependency = "static" | "item-state" | "graph-state";
 
 /**
+ * Pre-computed metadata extracted from a style declaration.
+ */
+export interface StyleAnalysis {
+  dependency: StyleDependency;
+  // Position attribute names inferred from attribute bindings on x/y.
+  // null when x/y are set via functions, conditionals, or not set at all.
+  xAttribute: string | null;
+  yAttribute: string | null;
+}
+
+/**
  * Classifies the state dependency of a predicate.
  */
 function classifyPredicate(predicate: unknown): StyleDependency {
@@ -324,57 +335,61 @@ function worstDependency(a: StyleDependency, b: StyleDependency): StyleDependenc
 }
 
 /**
- * Analyzes a style declaration to determine its state dependency.
- *
- * Returns "static" if no rules depend on item or graph state, "item-state" if
- * rules only depend on item state (string/array/object predicates), or
- * "graph-state" if any rule uses function predicates or value functions.
+ * Analyzes a style declaration to extract pre-computed metadata:
+ * state dependency level, and position attribute names for x/y.
  */
-export function analyzeStyleDependency(
+export function analyzeStyleDeclaration(
   styleDeclaration: Record<string, unknown> | Record<string, unknown>[] | undefined,
-): StyleDependency {
-  if (!styleDeclaration) return "static";
+): StyleAnalysis {
+  if (!styleDeclaration) return { dependency: "static", xAttribute: null, yAttribute: null };
 
   const rules = Array.isArray(styleDeclaration) ? styleDeclaration : [styleDeclaration];
-  let result: StyleDependency = "static";
+  let dependency: StyleDependency = "static";
+  let xAttribute: string | null = null;
+  let yAttribute: string | null = null;
 
   for (const rule of rules) {
     // Conditional rule with `when` predicate
     if ("when" in rule) {
-      result = worstDependency(result, classifyPredicate(rule.when));
+      dependency = worstDependency(dependency, classifyPredicate(rule.when));
       // Also check values inside `then` and `else` branches
       const thenObj = rule.then as Record<string, unknown> | undefined;
       if (thenObj && typeof thenObj === "object") {
         for (const value of Object.values(thenObj)) {
-          result = worstDependency(result, classifyValue(value));
+          dependency = worstDependency(dependency, classifyValue(value));
         }
       }
       const elseObj = rule.else as Record<string, unknown> | undefined;
       if (elseObj && typeof elseObj === "object") {
         for (const value of Object.values(elseObj)) {
-          result = worstDependency(result, classifyValue(value));
+          dependency = worstDependency(dependency, classifyValue(value));
         }
       }
     } else {
-      // Regular rule — check each property value
+      // Regular rule — check each property value and extract position bindings
       for (const [key, value] of Object.entries(rule)) {
         if (key === "when" || key === "then" || key === "else") continue;
-        result = worstDependency(result, classifyValue(value));
+        dependency = worstDependency(dependency, classifyValue(value));
+
+        // Extract position attribute names from direct bindings
+        if ((key === "x" || key === "y") && isAttributeBinding(value)) {
+          const attr = (value as DirectAttributeBinding<number>).attribute;
+          if (key === "x" && !xAttribute) xAttribute = attr;
+          if (key === "y" && !yAttribute) yAttribute = attr;
+        }
       }
     }
-
-    if (result === "graph-state") return result; // Can't get worse
   }
 
-  return result;
+  return { dependency, xAttribute, yAttribute };
 }
 
 /**
  * Resolved node style values (all properties resolved to concrete values).
  */
 export interface ResolvedNodeStyle {
-  x: number;
-  y: number;
+  x?: number;
+  y?: number;
   size: number;
   color: string;
   opacity: number;
@@ -437,8 +452,6 @@ export interface ResolvedEdgeStyle {
  * Default values for resolved node styles.
  */
 const DEFAULT_RESOLVED_NODE_STYLE: ResolvedNodeStyle = {
-  x: 0,
-  y: 0,
   size: 10,
   color: "#666",
   opacity: 1,

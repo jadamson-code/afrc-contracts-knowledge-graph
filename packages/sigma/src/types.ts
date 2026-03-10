@@ -179,6 +179,15 @@ export type SigmaStageEventPayload = SigmaEventPayload;
 export interface SigmaNodeEventPayload extends SigmaEventPayload {
   node: string;
 }
+export interface SigmaNodeDragEventPayload extends SigmaEventPayload {
+  node: string;
+  allDraggedNodes: string[];
+}
+export interface SigmaNodeDragMovePayload {
+  node: string;
+  allDraggedNodes: string[];
+  event: MouseCoords;
+}
 export interface SigmaEdgeEventPayload extends SigmaEventPayload {
   edge: string;
 }
@@ -207,6 +216,10 @@ export type SigmaAdditionalEvents = {
   kill(): void;
   // Body events
   moveBody(payload: SigmaStageEventPayload): void;
+  // Node drag events
+  nodeDragStart(payload: SigmaNodeDragEventPayload): void;
+  nodeDrag(payload: SigmaNodeDragMovePayload): void;
+  nodeDragEnd(payload: SigmaNodeDragEventPayload): void;
 };
 
 export type SigmaEvents = SigmaStageEvents & SigmaNodeEvents & SigmaEdgeEvents & SigmaAdditionalEvents;
@@ -366,9 +379,9 @@ export {
   evaluateStatePredicate,
   evaluateNodeStyle,
   evaluateEdgeStyle,
-  analyzeStyleDependency,
+  analyzeStyleDeclaration,
 } from "./core/styles";
-export type { ResolvedNodeStyle, ResolvedEdgeStyle, StyleDependency } from "./core/styles";
+export type { ResolvedNodeStyle, ResolvedEdgeStyle, StyleDependency, StyleAnalysis } from "./core/styles";
 
 /**
  * Primitives API:

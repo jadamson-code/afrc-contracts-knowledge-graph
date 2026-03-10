@@ -1,15 +1,15 @@
 import { expect, test } from "@playwright/test";
 
 const EXAMPLES = [
-  "edge-styles",
-  "events",
-  "hover-search",
-  "label-styles",
-  "large-graph",
-  "node-borders",
-  "node-images",
-  "node-piecharts",
-  "self-loops",
+  "core/events",
+  "core/hover-search",
+  "core/large-graph",
+  "styling/edge-styles",
+  "styling/label-styles",
+  "styling/node-borders",
+  "styling/node-images",
+  "styling/node-piecharts",
+  "styling/self-loops",
 ];
 
 for (const id of EXAMPLES) {

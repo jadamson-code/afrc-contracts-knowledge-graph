@@ -170,6 +170,7 @@ uniform vec2 u_resolution;
 uniform float u_pixelRatio;
 uniform float u_labelMargin;
 uniform float u_zoomLabelSizeRatio;
+uniform float u_labelPixelSnapping;
 ${shapeUniformDeclarations}
 
 out vec2 v_uv;
@@ -222,6 +223,9 @@ void main() {
   float la_s = sin(a_labelAngle);
   mat2 labelRotMat = mat2(la_c, -la_s, la_s, la_c);
 
+  vec3 nodeClip = u_matrix * vec3(a_nodePosition, 1.0);
+  vec2 snapDelta = vec2(0.0);
+
   if (a_positionMode < 4.0 && labelW > 0.0) {
     vec2 screenDir = getLabelDirection(a_positionMode);
     vec2 rotatedScreenDir = labelRotMat * screenDir;
@@ -231,6 +235,13 @@ void main() {
     float edgeDistPixels = nodeRadiusPixels * edgeDistNormalized;
     // labelMargin matches the label shader's margin (gap from node edge to text)
     float labelStart = edgeDistPixels + labelMargin;
+
+    // Snap node center to pixel grid so label/backdrop/attachment move as a unit
+    vec2 nodeScreen = vec2(
+      (nodeClip.x + 1.0) * u_resolution.x,
+      (1.0 - nodeClip.y) * u_resolution.y
+    ) * 0.5;
+    snapDelta = (round(nodeScreen) - nodeScreen) * u_labelPixelSnapping;
 
     if (a_positionMode < 0.5) {
       // Right: box spans from node center to text end + padding
@@ -318,8 +329,7 @@ void main() {
   vec2 quadSize = maxBound - minBound;
   vec2 quadCenter = (minBound + maxBound) * 0.5;
 
-  vec2 localPos = quadCenter + a_quadCorner * quadSize * 0.5;
-  vec3 nodeClip = u_matrix * vec3(a_nodePosition, 1.0);
+  vec2 localPos = quadCenter + a_quadCorner * quadSize * 0.5 + snapDelta;
   vec2 ndcOffset = localPos * 2.0 / u_resolution;
   ndcOffset.y = -ndcOffset.y;
 
@@ -542,6 +552,7 @@ export function collectBackdropUniforms(shapes: SDFShape[]): string[] {
     "u_pixelRatio",
     "u_labelMargin",
     "u_zoomLabelSizeRatio",
+    "u_labelPixelSnapping",
   ];
 
   for (const shape of shapes) {

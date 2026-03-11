@@ -505,6 +505,7 @@ export function createLabelProgram<
         uniformLocations.u_zoomLabelSizeRatio,
         1 / NodeLabelProgram.zoomToLabelSizeRatioFunction(params.zoomRatio),
       );
+      gl.uniform1f(uniformLocations.u_labelPixelSnapping, params.labelPixelSnapping);
 
       // Shape-specific uniforms (for SDF edge detection)
       // Deduplicate uniforms across all shapes

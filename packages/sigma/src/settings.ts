@@ -55,6 +55,7 @@ export interface Settings {
   labelDensity: number;
   labelGridCellSize: number;
   labelRenderedSizeThreshold: number;
+  labelPixelSnapping: boolean;
 
   // Camera and features
   maxDepthLevels: number;
@@ -115,6 +116,7 @@ export const DEFAULT_SETTINGS: Settings = {
   labelDensity: 1,
   labelGridCellSize: 100,
   labelRenderedSizeThreshold: 6,
+  labelPixelSnapping: true,
 
   // Camera and features
   maxDepthLevels: 20,

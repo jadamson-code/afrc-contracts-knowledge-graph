@@ -25,6 +25,7 @@ export const ATTACHMENT_TEXTURE_UNIT = 7;
 const ATTACHMENT_UNIFORMS = [
   "u_matrix",
   "u_resolution",
+  "u_labelPixelSnapping",
   "u_sizeRatio",
   "u_correctionRatio",
   "u_cameraAngle",
@@ -43,6 +44,7 @@ precision highp float;
 // Camera / viewport
 uniform mat3 u_matrix;
 uniform vec2 u_resolution;
+uniform float u_labelPixelSnapping;
 uniform float u_sizeRatio;
 uniform float u_correctionRatio;
 uniform float u_cameraAngle;
@@ -167,17 +169,35 @@ void main() {
   // -----------------------------------------------------------------------
   mat2 rotMat = rotate2D(a_labelAngle);
 
-  // Rotate the attachment center and quad corners around node center
   vec2 rotatedCenter = rotMat * attachCenter;
   vec2 halfSize = a_attachmentSize / 2.0;
   vec2 cornerOffset = rotMat * (a_quadCorner * halfSize);
 
-  // Convert to NDC offset
-  vec2 totalPixelOffset = rotatedCenter + cornerOffset;
-  vec2 offsetNDC = totalPixelOffset * 2.0 / u_resolution;
-  offsetNDC.y = -offsetNDC.y; // Flip Y for NDC
+  // Work in screen pixels (Y-down) so we can snap to the pixel grid.
+  // NDC → screen: screenX = (ndc+1)*res/2, screenY = (1-ndc)*res/2
+  vec2 nodeScreen = vec2(
+    (posNDC.x + 1.0) * u_resolution.x * 0.5,
+    (1.0 - posNDC.y) * u_resolution.y * 0.5
+  );
 
-  gl_Position = vec4(posNDC + offsetNDC, 0.0, 1.0);
+  // Snap node center to pixel grid so label/backdrop/attachment move as a unit
+  vec2 snapDelta = (round(nodeScreen) - nodeScreen) * u_labelPixelSnapping;
+
+  // Snap the quad's top-left corner to integer pixel boundaries so atlas
+  // texels map 1:1 to device pixels (prevents LINEAR filtering blur).
+  vec2 centerScreen = nodeScreen + rotatedCenter + snapDelta;
+  vec2 topLeft = centerScreen - halfSize;
+  topLeft = mix(topLeft, round(topLeft), u_labelPixelSnapping);
+  centerScreen = topLeft + halfSize;
+
+  vec2 vertexScreen = centerScreen + cornerOffset;
+
+  // Screen → NDC
+  gl_Position = vec4(
+    vertexScreen.x * 2.0 / u_resolution.x - 1.0,
+    1.0 - vertexScreen.y * 2.0 / u_resolution.y,
+    0.0, 1.0
+  );
 
   // Texture coordinates: map from atlas rect
   vec2 texOrigin = a_atlasRect.xy / u_atlasSize;
@@ -256,6 +276,7 @@ export class AttachmentProgram<
   setUniforms(params: RenderParams, { gl, uniformLocations }: ProgramInfo): void {
     gl.uniformMatrix3fv(uniformLocations.u_matrix, false, params.matrix);
     gl.uniform2f(uniformLocations.u_resolution, params.width * params.pixelRatio, params.height * params.pixelRatio);
+    gl.uniform1f(uniformLocations.u_labelPixelSnapping, params.labelPixelSnapping);
     gl.uniform1f(uniformLocations.u_sizeRatio, params.sizeRatio);
     gl.uniform1f(uniformLocations.u_correctionRatio, params.correctionRatio);
     gl.uniform1f(uniformLocations.u_cameraAngle, params.cameraAngle);

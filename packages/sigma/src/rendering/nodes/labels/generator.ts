@@ -236,6 +236,7 @@ uniform vec2 u_atlasSize;
 uniform sampler2D u_nodeDataTexture;
 uniform int u_nodeDataTextureWidth;
 uniform float u_zoomLabelSizeRatio;
+uniform float u_labelPixelSnapping;
 ${shapeUniformDeclarations}
 
 // ============================================================================
@@ -343,7 +344,15 @@ ${step3Code}
   // Apply label angle rotation
   float la_c = cos(a_labelAngle);
   float la_s = sin(a_labelAngle);
-  charPixelPos = mat2(la_c, -la_s, la_s, la_c) * charPixelPos;
+  mat2 labelRotMat = mat2(la_c, -la_s, la_s, la_c);
+  charPixelPos = labelRotMat * charPixelPos;
+
+  // Snap node center to pixel grid so label/backdrop/attachment move as a unit
+  vec2 nodeScreen = vec2(
+    (anchorClip.x + 1.0) * u_resolution.x,
+    (1.0 - anchorClip.y) * u_resolution.y
+  ) * 0.5;
+  charPixelPos += (round(nodeScreen) - nodeScreen) * u_labelPixelSnapping;
 
   // Convert to NDC (flip Y: screen Y-down -> clip Y-up)
   vec2 ndcOffset = vec2(charPixelPos.x, -charPixelPos.y) * 2.0 / u_resolution;
@@ -439,6 +448,7 @@ export function collectLabelUniforms(shapes: SDFShape[]): string[] {
     "u_nodeDataTexture",
     "u_nodeDataTextureWidth",
     "u_zoomLabelSizeRatio",
+    "u_labelPixelSnapping",
   ];
 
   for (const shape of shapes) {

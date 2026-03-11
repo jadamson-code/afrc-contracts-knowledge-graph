@@ -141,6 +141,7 @@ export function createBackdropProgram<
 
       // Zoom-dependent label size ratio
       gl.uniform1f(uniformLocations.u_zoomLabelSizeRatio, 1 / zoomToLabelSizeRatioFunction(params.zoomRatio));
+      gl.uniform1f(uniformLocations.u_labelPixelSnapping, params.labelPixelSnapping);
 
       // Shape-specific uniforms
       const seenUniforms = new Set<string>();

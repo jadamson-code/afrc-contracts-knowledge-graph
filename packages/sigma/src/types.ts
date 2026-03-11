@@ -130,6 +130,7 @@ export interface RenderParams {
   edgeDataTextureUnit: number;
   edgeDataTextureWidth: number;
   pickingFrameBuffer: WebGLFramebuffer | null;
+  labelPixelSnapping: number;
 }
 
 /**

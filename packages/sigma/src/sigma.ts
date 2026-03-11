@@ -2800,6 +2800,7 @@ export default class Sigma<
       edgeDataTextureUnit: EDGE_DATA_TEXTURE_UNIT,
       edgeDataTextureWidth: this.edgeDataTexture!.getTextureWidth(),
       pickingFrameBuffer: this.pickingFrameBuffer,
+      labelPixelSnapping: this.settings.labelPixelSnapping ? 1.0 : 0.0,
     };
   }
 

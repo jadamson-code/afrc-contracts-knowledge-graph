@@ -11,6 +11,7 @@
 import { LabelAttachmentContext, LabelAttachmentRenderer } from "../../../primitives";
 import { AtlasEntry, AtlasLookup, PackableItem, ShelfCursor, packItemsOnPage } from "../../../utils";
 import { contentToCanvas } from "./attachment-converter";
+import { ATTACHMENT_TEXTURE_UNIT } from "./attachment-program";
 
 const ATLAS_SIZE = 2048;
 
@@ -127,6 +128,7 @@ export class AttachmentManager {
     this.deleteGLTexture();
     const gl = this.gl;
     const tex = gl.createTexture()!;
+    gl.activeTexture(gl.TEXTURE0 + ATTACHMENT_TEXTURE_UNIT);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.packCanvas);

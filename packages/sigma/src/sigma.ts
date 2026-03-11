@@ -1207,11 +1207,10 @@ export default class Sigma<
 
   /**
    * Get the label color for a node.
-   * TODO: This should be integrated into the styles system.
    * @private
    */
-  private getLabelColor(_data: NodeDisplayData): string {
-    return "#000";
+  private getLabelColor(data: NodeDisplayData): string {
+    return data.labelColor;
   }
 
   /**
@@ -1849,11 +1848,9 @@ export default class Sigma<
     this.edgeLabelProgram.reallocate(totalCharacters);
 
     // Process each visible edge label into the program's buffer
-    // TODO: These defaults should come from the styles system
     const defaultEdgeLabelSize = 12;
     const defaultEdgeLabelMargin = this.primitives?.edges?.label?.margin ?? 5;
     const defaultEdgeLabelPosition = "over" as const;
-    const defaultEdgeLabelColor = "#000";
 
     let characterOffset = 0;
     for (const { edge, sourceData, targetData, edgeData, sourceKey, targetKey } of edgesToProcess) {
@@ -1870,7 +1867,7 @@ export default class Sigma<
         x: (sourceData.x + targetData.x) / 2,
         y: (sourceData.y + targetData.y) / 2,
         size: defaultEdgeLabelSize,
-        color: defaultEdgeLabelColor,
+        color: edgeData.labelColor,
         nodeSize: 0,
         nodeIndex: -1,
         margin: defaultEdgeLabelMargin,
@@ -2106,6 +2103,7 @@ export default class Sigma<
       size: resolvedStyle.size ?? 2,
       color: resolvedStyle.color ?? "#666",
       opacity: resolvedStyle.opacity ?? 1,
+      labelColor: resolvedStyle.labelColor ?? "#000",
       label: resolvedStyle.label ?? null,
       hidden: resolvedStyle.visibility === "hidden",
       forceLabel: resolvedStyle.labelVisibility === "visible",
@@ -2466,6 +2464,7 @@ export default class Sigma<
       size: resolvedStyle.size ?? 0.5,
       color: resolvedStyle.color ?? "#ccc",
       opacity: resolvedStyle.opacity ?? 1,
+      labelColor: resolvedStyle.labelColor ?? "#666",
       label: resolvedStyle.label ?? "",
       hidden: resolvedStyle.visibility === "hidden",
       forceLabel: resolvedStyle.labelVisibility === "visible",

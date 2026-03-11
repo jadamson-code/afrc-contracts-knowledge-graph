@@ -11,7 +11,7 @@ import { Attributes } from "graphology-types";
 
 import Sigma from "../../sigma";
 import { EdgeDisplayData, NodeDisplayData, RenderParams } from "../../types";
-import { colorToArray, floatColor } from "../../utils";
+import { colorToArray, floatColor, rgbaToFloat } from "../../utils";
 import { AttributeLayout, ItemAttributeTexture, computeAttributeLayout } from "../data-texture";
 import { isAttributeSource } from "../nodes";
 import { ProgramInfo } from "../utils";
@@ -253,7 +253,13 @@ export function createEdgeProgram<
       // Core attributes go into vertex buffer
       // Edge data (node indices, thickness, extremity ratios) fetched from edge data texture via edgeIndex
       array[startIndex++] = edgeTextureIndex;
-      array[startIndex++] = floatColor(data.color);
+      const opacity = data.opacity ?? 1;
+      if (opacity < 1) {
+        const [r, g, b, a] = colorToArray(data.color);
+        array[startIndex++] = rgbaToFloat(r, g, b, (a * opacity) | 0, true);
+      } else {
+        array[startIndex++] = floatColor(data.color);
+      }
       array[startIndex++] = edgeIndex;
 
       // Pack path/layer attributes into the edge attribute texture
@@ -313,10 +319,11 @@ export function createEdgeProgram<
               const defaultColor = typeof attr.defaultValue === "string" ? attr.defaultValue : data.color;
               const colorStr = typeof value === "string" ? value : defaultColor;
               const [r, g, b, a] = colorToArray(colorStr);
+              const opacity = data.opacity ?? 1;
               packed[offset] = r / 255;
               packed[offset + 1] = g / 255;
               packed[offset + 2] = b / 255;
-              packed[offset + 3] = a / 255;
+              packed[offset + 3] = (a / 255) * opacity;
             } else if (attr.size === 1) {
               packed[offset] = typeof value === "number" ? value : (attr.defaultValue as number) || 0;
             } else {

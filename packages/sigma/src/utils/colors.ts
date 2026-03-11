@@ -221,7 +221,7 @@ for (const htmlColor in HTML_COLORS) {
   FLOAT_COLOR_CACHE[HTML_COLORS[htmlColor]] = FLOAT_COLOR_CACHE[htmlColor];
 }
 
-function rgbaToFloat(r: number, g: number, b: number, a: number, masking?: boolean): number {
+export function rgbaToFloat(r: number, g: number, b: number, a: number, masking?: boolean): number {
   INT32[0] = (a << 24) | (b << 16) | (g << 8) | r;
   if (masking) INT32[0] = INT32[0] & 0xfeffffff;
   return FLOAT32[0];

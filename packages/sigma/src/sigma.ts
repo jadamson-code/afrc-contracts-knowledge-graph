@@ -2105,6 +2105,7 @@ export default class Sigma<
       y: resolvedStyle.y ?? (attrs.y as number),
       size: resolvedStyle.size ?? 2,
       color: resolvedStyle.color ?? "#666",
+      opacity: resolvedStyle.opacity ?? 1,
       label: resolvedStyle.label ?? null,
       hidden: resolvedStyle.visibility === "hidden",
       forceLabel: resolvedStyle.labelVisibility === "visible",
@@ -2464,6 +2465,7 @@ export default class Sigma<
     let data: EdgeDisplayData = {
       size: resolvedStyle.size ?? 0.5,
       color: resolvedStyle.color ?? "#ccc",
+      opacity: resolvedStyle.opacity ?? 1,
       label: resolvedStyle.label ?? "",
       hidden: resolvedStyle.visibility === "hidden",
       forceLabel: resolvedStyle.labelVisibility === "visible",

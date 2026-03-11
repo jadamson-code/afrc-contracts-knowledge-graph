@@ -11,6 +11,7 @@ const EXAMPLES = [
   "styling/node-images",
   "styling/node-piecharts",
   "styling/self-loops",
+  "styling/alpha-blending",
 ];
 
 for (const id of EXAMPLES) {

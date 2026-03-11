@@ -330,10 +330,11 @@ export function createNodeProgram<
             const defaultColor = typeof attr.defaultValue === "string" ? attr.defaultValue : data.color;
             const colorStr = typeof value === "string" ? value : defaultColor;
             const [r, g, b, a] = colorToArray(colorStr);
+            const opacity = data.opacity ?? 1;
             packed[offset] = r / 255;
             packed[offset + 1] = g / 255;
             packed[offset + 2] = b / 255;
-            packed[offset + 3] = a / 255;
+            packed[offset + 3] = (a / 255) * opacity;
           } else if (attr.size === 1) {
             // Single float value
             const defaultNum = typeof attr.defaultValue === "number" ? attr.defaultValue : 0;

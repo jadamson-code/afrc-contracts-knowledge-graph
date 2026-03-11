@@ -5,6 +5,7 @@ const EXAMPLES = [
   "core/hover-search",
   "core/large-graph",
   "styling/edge-styles",
+  "styling/label-rendering",
   "styling/label-styles",
   "styling/node-borders",
   "styling/node-images",

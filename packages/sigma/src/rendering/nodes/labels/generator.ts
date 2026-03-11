@@ -8,10 +8,13 @@
  *
  * @module
  */
+import { DEFAULT_SDF_ATLAS_OPTIONS } from "../../../core/sdf-atlas";
 import { GLSL_GET_LABEL_DIRECTION, generateFindEdgeDistance } from "../../glsl";
 import { getShapeGLSLForShapes } from "../../shapes";
 import { numberToGLSLFloat } from "../../utils";
 import { SDFShape } from "../types";
+
+const ATLAS_FONT_SIZE = DEFAULT_SDF_ATLAS_OPTIONS.fontSize;
 
 // ============================================================================
 // Types
@@ -214,6 +217,7 @@ in float a_margin;           // Gap between node edge and label (pixels)
 in float a_positionMode;     // Position: 0=right, 1=left, 2=above, 3=below, 4=over
 in float a_labelWidth;       // Total label width (pixels)
 in float a_labelHeight;      // Label height (pixels)
+in float a_verticalCenter;   // Vertical center offset from baseline (pixels)
 in float a_labelAngle;       // Label rotation angle (radians)
 
 // Per-vertex (constant quad corners)
@@ -240,12 +244,14 @@ ${shapeUniformDeclarations}
 
 out vec2 v_texCoord;
 out vec4 v_color;
+out float v_fontScale;
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const float bias = 255.0 / 254.0;
+const float ATLAS_FONT_SIZE = ${numberToGLSLFloat(ATLAS_FONT_SIZE)};
 
 // ============================================================================
 // Shape SDF Functions
@@ -285,6 +291,9 @@ void main() {
   float labelWidth = a_labelWidth * zoomScale;
   float labelHeight = a_labelHeight * zoomScale;
 
+  // Font scale: ratio of rendered size to atlas size (for SDF anti-aliasing)
+  v_fontScale = a_labelHeight * zoomScale / ATLAS_FONT_SIZE;
+
   // -------------------------------------------------------------------------
   // Step 1: Transform node position to clip space
   // -------------------------------------------------------------------------
@@ -307,8 +316,8 @@ ${step3Code}
   vec2 charPixelPos = positionOffset + charOffset + cornerOffset * charSize;
 
   // Apply text alignment based on position mode
-  float verticalCenter = labelHeight * 0.2;
-  float baselineToBottom = labelHeight * 0.25;
+  float verticalCenter = a_verticalCenter * zoomScale;
+  float baselineToBottom = labelHeight - verticalCenter;
 
   if (a_positionMode < 0.5) {
     // Right: vertically center
@@ -370,6 +379,7 @@ precision highp float;
 
 in vec2 v_texCoord;
 in vec4 v_color;
+in float v_fontScale;
 
 uniform sampler2D u_atlas;
 uniform float u_gamma;
@@ -391,9 +401,10 @@ void main() {
     // This is where the glyph edge is located in the SDF
     float edgeThreshold = 1.0 - u_sdfBuffer;
 
-    // Gamma controls the anti-aliasing band width
-    // Scale by pixel ratio for HiDPI support (sharper on high-DPI)
-    float gamma = u_gamma / u_pixelRatio;
+    // Gamma controls the anti-aliasing band width.
+    // Scale inversely with font scale so small labels get a wider AA band
+    // (smoother) and large labels get a tighter band (sharper).
+    float gamma = u_gamma / (u_pixelRatio * v_fontScale);
 
     // Pure gamma-based anti-aliasing using smoothstep
     // The AA band extends from (threshold - gamma) to (threshold + gamma)

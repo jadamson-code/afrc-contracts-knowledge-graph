@@ -1,0 +1,68 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+  import { DEFAULT_STYLES } from "sigma/types";
+  import { registerControls } from "../_controls";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const NODE_COUNT = 8;
+  const SPACING = 80;
+
+  const { fontFamily, baseLabelSize, labelSizeIncrement, labelAngle } = registerControls({
+    fontFamily: {
+      type: "select",
+      label: "Font family",
+      default: "sans-serif",
+      options: [
+        { label: "Sans-serif", value: "sans-serif" },
+        { label: "Serif", value: "serif" },
+      ],
+    },
+    baseLabelSize: { type: "number", label: "Base label size", default: 8, min: 4, max: 48, step: 1 },
+    labelSizeIncrement: { type: "number", label: "Label size increment", default: 6, min: 0, max: 20, step: 1 },
+    labelAngle: { type: "number", label: "Label angle (°)", default: 0, min: -180, max: 180, step: 5 },
+  });
+
+  const graph = new Graph();
+
+  for (let i = 0; i < NODE_COUNT; i++) {
+    const size = baseLabelSize + i * labelSizeIncrement;
+    graph.addNode(`node-${i}`, {
+      x: 0,
+      y: -i * SPACING,
+      size: 10,
+      label: `Size ${size}`,
+      labelSize: size,
+    });
+  }
+
+  new Sigma(graph, container, {
+    styles: {
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          labelVisibility: "visible",
+          backdropVisibility: "visible",
+          labelSize: { attribute: "labelSize" },
+          labelFont: fontFamily,
+          labelAngle: () => (labelAngle * Math.PI) / 180,
+        },
+      ],
+    },
+    settings: {
+      itemSizesReference: "positions",
+      zoomToSizeRatioFunction: (x: number) => x,
+      autoRescale: true,
+    },
+  });
+</script>

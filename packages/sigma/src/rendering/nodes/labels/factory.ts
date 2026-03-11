@@ -70,6 +70,8 @@ interface LabelGlyphCache {
   xOffsets: number[];
   /** Total label width (in atlas font size pixels) */
   totalWidth: number;
+  /** Vertical center offset from baseline, in atlas font size pixels */
+  verticalCenterOffset: number;
 }
 
 // ============================================================================
@@ -181,9 +183,9 @@ export function createLabelProgram<
 
       // Initialize SDF atlas manager for glyph generation
       this.atlasManager = new SDFAtlasManager();
-      // Gamma controls anti-aliasing sharpness: lower = sharper edges
-      // 0.08 provides crisp text while maintaining smooth anti-aliasing
-      this.gamma = 0.08;
+      // Base gamma for SDF anti-aliasing, scaled by fontScale in the shader.
+      // At a typical 14px label (fontScale ≈ 0.22), effective gamma ≈ 0.11.
+      this.gamma = 0.025;
       this.sdfBuffer = DEFAULT_SDF_ATLAS_OPTIONS.cutoff;
 
       // Create and configure WebGL texture for glyph atlas
@@ -239,6 +241,7 @@ export function createLabelProgram<
           { name: "a_positionMode", size: 1, type: FLOAT },
           { name: "a_labelWidth", size: 1, type: FLOAT },
           { name: "a_labelHeight", size: 1, type: FLOAT },
+          { name: "a_verticalCenter", size: 1, type: FLOAT },
           { name: "a_labelAngle", size: 1, type: FLOAT },
         ],
         // Quad corners (same for all characters)
@@ -283,6 +286,8 @@ export function createLabelProgram<
       const glyphs: (GlyphMetrics | undefined)[] = [];
       const xOffsets: number[] = [];
       let xOffset = 0;
+      let maxAscent = 0;
+      let maxDescent = 0;
 
       for (const char of text) {
         const charCode = char.codePointAt(0);
@@ -298,6 +303,8 @@ export function createLabelProgram<
 
         if (glyph) {
           xOffset += glyph.advance;
+          maxAscent = Math.max(maxAscent, glyph.bearingY);
+          maxDescent = Math.max(maxDescent, glyph.atlasHeight - glyph.bearingY);
         }
       }
 
@@ -305,6 +312,7 @@ export function createLabelProgram<
         glyphs,
         xOffsets,
         totalWidth: xOffset,
+        verticalCenterOffset: (maxAscent - maxDescent) / 2,
       });
     }
 
@@ -396,6 +404,9 @@ export function createLabelProgram<
 
       // a_labelHeight: Label height in pixels (for vertical centering)
       array[i++] = labelData.size;
+
+      // a_verticalCenter: Pre-computed vertical center offset (pixels)
+      array[i++] = cache.verticalCenterOffset * scale;
 
       // a_labelAngle: Per-node label rotation angle in radians
       array[i++] = labelData.labelAngle;

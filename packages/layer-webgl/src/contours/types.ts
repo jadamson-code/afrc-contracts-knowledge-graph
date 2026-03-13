@@ -2,6 +2,7 @@ export type ContoursOptions = {
   radius: number;
   feather: number;
   zoomToRadiusRatioFunction: (ratio: number) => number;
+  getWeight?: (node: string) => number;
   levels: {
     color?: string;
     threshold: number;

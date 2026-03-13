@@ -139,3 +139,16 @@ body {
 .controls-toggle.active:hover {
   background: #c81e48;
 }
+
+.controls-toggle:disabled {
+  background: #ddd;
+  border-color: #ccc;
+  color: #999;
+  cursor: default;
+}
+
+.controls-toggle.active:disabled {
+  background: #666;
+  border-color: #666;
+  color: #fff;
+}

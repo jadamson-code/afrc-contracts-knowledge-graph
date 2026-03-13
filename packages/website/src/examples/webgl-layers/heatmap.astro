@@ -1,0 +1,111 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import { bindWebGLLayer, createHeatmapProgram } from "@sigma/layer-webgl";
+  import Graph from "graphology";
+  import { parse } from "graphology-gexf/browser";
+  import Sigma, { DEFAULT_DEPTH_LAYERS } from "sigma";
+
+  import { registerControls } from "../_controls";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const res = await fetch("/data/arctic.gexf");
+  const gexf = await res.text();
+  const graph = parse(Graph, gexf);
+
+  // Style all nodes and edges white
+  graph.forEachNode((node) => {
+    graph.setNodeAttribute(node, "color", "#ffffff");
+  });
+
+  let showEdges = false;
+
+  const renderer = new Sigma(graph, container, {
+    primitives: {
+      depthLayers: ["heatmap", ...DEFAULT_DEPTH_LAYERS],
+    },
+    edgeReducer: (_key, data) => (showEdges ? data : { ...data, hidden: true }),
+  });
+
+  const HEATMAP_COLOR_STOPS = [
+    { value: 0.1, color: "#ffffff" },
+    { value: 1, color: "#fdcc8a" },
+    { value: 10, color: "#e34a33" },
+    { value: 100, color: "#b30000" },
+    { value: 1000, color: "#500000" },
+  ];
+  const HEATMAP_SHADING = {
+    intensity: 0.0001,
+    specular: 0.15,
+    shininess: 24,
+    lightAngle: 315,
+    rotateWithCamera: true,
+  };
+
+  let cleanHeatmap: (() => void) | null = null;
+  let heatmapOn = true;
+  let shadingOn = true;
+
+  function rebuildHeatmap() {
+    if (cleanHeatmap) {
+      cleanHeatmap();
+      cleanHeatmap = null;
+    }
+    if (!heatmapOn) {
+      container.style.backgroundColor = "#333333";
+      return;
+    }
+    container.style.backgroundColor = "#ffffff";
+    cleanHeatmap = bindWebGLLayer(
+      "heatmap",
+      renderer,
+      createHeatmapProgram(graph.nodes(), {
+        radius: 50,
+        colorStops: HEATMAP_COLOR_STOPS,
+        getWeight: (node) => graph.degree(node),
+        shading: shadingOn ? HEATMAP_SHADING : undefined,
+      }),
+    );
+  }
+
+  const { setToggle, setDisabled } = registerControls({
+    heatmap: {
+      type: "toggle",
+      label: "Show heatmap",
+      default: heatmapOn,
+      action: (active: boolean) => {
+        heatmapOn = active;
+        rebuildHeatmap();
+        setDisabled("shading", !heatmapOn);
+      },
+    },
+    shading: {
+      type: "toggle",
+      label: "Show shading",
+      default: shadingOn,
+      action: (active: boolean) => {
+        shadingOn = active;
+        rebuildHeatmap();
+      },
+    },
+    edges: {
+      type: "toggle",
+      label: "Show edges",
+      default: showEdges,
+      action: (active: boolean) => {
+        showEdges = active;
+        renderer.refresh();
+      },
+    },
+  });
+
+  rebuildHeatmap();
+</script>

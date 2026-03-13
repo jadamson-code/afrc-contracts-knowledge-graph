@@ -86,6 +86,7 @@ type ControlValues<T extends Record<string, ControlDef>> = {
 
 type RegisterControlsResult<T extends Record<string, ControlDef>> = ControlValues<T> & {
   setToggle: (key: string, active: boolean) => void;
+  setDisabled: (key: string, disabled: boolean) => void;
 };
 
 function readValue(def: ValueControlDef, raw: string | null): number | boolean | string {
@@ -106,8 +107,9 @@ function getFormValue(def: ValueControlDef, el: HTMLInputElement | HTMLSelectEle
   return el.value;
 }
 
-// Stores toggle setters keyed by control key, populated during buildControls
+// Stores toggle setters and disable setters keyed by control key, populated during buildControls
 const toggleSetters: Record<string, (active: boolean) => void> = {};
+const disableSetters: Record<string, (disabled: boolean) => void> = {};
 
 function buildControls(
   container: HTMLElement,
@@ -301,12 +303,15 @@ function buildControls(
           def.action(active);
         });
 
-        // Register a setter so external code can sync the toggle
+        // Register setters so external code can sync or disable the toggle
         toggleSetters[key] = (newActive: boolean) => {
           if (newActive === active) return;
           active = newActive;
           btn.classList.toggle("active", active);
           def.action(active);
+        };
+        disableSetters[key] = (disabled: boolean) => {
+          btn.disabled = disabled;
         };
       }
 
@@ -349,6 +354,10 @@ export function registerControls<T extends Record<string, ControlDef>>(defs: T):
     setToggle: (key: string, active: boolean) => {
       const setter = toggleSetters[key];
       if (setter) setter(active);
+    },
+    setDisabled: (key: string, disabled: boolean) => {
+      const setter = disableSetters[key];
+      if (setter) setter(disabled);
     },
   };
 

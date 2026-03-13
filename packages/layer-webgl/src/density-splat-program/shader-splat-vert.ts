@@ -4,15 +4,19 @@ export default function getSplatVertexShader() {
 in vec2 a_position;
 
 uniform sampler2D u_nodesTexture;
+uniform int u_nodesTextureWidth;
 uniform mat3 u_matrix;
 uniform float u_radius;
 uniform float u_correctionRatio;
 uniform float u_zoomModifier;
 
 out vec2 v_offset;
+out float v_weight;
 
 void main() {
-  vec2 nodePos = texelFetch(u_nodesTexture, ivec2(gl_InstanceID, 0), 0).xy;
+  vec3 nodeData = texelFetch(u_nodesTexture, ivec2(gl_InstanceID % u_nodesTextureWidth, gl_InstanceID / u_nodesTextureWidth), 0).xyz;
+  vec2 nodePos = nodeData.xy;
+  v_weight = nodeData.z;
 
   float factor = 0.5 / u_correctionRatio;
   float radius = u_radius * u_zoomModifier;

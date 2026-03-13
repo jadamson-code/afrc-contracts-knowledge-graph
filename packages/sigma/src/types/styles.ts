@@ -688,8 +688,8 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
     },
     depth: {
       when: ["isHighlighted", "isHovered"],
-      then: "topNodes",
-      else: "nodes",
+      then: "topEdges",
+      else: "edges",
     },
     labelDepth: {
       when: ["isHighlighted", "isHovered"],

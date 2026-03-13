@@ -9,51 +9,88 @@
 
 <script>
   import { bindWebGLLayer, createContoursProgram } from "@sigma/layer-webgl";
-  import Graph from "graphology";
-  import { parse } from "graphology-gexf/browser";
-  import louvain from "graphology-communities-louvain";
+  import { layerBorder } from "@sigma/node-border";
+  import { MultiGraph } from "graphology";
+  import iwanthue from "iwanthue";
   import Sigma from "sigma";
 
   import { registerControls } from "../_controls";
 
   const container = document.getElementById("sigma-container") as HTMLElement;
 
-  const gexfRes = await fetch("/data/arctic.gexf");
-  const gexf = await gexfRes.text();
-  const graph = parse(Graph, gexf);
+  const res = await fetch("/data/euroSIS.json");
+  const data = await res.json();
+  const graph = new MultiGraph();
+  graph.import(data);
 
-  louvain.assign(graph, { nodeCommunityAttribute: "community" });
-  const communities = new Set<string>();
-  graph.forEachNode((_, attrs) => communities.add(attrs.community));
-  const communitiesArray = Array.from(communities);
+  // Group nodes by country
+  const countries = new Set<string>();
+  graph.forEachNode((_, attrs) => countries.add(attrs.country));
+  const countriesArray = Array.from(countries).sort();
 
-  const renderer = new Sigma(graph, container);
+  // Assign colors per country
+  const palette = iwanthue(countriesArray.length, { seed: "eurosis" });
+  const countryColors: Record<string, string> = {};
+  countriesArray.forEach((c, i) => (countryColors[c] = palette[i]));
 
-  let cleanLayer: (() => void) | null = null;
+  // Style nodes by country and degree
+  graph.forEachNode((node, attrs) => {
+    graph.setNodeAttribute(node, "color", countryColors[attrs.country]);
+    graph.setNodeAttribute(node, "size", Math.sqrt(graph.degree(node)) / 2);
+  });
 
-  function showCommunity(community: string) {
-    if (cleanLayer) cleanLayer();
-    cleanLayer = bindWebGLLayer(
-      "metaball",
-      renderer,
-      createContoursProgram(graph.filterNodes((_, attr) => attr.community === community)),
-    );
-  }
-
-  const options = communitiesArray.map((c, i) => ({ label: `Community ${i + 1}`, value: c }));
-  options.unshift({ label: "No community", value: "" });
-
-  registerControls({
-    community: {
-      type: "select",
-      label: "Community",
-      default: communitiesArray[0],
-      options,
+  const renderer = new Sigma(graph, container, {
+    primitives: {
+      depthLayers: ["edges", "edgeLabels", "metaball", "nodes", "nodeLabels", "topNodes", "topNodeLabels"],
+      nodes: {
+        variables: {
+          borderColor: { type: "color", default: "#ffffff" },
+        },
+        layers: [
+          layerBorder({
+            borders: [
+              { size: 2, color: { attribute: "borderColor" }, mode: "pixels" },
+              { size: 0, color: { attribute: "color" }, fill: true },
+            ],
+          }),
+        ],
+      },
     },
   });
 
-  // Read the selected value and show the contour
-  const params = new URLSearchParams(location.search);
-  const selected = params.get("community") ?? communitiesArray[0];
-  if (selected) showCommunity(selected);
+  let cleanLayer: (() => void) | null = null;
+
+  function showCountry(country: string) {
+    if (cleanLayer) cleanLayer();
+    cleanLayer = null;
+    if (country === "") return;
+    cleanLayer = bindWebGLLayer(
+      "metaball",
+      renderer,
+      createContoursProgram(
+        graph.filterNodes((_, attr) => attr.country === country),
+        {
+          radius: 80,
+          border: { color: countryColors[country], thickness: 4 },
+          levels: [{ color: countryColors[country] + "33", threshold: 0.5 }],
+        },
+      ),
+    );
+  }
+
+  const options = countriesArray.map((c) => ({ label: c, value: c }));
+  options.unshift({ label: "No country", value: "" });
+
+  registerControls({
+    country: {
+      type: "action-select",
+      label: "Country",
+      default: countriesArray[0],
+      options,
+      action: (value: string) => showCountry(value),
+    },
+  });
+
+  // Show the default country
+  showCountry(countriesArray[0]);
 </script>

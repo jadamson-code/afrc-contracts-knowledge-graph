@@ -5,7 +5,8 @@ import { RenderParams } from "sigma/types";
 
 import getVertexShader from "./shader-vert";
 
-const QUAD_VERTICES = [-1, 1, 1, 1, -1, -1, 1, -1];
+export const QUAD_VERTICES = [-1, 1, 1, 1, -1, -1, 1, -1];
+const QUAD_VERTICES_F32 = new Float32Array(QUAD_VERTICES);
 
 export type WebGLLayerDefinition = {
   FRAGMENT_SHADER_SOURCE: string;
@@ -14,12 +15,12 @@ export type WebGLLayerDefinition = {
 };
 
 /**
- * This program is based on the base Program from Sigma, but instead of using `this.array` to iterate over the vertices,
- * it is bound to some uniform directly for the fragment shader.
+ * Base class for fullscreen-quad WebGL layer programs.
  *
- * So, when extending this new CustomLayerProgram abstract class:
- * - Do not implement `getDefinition`, implement `getCustomLayerDefinition` instead
- * - Do not implement `setUniforms`, implement `setCameraUniforms` and `cacheDataUniforms` instead
+ * Subclasses implement:
+ * - `getCustomLayerDefinition()` — fragment shader + uniform declarations
+ * - `setCameraUniforms()` — per-frame camera/view uniforms
+ * - `cacheDataUniforms()` — data-dependent uniforms (called when the graph changes)
  */
 export abstract class WebGLLayerProgram<
   N extends Attributes = Attributes,
@@ -38,6 +39,12 @@ export abstract class WebGLLayerProgram<
   ) {
     super(gl, pickingBuffer, renderer);
     this.verticesCount = QUAD_VERTICES.length / 2;
+
+    // Upload quad vertices once (they never change)
+    const { buffer } = this.normalProgram;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, QUAD_VERTICES_F32, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
   }
 
   // Internal rendering management overrides:
@@ -48,7 +55,7 @@ export abstract class WebGLLayerProgram<
       UNIFORMS: [...CAMERA_UNIFORMS, ...DATA_UNIFORMS],
       FRAGMENT_SHADER_SOURCE,
       VERTEX_SHADER_SOURCE: getVertexShader(),
-      VERTICES: 6,
+      VERTICES: 4,
       METHOD: WebGL2RenderingContext.TRIANGLE_STRIP,
       ATTRIBUTES: [{ name: "a_position", size: 2, type: WebGL2RenderingContext.FLOAT }],
     };
@@ -59,14 +66,29 @@ export abstract class WebGLLayerProgram<
   setUniforms(params: RenderParams, programInfo: ProgramInfo) {
     this.setCameraUniforms(params, programInfo);
   }
+
+  // Called by sigma when graph data changes. Binds the normal program, delegates to cacheDataUniforms.
+  // Subclasses with additional programs (e.g. splat pass) can override this to set their own uniforms.
+  cacheData(): void {
+    const { gl } = this.normalProgram;
+    gl.useProgram(this.normalProgram.program);
+    this.cacheDataUniforms(this.normalProgram);
+  }
+
+  render(params: RenderParams): void {
+    this.bindProgram(this.normalProgram);
+    this.renderProgram(params, this.normalProgram);
+    this.unbindProgram(this.normalProgram);
+  }
+  drawWebGL(method: number, { gl }: ProgramInfo): void {
+    gl.drawArrays(method, 0, QUAD_VERTICES.length / 2);
+  }
   protected bindProgram(program: ProgramInfo): void {
     const { gl, buffer } = program;
 
-    // Bind base quad data:
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     let offset = 0;
     this.ATTRIBUTES.forEach((attr) => (offset += this.bindAttribute(attr, program, offset)));
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(QUAD_VERTICES), gl.STATIC_DRAW);
   }
 }
 

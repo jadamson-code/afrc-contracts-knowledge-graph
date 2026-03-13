@@ -10,7 +10,7 @@
 <script>
   import { bindWebGLLayer, createContoursProgram } from "@sigma/layer-webgl";
   import Graph from "graphology";
-  import Sigma from "sigma";
+  import Sigma, { DEFAULT_DEPTH_LAYERS } from "sigma";
 
   import data from "../_data/data.json";
 
@@ -18,10 +18,14 @@
   graph.import(data);
 
   const container = document.getElementById("sigma-container") as HTMLElement;
-  const renderer = new Sigma(graph, container);
+  const renderer = new Sigma(graph, container, {
+    primitives: {
+      depthLayers: ["contours", ...DEFAULT_DEPTH_LAYERS],
+    },
+  });
 
   bindWebGLLayer(
-    "metaball",
+    "contours",
     renderer,
     createContoursProgram(graph.nodes(), {
       radius: 150,

@@ -16,3 +16,4 @@ import Sigma from "./sigma";
 
 export default Sigma;
 export { Sigma, Camera, MouseCaptor, TouchCaptor, SDFAtlasManager };
+export { DEFAULT_DEPTH_LAYERS } from "./primitives/types";

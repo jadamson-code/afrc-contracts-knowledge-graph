@@ -274,6 +274,17 @@ export default class Sigma<
   private labelProgram: LabelProgram<string, N, E, G> | null = null;
   private edgeLabelProgram: EdgeLabelProgram<string, N, E, G> | null = null;
 
+  // Custom layer programs (fullscreen quad effects rendered at specific depth positions)
+  private customLayerPrograms = new Map<
+    string,
+    {
+      render(params: RenderParams): void;
+      kill(): void;
+      preRender?(params: RenderParams): void;
+      cacheData?(): void;
+    }
+  >();
+
   // Label attachment rendering
   private attachmentManager: AttachmentManager | null = null;
   private attachmentProgram: AttachmentProgram<N, E, G> | null = null;
@@ -1165,6 +1176,11 @@ export default class Sigma<
     //
     this.processWebGLLabels(nodes);
 
+    // Cache data uniforms for custom layer programs
+    for (const program of this.customLayerPrograms.values()) {
+      if (program.cacheData) program.cacheData();
+    }
+
     this.emit("afterProcess");
     return this;
   }
@@ -2014,8 +2030,23 @@ export default class Sigma<
       this.computeDisplayedNodeLabels();
     }
 
+    // Pre-render pass for custom layers (offscreen work like density splatting)
+    // before the depth loop to avoid framebuffer switching mid-loop.
+    for (const program of this.customLayerPrograms.values()) {
+      if (program.preRender) program.preRender(params);
+    }
+
+    // Restore main framebuffer state after any offscreen passes
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.width * this.pixelRatio, this.height * this.pixelRatio);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
     const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
     for (const depth of depthLayers) {
+      // Custom layer program at this depth
+      const customLayer = this.customLayerPrograms.get(depth);
+      if (customLayer) customLayer.render(params);
+
       // Edges in this depth
       const edgeRanges = this.depthRanges.edges[depth];
       if (edgeRanges && (!this.settings.hideEdgesOnMove || !moving)) {
@@ -2997,6 +3028,51 @@ export default class Sigma<
     element.remove();
     delete this.elements[id];
 
+    return this;
+  }
+
+  /**
+   * Method returning the main WebGL context used by the renderer.
+   */
+  getWebGLContext(): WebGL2RenderingContext {
+    if (!this.webGLContext) throw new Error("Sigma: WebGL context is not available");
+    return this.webGLContext;
+  }
+
+  /**
+   * Registers a custom layer program to be rendered at the given depth layer position.
+   * The depth name must exist in the primitives depthLayers array.
+   */
+  addCustomLayerProgram(
+    depth: string,
+    program: {
+      render(params: RenderParams): void;
+      kill(): void;
+      preRender?(params: RenderParams): void;
+      cacheData?(): void;
+    },
+  ): this {
+    const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
+    if (!depthLayers.includes(depth))
+      throw new Error(
+        `Sigma: cannot add custom layer program at depth "${depth}" — ` +
+          `it must be declared in primitives.depthLayers. Current layers: ${depthLayers.join(", ")}`,
+      );
+    this.customLayerPrograms.set(depth, program);
+    this.refresh();
+    return this;
+  }
+
+  /**
+   * Removes a custom layer program previously registered at the given depth.
+   */
+  removeCustomLayerProgram(depth: string): this {
+    const program = this.customLayerPrograms.get(depth);
+    if (program) {
+      program.kill();
+      this.customLayerPrograms.delete(depth);
+      this.scheduleRender();
+    }
     return this;
   }
 
@@ -4000,6 +4076,10 @@ export default class Sigma<
     this.backdropProgram = null;
     this.attachmentProgram = null;
     this.attachmentManager = null;
+
+    // Kill custom layer programs
+    for (const program of this.customLayerPrograms.values()) program.kill();
+    this.customLayerPrograms.clear();
 
     // Cleanup SDF atlas
     if (this.sdfAtlas) {

@@ -11,7 +11,7 @@
   import { bindWebGLLayer, createContoursProgram } from "@sigma/layer-webgl";
   import Graph from "graphology";
   import louvain from "graphology-communities-louvain";
-  import Sigma from "sigma";
+  import Sigma, { DEFAULT_DEPTH_LAYERS } from "sigma";
 
   import { registerControls } from "../_controls";
   import data from "../_data/data.json";
@@ -43,8 +43,15 @@
   communitiesArray.forEach((c, i) => (palette[c] = COMMUNITY_COLORS[i % COMMUNITY_COLORS.length]));
   graph.forEachNode((node, attrs) => graph.setNodeAttribute(node, "color", palette[attrs.community]));
 
+  // Declare one depth layer per community (before the default layers)
+  const communityDepths = communitiesArray.map((c) => `community-${c}`);
+
   const container = document.getElementById("sigma-container") as HTMLElement;
-  const renderer = new Sigma(graph, container);
+  const renderer = new Sigma(graph, container, {
+    primitives: {
+      depthLayers: [...communityDepths, ...DEFAULT_DEPTH_LAYERS],
+    },
+  });
 
   // Track active contour layer cleanup functions
   const activeLayers: Record<string, (() => void) | null> = {};

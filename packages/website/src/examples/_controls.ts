@@ -55,7 +55,15 @@ interface ToggleControl {
   action: (active: boolean) => void;
 }
 
-type ControlDef = NumberControl | BooleanControl | SelectControl | ButtonControl | ToggleControl;
+interface ActionSelectControl {
+  type: "action-select";
+  label: string;
+  default: string;
+  options: { label: string; value: string }[];
+  action: (value: string) => void;
+}
+
+type ControlDef = NumberControl | BooleanControl | SelectControl | ButtonControl | ToggleControl | ActionSelectControl;
 type ValueControlDef = NumberControl | BooleanControl | SelectControl;
 
 type ControlValue<T extends ControlDef> = T extends NumberControl
@@ -64,11 +72,13 @@ type ControlValue<T extends ControlDef> = T extends NumberControl
     ? boolean
     : T extends SelectControl
       ? string
-      : T extends ToggleControl
-        ? boolean
-        : T extends ButtonControl
-          ? void
-          : never;
+      : T extends ActionSelectControl
+        ? string
+        : T extends ToggleControl
+          ? boolean
+          : T extends ButtonControl
+            ? void
+            : never;
 
 type ControlValues<T extends Record<string, ControlDef>> = {
   [K in keyof T]: ControlValue<T[K]>;
@@ -239,13 +249,40 @@ function buildControls(
     wrapper.appendChild(form);
   }
 
-  // Right side: action controls (buttons, toggles)
-  const actionDefs = Object.entries(defs).filter(([, def]) => def.type === "button" || def.type === "toggle");
+  // Right side: action controls (buttons, toggles, action-selects)
+  const actionDefs = Object.entries(defs).filter(
+    ([, def]) => def.type === "button" || def.type === "toggle" || def.type === "action-select",
+  );
   if (actionDefs.length > 0) {
     const actions = document.createElement("div");
     actions.className = "controls-actions";
 
     for (const [key, def] of actionDefs) {
+      if (def.type === "action-select") {
+        const row = document.createElement("label");
+        row.className = "controls-row";
+
+        const span = document.createElement("span");
+        span.className = "controls-label";
+        span.textContent = def.label;
+
+        const select = document.createElement("select");
+        select.name = key;
+        for (const opt of def.options) {
+          const option = document.createElement("option");
+          option.value = opt.value;
+          option.textContent = opt.label;
+          if (opt.value === values[key]) option.selected = true;
+          select.appendChild(option);
+        }
+        select.addEventListener("change", () => def.action(select.value));
+
+        row.appendChild(span);
+        row.appendChild(select);
+        actions.appendChild(row);
+        continue;
+      }
+
       const btn = document.createElement("button");
       btn.type = "button";
 
@@ -292,6 +329,8 @@ export function registerControls<T extends Record<string, ControlDef>>(defs: T):
     } else if (def.type === "toggle") {
       const raw = params.get(key);
       values[key] = raw !== null ? raw === "true" || raw === "1" : def.default;
+    } else if (def.type === "action-select") {
+      values[key] = def.default;
     } else {
       values[key] = readValue(def, params.get(key));
     }

@@ -172,8 +172,9 @@ export default class Sigma<
   private touchCaptor: TouchCaptor<N, E, G>;
   private container: HTMLElement;
   private elements: PlainObject<HTMLElement> = {};
-  private canvasContexts: PlainObject<CanvasRenderingContext2D> = {};
   private webGLContext: WebGL2RenderingContext | null = null;
+  // Offscreen canvas for text measurement fallback (not added to DOM)
+  private measureContext: CanvasRenderingContext2D | null = null;
   private pickingFrameBuffer: WebGLFramebuffer | null = null;
   private pickingTexture: WebGLTexture | null = null;
   private pickingDepthBuffer: WebGLRenderbuffer | null = null;
@@ -391,9 +392,7 @@ export default class Sigma<
 
     // Initializing contexts
     this.createWebGLContext("stage", { picking: true });
-    this.createCanvasContext("edgeLabels");
-    this.createCanvasContext("labels");
-    this.createCanvasContext("mouse", { style: { touchAction: "none", userSelect: "none" } });
+    this.createLayer("mouse", "div", { style: { touchAction: "none", userSelect: "none" } });
 
     // Initial resize
     this.resize();
@@ -1247,9 +1246,11 @@ export default class Sigma<
       const fontKey = this.labelProgram.registerFont?.(family, weight, style) || "";
       result = this.labelProgram.measureLabel(data.label, labelSize, fontKey);
     } else {
-      const context = this.canvasContexts.labels;
-      context.font = `${style} ${weight} ${labelSize}px ${family}`;
-      result = { width: context.measureText(data.label).width, height: labelSize };
+      if (!this.measureContext) {
+        this.measureContext = document.createElement("canvas").getContext("2d")!;
+      }
+      this.measureContext.font = `${style} ${weight} ${labelSize}px ${family}`;
+      result = { width: this.measureContext.measureText(data.label).width, height: labelSize };
     }
 
     this.labelSizeCache.set(cacheKey, result);
@@ -1813,9 +1814,6 @@ export default class Sigma<
       highlightedNodes,
     });
     extend(edgeLabelsToDisplay, this.edgesWithForcedLabels);
-    // Clear the canvas layer (we're using WebGL instead)
-    const context = this.canvasContexts.edgeLabels;
-    context.clearRect(0, 0, this.width, this.height);
 
     if (!this.edgeLabelProgram) return;
 
@@ -2899,26 +2897,6 @@ export default class Sigma<
   }
 
   /**
-   * Function used to create a canvas context and add the relevant DOM elements.
-   *
-   * @param  {string} id - Context's id.
-   * @param  options
-   * @return {Sigma}
-   */
-  createCanvasContext(id: string, options: { style?: Partial<CSSStyleDeclaration> } = {}): this {
-    const canvas = this.createCanvas(id, options);
-
-    const contextOptions = {
-      preserveDrawingBuffer: false,
-      antialias: false,
-    };
-
-    this.canvasContexts[id] = canvas.getContext("2d", contextOptions) as CanvasRenderingContext2D;
-
-    return this;
-  }
-
-  /**
    * Function used to create a WebGL 2 context and add the relevant DOM
    * elements.
    *
@@ -3020,8 +2998,6 @@ export default class Sigma<
     if (id === "stage" && this.webGLContext) {
       this.webGLContext.getExtension("WEBGL_lose_context")?.loseContext();
       this.webGLContext = null;
-    } else if (this.canvasContexts[id]) {
-      delete this.canvasContexts[id];
     }
 
     // Delete layer element
@@ -3596,14 +3572,6 @@ export default class Sigma<
       element.style.height = this.height + "px";
     }
 
-    // Sizing canvas contexts
-    for (const id in this.canvasContexts) {
-      this.elements[id].setAttribute("width", this.width * this.pixelRatio + "px");
-      this.elements[id].setAttribute("height", this.height * this.pixelRatio + "px");
-
-      if (this.pixelRatio !== 1) this.canvasContexts[id].scale(this.pixelRatio, this.pixelRatio);
-    }
-
     // Sizing WebGL context
     if (this.webGLContext) {
       this.elements.stage.setAttribute("width", this.width * this.pixelRatio + "px");
@@ -3627,8 +3595,6 @@ export default class Sigma<
 
     this.webGLContext!.bindFramebuffer(WebGLRenderingContext.FRAMEBUFFER, null);
     this.webGLContext!.clear(WebGLRenderingContext.COLOR_BUFFER_BIT);
-    this.canvasContexts.labels.clearRect(0, 0, this.width, this.height);
-    this.canvasContexts.edgeLabels.clearRect(0, 0, this.width, this.height);
 
     this.emit("afterClear");
     return this;
@@ -4104,8 +4070,8 @@ export default class Sigma<
     }
 
     // Destroying remaining collections
-    this.canvasContexts = {};
     this.webGLContext = null;
+    this.measureContext = null;
     this.elements = {};
   }
 
@@ -4126,12 +4092,6 @@ export default class Sigma<
 
   /**
    * Method that returns the collection of all used canvases.
-   * At the moment, the instantiated canvases are the following, and in the
-   * following order in the DOM:
-   * - `stage` (WebGL)
-   * - `edgeLabels`
-   * - `labels`
-   * - `mouse`
    *
    * @return {PlainObject<HTMLCanvasElement>} - The collection of canvases.
    */
@@ -4140,6 +4100,13 @@ export default class Sigma<
     for (const layer in this.elements)
       if (this.elements[layer] instanceof HTMLCanvasElement) res[layer] = this.elements[layer] as HTMLCanvasElement;
     return res;
+  }
+
+  /**
+   * Returns the mouse interaction layer element.
+   */
+  getMouseLayer(): HTMLElement {
+    return this.elements.mouse;
   }
 
   /**

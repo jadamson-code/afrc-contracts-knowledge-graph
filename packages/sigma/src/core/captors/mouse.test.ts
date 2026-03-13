@@ -41,7 +41,7 @@ beforeEach<SigmaTestContext>(async (context) => {
   });
   context.graph = graph;
   context.container = container;
-  context.target = context.sigma.getCanvases().mouse;
+  context.target = context.sigma.getMouseLayer();
 });
 
 afterEach<SigmaTestContext>(async ({ sigma }) => {

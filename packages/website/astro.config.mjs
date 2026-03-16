@@ -1,15 +1,41 @@
-import icon from "astro-icon";
 import starlight from "@astrojs/starlight";
+import icon from "astro-icon";
 import { defineConfig } from "astro/config";
+import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import starlightLinksValidator from "starlight-links-validator";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+const starlightDir = path.dirname(require.resolve("@astrojs/starlight"));
+
+// eslint-disable-next-line no-undef
 const isDev = process.argv.includes("dev");
 
 export default defineConfig({
   site: "https://www.sigmajs.org",
   vite: {
     server: { strictPort: true },
+    resolve: {
+      alias: [
+        // Bypass Starlight's exports map so our custom Icon can import its icon data
+        { find: "@astrojs/starlight/components/Icons", replacement: path.join(starlightDir, "components/Icons.ts") },
+      ],
+    },
+    plugins: [
+      {
+        name: "phosphor-icon-override",
+        enforce: "pre",
+        resolveId(source, importer) {
+          // Intercept Starlight's internal Icon imports and redirect to our custom component
+          if (importer?.includes("@astrojs/starlight") && source.endsWith("user-components/Icon.astro")) {
+            return path.resolve(__dirname, "src/components/StarlightIconOverride.astro");
+          }
+        },
+      },
+    ],
   },
   redirects: {
     "/docs": "/get-started/quickstart/",

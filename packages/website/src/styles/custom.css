@@ -51,6 +51,26 @@
   font-family: Hauora, Roboto, Arial, sans-serif;
 }
 
+/* Tighter logo-to-title spacing in header */
+.site-title {
+  gap: 0.3rem !important;
+}
+
+/* Color ".js" suffix grey in the site title */
+.site-title > span {
+  font-size: 0;
+}
+.site-title > span::before {
+  content: "sigma";
+  font-size: var(--sl-text-h4);
+  color: var(--sl-color-text-accent);
+}
+.site-title > span::after {
+  content: ".js";
+  font-size: var(--sl-text-h4);
+  color: var(--grey);
+}
+
 /* v4 doc notice banner */
 .sl-banner {
   text-align: center;

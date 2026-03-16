@@ -1,0 +1,60 @@
+---
+import { Icons, type StarlightIcon } from "@astrojs/starlight/components/Icons";
+
+// Import Phosphor SVGs as raw strings
+import githubSvg from "@phosphor-icons/core/assets/bold/github-logo-bold.svg?raw";
+import mastodonSvg from "@phosphor-icons/core/assets/bold/mastodon-logo-bold.svg?raw";
+import laptopSvg from "@phosphor-icons/core/assets/bold/laptop-bold.svg?raw";
+import sunSvg from "@phosphor-icons/core/assets/bold/sun-bold.svg?raw";
+import moonSvg from "@phosphor-icons/core/assets/bold/moon-bold.svg?raw";
+import magnifierSvg from "@phosphor-icons/core/assets/bold/magnifying-glass-bold.svg?raw";
+
+/** Extract the inner content of an SVG string (everything between <svg> and </svg>) */
+function extractSvgContent(raw: string): string {
+  return raw.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
+}
+
+interface Props {
+  name: StarlightIcon;
+  label?: string;
+  color?: string;
+  size?: string;
+  class?: string;
+}
+
+// Map Starlight icon names to Phosphor SVG replacements
+const PhosphorIcons: Partial<Record<StarlightIcon, string>> = {
+  github: extractSvgContent(githubSvg),
+  mastodon: extractSvgContent(mastodonSvg),
+  laptop: extractSvgContent(laptopSvg),
+  sun: extractSvgContent(sunSvg),
+  moon: extractSvgContent(moonSvg),
+  magnifier: extractSvgContent(magnifierSvg),
+};
+
+const { name, label, size = "1em", color } = Astro.props;
+const a11yAttrs = label ? ({ "aria-label": label } as const) : ({ "aria-hidden": "true" } as const);
+
+const phosphorPath = PhosphorIcons[name];
+const viewBox = phosphorPath ? "0 0 256 256" : "0 0 24 24";
+const html = phosphorPath || Icons[name];
+---
+
+<svg
+  {...a11yAttrs}
+  class={Astro.props.class}
+  width="16"
+  height="16"
+  viewBox={viewBox}
+  fill="currentColor"
+  set:html={html}
+/>
+
+<style define:vars={{ "sl-icon-color": color, "sl-icon-size": size }}>
+  svg {
+    color: var(--sl-icon-color);
+    font-size: var(--sl-icon-size, 1em);
+    width: 1em;
+    height: 1em;
+  }
+</style>

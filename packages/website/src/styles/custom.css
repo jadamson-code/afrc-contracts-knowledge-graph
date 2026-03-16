@@ -1,78 +1,54 @@
-/* sigma.js website — custom styles for Starlight */
-
-:root {
-  --ruby: #e22653;
-  --grey: #999;
-  --dark-grey: #666;
-  --cream: #f9f7ed;
-}
-
-/* Titles font */
-@font-face {
-  font-family: Hauora;
-  src:
-    local("Hauora"),
-    url("/fonts/hauora/Hauora-Medium.woff2") format("woff2");
-}
-@font-face {
-  font-family: Hauora;
-  font-weight: bold;
-  src:
-    local("Hauora"),
-    url("/fonts/hauora/Hauora-Bold.woff2") format("woff2");
-}
-
-/* Monospace font */
-@font-face {
-  font-family: Cascadia;
-  src:
-    local("Cascadia"),
-    url("/fonts/cascadia/CascadiaCode.woff2") format("woff2");
-}
-
-/* Main font */
-@font-face {
-  font-family: "Public Sans";
-  src:
-    local("Public Sans"),
-    url("/fonts/public-sans/PublicSans-Regular.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Public Sans";
-  font-style: italic;
-  src:
-    local("Public Sans"),
-    url("/fonts/public-sans/PublicSans-LightItalic.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Public Sans";
-  font-weight: bold;
-  src:
-    local("Public Sans"),
-    url("/fonts/public-sans/PublicSans-SemiBold.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Public Sans";
-  font-style: italic;
-  font-weight: bold;
-  src:
-    local("Public Sans"),
-    url("/fonts/public-sans/PublicSans-SemiBoldItalic.woff2") format("woff2");
-}
+/* sigma.js website — Starlight overrides (shared styles are in base.css) */
 
 /* Starlight theme overrides */
 :root {
   --sl-font: "Public Sans", Lato, Arial, sans-serif;
   --sl-font-system: "Public Sans", Lato, Arial, sans-serif;
   --sl-font-mono: Cascadia, monospace;
+  --sl-text-base: 1.05rem;
+}
+:root[data-theme="dark"] {
   --sl-color-accent-low: #3b1520;
   --sl-color-accent: #e22653;
   --sl-color-accent-high: #f5a3b8;
+  --sl-color-hairline-shade: var(--light-grey);
+  --sl-color-hairline: var(--light-grey);
 }
 :root[data-theme="light"] {
   --sl-color-accent-low: #f9dce3;
   --sl-color-accent: #c41e47;
   --sl-color-accent-high: #5c0f22;
+  --sl-color-bg-inline-code: var(--cream);
+  --sl-color-hairline-shade: var(--light-grey);
+  --sl-color-hairline: var(--light-grey);
+}
+
+/* Hauora for sidebar group labels */
+.sidebar-content .top-level > li > details > summary {
+  font-family: Hauora, Roboto, Arial, sans-serif;
+}
+
+/* Smooth link transitions */
+.content-panel a {
+  transition: color ease-out 200ms;
+}
+
+/* Remove border between content panels */
+.content-panel + .content-panel {
+  border-top: none;
+}
+
+/* Cleaner pagination buttons */
+.pagination-links a {
+  border-radius: 0;
+  border-color: var(--light-grey);
+  box-shadow: none;
+}
+.pagination-links a:hover {
+  border-color: var(--sl-color-gray-3);
+}
+.pagination-links .link-title {
+  font-family: Hauora, Roboto, Arial, sans-serif;
 }
 
 /* v4 doc notice banner */

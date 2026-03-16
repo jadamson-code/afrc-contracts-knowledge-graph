@@ -1,5 +1,6 @@
 ---
-// sigma.js homepage — standalone page outside Starlight docs
+// sigma.js homepage — standalone landing page outside Starlight docs
+import { Icon } from "astro-icon/components";
 import "../styles/base.css";
 import "../styles/homepage.css";
 ---
@@ -7,10 +8,10 @@ import "../styles/homepage.css";
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Sigma.js</title>
+    <title>Sigma.js - Render large graphs in the browser</title>
     <meta
       name="description"
-      content="a JavaScript library aimed at visualizing graphs of thousands of nodes and edges"
+      content="A WebGL-powered JavaScript library for interactive graph visualization, built on graphology."
     />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png" />
@@ -20,98 +21,36 @@ import "../styles/homepage.css";
   </head>
   <body>
     <div class="v4-notice">
-      This is the <strong>v4</strong> website.
-      <a href="https://v3.sigmajs.org">Looking for v3 documentation?</a>
+      This is the <strong>v4-beta</strong> website.
+      <a href="https://sigmajs.org">Looking for v3 documentation?</a>
     </div>
 
-    <header>
-      <input type="checkbox" id="toggle-menu" />
-      <nav class="menu">
-        <label for="toggle-menu" tabindex="0">
-          <img src="/img/icon-menu.svg" alt="Toggle menu" class="show-menu" />
-          <img src="/img/icon-close.svg" alt="Toggle menu" class="hide-menu" />
-        </label>
-
-        <div class="panel">
-          <div>
-            <a href="#" class="text-title with-logo">
-              <img src="/img/logo-sigma-ruby.svg" alt="" />
-              <strong class="text-ruby">sigma</strong><strong class="text-grey">.js</strong>
-            </a>
-          </div>
-          <ul class="internal">
-            <li>
-              <strong><a href="/get-started/quickstart/">Documentation</a></strong>
-            </li>
-            <li><a href="/how-to/interactivity/events/">Examples</a></li>
-            <li><a href="#architecture">Architecture</a></li>
-            <li><a href="#quickstart">Quick start</a></li>
-            <li><a href="#usecases">Use cases</a></li>
-            <li><a href="#faq">FAQ</a></li>
-            <li><a href="#gofurther">Go further</a></li>
-            <li><a href="#inthewild">In the wild</a></li>
-          </ul>
-          <ul>
-            <li>
-              <a href="https://github.com/jacomyal/sigma.js" class="with-logo">
-                <img src="/img/logo-github.svg" alt="" />
-                <span>GitHub</span>
-              </a>
-            </li>
-            <li>
-              <a rel="me" href="https://vis.social/@sigmajs" class="with-logo">
-                <img src="/img/logo-mastodon.svg" alt="" />
-                <span>Mastodon</span>
-              </a>
-            </li>
-            <li>
-              <a href="https://stackoverflow.com/questions/tagged/sigma.js" class="with-logo">
-                <img src="/img/logo-stackoverflow.svg" alt="" />
-                <span>StackOverflow</span>
-              </a>
-            </li>
-          </ul>
-        </div>
-      </nav>
-
-      <nav class="links">
-        <ul>
-          <li>
-            <a href="/get-started/quickstart/"><img src="/img/logo-documentation.svg" alt="Documentation" /></a>
-          </li>
-          <li>
-            <a href="https://github.com/jacomyal/sigma.js"><img src="/img/logo-github.svg" alt="GitHub" /></a>
-          </li>
-          <li>
-            <a rel="me" href="https://vis.social/@sigmajs">
-              <img src="/img/logo-mastodon.svg" alt="Mastodon" />
-            </a>
-          </li>
-          <li>
-            <a href="https://stackoverflow.com/questions/tagged/sigma.js">
-              <img src="/img/logo-stackoverflow.svg" alt="StackOverflow" />
-            </a>
-          </li>
-        </ul>
-      </nav>
-    </header>
-
     <main>
-      <section class="title">
-        <h1 class="with-logo">
-          <img src="/img/logo-sigma-ruby.svg" alt="" />
+      <section class="hero">
+        <h1>
+          <img src="/img/logo-sigma-ruby.svg" alt="" class="hero-logo" />
           <span class="text-ruby">sigma</span><span class="text-grey">.js</span>
         </h1>
-        <i><strong>a JavaScript library aimed at visualizing graphs of thousands of nodes and edges</strong></i>
+        <p class="tagline">Render large graphs in the browser. Fast.</p>
+        <p class="subtitle">
+          A WebGL-powered JavaScript library for interactive graph visualization, built on
+          <a href="https://graphology.github.io/">graphology</a>.
+        </p>
+        <div class="ctas">
+          <a href="/get-started/quickstart/" class="button button-primary">Get started</a>
+          <a href="https://github.com/jacomyal/sigma.js" class="button button-outline">
+            <Icon name="ph:github-logo-bold" class="button-icon" /> View on GitHub
+          </a>
+        </div>
       </section>
 
       <section class="showcase">
         <div class="wrapper">
           <iframe allowfullscreen="allowfullscreen" src="/demo/index.html" title="Sigma.js demo" width="100%"></iframe>
           <div class="overlay" tabindex="0">
-            <h2 class="text-title"><span class="bg">See sigma.js in action</span></h2>
+            <h2><span class="bg">See sigma.js in action</span></h2>
             <div>
-              <span class="bg">Click here to explore a network of Wikipedia pages about data visualization.</span>
+              <span class="bg">Click to explore a network of Wikipedia pages about data visualization.</span>
             </div>
           </div>
         </div>
@@ -124,204 +63,36 @@ import "../styles/homepage.css";
         </div>
       </section>
 
-      <section id="architecture">
-        <h2>Architecture</h2>
-        <p>
-          Sigma.js is a modern JavaScript library for rendering and interacting with network graphs in the browser. It
-          works in symbiosis with <a href="https://graphology.github.io/">graphology</a>, a multipurpose graph
-          manipulation library.
-        </p>
-        <div class="schema">
-          <div>
-            <div class="text-center"><img src="/img/logo-graphology.svg" alt="" /></div>
-            <h3>graphology</h3>
+      <section class="why-sigma">
+        <h2>What makes sigma.js different</h2>
+        <div class="cards">
+          <div class="card">
+            <h3><Icon name="ph:lightning-bold" class="card-icon" /> WebGL rendering</h3>
+            <p>GPU-accelerated rendering for smooth display and interaction, even on complex graphs.</p>
+          </div>
+          <div class="card">
+            <h3><Icon name="ph:hand-tap-bold" class="card-icon" /> Built-in interactions</h3>
+            <p>Pan, zoom, hover, and multi-touch work out of the box on any device.</p>
+          </div>
+          <div class="card">
+            <h3><Icon name="ph:puzzle-piece-bold" class="card-icon" /> Framework-agnostic</h3>
+            <p>Works with React, Angular, Vue, or vanilla JS. No framework lock-in.</p>
+          </div>
+          <div class="card">
+            <h3><Icon name="ph:graph-bold" class="card-icon" /> Graph algorithms</h3>
             <p>
-              <i>handles <strong>graph data model & algorithms</strong></i>
-            </p>
-          </div>
-          <span>+</span>
-          <div>
-            <div class="text-center"><img src="/img/logo-sigma-ruby.svg" alt="" /></div>
-            <h3>sigma.js</h3>
-            <p>
-              <i>handles <strong>graph rendering & interactions</strong></i>
-            </p>
-          </div>
-          <span>=</span>
-          <div>
-            <div class="text-center"><img src="/img/icon-app.svg" alt="" /></div>
-            <h3 class="text-center">your <span class="text-ruby">&hearts;</span> web app</h3>
-          </div>
-        </div>
-      </section>
-
-      <section id="quickstart">
-        <h2>Quick start</h2>
-        <div class="options row">
-          <div>
-            <p>I want sigma.js in my existing project:</p>
-            <pre><code>npm install graphology sigma</code></pre>
-            <p>Learn more on the <a href="/get-started/quickstart/">quickstart guide</a></p>
-          </div>
-          <div>
-            <p>I start from nothing:</p>
-            <p>
-              <a class="button" href="https://codesandbox.io/p/sandbox/sigma-template-82mpns">Try this CodeSandbox</a>
+              Layouts, metrics, community detection, and more, via
+              <a href="https://graphology.github.io/standard-library/">graphology's rich standard library</a>.
             </p>
           </div>
         </div>
       </section>
 
-      <section id="usecases">
-        <h2>Use cases</h2>
-        <div class="usecase row">
-          <a class="thumbnail" href="/get-started/loading-data/" aria-label="Open loading data guide">
-            <div style="background-image: url(/img/thumbnail-display.png)"></div>
-          </a>
-          <div>
-            <h2>Display</h2>
-            <p>
-              The most basic use case: you have a graph dataset, with colors, sizes and positions for each node. For
-              instance, you exported a <a href="https://gexf.net/">GEXF graph file</a> from
-              <a href="https://gephi.org/">Gephi</a>. You want to visualize it using on a web page.
-            </p>
-            <p>
-              <a href="/get-started/loading-data/" class="button">Open guide</a>
-            </p>
-          </div>
-        </div>
-        <div class="usecase row">
-          <a class="thumbnail" href="/how-to/interactivity/hover-search/" aria-label="Open hover and search guide">
-            <div style="background-image: url(/img/thumbnail-explore.png)"></div>
-          </a>
-          <div>
-            <h2>Explore</h2>
-            <p>
-              You want to add interaction, so that your users can dig into the graph. You want to add a search field,
-              and allow users to see the neighborhood of a node when hovering it.
-            </p>
-            <p>
-              <a href="/how-to/interactivity/hover-search/" class="button">Open guide</a>
-            </p>
-          </div>
-        </div>
-        <div class="usecase row">
-          <a class="thumbnail" href="/how-to/interactivity/drag-drop/" aria-label="Open drag and drop guide">
-            <div style="background-image: url(/img/thumbnail-interact.png)"></div>
-          </a>
-          <div>
-            <h2>Interact</h2>
-            <p>
-              You are developing a web application where users can create and manipulate graphs. You need users to be
-              able to create nodes on click, and to drag and drop nodes.
-            </p>
-            <p>
-              <a href="/how-to/interactivity/drag-drop/" class="button">Open guide</a>
-            </p>
-          </div>
-        </div>
-        <div class="usecase row">
-          <a class="thumbnail" href="/how-to/nodes/colors-sizes-shapes/" aria-label="Open customization guide">
-            <div style="background-image: url(/img/thumbnail-customize.png)"></div>
-          </a>
-          <div>
-            <h2>Customize</h2>
-            <p>
-              You need to personalize the way your graphs are rendered. You need to display some nodes with pictures in
-              them, and others differently.
-            </p>
-            <p>
-              <a href="/how-to/nodes/colors-sizes-shapes/" class="button">Open guide</a>
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section id="faq">
-        <h2>Frequently asked questions</h2>
-        <ul>
-          <li>
-            <h3>How can I obtain drawable data from a CSV?</h3>
-            <p>
-              You will process the data with graphology, then render it with sigma.js. Check out the
-              <a href="/get-started/loading-data/">loading data guide</a>
-              for detailed instructions.
-            </p>
-          </li>
-          <li>
-            <h3>What graph algorithms are implemented in sigma.js?</h3>
-            <p>
-              None in sigma.js, but graphology has a lot, from
-              <a href="https://graphology.github.io/standard-library/layout-forceatlas2.html">ForceAtlas2 layout</a> to
-              <a href="https://graphology.github.io/standard-library/metrics.html">various metrics</a> or even
-              <a href="https://graphology.github.io/standard-library/communities-louvain.html">community detection</a>.
-              <strong>
-                You can see an overview
-                <a href="https://graphology.github.io/standard-library/">in the documentation</a>.
-              </strong>
-            </p>
-          </li>
-          <li>
-            <h3>Why should I use sigma.js and not <a href="https://d3js.org/">d3.js</a>?</h3>
-            <p>
-              Sigma.js renders graphs using WebGL. It allows drawing larger graphs faster than with Canvas or SVG based
-              solutions. It also makes custom rendering way harder to develop. If you have small graphs (like a few
-              hundreds of nodes and edges) and/or if you need very customized rendering, then
-              <strong>d3.js is indeed a best fit for you</strong>.
-            </p>
-          </li>
-          <li>
-            <h3>Can I use sigma.js in my <a href="https://reactjs.org/">React</a> application?</h3>
-            <p>
-              Yes, the best way is certainly to use the
-              <a href="https://github.com/sim51/react-sigma">@react-sigma</a>. The example on top of this page is
-              developed using it, you can check the
-              <a href="https://github.com/jacomyal/sigma.js/tree/main/packages/demo">sourcecode</a> to get an idea.
-            </p>
-          </li>
-          <li>
-            <h3>And within an <a href="https://angular.io/">Angular</a> application?</h3>
-            <p>
-              Yes it is possible, but harder, because we do not have a wrapper yet. So you will have to bind sigma.js
-              lifecycle to your app manually. It is not necessarily too difficult though, please take a look on
-              <a href="https://github.com/sim51/ng-sigma-example">this repository</a> which offers a quick example.
-            </p>
-          </li>
-        </ul>
-      </section>
-
-      <section id="gofurther">
-        <h2>Go further</h2>
-        <div class="contributing row">
-          <div>
-            <h3>I want to know more</h3>
-            <p>Look at <a href="/get-started/quickstart/">the documentation</a>.</p>
-          </div>
-          <div>
-            <h3>I have a problem</h3>
-            <p>
-              Ask your questions on <a href="https://stackoverflow.com/questions/tagged/sigma.js">StackOverflow</a>, or
-              report bugs by
-              <a href="https://github.com/jacomyal/sigma.js/issues/new/choose">opening a new GitHub issue</a>.
-            </p>
-          </div>
-          <div>
-            <h3>I want to help</h3>
-            <p>
-              Contributions are welcome! Reading
-              <a href="https://github.com/jacomyal/sigma.js/blob/main/CONTRIBUTING.md">our contribution guide</a> is a good
-              start. You can also help us investigating
-              <a href="https://github.com/jacomyal/sigma.js/issues">existing issues</a> or answering
-              <a href="https://stackoverflow.com/questions/tagged/sigma.js">questions on StackOverflow</a>.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section id="inthewild">
+      <section class="in-the-wild">
         <h2>In the wild</h2>
-        <p>Here are a selection of applications and websites using sigma.js.</p>
-        <div class="usages">
+        <p class="intro">A selection of applications and websites using sigma.js.</p>
+
+        <div class="featured">
           <div>
             <a class="thumbnail" href="https://gephi.org/gephi-lite" aria-label="Gephi Lite">
               <div style="background-image: url(/img/thumbnail-gephi-lite.png)"></div>
@@ -329,6 +100,15 @@ import "../styles/homepage.css";
             <div class="sumup">
               <h3>Gephi Lite</h3>
               <p>a graph visualization and exploration web application</p>
+            </div>
+          </div>
+          <div>
+            <a class="thumbnail" href="https://gdotv.com/" aria-label="G.V()">
+              <div style="background-image: url(/img/thumbnail-gdotv.png)"></div>
+            </a>
+            <div class="sumup">
+              <h3>G.V()</h3>
+              <p>a software to write, debug, test and analyze Gremlin graph databases</p>
             </div>
           </div>
           <div>
@@ -340,6 +120,18 @@ import "../styles/homepage.css";
               <p>a collaborative platform for mapping, analyzing, and sharing data-networks</p>
             </div>
           </div>
+          <div>
+            <a class="thumbnail" href="https://github.com/SpecterOps/BloodHound" aria-label="BloodHound">
+              <div style="background-image: url(/img/thumbnail-bloodhound.png)"></div>
+            </a>
+            <div class="sumup">
+              <h3>BloodHound</h3>
+              <p>a security analysis tool for uncovering hidden Active Directory and Azure relationships</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="others">
           <div>
             <a class="thumbnail" href="https://ouestware.gitlab.io/retina" aria-label="Retina">
               <div style="background-image: url(/img/thumbnail-retina.png)"></div>
@@ -356,15 +148,6 @@ import "../styles/homepage.css";
             <div class="sumup">
               <h3>Polinode</h3>
               <p>a software to collect, visualize and analyze connected data</p>
-            </div>
-          </div>
-          <div>
-            <a class="thumbnail" href="https://gdotv.com/" aria-label="G.V()">
-              <div style="background-image: url(/img/thumbnail-gdotv.png)"></div>
-            </a>
-            <div class="sumup">
-              <h3>G.V()</h3>
-              <p>a software to write, debug, test and analyze Gremlin graph databases</p>
             </div>
           </div>
           <div>
@@ -395,15 +178,6 @@ import "../styles/homepage.css";
             </div>
           </div>
           <div>
-            <a class="thumbnail" href="https://github.com/SpecterOps/BloodHound" aria-label="BloodHound">
-              <div style="background-image: url(/img/thumbnail-bloodhound.png)"></div>
-            </a>
-            <div class="sumup">
-              <h3>BloodHound</h3>
-              <p>a security analysis tool for uncovering hidden Active Directory and Azure relationships</p>
-            </div>
-          </div>
-          <div>
             <a class="thumbnail" href="https://www.scovery.com/" aria-label="Scovery">
               <div style="background-image: url(/img/thumbnail-scovery.png)"></div>
             </a>
@@ -430,6 +204,42 @@ import "../styles/homepage.css";
               <p>a tool for visualizing and exploring the structure of C# codebases</p>
             </div>
           </div>
+          <div>
+            <a class="thumbnail" href="https://github.com/HKUDS/LightRAG" aria-label="LightRAG">
+              <div style="background-image: url(/img/thumbnail-lightrag.png)"></div>
+            </a>
+            <div class="sumup">
+              <h3>LightRAG</h3>
+              <p>a lightweight RAG framework with knowledge graph visualization</p>
+            </div>
+          </div>
+          <div>
+            <a class="thumbnail" href="https://surrealdb.com/surrealist" aria-label="SurrealDB Surrealist">
+              <div style="background-image: url(/img/thumbnail-surrealist.png)"></div>
+            </a>
+            <div class="sumup">
+              <h3>Surrealist</h3>
+              <p>a visual IDE for SurrealDB with interactive graph exploration</p>
+            </div>
+          </div>
+          <div>
+            <a class="thumbnail" href="https://infranodus.com" aria-label="InfraNodus">
+              <div style="background-image: url(/img/thumbnail-infranodus.png)"></div>
+            </a>
+            <div class="sumup">
+              <h3>InfraNodus</h3>
+              <p>a text network analysis tool for revealing topical structure in any text</p>
+            </div>
+          </div>
+          <div>
+            <a class="thumbnail" href="https://github.com/k1nd0ne/VolWeb" aria-label="VolWeb">
+              <div style="background-image: url(/img/thumbnail-volweb.png)"></div>
+            </a>
+            <div class="sumup">
+              <h3>VolWeb</h3>
+              <p>a centralized web platform for memory forensics analysis</p>
+            </div>
+          </div>
         </div>
       </section>
     </main>
@@ -437,17 +247,31 @@ import "../styles/homepage.css";
     <footer class="row">
       <section>
         <p>
-          <span class="with-logo">
-            <img src="/img/logo-sigma-ruby.svg" alt="" />
-            <strong class="text-ruby">sigma</strong><strong class="text-grey">.js</strong>
-          </span>
+          <strong class="text-ruby">sigma</strong><strong class="text-grey">.js</strong>
           is published by <a href="https://medialab.sciencespo.fr/en/">Sciences-Po medialab</a> and
           <a href="https://ouestware.com/en">OuestWare</a>.
         </p>
         <ul>
-          <li><a href="/get-started/quickstart/">documentation</a></li>
-          <li><a rel="me" href="https://vis.social/@sigmajs">@sigmajs@vis.social on mastodon</a></li>
-          <li><a href="https://github.com/jacomyal/sigma.js">github.com/jacomyal/sigma.js</a></li>
+          <li>
+            <a href="/get-started/quickstart/">
+              <Icon name="ph:book-open-bold" class="footer-icon" /> Documentation
+            </a>
+          </li>
+          <li>
+            <a rel="me" href="https://vis.social/@sigmajs">
+              <Icon name="ph:mastodon-logo-bold" class="footer-icon" /> @sigmajs@vis.social
+            </a>
+          </li>
+          <li>
+            <a href="https://github.com/jacomyal/sigma.js">
+              <Icon name="ph:github-logo-bold" class="footer-icon" /> github.com/jacomyal/sigma.js
+            </a>
+          </li>
+          <li>
+            <a href="https://stackoverflow.com/questions/tagged/sigma.js">
+              <Icon name="ph:stack-overflow-logo-bold" class="footer-icon" /> StackOverflow
+            </a>
+          </li>
         </ul>
       </section>
       <section>
@@ -456,7 +280,9 @@ import "../styles/homepage.css";
           <a href="https://github.com/jacomyal/sigma.js/blob/main/LICENSE.txt">the MIT License</a>.
         </p>
         <p>
-          This website uses <a href="https://themeui.net/hauora-sans-free-font/">Hauroa Sans</a>,
+          This website is built with <a href="https://astro.build/">Astro</a>, using
+          <a href="https://phosphoricons.com/">Phosphor</a> icons and
+          <a href="https://themeui.net/hauora-sans-free-font/">Hauroa Sans</a>,
           <a href="https://public-sans.digital.gov/">Public Sans</a> and
           <a href="https://github.com/microsoft/cascadia-code">Cascadia Code</a> fonts.
         </p>

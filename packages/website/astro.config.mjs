@@ -1,3 +1,4 @@
+import icon from "astro-icon";
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 import starlightLinksValidator from "starlight-links-validator";
@@ -161,5 +162,6 @@ export default defineConfig({
         },
       ],
     }),
+    icon(),
   ],
 });

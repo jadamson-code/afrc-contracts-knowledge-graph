@@ -72,6 +72,23 @@
 }
 
 /* v4 doc notice banner */
-.sl-banner {
+:root {
+  --sl-v4-notice-height: 2em;
+}
+.v4-notice {
+  background: var(--cream);
+  color: black;
   text-align: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 11;
+  border-bottom: 1px solid var(--sl-color-hairline-shade);
+}
+.v4-notice a {
+  color: var(--ruby);
+  white-space: nowrap;
 }

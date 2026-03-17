@@ -85,6 +85,9 @@ export default defineConfig({
               }),
             ]),
       ],
+      components: {
+        PageFrame: "./src/components/PageFrame.astro",
+      },
       title: "sigma.js",
       tagline: "A JavaScript library aimed at visualizing graphs of thousands of nodes and edges",
       favicon: "/img/favicon-32x32.png",

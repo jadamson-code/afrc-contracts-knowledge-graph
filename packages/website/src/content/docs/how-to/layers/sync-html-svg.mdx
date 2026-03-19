@@ -1,0 +1,53 @@
+---
+title: Synchronize custom HTML/SVG elements
+sidebar:
+  label: "Custom HTML/SVG elements"
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+Sometimes you need to render HTML or SVG elements positioned in graph space — cluster labels, tooltips, annotations, or custom overlays. The pattern is straightforward: create DOM elements, position them using `graphToViewport()`, and update their positions on every render.
+
+## The pattern
+
+1. Create an overlay container with `position: absolute; inset: 0; pointer-events: none;`.
+2. For each element, compute its screen position using `renderer.graphToViewport()`.
+3. Listen to `afterRender` to update positions when the camera moves.
+
+```typescript
+// Create an overlay layer
+const overlay = document.createElement("div");
+overlay.style.cssText = "position: absolute; inset: 0; pointer-events: none; overflow: hidden;";
+container.appendChild(overlay);
+
+// Position a label at graph coordinates (x, y)
+function updateLabel(el: HTMLElement, graphX: number, graphY: number) {
+  const { x, y } = renderer.graphToViewport({ x: graphX, y: graphY });
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+}
+
+// Update on every render (camera pan, zoom, resize)
+renderer.on("afterRender", () => {
+  updateLabel(myLabel, 0, 0);
+});
+```
+
+## Example: cluster labels
+
+A common use case is rendering cluster names over groups of nodes. Compute the centroid of each cluster's nodes, create HTML labels, and reposition them on every render.
+
+<SigmaExample id="cookbook/cluster-labels" height="500px" />
+
+The key parts of this example:
+
+- **Compute centroids** by averaging the `x` and `y` positions of all nodes in each cluster.
+- **Create HTML elements** with `position: absolute; transform: translate(-50%, -50%)` for centering.
+- **Update in `afterRender`** using `renderer.graphToViewport()` to convert graph coordinates to screen pixels.
+
+## Tips
+
+- Use `pointer-events: none` on the overlay container so mouse events pass through to sigma.
+- Use `overflow: hidden` to clip elements that move off-screen during panning.
+- For SVG overlays, the same pattern applies — create an `<svg>` element with the same dimensions as the container and use `graphToViewport()` to position elements.
+- If you need elements to interact with mouse events (e.g. clickable labels), set `pointer-events: auto` on those specific elements.

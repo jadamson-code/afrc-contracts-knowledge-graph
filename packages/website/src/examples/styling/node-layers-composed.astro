@@ -8,6 +8,7 @@
 </style>
 
 <script>
+  import { layerBorder } from "@sigma/node-border";
   import { layerImage } from "@sigma/node-image";
   import Sigma from "sigma";
   import { layerFill } from "sigma/rendering";
@@ -43,7 +44,16 @@
         variables: {
           image: { type: "string" },
         },
-        layers: [layerFill(), layerImage()],
+        layers: [
+          layerFill(),
+          layerBorder({
+            borders: [
+              { size: 0.1, color: "#333" },
+              { size: 0, color: "#fff", fill: true },
+            ],
+          }),
+          layerImage({ padding: 0.15 }),
+        ],
       },
     },
   });

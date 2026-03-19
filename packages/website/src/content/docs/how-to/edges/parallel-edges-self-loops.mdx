@@ -1,0 +1,23 @@
+---
+title: Parallel edges and self-loops
+sidebar:
+  label: "Parallel edges & self-loops"
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+Sigma handles two special edge cases: multiple edges between the same pair of nodes (parallel edges), and edges that connect a node to itself (self-loops).
+
+## Parallel edges
+
+When multiple edges connect the same pair of nodes, sigma can spread them apart automatically. Sigma provides built-in state flags `parallelIndex` and `parallelCount` on edges to support this.
+
+Use the `parallelPath` style property to choose a curved path for parallel edges, and `parallelSpread` to control the spacing:
+
+<SigmaExample id="styling/parallel-edges" height="500px" showSource />
+
+## Self-loops
+
+Edges that connect a node to itself are rendered as loops. The `selfLoopPath` style property controls their shape:
+
+<SigmaExample id="styling/self-loops" height="500px" showSource />

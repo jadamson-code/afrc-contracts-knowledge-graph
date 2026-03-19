@@ -4,7 +4,7 @@ sidebar:
   label: Settings
 ---
 
-Settings control camera behavior, interaction, and rendering performance. They are separate from [styles](/reference/attributes/), which handle visual appearance.
+Settings control camera behavior, interaction, and rendering performance. They are separate from [styles](/reference/style-properties/), which handle visual appearance.
 
 Pass settings when creating a sigma instance:
 
@@ -66,20 +66,21 @@ The `cameraPanBoundaries` setting accepts:
 
 ## Sizing and scaling
 
-| Setting                   | Type                        | Default     | Description                                                                                                                                |
-| ------------------------- | --------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `itemSizesReference`      | `"screen" \| "positions"`   | `"screen"`  | How node/edge sizes are interpreted. `"screen"`: sizes are in pixels regardless of zoom. `"positions"`: sizes scale with graph coordinates |
-| `zoomToSizeRatioFunction` | `(ratio: number) => number` | `Math.sqrt` | Maps camera zoom ratio to a size scaling factor. Only relevant when `itemSizesReference` is `"screen"`                                     |
-| `autoRescale`             | `boolean`                   | `true`      | Automatically rescale the graph to fit the viewport                                                                                        |
-| `autoCenter`              | `boolean`                   | `true`      | Automatically center the graph in the viewport                                                                                             |
+| Setting                   | Type                        | Default     | Description                                                                                                                                  |
+| ------------------------- | --------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `itemSizesReference`      | `"screen" \| "positions"`   | `"screen"`  | How node/edge sizes are interpreted. `"screen"`: sizes are in pixels regardless of zoom. `"positions"`: sizes scale with graph coordinates   |
+| `zoomToSizeRatioFunction` | `(ratio: number) => number` | `Math.sqrt` | Maps camera zoom ratio to a size scaling factor. Only relevant when `itemSizesReference` is `"screen"`                                       |
+| `autoRescale`             | `boolean \| "once"`         | `true`      | Automatically rescale the graph to fit the viewport. `"once"` captures the initial extent and freezes it, useful for drag-and-drop scenarios |
+| `autoCenter`              | `boolean`                   | `true`      | Automatically center the graph in the viewport                                                                                               |
 
 ## Label optimization
 
-| Setting                      | Type     | Default | Description                                                                           |
-| ---------------------------- | -------- | ------- | ------------------------------------------------------------------------------------- |
-| `labelRenderedSizeThreshold` | `number` | `6`     | Minimum rendered node size (in pixels) for its label to be displayed                  |
-| `labelDensity`               | `number` | `1`     | Controls how many labels are shown. Higher values show more labels (must be positive) |
-| `labelGridCellSize`          | `number` | `100`   | Size of the label grid cells used for density-based culling                           |
+| Setting                      | Type      | Default | Description                                                                           |
+| ---------------------------- | --------- | ------- | ------------------------------------------------------------------------------------- |
+| `labelRenderedSizeThreshold` | `number`  | `6`     | Minimum rendered node size (in pixels) for its label to be displayed                  |
+| `labelDensity`               | `number`  | `1`     | Controls how many labels are shown. Higher values show more labels (must be positive) |
+| `labelGridCellSize`          | `number`  | `100`   | Size of the label grid cells used for density-based culling                           |
+| `labelPixelSnapping`         | `boolean` | `true`  | Snap label positions to whole pixels for sharper text rendering                       |
 
 ## Performance
 

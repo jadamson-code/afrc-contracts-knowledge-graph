@@ -1,0 +1,48 @@
+---
+title: Fill layers
+sidebar:
+  label: "Fill layers"
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+Node appearance is built by compositing **layers** from back to front. Sigma ships with one built-in layer (`layerFill`), and three extension packages add specialized layers for borders, images, and piecharts.
+
+## How layers work
+
+Layers are declared in `primitives.nodes.layers`. They are composited in order — earlier layers render behind later ones. Layers automatically disable themselves when they have no data for a given node (e.g., an image layer on a node without an `image` attribute renders as transparent).
+
+All nodes share the same WebGL program regardless of which layers they use.
+
+## Available layers
+
+| Layer             | Package                | Description                                  |
+| ----------------- | ---------------------- | -------------------------------------------- |
+| `layerFill()`     | `sigma/rendering`      | Solid color fill using the node's `color`    |
+| `layerBorder()`   | `@sigma/node-border`   | Configurable concentric borders              |
+| `layerImage()`    | `@sigma/node-image`    | Image or pictogram rendered inside the shape |
+| `layerPiechart()` | `@sigma/node-piechart` | Pie chart slices                             |
+
+## Borders
+
+The `@sigma/node-border` package adds one or more concentric borders around nodes. Each border entry has a `size` (fraction of node radius), a `color`, and optional `fill: true` to fill the remaining space. Set `mode: "pixels"` for fixed pixel widths. Border sizes and colors can also be read from node attributes using `{ attribute: "..." }`.
+
+<SigmaExample id="styling/node-borders" height="500px" showSource />
+
+## Images and pictograms
+
+The `@sigma/node-image` package renders photos or SVG icons inside nodes. The image is clipped to the node shape. For SVG pictograms, use `drawingMode: "color"` to tint the icon with the node's color, and `padding` to add space around the icon.
+
+<SigmaExample id="styling/node-images" height="500px" showSource />
+
+## Piecharts
+
+The `@sigma/node-piechart` package renders nodes as pie charts. Slice proportions are computed automatically. Set `defaultColor` to control the appearance when all values are zero. Use `offset` (radians) to rotate the starting angle.
+
+<SigmaExample id="styling/node-piecharts" height="500px" showSource />
+
+## Composing layers
+
+Layers compose naturally. The example below combines a fill, a border, and an image layer — composited in declaration order:
+
+<SigmaExample id="styling/node-layers-composed" height="500px" showSource />

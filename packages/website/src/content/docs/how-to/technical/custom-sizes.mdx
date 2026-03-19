@@ -5,13 +5,19 @@ sidebar:
   label: "Custom sizes"
 ---
 
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+Try changing the settings below and zoom in/out to see how each combination affects node and edge sizing:
+
+<SigmaExample id="core/custom-sizes" height="500px" />
+
 By default, sigma rescales node and edge sizes to fit the viewport and uses square-root zoom scaling so that elements grow moderately as you zoom in. These defaults work well for most graphs, but some layouts require more control.
 
 ## Default behavior
 
 Out of the box, sigma does two things:
 
-1. **Auto-rescale**: Node sizes are rescaled so the smallest and largest nodes fit within a reasonable range, regardless of the raw values in the graph.
+1. **Auto-rescale**: Node positions are rescaled so the graph fits optimally in the viewport. Sizes are not rescaled — they remain as specified in the graph data.
 2. **Square-root zoom scaling**: When you zoom in, node sizes grow proportionally to the square root of the zoom ratio. This keeps nodes visible at all zoom levels without overwhelming the view.
 
 ## Disabling auto-rescale

@@ -1,0 +1,48 @@
+---
+title: Shapes
+sidebar:
+  label: "Shapes"
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+By default, sigma renders all nodes as circles. To use other shapes, declare them in `primitives.nodes.shapes` and assign shapes to nodes via a style rule.
+
+## Built-in shapes
+
+Sigma ships with four built-in SDF shapes: `sdfCircle()`, `sdfSquare()`, `sdfTriangle()`, and `sdfDiamond()`. Each node selects its shape through the `shape` style property:
+
+<SigmaExample id="styling/node-shapes" height="500px" showSource />
+
+## Fixed shape for all nodes
+
+If you want all nodes to use a single non-default shape, declare just that shape and set it as a fixed value in styles:
+
+```typescript
+import { sdfSquare } from "sigma/rendering";
+
+new Sigma(graph, container, {
+  primitives: {
+    nodes: {
+      shapes: [sdfSquare()],
+    },
+  },
+  styles: {
+    nodes: [{ shape: "square", color: { attribute: "color" }, size: { attribute: "size" } }],
+  },
+});
+```
+
+## Custom shapes
+
+You can create custom shapes by implementing the `SDFShape` interface. A shape is defined by a GLSL [signed distance function](https://iquilezles.org/articles/distfunctions2d/) — a function that returns the distance from a point to the shape boundary (negative inside, positive outside).
+
+The GLSL function must follow the naming convention `sdf_{name}(vec2 uv, float size, ...)`. The `uv` parameter is the pixel offset from the node center, and `size` is the node radius. Additional parameters correspond to uniforms declared in the `uniforms` array.
+
+The `inradiusFactor` controls how edge endpoints are clamped to the shape boundary (ratio of inradius to circumradius). For a circle it's 1.0, for a square it's ~0.707.
+
+For a comprehensive catalog of 2D SDF primitives, see [Inigo Quilez's reference](https://iquilezles.org/articles/distfunctions2d/).
+
+The example below defines a custom heart shape and uses it alongside the built-in circle:
+
+<SigmaExample id="styling/custom-node-shape" height="500px" showSource />

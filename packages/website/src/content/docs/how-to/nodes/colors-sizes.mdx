@@ -1,0 +1,77 @@
+---
+title: Colors and sizes
+sidebar:
+  label: "Colors & sizes"
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+Sigma.js reads node colors and sizes from graph attributes. You control the mapping between attributes and visual properties through `styles`.
+
+The example below uses a categorical binding for colors and a numerical binding for sizes:
+
+<SigmaExample id="styling/node-colors-sizes" height="500px" />
+
+## Setting colors and sizes
+
+The simplest approach reads `color` and `size` directly from graph attributes:
+
+```typescript
+import Graph from "graphology";
+import Sigma from "sigma";
+
+const graph = new Graph();
+graph.addNode("a", { x: 0, y: 0, size: 15, color: "#e22653", label: "Node A" });
+graph.addNode("b", { x: 100, y: 100, size: 25, color: "#0055ff", label: "Node B" });
+
+new Sigma(graph, container, {
+  styles: {
+    nodes: [{ color: { attribute: "color" }, size: { attribute: "size" } }],
+  },
+});
+```
+
+You can also set fixed values that apply to all nodes:
+
+```typescript
+styles: {
+  nodes: [
+    { color: "#e22653", size: 10 },
+  ],
+}
+```
+
+Or mix fixed defaults with attribute overrides. Style rules are evaluated in order, and later values override earlier ones:
+
+```typescript
+styles: {
+  nodes: [
+    { color: "#cccccc", size: 10 },
+    { color: { attribute: "color" }, size: { attribute: "size" } },
+  ],
+}
+```
+
+## Conditional styles
+
+You can change appearance based on node state. For example, grey out nodes that are not active:
+
+```typescript
+styles: {
+  nodes: [
+    { color: { attribute: "color" }, size: { attribute: "size" } },
+    {
+      when: (attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive,
+      then: { color: "#f6f6f6" },
+    },
+  ],
+}
+```
+
+See [Hover and search highlight](/how-to/interactivity/hover-search/) for a full example of conditional styling.
+
+## Opacity and alpha blending
+
+Use the `opacity` style property to control node and edge transparency:
+
+<SigmaExample id="styling/alpha-blending" height="500px" />

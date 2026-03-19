@@ -1,0 +1,107 @@
+---
+title: "Style the graph"
+description: Use sigma's styles system to control node and edge appearance.
+---
+
+import SigmaExample from "../../../components/SigmaExample.astro";
+
+In [Part 2](/get-started/load-a-dataset/), you colored nodes by cluster and sized them by score — but the mapping was baked into the graph-building code. In this step, you will move that logic into sigma's **styles** system, which is more declarative and enables conditional rules.
+
+## Store raw data, style separately
+
+Instead of computing `color` and `size` when building the graph, store the raw attributes and let sigma's styles do the mapping.
+
+Update your `index.ts`. First, change the graph-building loop to store raw data, and compute the score extents for the size mapping:
+
+```typescript
+const scoreExtents = { min: Infinity, max: -Infinity };
+
+for (const node of dataset.nodes) {
+  scoreExtents.min = Math.min(scoreExtents.min, node.score);
+  scoreExtents.max = Math.max(scoreExtents.max, node.score);
+  graph.addNode(node.key, {
+    label: node.label,
+    x: node.x,
+    y: node.y,
+    // Store raw data instead of visual properties
+    cluster: node.cluster,
+    score: node.score,
+  });
+}
+```
+
+Then pass a `styles` option when creating the sigma instance. We start from `DEFAULT_STYLES.nodes` to keep the built-in hover behaviors (label visibility, depth layers, backdrops), then override `color` and `size`:
+
+```typescript
+import { DEFAULT_STYLES } from "sigma/types";
+
+const renderer = new Sigma(graph, document.getElementById("container")!, {
+  styles: {
+    nodes: [
+      DEFAULT_STYLES.nodes,
+      {
+        color: { attribute: "cluster", dict: clusterColors, defaultValue: "#999" },
+        size: { attribute: "score", min: 50, max: 250, minValue: scoreExtents.min, maxValue: scoreExtents.max },
+        label: { attribute: "label" },
+      },
+    ],
+    edges: [{ color: "#ccc", size: 5 }],
+  },
+});
+```
+
+The result looks the same, but now the styling is declared in one place. The `size` binding maps the `score` attribute to a 50–250 range automatically.
+
+## Style value types
+
+The styles system supports several value types:
+
+- **Literal**: `color: "#ccc"` — same value for all elements
+- **Attribute binding**: `color: { attribute: "color" }` — reads from graph data
+- **Numerical binding**: `size: { attribute: "score", min: 10, max: 50 }` — maps a numeric range
+- **Categorical binding**: maps discrete values via a dictionary (see below)
+
+For the full list, see the [Style value types](/reference/style-value-types/) reference.
+
+## Categorical color mapping
+
+Instead of pre-computing `clusterColor` in the graph, you can map cluster IDs directly to colors using a categorical binding. Build the dictionary from the dataset:
+
+```typescript
+const clusterColors = Object.fromEntries(dataset.clusters.map((c) => [c.key, c.color]));
+```
+
+Then use it in the styles:
+
+```typescript
+color: {
+  attribute: "cluster",
+  dict: clusterColors,
+  defaultValue: "#999",
+},
+```
+
+Now the graph-building code only stores `cluster: node.cluster` — no color computation needed.
+
+## Add a hover effect
+
+Sigma's styles support **conditional rules** that change appearance based on node state. `DEFAULT_STYLES.nodes` already provides hover effects (label visibility, backdrops, depth layer switching). You can add more rules on top — for example, forcing the label visible on hover:
+
+```typescript
+{
+  when: "isHovered",
+  then: {
+    labelVisibility: "visible",
+  },
+},
+```
+
+Rules are evaluated in order. The base rule applies to all nodes. Conditional rules override specific properties only when their condition is met.
+
+## Full code and result
+
+<SigmaExample id="get-started/style-the-graph" height="400px" showSource defaultTab="source" />
+
+## Next steps
+
+The graph now has declarative styles with a hover effect. In [Part 4: Add interactivity](/get-started/add-interactivity/), you will add neighbor highlighting and a search bar to build a fully interactive explorer.

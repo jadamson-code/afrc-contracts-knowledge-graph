@@ -1,0 +1,19 @@
+---
+title: Attachments
+sidebar:
+  label: "Attachments"
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+Label attachments let you display custom HTML content anchored to a node's label. This is useful for tooltips, info cards, or interactive UI.
+
+## How it works
+
+1. **Declare** an attachment renderer in `primitives.nodes.labelAttachments`. Each renderer is a function that receives context and returns HTML content.
+2. **Assign** it to nodes via the `labelAttachment` style property, typically with a conditional to show it on hover.
+3. **Position** it with `labelAttachmentPlacement`.
+
+The renderer function receives a `LabelAttachmentContext` with `attributes`, `state`, and `graphState`. It returns a `LabelAttachmentContent` object with `type: "html"`, an `html` string, and optional scoped `css`.
+
+<SigmaExample id="styling/label-attachments" height="500px" showSource />

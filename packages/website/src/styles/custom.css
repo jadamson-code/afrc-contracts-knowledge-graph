@@ -92,3 +92,7 @@
   color: var(--ruby);
   white-space: nowrap;
 }
+
+.sl-markdown-content code {
+  white-space: nowrap;
+}

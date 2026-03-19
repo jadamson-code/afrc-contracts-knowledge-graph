@@ -1,4 +1,8 @@
 {
+  "get-started": {
+    "title": "Get started",
+    "description": "Step-by-step tutorial examples"
+  },
   "core": {
     "title": "Core features",
     "description": "Events, camera, viewport and performance"

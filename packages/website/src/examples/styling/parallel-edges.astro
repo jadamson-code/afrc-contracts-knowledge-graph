@@ -8,43 +8,27 @@
 </style>
 
 <script>
-  import Graph from "graphology";
   import Sigma from "sigma";
   import { extremityArrow, layerPlain, pathCurved, pathLine, pathLoop } from "sigma/rendering";
   import { DEFAULT_STYLES } from "sigma/types";
 
+  import { getSmallGraph } from "../_data/small-graph";
+
   const container = document.getElementById("sigma-container") as HTMLElement;
-  const graph = new Graph({ multi: true, type: "mixed" });
+  const graph = getSmallGraph({ multi: true, type: "mixed" });
 
-  // Nodes in a triangle + an extra node:
-  graph.addNode("a", { x: 0, y: 0, size: 14, color: "#555" });
-  graph.addNode("b", { x: 200, y: 0, size: 14, color: "#555" });
-  graph.addNode("c", { x: 100, y: -160, size: 14, color: "#555" });
-  graph.addNode("d", { x: 300, y: -160, size: 14, color: "#555" });
+  // Add parallel edges to showcase the feature:
 
-  // --- Case 1: Multiple directed edges, same direction (A → B) ---
-  graph.addDirectedEdge("a", "b", { size: 3, color: "#E8684A", head: "arrow" });
+  // Multiple directed edges, same direction (a → b already exists)
   graph.addDirectedEdge("a", "b", { size: 3, color: "#F6903D", head: "arrow" });
   graph.addDirectedEdge("a", "b", { size: 3, color: "#FACC14", head: "arrow" });
 
-  // --- Case 2: Directed edges in both directions (B ↔ C) ---
-  graph.addDirectedEdge("b", "c", { size: 3, color: "#5B8FF9", head: "arrow" });
-  graph.addDirectedEdge("c", "b", { size: 3, color: "#61DDAA", head: "arrow" });
+  // Directed edges in both directions (c → e already exists, add e → c)
+  graph.addDirectedEdge("e", "c", { size: 3, color: "#61DDAA", head: "arrow" });
 
-  // --- Case 3: More edges in both directions (A ↔ C) ---
-  graph.addDirectedEdge("a", "c", { size: 2, color: "#9270CA", head: "arrow" });
-  graph.addDirectedEdge("a", "c", { size: 2, color: "#9270CA", head: "arrow" });
-  graph.addDirectedEdge("c", "a", { size: 2, color: "#F08BB4", head: "arrow" });
-
-  // --- Case 4: Single edge (no parallel) for comparison (C → D) ---
-  graph.addDirectedEdge("c", "d", { size: 3, color: "#ccc", head: "arrow" });
-
-  // --- Case 5: Undirected parallel edges (B — D) ---
-  graph.addUndirectedEdge("b", "d", { size: 3, color: "#78D3F8" });
-  graph.addUndirectedEdge("b", "d", { size: 3, color: "#247BA0" });
-
-  // --- Case 6: Self-loop (should not interfere with parallel edges) ---
-  graph.addDirectedEdge("d", "d", { size: 3, color: "#F6903D", head: "arrow" });
+  // Undirected parallel edges
+  graph.addUndirectedEdge("d", "e", { size: 3, color: "#78D3F8" });
+  graph.addUndirectedEdge("d", "e", { size: 3, color: "#247BA0" });
 
   new Sigma(graph, container, {
     primitives: {

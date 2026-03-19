@@ -1,0 +1,179 @@
+<div id="sigma-container"></div>
+<div id="search">
+  <input type="search" id="search-input" list="suggestions" placeholder="Search for a node..." />
+  <datalist id="suggestions"></datalist>
+</div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+  #search {
+    position: absolute;
+    right: 1em;
+    top: 1em;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+  import type { BaseEdgeState, BaseGraphState, BaseNodeState } from "sigma/types";
+
+  interface NodeState extends BaseNodeState {
+    isActive: boolean;
+  }
+
+  interface EdgeState extends BaseEdgeState {
+    isActive: boolean;
+  }
+
+  interface GraphState extends BaseGraphState {
+    hasActiveSubgraph: boolean;
+  }
+
+  interface Dataset {
+    nodes: { key: string; label: string; tag: string; cluster: string; x: number; y: number; score: number }[];
+    edges: [string, string][];
+    clusters: { key: string; color: string; clusterLabel: string }[];
+  }
+
+  const response = await fetch("/data/wikipedia.json");
+  const dataset: Dataset = await response.json();
+
+  const clusterColors = Object.fromEntries(dataset.clusters.map((c) => [c.key, c.color]));
+
+  const graph = new Graph();
+  const scoreExtents = { min: Infinity, max: -Infinity };
+
+  for (const node of dataset.nodes) {
+    scoreExtents.min = Math.min(scoreExtents.min, node.score);
+    scoreExtents.max = Math.max(scoreExtents.max, node.score);
+    graph.addNode(node.key, {
+      label: node.label,
+      x: node.x,
+      y: node.y,
+      cluster: node.cluster,
+      score: node.score,
+    });
+  }
+
+  for (const [source, target] of dataset.edges) {
+    if (graph.hasNode(source) && graph.hasNode(target) && !graph.hasEdge(source, target)) {
+      graph.addEdge(source, target);
+    }
+  }
+
+  const renderer = new Sigma<object, object, object, NodeState, EdgeState, GraphState>(
+    graph,
+    document.getElementById("sigma-container") as HTMLElement,
+    {
+      styles: {
+        nodes: [
+          {
+            color: {
+              attribute: "cluster",
+              dict: clusterColors,
+              defaultValue: "#999",
+            },
+            size: { attribute: "score", min: 50, max: 250, minValue: scoreExtents.min, maxValue: scoreExtents.max },
+            label: { attribute: "label" },
+          },
+          {
+            when: "isHovered",
+            then: { size: 100, labelVisibility: "visible" },
+          },
+          {
+            when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive && !state.isHovered,
+            then: { color: "#f6f6f6", label: "" },
+          },
+          {
+            when: "isActive",
+            then: { labelVisibility: "visible" },
+          },
+        ],
+        edges: [
+          { color: "#ccc", size: 5 },
+          {
+            when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive,
+            then: { color: "#f6f6f6" },
+          },
+        ],
+      },
+    },
+  );
+
+  // --- Hover highlighting ---
+
+  function setActiveSubgraph(activeNodes: Set<string> | null) {
+    const active: string[] = [];
+    const inactive: string[] = [];
+    graph.forEachNode((node) => {
+      (activeNodes && activeNodes.has(node) ? active : inactive).push(node);
+    });
+    renderer.setNodesState(active, { isActive: true });
+    renderer.setNodesState(inactive, { isActive: false });
+
+    const activeEdges: string[] = [];
+    const inactiveEdges: string[] = [];
+    graph.forEachEdge((edge) => {
+      const [source, target] = graph.extremities(edge);
+      (activeNodes && activeNodes.has(source) && activeNodes.has(target) ? activeEdges : inactiveEdges).push(edge);
+    });
+    renderer.setEdgesState(activeEdges, { isActive: true });
+    renderer.setEdgesState(inactiveEdges, { isActive: false });
+
+    renderer.setGraphState({ hasActiveSubgraph: !!activeNodes && activeNodes.size > 0 });
+    renderer.refresh({ skipIndexation: true });
+  }
+
+  renderer.on("enterNode", ({ node }) => {
+    const neighbors = new Set(graph.neighbors(node));
+    neighbors.add(node);
+    setActiveSubgraph(neighbors);
+  });
+
+  renderer.on("leaveNode", () => {
+    setActiveSubgraph(null);
+  });
+
+  // --- Search ---
+
+  const searchInput = document.getElementById("search-input") as HTMLInputElement;
+  const suggestionsEl = document.getElementById("suggestions") as HTMLDataListElement;
+
+  suggestionsEl.innerHTML = graph
+    .nodes()
+    .map((node) => `<option value="${graph.getNodeAttribute(node, "label")}"></option>`)
+    .join("\n");
+
+  searchInput.addEventListener("input", () => {
+    const query = searchInput.value.toLowerCase();
+
+    if (!query) {
+      setActiveSubgraph(null);
+      return;
+    }
+
+    const matches = graph
+      .nodes()
+      .filter((n) => (graph.getNodeAttribute(n, "label") as string).toLowerCase().includes(query));
+
+    if (matches.length === 1) {
+      const match = matches[0];
+      const neighbors = new Set(graph.neighbors(match));
+      neighbors.add(match);
+      setActiveSubgraph(neighbors);
+
+      const position = renderer.getNodeDisplayData(match);
+      if (position) {
+        renderer.getCamera().animate(position, { duration: 500 });
+      }
+    } else if (matches.length > 0) {
+      setActiveSubgraph(new Set(matches));
+    } else {
+      setActiveSubgraph(null);
+    }
+  });
+</script>

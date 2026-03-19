@@ -149,11 +149,11 @@ When position attributes differ from `x`/`y` (e.g. via styles mapping `x: { attr
 
 Three events are available for observing the drag lifecycle. All payloads include `node`, `allDraggedNodes`, and the wrapped `MouseCoords` event:
 
-| Event | Description |
-|---|---|
+| Event           | Description                                                     |
+| --------------- | --------------------------------------------------------------- |
 | `nodeDragStart` | Fired when drag begins. Call `preventSigmaDefault()` to cancel. |
-| `nodeDrag` | Fired on every pointer move during drag. |
-| `nodeDragEnd` | Fired when the pointer is released. |
+| `nodeDrag`      | Fired on every pointer move during drag.                        |
+| `nodeDragEnd`   | Fired when the pointer is released.                             |
 
 - `node` is the node under the pointer (the one the user grabbed).
 - `allDraggedNodes` is the full set of nodes being moved (from `getDraggedNodes`).

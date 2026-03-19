@@ -1,5 +1,7 @@
 ---
-title: Loading data
+title: Load graph data
+sidebar:
+  label: "Load graph data"
 description: How to load graph data from GEXF, CSV, and JSON files.
 ---
 
@@ -50,7 +52,7 @@ The expected JSON structure looks like this:
 {
   "nodes": [
     { "key": "n1", "attributes": { "x": 0, "y": 0, "size": 10, "label": "Node 1", "color": "#e22653" } },
-    { "key": "n2", "attributes": { "x": 1, "y": 1, "size": 10, "label": "Node 2", "color": "#666" } }
+    { "key": "n2", "attributes": { "x": 100, "y": 100, "size": 10, "label": "Node 2", "color": "#666" } }
   ],
   "edges": [{ "source": "n1", "target": "n2", "attributes": { "size": 2 } }]
 }
@@ -107,7 +109,7 @@ import Graph from "graphology";
 const graph = new Graph();
 
 graph.addNode("alice", { label: "Alice", x: 0, y: 0, size: 15, color: "#e22653" });
-graph.addNode("bob", { label: "Bob", x: 1, y: 1, size: 10, color: "#277da1" });
+graph.addNode("bob", { label: "Bob", x: 100, y: 100, size: 10, color: "#277da1" });
 graph.addEdge("alice", "bob");
 ```
 

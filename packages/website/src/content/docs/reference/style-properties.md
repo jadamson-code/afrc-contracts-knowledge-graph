@@ -1,26 +1,12 @@
 ---
-title: Attributes
+title: Style properties
 sidebar:
-  label: Attributes
+  label: Style properties
 ---
 
-In sigma.js v4, node and edge appearance is controlled through the **styles** system rather than reading attributes directly from the graph. The styles declaration maps graphology attributes to visual properties using attribute bindings, functions, and conditionals.
+Every node and edge has a set of built-in style properties that control its visual appearance. These properties are set through the [styles system](/concepts/styles-and-primitives/) using any [style value type](/reference/style-value-types/).
 
-## How styles read attributes
-
-The default styles use `{ attribute: "..." }` bindings to read values from graphology node/edge attributes. For example, the default node styles include:
-
-```typescript
-{
-  x: { attribute: "x" },
-  y: { attribute: "y" },
-  color: { attribute: "color", defaultValue: "#666" },
-  size: { attribute: "size", defaultValue: 10 },
-  label: { attribute: "label" },
-}
-```
-
-This means sigma reads `x`, `y`, `color`, `size`, and `label` from each node's graphology attributes. If an attribute is missing, the `defaultValue` is used.
+Custom properties can be added via [primitives variables](/reference/primitives-schema/).
 
 ## Node style properties
 
@@ -28,12 +14,12 @@ These are the built-in style properties available for nodes:
 
 ### Position and geometry
 
-| Property | Type     | Description                                                                                        |
-| -------- | -------- | -------------------------------------------------------------------------------------------------- |
-| `x`      | `number` | X coordinate in graph space                                                                        |
-| `y`      | `number` | Y coordinate in graph space                                                                        |
-| `size`   | `number` | Node diameter in pixels                                                                            |
-| `shape`  | `string` | Shape name (e.g. `"circle"`, `"square"`). Must match a shape declared in `primitives.nodes.shapes` |
+| Property | Type     | Description                                                                                                 |
+| -------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| `x`      | `number` | X coordinate in graph space                                                                                 |
+| `y`      | `number` | Y coordinate in graph space                                                                                 |
+| `size`   | `number` | Node size (actual pixel size depends on `autoRescale`, `itemSizesReference`, and `zoomToSizeRatioFunction`) |
+| `shape`  | `string` | Shape name (e.g. `"circle"`, `"square"`). Must match a shape declared in `primitives.nodes.shapes`          |
 
 ### Appearance
 
@@ -86,15 +72,18 @@ Backdrops render a background shape behind nodes and their labels, typically use
 
 ### Appearance
 
-| Property     | Type                    | Description                                                                              |
-| ------------ | ----------------------- | ---------------------------------------------------------------------------------------- |
-| `size`       | `number`                | Edge thickness in pixels                                                                 |
-| `color`      | `string`                | Edge color                                                                               |
-| `opacity`    | `number`                | Opacity from 0 to 1                                                                      |
-| `visibility` | `"visible" \| "hidden"` | Whether the edge is visible                                                              |
-| `path`       | `string`                | Path type (e.g. `"straight"`, `"curved"`). Must match a path in `primitives.edges.paths` |
-| `head`       | `string`                | Head (target) extremity type (e.g. `"arrow"`, `"none"`)                                  |
-| `tail`       | `string`                | Tail (source) extremity type                                                             |
+| Property         | Type                    | Description                                                                              |
+| ---------------- | ----------------------- | ---------------------------------------------------------------------------------------- |
+| `size`           | `number`                | Edge thickness in pixels                                                                 |
+| `color`          | `string`                | Edge color                                                                               |
+| `opacity`        | `number`                | Opacity from 0 to 1                                                                      |
+| `visibility`     | `"visible" \| "hidden"` | Whether the edge is visible                                                              |
+| `path`           | `string`                | Path type (e.g. `"straight"`, `"curved"`). Must match a path in `primitives.edges.paths` |
+| `head`           | `string`                | Head (target) extremity type (e.g. `"arrow"`, `"none"`)                                  |
+| `tail`           | `string`                | Tail (source) extremity type                                                             |
+| `selfLoopPath`   | `string`                | Path type override for self-loop edges                                                   |
+| `parallelPath`   | `string`                | Path type override for parallel edges                                                    |
+| `parallelSpread` | `number`                | Spread factor for parallel edge separation (default: `0.25`)                             |
 
 ### Ordering
 
@@ -141,24 +130,4 @@ const renderer = new Sigma(graph, container, {
 });
 ```
 
-Once declared, custom variables can be styled exactly like built-in properties -- with static values, attribute bindings, functions, or conditionals.
-
-## Setting values with styles
-
-Every style property accepts multiple value forms:
-
-```typescript
-// Static value
-{ color: "#e44" }
-
-// Attribute binding (reads from graphology attributes)
-{ color: { attribute: "color", defaultValue: "#666" } }
-
-// Function
-{ color: (attrs, state) => state.isHovered ? "#f00" : attrs.color }
-
-// Conditional
-{ color: { when: "isHovered", then: "#f00", else: "#666" } }
-```
-
-See the [styles and primitives concept page](/concepts/styles-and-primitives/) for a detailed explanation of the styling system.
+Once declared, custom variables can be styled exactly like built-in properties -- with any [style value type](/reference/style-value-types/).

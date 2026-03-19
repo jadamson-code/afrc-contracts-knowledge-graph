@@ -1,0 +1,66 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+  import { layerFill, sdfCircle, sdfDiamond, sdfSquare, sdfTriangle } from "sigma/rendering";
+  import { DEFAULT_STYLES } from "sigma/types";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const graph = new Graph();
+
+  const SHAPES = ["circle", "square", "triangle", "diamond"];
+  const COLORS = ["#e22653", "#0055ff", "#33cc33", "#ff9900"];
+
+  // Create a grid of nodes showing each shape at different sizes
+  for (let row = 0; row < SHAPES.length; row++) {
+    const shape = SHAPES[row];
+    const color = COLORS[row];
+    for (let col = 0; col < 4; col++) {
+      const size = 10 + col * 8;
+      graph.addNode(`${shape}-${col}`, {
+        x: col * 200,
+        y: -row * 200,
+        size,
+        color,
+        shape,
+        label: col === 0 ? shape : "",
+      });
+    }
+    // Connect nodes in a row
+    for (let col = 0; col < 3; col++) {
+      graph.addEdge(`${shape}-${col}`, `${shape}-${col + 1}`, { size: 2 });
+    }
+  }
+
+  // Connect across rows
+  for (let row = 0; row < SHAPES.length - 1; row++) {
+    graph.addEdge(`${SHAPES[row]}-1`, `${SHAPES[row + 1]}-1`, { size: 2 });
+    graph.addEdge(`${SHAPES[row]}-2`, `${SHAPES[row + 1]}-2`, { size: 2 });
+  }
+
+  new Sigma(graph, container, {
+    primitives: {
+      nodes: {
+        shapes: [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()],
+        layers: [layerFill()],
+      },
+    },
+    styles: {
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          shape: { attribute: "shape" },
+        },
+      ],
+    },
+  });
+</script>

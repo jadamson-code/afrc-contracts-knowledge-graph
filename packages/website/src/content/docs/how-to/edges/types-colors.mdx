@@ -1,18 +1,14 @@
 ---
-title: Types and colors
+title: Paths and colors
 sidebar:
-  label: "Types & colors"
+  label: "Paths & colors"
 ---
 
 import SigmaExample from "../../../../components/SigmaExample.astro";
 
-Sigma v4 gives you full control over edge appearance through the **primitives** and **styles** system. You can combine different path geometries, arrow extremities, colors, and dashed layers to render edges exactly as needed.
+Sigma v4 gives you full control over edge appearance through the **primitives** and **styles** system. You can combine different path geometries, colors, and dashed layers.
 
-## Live example
-
-The example below shows various combinations of edge paths, extremities, and dashed layers.
-
-<SigmaExample id="styling/edge-styles" height="500px" />
+<SigmaExample id="styling/edge-styles" height="500px" showSource />
 
 ## Edge paths
 
@@ -26,46 +22,9 @@ Sigma ships with five built-in path types:
 | `pathStepCurved()` | Step with rounded corners                       |
 | `pathCurvedS()`    | S-shaped cubic curve                            |
 
-Declare which paths your graph uses in `primitives.edges.paths`, then assign them per-edge via styles:
+Declare which paths your graph uses in `primitives.edges.paths`, then assign them per-edge via styles. The first path in the array is the default. Edges whose `path` attribute does not match any declared path fall back to it.
 
-```typescript
-import { pathCurved, pathLine } from "sigma/rendering";
-
-new Sigma(graph, container, {
-  primitives: {
-    edges: {
-      paths: [pathLine(), pathCurved()],
-    },
-  },
-  styles: {
-    edges: [{ path: { attribute: "path" } }],
-  },
-});
-```
-
-The first path in the array is the default. Edges whose `path` attribute does not match any declared path fall back to it.
-
-## Extremities (arrows)
-
-To render arrowheads, declare the extremity types in `primitives.edges.extremities` and assign them via the `head` and `tail` style properties:
-
-```typescript
-import { extremityArrow, pathLine } from "sigma/rendering";
-
-new Sigma(graph, container, {
-  primitives: {
-    edges: {
-      paths: [pathLine()],
-      extremities: [extremityArrow()],
-    },
-  },
-  styles: {
-    edges: [{ head: { attribute: "head" } }],
-  },
-});
-```
-
-This reads each edge's `head` attribute (e.g. `"arrow"`) to decide which extremity to draw at the target end. Use `tail` for the source end.
+For arrowheads and other endpoint shapes, see [Extremities](/how-to/edges/extremities/).
 
 ## Edge colors
 
@@ -83,85 +42,6 @@ new Sigma(graph, container, {
 
 ## Dashed edges
 
-The `layerDashed()` function from `sigma/rendering` adds a dashed overlay on top of the plain edge body. Import it and add it to the edge layers:
-
-```typescript
-import { extremityArrow, layerDashed, layerPlain, pathCurved, pathLine } from "sigma/rendering";
-
-new Sigma(graph, container, {
-  primitives: {
-    edges: {
-      paths: [pathLine(), pathCurved()],
-      extremities: [extremityArrow()],
-      layers: [
-        layerPlain(),
-        layerDashed({
-          dashSize: { value: 5, mode: "pixels" },
-          gapSize: { value: 10, mode: "pixels" },
-        }),
-      ],
-    },
-  },
-  styles: {
-    edges: [
-      {
-        path: { attribute: "path" },
-        head: { attribute: "head" },
-      },
-    ],
-  },
-});
-```
-
-The `dashSize` and `gapSize` options accept either a fixed `{ value, mode }` object or an `{ attribute }` reference to read per-edge values from graph data. Set `mode: "pixels"` for screen-space sizing.
-
-## Putting it all together
-
-A complete configuration combining paths, extremities, colors, and dashes:
-
-```typescript
-import {
-  extremityArrow,
-  layerDashed,
-  layerPlain,
-  pathCurved,
-  pathCurvedS,
-  pathLine,
-  pathStepCurved,
-} from "sigma/rendering";
-
-new Sigma(graph, container, {
-  primitives: {
-    edges: {
-      paths: [pathLine(), pathCurved(), pathStepCurved(), pathCurvedS()],
-      extremities: [extremityArrow()],
-      layers: [
-        layerPlain(),
-        layerDashed({
-          dashColor: { attribute: "dashColor" },
-          dashSize: { attribute: "dashSize", default: 0, mode: "pixels" },
-          gapSize: { value: 10, mode: "pixels" },
-        }),
-      ],
-    },
-  },
-  styles: {
-    edges: [
-      {
-        color: { attribute: "color" },
-        path: { attribute: "path" },
-        head: { attribute: "head" },
-        tail: { attribute: "tail" },
-      },
-    ],
-  },
-});
-```
+The `layerDashed()` function from `sigma/rendering` adds a dashed overlay on top of the plain edge body. The `dashSize` and `gapSize` options accept either a fixed `{ value, mode }` object or an `{ attribute }` reference to read per-edge values from graph data. Set `mode: "pixels"` for screen-space sizing.
 
 For more on the styles and primitives system, see [Styles and primitives](/concepts/styles-and-primitives/).
-
-## Edge labels
-
-Sigma can render labels along edges. Enable it with `renderEdgeLabels: true` in settings, and use the `label` primitives option to configure font size mode and text border:
-
-<SigmaExample id="styling/edge-label-styles" height="500px" />

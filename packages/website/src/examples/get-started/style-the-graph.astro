@@ -1,0 +1,73 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+  import { DEFAULT_STYLES } from "sigma/types";
+
+  interface Dataset {
+    nodes: { key: string; label: string; tag: string; cluster: string; x: number; y: number; score: number }[];
+    edges: [string, string][];
+    clusters: { key: string; color: string; clusterLabel: string }[];
+  }
+
+  const response = await fetch("/data/wikipedia.json");
+  const dataset: Dataset = await response.json();
+
+  const clusterColors = Object.fromEntries(dataset.clusters.map((c) => [c.key, c.color]));
+
+  const graph = new Graph();
+  const scoreExtents = {
+    min: Infinity,
+    max: -Infinity,
+  };
+
+  for (const node of dataset.nodes) {
+    scoreExtents.min = Math.min(scoreExtents.min, node.score);
+    scoreExtents.max = Math.max(scoreExtents.max, node.score);
+    graph.addNode(node.key, {
+      label: node.label,
+      x: node.x,
+      y: node.y,
+      cluster: node.cluster,
+      score: node.score,
+    });
+  }
+
+  for (const [source, target] of dataset.edges) {
+    if (graph.hasNode(source) && graph.hasNode(target) && !graph.hasEdge(source, target)) {
+      graph.addEdge(source, target);
+    }
+  }
+
+  const renderer = new Sigma(graph, document.getElementById("sigma-container") as HTMLElement, {
+    styles: {
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          color: {
+            attribute: "cluster",
+            dict: clusterColors,
+            defaultValue: "#999",
+          },
+          size: { attribute: "score", min: 50, max: 250, minValue: scoreExtents.min, maxValue: scoreExtents.max },
+          label: { attribute: "label" },
+        },
+        {
+          when: "isHovered",
+          then: {
+            labelVisibility: "visible",
+          },
+        },
+      ],
+      edges: [{ color: "#ccc", size: 5 }],
+    },
+  });
+</script>

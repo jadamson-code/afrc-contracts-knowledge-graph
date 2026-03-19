@@ -1,0 +1,99 @@
+/* SigmaExample component styles */
+
+.sigma-example {
+  margin: 1.5rem 0;
+  border: 1px solid var(--sl-color-gray-5, #e0e0e0);
+  overflow: hidden;
+}
+
+/* Panels */
+.sigma-example-panel {
+  display: none;
+}
+.sigma-example-panel.active {
+  display: block;
+}
+
+/* Result panel */
+.sigma-example-result iframe {
+  display: block;
+  width: 100%;
+  height: var(--panel-height, 500px);
+  border: none;
+}
+
+/* Source panel */
+.sigma-example-source {
+  height: var(--panel-height, 500px);
+  overflow: hidden;
+}
+.sigma-example-source .expressive-code {
+  margin: 0;
+  height: 100%;
+}
+.sigma-example-source .expressive-code .frame,
+.sigma-example-source .expressive-code pre {
+  border: none;
+  border-radius: 0;
+  height: 100%;
+}
+.sigma-example-source .expressive-code .frame {
+  margin: 0;
+}
+.sigma-example-source .expressive-code pre {
+  max-height: none;
+  overflow: auto;
+}
+
+/* Toolbar (footer) */
+.sigma-example-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 0.75rem;
+  border-top: 1px solid var(--sl-color-gray-5, #e0e0e0);
+  background: var(--sl-color-gray-7, #f5f5f5);
+  font-size: 0.8rem;
+  min-height: 2rem;
+}
+
+/* Tabs (left side of toolbar) */
+.sigma-example-tabs {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+}
+.sigma-example-tab {
+  padding: 0 0.75rem;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--sl-color-gray-3, #666);
+  border-top: 2px solid transparent;
+}
+.sigma-example-tab.active {
+  color: var(--sl-color-text-accent, #c41e47);
+  border-top-color: var(--sl-color-text-accent, #c41e47);
+}
+
+/* Links (right side of toolbar) */
+.sigma-example-links {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.sigma-example-toolbar-sep {
+  width: 1px;
+  height: 0.9em;
+  background: var(--sl-color-gray-5, #ccc);
+}
+.sigma-example-links a {
+  color: var(--sl-color-text-accent, #0369a1);
+  text-decoration: none;
+}
+.sigma-example-links a:hover {
+  text-decoration: underline;
+}

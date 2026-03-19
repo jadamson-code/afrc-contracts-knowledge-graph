@@ -13,6 +13,7 @@
   import forceAtlas2 from "graphology-layout-forceatlas2";
   import FA2Layout from "graphology-layout-forceatlas2/worker";
   import circlepack from "graphology-layout/circlepack";
+  import { DEFAULT_STYLES } from "sigma/types";
   import seedrandom from "seedrandom";
   import Sigma from "sigma";
   import { registerControls } from "../_controls";
@@ -58,7 +59,7 @@
   const container = document.getElementById("sigma-container") as HTMLElement;
   const renderer = new Sigma(graph, container, {
     styles: {
-      edges: { color: "#e6e6e6" },
+      edges: [DEFAULT_STYLES.edges, { color: "#e6e6e6" }],
     },
   });
 

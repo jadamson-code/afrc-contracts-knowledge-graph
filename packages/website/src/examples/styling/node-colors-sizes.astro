@@ -1,0 +1,48 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Sigma from "sigma";
+  import { DEFAULT_STYLES } from "sigma/types";
+
+  import { getSmallGraph } from "../_data/small-graph";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const graph = getSmallGraph();
+
+  const CLUSTERS: Record<string, { cluster: string; score: number }> = {
+    a: { cluster: "1", score: 0.0003 },
+    b: { cluster: "1", score: 0.0008 },
+    c: { cluster: "2", score: 0.0005 },
+    d: { cluster: "2", score: 0.0002 },
+    e: { cluster: "3", score: 0.001 },
+    f: { cluster: "3", score: 0.0004 },
+  };
+  graph.forEachNode((node) => {
+    graph.mergeNodeAttributes(node, CLUSTERS[node]);
+  });
+
+  new Sigma(graph, container, {
+    styles: {
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          color: {
+            attribute: "cluster",
+            dict: { "1": "#E8684A", "2": "#5B8FF9", "3": "#61DDAA" },
+            defaultValue: "#999",
+          },
+          size: { attribute: "score", min: 15, max: 100, minValue: 0, maxValue: 0.001 },
+        },
+      ],
+      edges: [DEFAULT_STYLES.edges],
+    },
+  });
+</script>

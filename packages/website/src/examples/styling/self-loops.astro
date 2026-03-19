@@ -8,7 +8,6 @@
 </style>
 
 <script>
-  import Graph from "graphology";
   import Sigma from "sigma";
   import {
     extremityArrow,
@@ -17,52 +16,26 @@
     layerPlain,
     pathLine,
     pathLoop,
-    sdfCircle,
-    sdfDiamond,
-    sdfSquare,
   } from "sigma/rendering";
   import { DEFAULT_STYLES } from "sigma/types";
 
+  import { getSmallGraph } from "../_data/small-graph";
+
   const container = document.getElementById("sigma-container") as HTMLElement;
   const PI = Math.PI;
-  const graph = new Graph({ multi: true });
+  const graph = getSmallGraph({ multi: true });
 
-  // Nodes:
-  graph.addNode("a", { x: 0, y: 0, size: 14, color: "#555", shape: "circle" });
-  graph.addNode("b", { x: 200, y: 0, size: 14, color: "#555", shape: "square" });
-  graph.addNode("c", { x: 100, y: -160, size: 14, color: "#555", shape: "diamond" });
-  graph.addNode("d", { x: 100, y: 160, size: 18, color: "#555", shape: "circle" });
-
-  // Regular edges:
-  graph.addEdge("a", "b", { size: 2, color: "#ccc", head: "arrow" });
-  graph.addEdge("b", "c", { size: 2, color: "#ccc", head: "arrow" });
-  graph.addEdge("c", "a", { size: 2, color: "#ccc", head: "arrow" });
-
-  // Self-loops showcasing various features:
-
-  // Basic self-loops with arrows on different node shapes
+  // Add self-loops showcasing various features:
   graph.addEdge("a", "a", { size: 3, color: "#E8684A", head: "arrow" });
   graph.addEdge("b", "b", { size: 3, color: "#61DDAA", head: "arrow", tail: "arrow" });
   graph.addEdge("c", "c", { size: 3, color: "#F6903D", head: "arrow", loopAngle: PI });
-
-  // Dashed self-loop
-  graph.addEdge("a", "a", { size: 2, color: "#9270CA", head: "arrow", loopAngle: (3 * PI) / 2, dashSize: 6 });
-
-  // Thick self-loop with widespread
-  graph.addEdge("b", "b", { size: 6, color: "#5B8FF9", loopAngle: PI, loopSpread: (110 * PI) / 180 });
-
-  // Narrow spread
-  graph.addEdge("c", "c", { size: 2, color: "#9270CA", head: "arrow", loopAngle: 0, loopSpread: (70 * PI) / 180 });
-
-  // Parallel self-loops display
-  for (let i = 0; i < 3; i++) {
-    graph.addEdge("d", "d", { size: 3, head: "arrow", loopSpread: ((70 + i * 15) * PI) / 180, loopRadius: i + 4 });
-  }
+  graph.addEdge("d", "d", { size: 2, color: "#9270CA", head: "arrow", loopAngle: (3 * PI) / 2, dashSize: 6 });
+  graph.addEdge("e", "e", { size: 6, color: "#5B8FF9", loopAngle: PI, loopSpread: (110 * PI) / 180 });
+  graph.addEdge("f", "f", { size: 2, color: "#9270CA", head: "arrow", loopAngle: 0, loopSpread: (70 * PI) / 180 });
 
   new Sigma(graph, container, {
     primitives: {
       nodes: {
-        shapes: [sdfCircle(), sdfSquare(), sdfDiamond()],
         layers: [layerFill()],
       },
       edges: {
@@ -82,7 +55,6 @@
     styles: {
       nodes: {
         ...DEFAULT_STYLES.nodes,
-        shape: { attribute: "shape" },
         color: { attribute: "color" },
         size: { attribute: "size" },
       },

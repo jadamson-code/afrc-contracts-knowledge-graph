@@ -1,0 +1,102 @@
+---
+title: Camera and viewport
+sidebar:
+  label: "Camera & viewport"
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+Sigma's camera controls what portion of the graph is visible. You can constrain user interactions, animate the camera, and convert between coordinate systems.
+
+## Zoom and pan boundaries
+
+Constrain how far users can zoom:
+
+```typescript
+new Sigma(graph, container, {
+  settings: {
+    minCameraRatio: 0.1, // Maximum zoom in (10x)
+    maxCameraRatio: 2, // Maximum zoom out (0.5x)
+  },
+});
+```
+
+Constrain panning:
+
+```typescript
+new Sigma(graph, container, {
+  settings: {
+    cameraPanBoundaries: { tolerance: 0.2 },
+  },
+});
+```
+
+The `tolerance` value controls how far past the graph bounding box the user can pan, as a fraction of the viewport. Set `cameraPanBoundaries: true` for the default tolerance, or `null` (default) to disable.
+
+## Animated transitions
+
+Use `renderer.getCamera().animate()` to smoothly transition the camera:
+
+```typescript
+const camera = renderer.getCamera();
+
+// Pan and zoom to a specific position
+camera.animate({ x: 0.5, y: 0.5, ratio: 0.5 });
+
+// With custom duration
+camera.animate({ x: 0.3, y: 0.7, ratio: 0.2 }, { duration: 1000 });
+
+// Reset to default view
+camera.animatedReset();
+
+// Zoom in / out by a factor
+camera.animatedZoom(2);
+camera.animatedUnzoom(2);
+```
+
+`animate()` returns a `Promise` that resolves when the animation completes.
+
+## Instant updates
+
+For immediate (non-animated) changes:
+
+```typescript
+camera.setState({ x: 0.5, y: 0.5, ratio: 1, angle: 0 });
+```
+
+## Coordinate conversion
+
+Convert between graph space and screen space:
+
+```typescript
+// Graph coordinates → screen pixels
+const screenPos = renderer.graphToViewport({ x: 0, y: 0 });
+
+// Screen pixels → graph coordinates
+const graphPos = renderer.viewportToGraph({ x: 100, y: 200 });
+```
+
+## Viewport utilities
+
+The `@sigma/utils` package provides helpers for working with the viewport:
+
+```typescript
+import { fitViewportToNodes, getNodesInViewport } from "@sigma/utils";
+
+// Animate the camera to fit a set of nodes
+fitViewportToNodes(renderer, ["node1", "node2", "node3"], { duration: 500 });
+
+// Get all nodes currently visible on screen
+const visibleNodes = getNodesInViewport(renderer);
+```
+
+<SigmaExample id="core/viewport-utilities" height="500px" />
+
+## Updating settings at runtime
+
+```typescript
+renderer.setSettings({ enableCameraZooming: false });
+renderer.setSettings({ minCameraRatio: 0.5, maxCameraRatio: 3 });
+```
+
+<SigmaExample id="core/camera-control" height="500px" />

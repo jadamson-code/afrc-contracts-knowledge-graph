@@ -1,0 +1,50 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+
+  // Describe the dataset shape
+  interface Dataset {
+    nodes: { key: string; label: string; tag: string; cluster: string; x: number; y: number; score: number }[];
+    edges: [string, string][];
+    clusters: { key: string; color: string; clusterLabel: string }[];
+  }
+
+  // Fetch the dataset
+  const response = await fetch("/data/wikipedia.json");
+  const dataset: Dataset = await response.json();
+
+  // Index clusters by key for quick lookup
+  const clustersByKey = Object.fromEntries(dataset.clusters.map((c) => [c.key, c]));
+
+  // Build a graphology graph from the dataset
+  const graph = new Graph();
+
+  for (const node of dataset.nodes) {
+    const cluster = clustersByKey[node.cluster];
+    graph.addNode(node.key, {
+      label: node.label,
+      x: node.x,
+      y: node.y,
+      color: cluster?.color ?? "#999",
+      size: 10 + node.score * 5000,
+    });
+  }
+
+  for (const [source, target] of dataset.edges) {
+    if (graph.hasNode(source) && graph.hasNode(target) && !graph.hasEdge(source, target)) {
+      graph.addEdge(source, target);
+    }
+  }
+
+  // Render
+  new Sigma(graph, document.getElementById("sigma-container") as HTMLElement);
+</script>

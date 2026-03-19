@@ -1,0 +1,98 @@
+---
+title: Interactions and events
+sidebar:
+  label: "Interactions & events"
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+Sigma handles mouse and touch interactions out of the box and emits events you can listen to.
+
+## Built-in interactions
+
+By default, sigma supports these interactions:
+
+| Interaction | Mouse                             | Touch                |
+| ----------- | --------------------------------- | -------------------- |
+| **Pan**     | Drag the background               | Drag with one finger |
+| **Zoom**    | Scroll wheel                      | Pinch                |
+| **Rotate**  | Right-click drag                  | Two-finger rotate    |
+| **Hover**   | Move cursor over a node           | —                    |
+| **Click**   | Click a node, edge, or background | Tap                  |
+
+Each interaction can be enabled or disabled via settings:
+
+```typescript
+new Sigma(graph, container, {
+  settings: {
+    enableCameraZooming: true, // Scroll/pinch to zoom
+    enableCameraPanning: true, // Drag to pan
+    enableCameraRotation: true, // Right-click drag / two-finger rotate
+  },
+});
+```
+
+## Listening for events
+
+Sigma emits events when users interact with nodes, edges, or the stage (background). Listen with `renderer.on()`:
+
+```typescript
+renderer.on("clickNode", ({ node, event }) => {
+  console.log("Clicked node", node);
+  console.log("Position", event.x, event.y);
+  console.log("Native event", event.original);
+});
+
+renderer.on("enterNode", ({ node }) => {
+  document.body.style.cursor = "pointer";
+});
+
+renderer.on("leaveNode", () => {
+  document.body.style.cursor = "default";
+});
+
+renderer.on("clickStage", () => {
+  // User clicked the background — e.g. deselect all
+});
+```
+
+Every event payload includes an `event` object with `x`, `y` coordinates and `original` (the native `MouseEvent` or `TouchEvent`).
+
+## Enabling edge events
+
+Edge events are disabled by default for performance (edge hit detection requires extra GPU work). Enable them with:
+
+```typescript
+new Sigma(graph, container, {
+  settings: { enableEdgeEvents: true },
+});
+```
+
+## Live example
+
+Interact with the graph below — every event is logged in the overlay panel.
+
+<SigmaExample id="core/events" height="500px" />
+
+## Building a context menu
+
+Here is a concrete example: show a context menu on right-click.
+
+```typescript
+renderer.on("rightClickNode", ({ node, event }) => {
+  // Prevent the browser's default context menu
+  event.original.preventDefault();
+
+  const menu = document.getElementById("context-menu")!;
+  menu.style.left = `${event.x}px`;
+  menu.style.top = `${event.y}px`;
+  menu.style.display = "block";
+  menu.dataset.node = node;
+});
+
+renderer.on("clickStage", () => {
+  document.getElementById("context-menu")!.style.display = "none";
+});
+```
+
+For the full list of events and their payloads, see the [Events reference](/reference/events/).

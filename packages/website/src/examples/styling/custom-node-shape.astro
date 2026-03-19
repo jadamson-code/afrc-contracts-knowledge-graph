@@ -1,0 +1,79 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Sigma from "sigma";
+  import { layerFill, sdfCircle } from "sigma/rendering";
+  import type { SDFShape } from "sigma/rendering";
+  import { DEFAULT_STYLES } from "sigma/types";
+
+  import { getSmallGraph } from "../_data/small-graph";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  /**
+   * Custom heart SDF shape.
+   * Based on Inigo Quilez's 2D distance functions:
+   * https://iquilezles.org/articles/distfunctions2d/
+   */
+  function sdfHeart(): SDFShape {
+    // The IQ heart SDF has its tip at the origin and extends up to ~y=1.
+    // We shift p.y by -0.5 to center the heart on the node origin,
+    // and scale by 0.7 so it fits within the node quad with AA room.
+    const SCALE = 0.7;
+    const Y_CENTER = 0.5;
+
+    const glsl = /*glsl*/ `
+float dot2_heart(vec2 v) { return dot(v, v); }
+
+float sdf_heart(vec2 uv, float size) {
+  float scale = ${SCALE.toFixed(4)};
+  // Normalize to unit space, then shift so the heart's center is at the origin
+  vec2 p = uv / (size * scale);
+  p.y += ${Y_CENTER.toFixed(4)};
+
+  p.x = abs(p.x);
+
+  float d;
+  if (p.y + p.x > 1.0) {
+    d = sqrt(dot2_heart(p - vec2(0.25, 0.75))) - sqrt(2.0) / 4.0;
+  } else {
+    d = sqrt(min(dot2_heart(p - vec2(0.0, 1.0)), dot2_heart(p - 0.5 * max(p.x + p.y, 0.0)))) * sign(p.x - p.y);
+  }
+
+  return d * size * scale;
+}
+`;
+
+    return {
+      name: "heart",
+      glsl,
+      uniforms: [],
+      inradiusFactor: 0.5,
+    };
+  }
+
+  const graph = getSmallGraph();
+
+  graph.forEachNode((node) => {
+    graph.setNodeAttribute(node, "shape", "heart");
+  });
+
+  new Sigma(graph, container, {
+    primitives: {
+      nodes: {
+        shapes: [sdfCircle(), sdfHeart()],
+        layers: [layerFill()],
+      },
+    },
+    styles: {
+      nodes: [DEFAULT_STYLES.nodes, { shape: { attribute: "shape" } }],
+    },
+  });
+</script>

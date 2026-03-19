@@ -14,13 +14,14 @@ Sigma.js's event handling API is modeled after the **[events](https://www.npmjs.
 All interactive events come with a payload that contains an `event` object with:
 
 - `x` and `y`: Coordinates within the container where the event occurred.
-- `originalEvent`: The original MouseEvent or TouchEvent.
+- `original`: The original MouseEvent or TouchEvent.
 
 ### Node events
 
 - **enterNode** — mouse enters a node
 - **leaveNode** — mouse leaves a node
 - **downNode** — mouse button pressed on a node
+- **upNode** — mouse button released on a node
 - **clickNode** — node clicked
 - **rightClickNode** — node right-clicked
 - **doubleClickNode** — node double-clicked
@@ -33,6 +34,7 @@ Payload: `{ node: string, event }` where `node` is the node ID.
 - **enterEdge** — mouse enters an edge
 - **leaveEdge** — mouse leaves an edge
 - **downEdge** — mouse button pressed on an edge
+- **upEdge** — mouse button released on an edge
 - **clickEdge** — edge clicked
 - **rightClickEdge** — edge right-clicked
 - **doubleClickEdge** — edge double-clicked
@@ -44,7 +46,10 @@ To enable edge events, set `enableEdgeEvents: true` in the sigma settings.
 
 ### Stage events
 
+- **enterStage** — mouse enters the stage
+- **leaveStage** — mouse leaves the stage
 - **downStage** — mouse button pressed on the background
+- **upStage** — mouse button released on the background
 - **clickStage** — background clicked
 - **rightClickStage** — background right-clicked
 - **doubleClickStage** — background double-clicked
@@ -54,12 +59,31 @@ Payload: `{ event }`.
 
 ## Lifecycle events
 
+- **beforeClear** — emitted before the rendering state is cleared
+- **afterClear** — emitted after the rendering state is cleared
+- **beforeProcess** — emitted before graph data is processed
+- **afterProcess** — emitted after graph data is processed
 - **beforeRender** — emitted just before the graph is rendered
 - **afterRender** — emitted immediately after the graph has been rendered
 - **resize** — emitted when the sigma instance undergoes resizing
 - **kill** — emitted when the sigma instance is terminated
 
 These lifecycle events do not come with any payload.
+
+## Drag events
+
+- **nodeDragStart** — a node drag begins
+- **nodeDrag** — a node is being dragged
+- **nodeDragEnd** — a node drag ends
+
+Payload for `nodeDragStart` and `nodeDragEnd`: `{ node: string, event }`.
+Payload for `nodeDrag`: `{ node: string, event, newPosition: { x, y } }`.
+
+## Other events
+
+- **moveBody** — mouse or touch moves over the stage (regardless of target)
+
+Payload: `{ event }`.
 
 ## Custom events
 

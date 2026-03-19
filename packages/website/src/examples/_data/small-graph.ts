@@ -1,0 +1,35 @@
+import Graph from "graphology";
+
+const NODES = [
+  { key: "a", x: 0, y: 0, size: 20, label: "A", color: "#e22653" },
+  { key: "b", x: 100, y: -100, size: 40, label: "B", color: "#e28b53" },
+  { key: "c", x: 300, y: -200, size: 20, label: "C", color: "#9be225" },
+  { key: "d", x: 100, y: -300, size: 20, label: "D", color: "#53a4e2" },
+  { key: "e", x: 300, y: -400, size: 40, label: "E", color: "#7553e2" },
+  { key: "f", x: 400, y: -500, size: 20, label: "F", color: "#e253d5" },
+];
+
+const EDGES: [string, string][] = [
+  ["a", "b"],
+  ["b", "c"],
+  ["b", "d"],
+  ["c", "b"],
+  ["c", "e"],
+  ["d", "c"],
+  ["d", "e"],
+  ["e", "d"],
+  ["f", "e"],
+];
+
+export function getSmallGraph(options?: ConstructorParameters<typeof Graph>[0]): Graph {
+  const graph = new Graph(options);
+
+  for (const { key, ...attributes } of NODES) {
+    graph.addNode(key, attributes);
+  }
+  for (const [source, target] of EDGES) {
+    graph.addEdge(source, target, { size: 10 });
+  }
+
+  return graph;
+}

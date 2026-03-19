@@ -1,69 +1,95 @@
 ---
 /**
- * Embeds a sigma.js example in a Starlight docs page via an iframe.
+ * Embeds a sigma.js example in a Starlight docs page.
  *
  * Usage in MDX:
- *   import SigmaExample from '../../components/SigmaExample.astro';
- *   <SigmaExample id="events" />
+ *   <SigmaExample id="core/events" />
+ *   <SigmaExample id="core/events" showSource />
+ *   <SigmaExample id="get-started/quickstart" showSource defaultTab="source" />
  *
- * The `id` must match a file at src/examples/{id}.astro.
- * The example is rendered in an iframe pointing to /embed/{id}/.
+ * Props:
+ *   id         — must match a file at src/examples/{id}.astro
+ *   height     — iframe height (default "500px")
+ *   showSource — extract the <script> content and show it in a tab
+ *   defaultTab — which tab to show first: "result" (default) or "source"
  */
+import { Code } from "astro-expressive-code/components";
 
 interface Props {
   id: string;
   height?: string;
+  showSource?: boolean;
+  defaultTab?: "result" | "source";
 }
 
-const { id, height = "500px" } = Astro.props;
+const { id, height = "500px", showSource = false, defaultTab = "result" } = Astro.props;
+
+let scriptSource = "";
+if (showSource) {
+  const sources = import.meta.glob("../examples/**/*.astro", { query: "?raw", eager: true });
+  const key = Object.keys(sources).find((k) => k.includes(`/${id}.astro`));
+  if (key) {
+    const raw = (sources[key] as { default: string }).default;
+    const match = raw.match(/<script[^>]*>([\s\S]*?)<\/script>/);
+    if (match) {
+      scriptSource = match[1].replace(/^\n/, "").replace(/\n$/, "").replace(/^  /gm, "");
+    }
+  }
+}
+
+const hasSource = showSource && scriptSource;
+const sourceFirst = hasSource && defaultTab === "source";
 ---
 
-<div class="sigma-example">
-  <iframe src={`/embed/${id}/`} style={`height: ${height}`} title={`sigma.js example: ${id}`} loading="lazy"></iframe>
+<div class={`sigma-example not-content ${hasSource ? "has-tabs" : ""}`} style={`--panel-height: ${height}`}>
+  <div class={`sigma-example-panel sigma-example-result ${sourceFirst ? "" : "active"}`} data-panel="result">
+    <iframe src={`/embed/${id}/?stage-only`} title={`sigma.js example: ${id}`} loading="lazy"
+    ></iframe>
+  </div>
+  {
+    hasSource && (
+      <div class={`sigma-example-panel sigma-example-source ${sourceFirst ? "active" : ""}`} data-panel="source">
+        <Code code={scriptSource} lang="typescript" />
+      </div>
+    )
+  }
   <div class="sigma-example-toolbar">
-    <a
-      href={`https://github.com/jacomyal/sigma.js/blob/v4/packages/website/src/examples/${id}.astro`}
-      target="_blank"
-      rel="noopener">View source on GitHub</a
-    >
-    <span class="sigma-example-toolbar-sep"></span>
-    <a href={`/embed/${id}/`} target="_blank" rel="noopener">Open in new tab</a>
+    {
+      hasSource && (
+        <div class="sigma-example-tabs">
+          <button class={`sigma-example-tab ${sourceFirst ? "" : "active"}`} data-tab="result">
+            Result
+          </button>
+          <button class={`sigma-example-tab ${sourceFirst ? "active" : ""}`} data-tab="source">
+            Source
+          </button>
+        </div>
+      )
+    }
+    <div class="sigma-example-links">
+      <a
+        href={`https://github.com/jacomyal/sigma.js/blob/v4/packages/website/src/examples/${id}.astro`}
+        target="_blank"
+        rel="noopener">View full source on GitHub</a
+      >
+      <span class="sigma-example-toolbar-sep"></span>
+      <a href={`/embed/${id}/`} target="_blank" rel="noopener">Open in new tab</a>
+    </div>
   </div>
 </div>
 
-<style>
-  .sigma-example {
-    margin: 1.5rem 0;
-    border: 1px solid var(--sl-color-gray-5, #e0e0e0);
-    border-radius: 0;
-    overflow: hidden;
-  }
-  .sigma-example iframe {
-    display: block;
-    width: 100%;
-    border: none;
-  }
-  .sigma-example-toolbar {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 0.75rem;
-    margin-top: 0 !important;
-    padding: 0.4rem 0.75rem;
-    border-top: 1px solid var(--sl-color-gray-5, #e0e0e0);
-    background: var(--sl-color-gray-7, #f5f5f5);
-    font-size: 0.8rem;
-  }
-  .sigma-example-toolbar-sep {
-    width: 1px;
-    height: 0.9em;
-    background: var(--sl-color-gray-5, #ccc);
-  }
-  .sigma-example-toolbar a {
-    color: var(--sl-color-text-accent, #0369a1);
-    text-decoration: none;
-  }
-  .sigma-example-toolbar a:hover {
-    text-decoration: underline;
-  }
-</style>
+<script>
+  document.querySelectorAll<HTMLElement>(".sigma-example.has-tabs").forEach((example) => {
+    example.querySelectorAll<HTMLButtonElement>(".sigma-example-tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const tabName = tab.dataset.tab!;
+        example
+          .querySelectorAll(".sigma-example-tab")
+          .forEach((t) => t.classList.toggle("active", (t as HTMLElement).dataset.tab === tabName));
+        example
+          .querySelectorAll(".sigma-example-panel")
+          .forEach((p) => p.classList.toggle("active", (p as HTMLElement).dataset.panel === tabName));
+      });
+    });
+  });
+</script>

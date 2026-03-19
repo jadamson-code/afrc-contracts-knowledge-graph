@@ -244,25 +244,7 @@ when: { isHovered: true, isActive: false }
 when: (attributes, state, graphState, graph) => graphState.hasActiveSubgraph && state.isActive
 ```
 
-### Built-in state flags
-
-Sigma provides these state flags out of the box:
-
-**Node state:** `isHovered`, `isHidden`, `isHighlighted`
-
-**Edge state:** `isHovered`, `isHidden`, `isHighlighted`
-
-**Graph state:** `isIdle`, `isPanning`, `isZooming`, `isDragging`, `hasHovered`, `hasHighlighted`
-
-You can extend these with custom fields by providing your own state types.
-
-### Built-in style properties
-
-These properties are always available, regardless of primitives:
-
-**Nodes:** `x`, `y`, `size`, `color`, `opacity`, `shape`, `visibility`, `depth`, `zIndex`, `label`, `labelColor`, `labelSize`, `labelFont`, `labelVisibility`, `labelPosition`, `labelAngle`, `labelDepth`, `backdropVisibility`, `backdropColor`, `backdropPadding`, and others.
-
-**Edges:** `size`, `color`, `opacity`, `path`, `head`, `tail`, `visibility`, `depth`, `zIndex`, `label`, `labelColor`, `labelSize`, `labelFont`, `labelVisibility`, `labelPosition`, `labelDepth`.
+For the complete list of state flags, see the [State flags](/reference/state-flags/) reference. For all available style properties, see the [Style properties](/reference/style-properties/) reference.
 
 ## Full example
 
@@ -276,7 +258,7 @@ import { extremityArrow, layerFill, pathLine, sdfCircle } from "sigma/rendering"
 
 const graph = new Graph();
 graph.addNode("a", { x: 0, y: 0, size: 15, color: "#e22653", label: "Alice" });
-graph.addNode("b", { x: 1, y: 1, size: 10, color: "#277da1", label: "Bob" });
+graph.addNode("b", { x: 100, y: 100, size: 10, color: "#277da1", label: "Bob" });
 graph.addEdge("a", "b");
 
 const renderer = new Sigma(graph, document.getElementById("container"), {

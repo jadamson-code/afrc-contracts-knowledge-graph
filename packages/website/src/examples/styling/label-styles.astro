@@ -44,11 +44,11 @@
 
   const { labelAngle, labelMargin, rotateWithCamera } = registerControls({
     labelAngle: { type: "number", label: "Angle (°)", default: 0, min: -180, max: 180, step: 5 },
-    labelMargin: { type: "number", label: "Margin (px)", default: 5, min: 0, max: 50, step: 1 },
+    labelMargin: { type: "number", label: "Margin (px)", default: 0, min: 0, max: 50, step: 1 },
     rotateWithCamera: { type: "boolean", label: "Rotate with camera", default: false },
   });
 
-  const renderer = new Sigma(graph, container, {
+  new Sigma(graph, container, {
     primitives: {
       nodes: {
         shapes: [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()],
@@ -64,6 +64,7 @@
           shape: { attribute: "shape" },
           labelPosition: { attribute: "labelPosition", defaultValue: "right" },
           labelAngle: () => (labelAngle * Math.PI) / 180,
+          labelVisibility: "visible",
         },
       ],
     },
@@ -73,6 +74,4 @@
       autoRescale: true,
     },
   });
-
-  renderer.getCamera().setState({ angle: 0.1 });
 </script>

@@ -1,0 +1,28 @@
+---
+title: Backdrops
+sidebar:
+  label: "Backdrops"
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+Backdrops are decorative shapes drawn behind nodes and their labels. They are typically used for hover effects — making the hovered node and its label stand out from the rest of the graph.
+
+## Properties
+
+Backdrops are controlled via flat `backdrop*` style properties:
+
+| Property               | Type                          | Description                                                                   |
+| ---------------------- | ----------------------------- | ----------------------------------------------------------------------------- |
+| `backdropVisibility`   | `"visible" \| "hidden"`       | Whether the backdrop is shown                                                 |
+| `backdropColor`        | `string`                      | Fill color                                                                    |
+| `backdropPadding`      | `number`                      | Padding around the node and label (px)                                        |
+| `backdropCornerRadius` | `number`                      | Corner radius (px)                                                            |
+| `backdropBorderColor`  | `string`                      | Border color                                                                  |
+| `backdropBorderWidth`  | `number`                      | Border width (px)                                                             |
+| `backdropShadowColor`  | `string`                      | Shadow color                                                                  |
+| `backdropShadowBlur`   | `number`                      | Shadow blur radius (px)                                                       |
+| `backdropLabelPadding` | `number`                      | Separate padding for the label portion (`-1` falls back to `backdropPadding`) |
+| `backdropArea`         | `"both" \| "node" \| "label"` | Which area the backdrop covers                                                |
+
+<SigmaExample id="styling/backdrop-styles" height="500px" showSource />

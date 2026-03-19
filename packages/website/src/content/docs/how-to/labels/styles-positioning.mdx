@@ -1,0 +1,138 @@
+---
+title: Styles and positioning
+sidebar:
+  label: "Styles & positioning"
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+Sigma renders labels for both nodes and edges on the GPU using SDF text. This page covers font styles, positioning, and visibility for both.
+
+## Node labels
+
+### Positioning
+
+Labels can be placed relative to their node using the `labelPosition` style property:
+
+```typescript
+styles: {
+  nodes: [
+    {
+      label: { attribute: "label" },
+      labelPosition: "right", // "right" | "left" | "above" | "below" | "over"
+    },
+  ],
+}
+```
+
+You can also set `labelAngle` for rotated labels.
+
+### Font and color
+
+```typescript
+styles: {
+  nodes: [
+    {
+      labelColor: "#333",
+      labelSize: 14,
+      labelFont: "Georgia, serif",
+    },
+  ],
+}
+```
+
+### Visibility
+
+By default, sigma uses density-based culling to avoid overlapping labels. You can override this per-node:
+
+- `"auto"` (default) — density-based, only the most important labels are shown
+- `"visible"` — always displayed
+- `"hidden"` — never displayed
+
+```typescript
+styles: {
+  nodes: [
+    { labelVisibility: "auto" },
+    {
+      when: "isHovered",
+      then: { labelVisibility: "visible" },
+    },
+  ],
+}
+```
+
+The `labelRenderedSizeThreshold` and `labelDensity` settings control the density-based culling behavior — see [Settings](/reference/settings/).
+
+This example demonstrates label positioning, visibility modes, and density-based culling:
+
+<SigmaExample id="styling/label-rendering" height="500px" />
+
+This example shows custom label font families, sizes, and colors:
+
+<SigmaExample id="styling/label-styles" height="500px" />
+
+## Edge labels
+
+Edge labels are disabled by default. Enable them with the `renderEdgeLabels` setting:
+
+```typescript
+new Sigma(graph, container, {
+  settings: { renderEdgeLabels: true },
+});
+```
+
+Label text comes from the edge's `label` attribute:
+
+```typescript
+graph.addEdge("a", "b", { label: "connects to" });
+```
+
+### Position
+
+Edge labels can be placed relative to the edge path:
+
+| Position  | Description                                              |
+| --------- | -------------------------------------------------------- |
+| `"over"`  | Centered directly on the edge path                       |
+| `"above"` | Offset above the edge path                               |
+| `"below"` | Offset below the edge path                               |
+| `"auto"`  | GPU picks above or below based on which node is leftmost |
+
+```typescript
+styles: {
+  edges: [{ labelPosition: "above" }],
+}
+```
+
+### Font size modes
+
+Edge labels support two font size modes, configured in `primitives.edges.label`:
+
+- **`"fixed"`** (default) — constant pixel size regardless of zoom
+- **`"scaled"`** — scales with camera zoom
+
+```typescript
+primitives: {
+  edges: {
+    label: { fontSizeMode: "scaled" },
+  },
+},
+```
+
+### Text border
+
+When labels are positioned `"over"` the edge, they can be hard to read. The `textBorder` option adds an outline around each character:
+
+```typescript
+primitives: {
+  edges: {
+    label: {
+      textBorder: { width: 2, color: "#ffffff" },
+    },
+  },
+},
+```
+
+This example shows edge label positioning, font size modes, and text borders:
+
+<SigmaExample id="styling/edge-label-styles" height="500px" />

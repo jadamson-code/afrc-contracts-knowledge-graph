@@ -1,0 +1,91 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+  import { registerControls } from "../_controls";
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const { autoRescale, itemSizesReference, zoomScaling } = registerControls({
+    autoRescale: {
+      type: "select",
+      label: "autoRescale",
+      default: "true",
+      options: [
+        { label: "true", value: "true" },
+        { label: "false", value: "false" },
+        { label: "once", value: "once" },
+      ],
+    },
+    itemSizesReference: {
+      type: "select",
+      label: "itemSizesReference",
+      default: "screen",
+      options: [
+        { label: "screen", value: "screen" },
+        { label: "positions", value: "positions" },
+      ],
+    },
+    zoomScaling: {
+      type: "select",
+      label: "zoomToSizeRatioFunction",
+      default: "sqrt",
+      options: [
+        { label: "sqrt (default)", value: "sqrt" },
+        { label: "linear", value: "linear" },
+        { label: "constant", value: "constant" },
+      ],
+    },
+  });
+
+  const ZOOM_FUNCTIONS: Record<string, (ratio: number) => number> = {
+    sqrt: Math.sqrt,
+    linear: (ratio: number) => ratio,
+    constant: () => 1,
+  };
+
+  const graph = new Graph();
+
+  // Grid layout with varying sizes
+  const COLS = 8;
+  const ROWS = 6;
+  const SPACING = 100;
+  const COLORS = ["#e22653", "#277da1", "#33cc33", "#ff9900", "#9b59b6", "#1abc9c"];
+
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const id = `${row}-${col}`;
+      graph.addNode(id, {
+        x: col * SPACING,
+        y: -row * SPACING,
+        size: 5 + ((row * COLS + col) % 10) * 3,
+        color: COLORS[(row + col) % COLORS.length],
+        label: `(${col},${row})`,
+      });
+
+      if (col > 0) graph.addEdge(`${row}-${col - 1}`, id, { size: 2 });
+      if (row > 0) graph.addEdge(`${row - 1}-${col}`, id, { size: 2 });
+    }
+  }
+
+  let autoRescaleValue: boolean | "once";
+  if (autoRescale === "true") autoRescaleValue = true;
+  else if (autoRescale === "once") autoRescaleValue = "once";
+  else autoRescaleValue = false;
+
+  new Sigma(graph, container, {
+    settings: {
+      autoRescale: autoRescaleValue,
+      itemSizesReference: itemSizesReference as "screen" | "positions",
+      zoomToSizeRatioFunction: ZOOM_FUNCTIONS[zoomScaling],
+    },
+  });
+</script>

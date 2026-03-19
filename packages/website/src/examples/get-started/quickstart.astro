@@ -1,0 +1,47 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+
+  // Create a graph with graphology
+  const graph = new Graph();
+
+  // Add nodes with positions, sizes, colors, and labels
+  graph.addNode("1", {
+    label: "Node 1",
+    x: 0,
+    y: 0,
+    size: 1,
+    color: "#e22653",
+  });
+  graph.addNode("2", {
+    label: "Node 2",
+    x: 5,
+    y: 10,
+    size: 1,
+    color: "#666",
+  });
+  graph.addNode("3", {
+    label: "Node 3",
+    x: 10,
+    y: 0,
+    size: 1,
+    color: "#277da1",
+  });
+
+  // Add edges between nodes
+  graph.addEdge("1", "2", { size: 1 });
+  graph.addEdge("2", "3", { size: 1 });
+  graph.addEdge("3", "1", { size: 1 });
+
+  // Render the graph in the container
+  const renderer = new Sigma(graph, document.getElementById("sigma-container") as HTMLElement);
+</script>

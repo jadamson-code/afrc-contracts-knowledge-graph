@@ -31,7 +31,7 @@
     useColorAlpha: { type: "boolean", label: "Use color alpha (not opacity)", default: false },
     nodeOpacity: { type: "number", label: "Node opacity", default: 0.5, min: 0, max: 1, step: 0.05 },
     edgeOpacity: { type: "number", label: "Edge opacity", default: 0.3, min: 0, max: 1, step: 0.05 },
-    edgeSize: { type: "number", label: "Edge size", default: 5, min: 0, max: 20, step: 0.5 },
+    edgeSize: { type: "number", label: "Edge size", default: 25, min: 0, max: 100, step: 2.5 },
   });
 
   container.style.backgroundColor = bgColor;
@@ -116,10 +116,8 @@
         DEFAULT_STYLES.nodes,
         {
           opacity: useColorAlpha ? 1 : nodeOpacity,
-          size: { attribute: "score", min: 5, max: 20, minValue: 0, maxValue: 0.1 },
-          ...(isDarkBg
-            ? { labelColor: { when: "isHovered", then: "#000", else: "#fff" } }
-            : {}),
+          size: { attribute: "score", min: 25, max: 100, minValue: 0, maxValue: 0.1 },
+          ...(isDarkBg ? { labelColor: { when: "isHovered", then: "#000", else: "#fff" } } : {}),
         },
       ],
       edges: [DEFAULT_STYLES.edges, { opacity: useColorAlpha ? 1 : edgeOpacity, size: edgeSize }],

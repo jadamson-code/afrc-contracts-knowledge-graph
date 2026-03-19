@@ -72,13 +72,13 @@
     if (graph.hasNode(source) && graph.hasNode(target) && !graph.hasEdge(source, target)) graph.addEdge(source, target);
   });
 
-  // Normalize score to a [3, 20] size range
+  // Normalize score to a [15, 100] size range
   const scores = graph.nodes().map((n) => graph.getNodeAttribute(n, "score") as number);
   const minScore = Math.min(...scores);
   const maxScore = Math.max(...scores);
   graph.forEachNode((node) => {
     const score = graph.getNodeAttribute(node, "score") as number;
-    graph.setNodeAttribute(node, "size", 3 + ((score - minScore) / (maxScore - minScore)) * 17);
+    graph.setNodeAttribute(node, "size", 15 + ((score - minScore) / (maxScore - minScore)) * 85);
   });
 
   new Sigma(graph, container, {

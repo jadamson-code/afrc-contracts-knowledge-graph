@@ -1,0 +1,50 @@
+---
+title: "Load a dataset"
+description: Replace the toy graph with a real network loaded from a file.
+---
+
+import SigmaExample from "../../../components/SigmaExample.astro";
+
+In the [quickstart](/get-started/quickstart/), you rendered a hand-built 3-node graph. Real graphs come from files. In this step, you will load a JSON dataset and render a network of over 2,000 Wikipedia concepts.
+
+## Get the data
+
+For this tutorial, we use a dataset of Wikipedia articles about data visualization. Each node is an article with a cluster and a relevance score. Download [wikipedia.json](https://raw.githubusercontent.com/jacomyal/sigma.js/main/packages/website/public/data/wikipedia.json) and place it in your `public/` directory (or next to your HTML file).
+
+The file structure looks like this:
+
+```json
+{
+  "nodes": [
+    { "key": "cytoscape", "label": "Cytoscape", "tag": "Tool", "cluster": "0", "x": 643.8, "y": -770.3, "score": 0.00007 }
+  ],
+  "edges": [["cytoscape", "gephi"], ...],
+  "clusters": [
+    { "key": "0", "color": "#6c3e81", "clusterLabel": "Graph theory" }
+  ]
+}
+```
+
+Nodes have positions, a tag (Tool, Concept, Chart type...), a cluster ID, and a score. Clusters have colors and labels. Edges are `[source, target]` pairs.
+
+## Load and render the graph
+
+Replace the contents of `index.ts` with the code below. It fetches the dataset, builds a graphology graph, and renders it with sigma:
+
+<SigmaExample id="get-started/load-a-dataset" height="400px" showSource defaultTab="source" />
+
+When you open the page, you should see a dense network of ~2,000 nodes. Nodes are colored by cluster and sized by their relevance score. You can scroll to zoom in and drag to pan around.
+
+## What happened
+
+Unlike the quickstart where we set each node's attributes by hand, here we fetched a JSON file and built the graph programmatically. The key steps:
+
+1. **Fetch** the dataset from the server.
+2. **Build** a graphology graph, translating the raw data fields (`cluster`, `score`) into visual attributes (`color`, `size`) that sigma's default styles know how to render.
+3. **Render** with `new Sigma(graph, container)`.
+
+This is the core pattern: **graphology owns the data, sigma renders it**. You can load data from any source — JSON, GEXF, CSV, an API — as long as you end up with a graphology graph instance. See the [Load graph data](/how-to/technical/loading-data/) how-to for all supported formats.
+
+## Next steps
+
+Right now the color and size mapping is baked into the graph-building code. In [Part 3: Style the graph](/get-started/style-the-graph/), you will use sigma's **styles** system to control appearance declaratively — including conditional rules that change how nodes look based on their state.

@@ -1,0 +1,19 @@
+---
+title: Extremities
+sidebar:
+  label: "Extremities"
+---
+
+import SigmaExample from "../../../../components/SigmaExample.astro";
+
+Extremities are shapes drawn at the endpoints of edges — most commonly arrowheads on directed graphs.
+
+Declare the available extremity types in `primitives.edges.extremities`, then assign them per-edge via the `head` and `tail` style properties. Use `tail` for the source end. If `head` or `tail` is not set, no extremity is drawn on that end.
+
+To render arrows on all edges without per-edge attributes, use a fixed value: `head: "arrow"`.
+
+## Available extremity types
+
+This catalog shows all available combinations of edge paths and extremity types:
+
+<SigmaExample id="styling/edge-extremities" height="500px" showSource />

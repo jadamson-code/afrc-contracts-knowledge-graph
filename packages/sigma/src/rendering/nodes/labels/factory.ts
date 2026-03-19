@@ -70,6 +70,8 @@ interface LabelGlyphCache {
   xOffsets: number[];
   /** Total label width (in atlas font size pixels) */
   totalWidth: number;
+  /** Total label height (maxAscent + maxDescent), in atlas font size pixels */
+  totalHeight: number;
   /** Vertical center offset from baseline, in atlas font size pixels */
   verticalCenterOffset: number;
 }
@@ -242,6 +244,7 @@ export function createLabelProgram<
           { name: "a_labelWidth", size: 1, type: FLOAT },
           { name: "a_labelHeight", size: 1, type: FLOAT },
           { name: "a_verticalCenter", size: 1, type: FLOAT },
+          { name: "a_textHeight", size: 1, type: FLOAT },
           { name: "a_labelAngle", size: 1, type: FLOAT },
         ],
         // Quad corners (same for all characters)
@@ -312,6 +315,7 @@ export function createLabelProgram<
         glyphs,
         xOffsets,
         totalWidth: xOffset,
+        totalHeight: maxAscent + maxDescent,
         verticalCenterOffset: (maxAscent - maxDescent) / 2,
       });
     }
@@ -402,11 +406,14 @@ export function createLabelProgram<
       // a_labelWidth: Total label width in pixels (for centering/right-alignment)
       array[i++] = cache.totalWidth * scale;
 
-      // a_labelHeight: Label height in pixels (for vertical centering)
+      // a_labelHeight: Font size in pixels (for SDF anti-aliasing)
       array[i++] = labelData.size;
 
       // a_verticalCenter: Pre-computed vertical center offset (pixels)
       array[i++] = cache.verticalCenterOffset * scale;
+
+      // a_textHeight: Actual text height (maxAscent + maxDescent) in pixels
+      array[i++] = cache.totalHeight * scale;
 
       // a_labelAngle: Per-node label rotation angle in radians
       array[i++] = labelData.labelAngle;

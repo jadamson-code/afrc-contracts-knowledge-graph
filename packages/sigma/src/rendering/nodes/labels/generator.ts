@@ -218,6 +218,7 @@ in float a_positionMode;     // Position: 0=right, 1=left, 2=above, 3=below, 4=o
 in float a_labelWidth;       // Total label width (pixels)
 in float a_labelHeight;      // Label height (pixels)
 in float a_verticalCenter;   // Vertical center offset from baseline (pixels)
+in float a_textHeight;       // Actual text height: maxAscent + maxDescent (pixels)
 in float a_labelAngle;       // Label rotation angle (radians)
 
 // Per-vertex (constant quad corners)
@@ -318,7 +319,9 @@ ${step3Code}
 
   // Apply text alignment based on position mode
   float verticalCenter = a_verticalCenter * zoomScale;
-  float baselineToBottom = labelHeight - verticalCenter;
+  float textHeight = a_textHeight * zoomScale;
+  float baselineToDescent = textHeight / 2.0 - verticalCenter;
+  float baselineToAscent = textHeight / 2.0 + verticalCenter;
 
   if (a_positionMode < 0.5) {
     // Right: vertically center
@@ -328,13 +331,13 @@ ${step3Code}
     charPixelPos.x -= labelWidth + 1.0;
     charPixelPos.y += verticalCenter;
   } else if (a_positionMode < 2.5) {
-    // Above: center horizontally
+    // Above: center horizontally, bottom of text at anchor
     charPixelPos.x -= labelWidth * 0.5;
-    charPixelPos.y -= baselineToBottom;
+    charPixelPos.y -= baselineToDescent;
   } else if (a_positionMode < 3.5) {
-    // Below: center horizontally
+    // Below: center horizontally, top of text at anchor
     charPixelPos.x -= labelWidth * 0.5;
-    charPixelPos.y += labelHeight - baselineToBottom;
+    charPixelPos.y += baselineToAscent;
   } else {
     // Over: center both
     charPixelPos.x -= labelWidth * 0.5;

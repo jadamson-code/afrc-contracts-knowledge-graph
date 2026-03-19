@@ -103,7 +103,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
   // Size and scaling
   zoomToSizeRatioFunction: Math.sqrt,
-  itemSizesReference: "screen",
+  itemSizesReference: "positions",
   autoRescale: true,
   autoCenter: true,
 

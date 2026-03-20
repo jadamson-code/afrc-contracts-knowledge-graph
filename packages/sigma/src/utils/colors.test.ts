@@ -38,6 +38,20 @@ describe("parseColor", () => {
     expect(parseColor("rgba(128, 64, 32, 0.75)")).toEqual({ r: 128, g: 64, b: 32, a: 0.75 });
   });
 
+  test("it should parse named CSS colors", () => {
+    expect(parseColor("red")).toEqual({ r: 255, g: 0, b: 0, a: 1 });
+    expect(parseColor("green")).toEqual({ r: 0, g: 128, b: 0, a: 1 });
+    expect(parseColor("blue")).toEqual({ r: 0, g: 0, b: 255, a: 1 });
+    expect(parseColor("white")).toEqual({ r: 255, g: 255, b: 255, a: 1 });
+    expect(parseColor("black")).toEqual({ r: 0, g: 0, b: 0, a: 1 });
+  });
+
+  test("it should be case-insensitive for named CSS colors", () => {
+    expect(parseColor("RED")).toEqual({ r: 255, g: 0, b: 0, a: 1 });
+    expect(parseColor("Red")).toEqual({ r: 255, g: 0, b: 0, a: 1 });
+    expect(parseColor("BLUE")).toEqual({ r: 0, g: 0, b: 255, a: 1 });
+  });
+
   test("it should parse 'transparent' keyword", () => {
     expect(parseColor("transparent")).toEqual({ r: 0, g: 0, b: 0, a: 0 });
     expect(parseColor("Transparent")).toEqual({ r: 0, g: 0, b: 0, a: 0 });

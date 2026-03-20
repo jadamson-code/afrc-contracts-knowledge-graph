@@ -170,9 +170,16 @@ export function parseColor(val: string): RGBAColor {
   let b = 0; // byte
   let a = 1; // float
 
+  const lowerVal = val.toLowerCase();
+
   // Handle "transparent" special case
-  if (val.toLowerCase() === "transparent") {
+  if (lowerVal === "transparent") {
     return { r: 0, g: 0, b: 0, a: 0 };
+  }
+
+  // Handle named CSS colors
+  if (lowerVal in HTML_COLORS) {
+    return parseColor(HTML_COLORS[lowerVal]);
   }
 
   // Handling hexadecimal notation
@@ -326,11 +333,7 @@ export function getPixelColor(
  * colorToGLSLString("rgba(255, 0, 0, 0.5)") // "vec4(1.0, 0.0, 0.0, 0.5)"
  */
 export function colorToGLSLString(val: string): string {
-  // Handle HTML color names by looking them up first
-  const normalizedVal = val.toLowerCase();
-  const hexVal = HTML_COLORS[normalizedVal] || val;
-
-  const { r, g, b, a } = parseColor(hexVal);
+  const { r, g, b, a } = parseColor(val);
 
   // Convert 0-255 range to 0.0-1.0 and format as GLSL floats
   const rFloat = (r / 255).toFixed(6);

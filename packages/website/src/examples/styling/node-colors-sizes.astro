@@ -17,7 +17,7 @@
 
   const graph = getSmallGraph();
 
-  const CLUSTERS: Record<string, { cluster: string; score: number }> = {
+  const DATA: Record<string, { cluster: string; score: number }> = {
     a: { cluster: "1", score: 0.0003 },
     b: { cluster: "1", score: 0.0008 },
     c: { cluster: "2", score: 0.0005 },
@@ -26,7 +26,7 @@
     f: { cluster: "3", score: 0.0004 },
   };
   graph.forEachNode((node) => {
-    graph.mergeNodeAttributes(node, CLUSTERS[node]);
+    graph.mergeNodeAttributes(node, DATA[node]);
   });
 
   new Sigma(graph, container, {
@@ -39,7 +39,7 @@
             dict: { "1": "#E8684A", "2": "#5B8FF9", "3": "#61DDAA" },
             defaultValue: "#999",
           },
-          size: { attribute: "score", min: 15, max: 100, minValue: 0, maxValue: 0.001 },
+          size: { attribute: "score", min: 10, max: 30, minValue: 0, maxValue: 0.001 },
         },
       ],
       edges: [DEFAULT_STYLES.edges],

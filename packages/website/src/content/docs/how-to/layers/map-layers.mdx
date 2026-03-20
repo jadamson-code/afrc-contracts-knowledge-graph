@@ -25,7 +25,7 @@ npm install @sigma/layer-maplibre maplibre-gl
 
 Nodes positioned by latitude/longitude on an OpenStreetMap base layer:
 
-<SigmaExample id="map-layers/leaflet-basic" height="400px" showSource />
+<SigmaExample id="map-layers/leaflet-basic" height="400px" />
 
 Set `x: 0, y: 0` on every node — the map layer overwrites these coordinates with projected positions. If you omit `getNodeLatLng`, the layer reads `lat` and `lng` directly from node attributes.
 
@@ -33,7 +33,7 @@ Set `x: 0, y: 0` on every node — the map layer overwrites these coordinates wi
 
 The same concept using MapLibre GL as the map provider. The `mapOptions` object is passed directly to the MapLibre `Map` constructor:
 
-<SigmaExample id="map-layers/maplibre-basic" height="400px" showSource />
+<SigmaExample id="map-layers/maplibre-basic" height="400px" />
 
 ## Custom tile layer
 

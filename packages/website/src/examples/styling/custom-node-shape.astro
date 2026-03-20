@@ -29,6 +29,7 @@
     const SCALE = 0.7;
     const Y_CENTER = 0.5;
 
+    // language=GLSL
     const glsl = /*glsl*/ `
 float dot2_heart(vec2 v) { return dot(v, v); }
 
@@ -62,7 +63,7 @@ float sdf_heart(vec2 uv, float size) {
   const graph = getSmallGraph();
 
   graph.forEachNode((node) => {
-    graph.setNodeAttribute(node, "shape", "heart");
+    graph.setNodeAttribute(node, "shape", node === "a" ? "circle" : "heart");
   });
 
   new Sigma(graph, container, {

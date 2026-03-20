@@ -10,17 +10,7 @@
 <script>
   import Graph from "graphology";
   import Sigma from "sigma";
-  import {
-    extremityArrow,
-    layerFill,
-    layerPlain,
-    pathCurved,
-    pathLine,
-    pathStep,
-    pathStepCurved,
-    sdfDiamond,
-    sdfTriangle,
-  } from "sigma/rendering";
+  import { extremityArrow, layerPlain, pathCurved, pathLine, pathStepCurved } from "sigma/rendering";
   import { DEFAULT_STYLES } from "sigma/types";
   import type { EdgeLabelFontSizeMode, EdgeLabelPosition } from "sigma/types";
 
@@ -32,17 +22,14 @@
   const PATHS = [
     { name: "straight", label: "Straight" },
     { name: "curved", label: "Curved" },
-    { name: "step", label: "Step" },
     { name: "stepCurved", label: "Step Curved" },
   ] as const;
 
   const COL_SPACING = 100;
   const ROW_SPACING = 80;
   const NODE_SPACING = 50;
-  const NODE_SIZE = 10;
   const EDGE_SIZE = 5;
-  const EDGE_COLOR = "#999999";
-  const NODE_COLORS = ["#5B8FF9", "#5AD8A6", "#F6BD16", "#E8684A"];
+  const EDGE_COLOR = "#5B8FF9";
 
   const { fontSizeMode, headType, tailType } = registerControls({
     fontSizeMode: {
@@ -87,20 +74,12 @@
       graph.addNode(sourceId, {
         x: cellX - NODE_SPACING / 2,
         y: cellY,
-        size: NODE_SIZE,
-        color: NODE_COLORS[row],
-        label: "",
-        shape: "diamond",
       });
 
       const targetId = `${pathInfo.name}-${col}-target`;
       graph.addNode(targetId, {
         x: cellX + NODE_SPACING / 2,
         y: cellY + NODE_SPACING / 2,
-        size: NODE_SIZE,
-        color: NODE_COLORS[row],
-        label: "",
-        shape: "triangle",
       });
 
       graph.addEdge(sourceId, targetId, {
@@ -116,12 +95,8 @@
 
   new Sigma(graph, container, {
     primitives: {
-      nodes: {
-        shapes: [sdfDiamond(), sdfTriangle()],
-        layers: [layerFill()],
-      },
       edges: {
-        paths: [pathLine(), pathCurved(), pathStep(), pathStepCurved()],
+        paths: [pathLine(), pathCurved(), pathStepCurved({ cornerRadius: 1 })],
         extremities: [extremityArrow()],
         layers: [layerPlain()],
         defaultHead: headType === "none" ? undefined : headType,
@@ -129,13 +104,13 @@
         variables: { curvature: { type: "number", default: 0 } },
         label: {
           fontSizeMode: fontSizeMode as EdgeLabelFontSizeMode,
-          color: "#000",
-          textBorder: { width: 8, color: "#ffffff" },
+          color: "#041a47",
+          textBorder: { width: 12, color: "#ffffff" },
         },
       },
     },
     styles: {
-      nodes: [DEFAULT_STYLES.nodes, { shape: { attribute: "shape" } }],
+      nodes: [DEFAULT_STYLES.nodes, { size: 6, color: "darkgrey", label: "" }],
       edges: [
         DEFAULT_STYLES.edges,
         {

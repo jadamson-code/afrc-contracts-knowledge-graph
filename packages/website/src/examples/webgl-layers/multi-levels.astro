@@ -13,14 +13,30 @@
   import Sigma, { DEFAULT_DEPTH_LAYERS } from "sigma";
 
   import data from "../_data/data.json";
+  import { DEFAULT_STYLES } from "sigma/types";
+  import { layerBorder } from "@sigma/node-border";
 
   const graph = new Graph();
   graph.import(data);
+  graph.forEachNode((node, { size }) => graph.setNodeAttribute(node, "size", size / 2));
 
   const container = document.getElementById("sigma-container") as HTMLElement;
   const renderer = new Sigma(graph, container, {
     primitives: {
       depthLayers: ["contours", ...DEFAULT_DEPTH_LAYERS],
+      nodes: {
+        layers: [
+          layerBorder({
+            borders: [
+              { size: 0.3, color: "black", mode: "relative" },
+              { fill: true, color: "white" },
+            ],
+          }),
+        ],
+      },
+    },
+    styles: {
+      edges: [DEFAULT_STYLES.edges, { color: "black" }],
     },
   });
 
@@ -35,14 +51,14 @@
         thickness: 4,
       },
       levels: [
-        { color: "#fff7f3", threshold: 0.9 },
-        { color: "#fde0dd", threshold: 0.8 },
-        { color: "#fcc5c0", threshold: 0.7 },
-        { color: "#fa9fb5", threshold: 0.6 },
-        { color: "#f768a1", threshold: 0.5 },
-        { color: "#dd3497", threshold: 0.4 },
-        { color: "#ae017e", threshold: 0.3 },
-        { color: "#7a0177", threshold: 0.2 },
+        { color: "#fff7f3", threshold: 4.0 },
+        { color: "#fde0dd", threshold: 3.5 },
+        { color: "#fcc5c0", threshold: 3.0 },
+        { color: "#fa9fb5", threshold: 2.5 },
+        { color: "#f768a1", threshold: 2.0 },
+        { color: "#dd3497", threshold: 1.5 },
+        { color: "#ae017e", threshold: 1.0 },
+        { color: "#7a0177", threshold: 0.5 },
         { color: "#49006a", threshold: -0.1 },
       ],
     }),

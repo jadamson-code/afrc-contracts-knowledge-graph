@@ -31,9 +31,7 @@
   const COL_SPACING = 100;
   const ROW_SPACING = 70;
   const NODE_SPACING = 50;
-  const NODE_SIZE = 10;
   const EDGE_SIZE = 5;
-  const NODE_COLOR = "#999";
 
   const PATHS = [
     { name: "straight", color: "#5B8FF9" },
@@ -71,14 +69,10 @@
         graph.addNode(sourceId, {
           x: cellX - NODE_SPACING / 2,
           y: cellY,
-          size: NODE_SIZE,
-          color: NODE_COLOR,
         });
         graph.addNode(targetId, {
           x: cellX + NODE_SPACING / 2,
           y: cellY + NODE_SPACING * 0.6,
-          size: NODE_SIZE,
-          color: NODE_COLOR,
         });
         graph.addEdge(sourceId, targetId, {
           size: EDGE_SIZE,
@@ -104,7 +98,7 @@
       },
     },
     styles: {
-      nodes: [DEFAULT_STYLES.nodes],
+      nodes: [DEFAULT_STYLES.nodes, { size: 12, color: "darkgrey" }],
       edges: [
         DEFAULT_STYLES.edges,
         { path: { attribute: "path" }, head: { attribute: "head" }, tail: { attribute: "tail" } },

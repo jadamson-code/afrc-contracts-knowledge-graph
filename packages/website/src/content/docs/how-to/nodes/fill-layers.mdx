@@ -27,22 +27,22 @@ All nodes share the same WebGL program regardless of which layers they use.
 
 The `@sigma/node-border` package adds one or more concentric borders around nodes. Each border entry has a `size` (fraction of node radius), a `color`, and optional `fill: true` to fill the remaining space. Set `mode: "pixels"` for fixed pixel widths. Border sizes and colors can also be read from node attributes using `{ attribute: "..." }`.
 
-<SigmaExample id="styling/node-borders" height="500px" showSource />
+<SigmaExample id="styling/node-borders" height="500px" />
 
 ## Images and pictograms
 
 The `@sigma/node-image` package renders photos or SVG icons inside nodes. The image is clipped to the node shape. For SVG pictograms, use `drawingMode: "color"` to tint the icon with the node's color, and `padding` to add space around the icon.
 
-<SigmaExample id="styling/node-images" height="500px" showSource />
+<SigmaExample id="styling/node-images" height="500px" />
 
 ## Piecharts
 
 The `@sigma/node-piechart` package renders nodes as pie charts. Slice proportions are computed automatically. Set `defaultColor` to control the appearance when all values are zero. Use `offset` (radians) to rotate the starting angle.
 
-<SigmaExample id="styling/node-piecharts" height="500px" showSource />
+<SigmaExample id="styling/node-piecharts" height="500px" />
 
 ## Composing layers
 
 Layers compose naturally. The example below combines a fill, a border, and an image layer — composited in declaration order:
 
-<SigmaExample id="styling/node-layers-composed" height="500px" showSource />
+<SigmaExample id="styling/node-layers-composed" height="500px" />

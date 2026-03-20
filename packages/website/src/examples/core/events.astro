@@ -10,16 +10,16 @@
   #sigma-container .sigma-mouse {
     z-index: 1;
   }
-  #sigma-logs {
+  :global(#sigma-logs) {
     position: absolute;
     inset: 0;
     overflow: hidden;
     pointer-events: none;
   }
-  #sigma-logs > div {
+  :global(#sigma-logs > div) {
     padding: 3px;
   }
-  #sigma-logs > div > span {
+  :global(#sigma-logs > div > span) {
     background: #ffffff99;
   }
 </style>
@@ -39,7 +39,7 @@
 
   function logEvent(event: string, itemType: "node" | "edge" | "positions", item: string | MouseCoords): void {
     const div = document.createElement("div");
-    let message = `Event "${event}"`;
+    let message = `"${event}"`;
     if (item && itemType) {
       if (itemType === "positions") {
         item = item as MouseCoords;

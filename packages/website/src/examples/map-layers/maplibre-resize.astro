@@ -40,7 +40,7 @@
     },
     nodeReducer: (node, data) => ({
       ...data,
-      size: Math.sqrt(graph.degree(node)) / 2,
+      size: Math.sqrt(graph.degree(node)) * 5,
     }),
   });
 

@@ -19,20 +19,31 @@
 
   const graph = getSmallGraph();
 
-  const IMAGES: Record<string, { label: string; image: string }> = {
-    a: { label: "Jim", image: "https://upload.wikimedia.org/wikipedia/commons/7/7f/Jim_Morrison_1969.JPG" },
+  const IMAGES: Record<string, { label: string; image?: string }> = {
+    a: {
+      label: "Jim",
+      image: "https://upload.wikimedia.org/wikipedia/commons/7/7f/Jim_Morrison_1969.JPG",
+    },
     b: {
       label: "Johnny",
       image: "https://upload.wikimedia.org/wikipedia/commons/a/a8/Johnny_Hallyday_%E2%80%94_Milan%2C_1973.jpg",
     },
-    c: { label: "Jimi", image: "https://upload.wikimedia.org/wikipedia/commons/6/6c/Jimi-Hendrix-1967-Helsinki-d.jpg" },
+    c: {
+      label: "Jimi",
+      image: "https://upload.wikimedia.org/wikipedia/commons/6/6c/Jimi-Hendrix-1967-Helsinki-d.jpg",
+    },
     d: {
       label: "Bob",
       image:
         "https://upload.wikimedia.org/wikipedia/commons/c/c5/Bob-Dylan-arrived-at-Arlanda-surrounded-by-twenty-bodyguards-and-assistants-391770740297_%28cropped%29.jpg",
     },
-    e: { label: "Eric", image: "https://upload.wikimedia.org/wikipedia/commons/b/b1/Eric_Clapton_1.jpg" },
-    f: { label: "Mick", image: "https://upload.wikimedia.org/wikipedia/commons/6/66/Mick-Jagger-1965b.jpg" },
+    e: {
+      label: "Eric",
+      image: "https://upload.wikimedia.org/wikipedia/commons/b/b1/Eric_Clapton_1.jpg",
+    },
+    f: {
+      label: "John Doe",
+    },
   };
   graph.forEachNode((node) => {
     graph.mergeNodeAttributes(node, IMAGES[node]);
@@ -42,17 +53,18 @@
     primitives: {
       nodes: {
         variables: {
-          image: { type: "string" },
+          image: { type: "string", default: "/img/placeholder-node-image.png" },
         },
         layers: [
-          layerFill(),
+          layerFill({ color: "lightgrey" }),
+          layerImage(),
           layerBorder({
             borders: [
-              { size: 0.1, color: "#333" },
-              { size: 0, color: "#fff", fill: true },
+              { size: 0.2, color: "#333" },
+              { size: 0.2, color: "#fff" },
+              { color: "transparent", fill: true },
             ],
           }),
-          layerImage({ padding: 0.15 }),
         ],
       },
     },

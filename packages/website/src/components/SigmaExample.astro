@@ -4,13 +4,11 @@
  *
  * Usage in MDX:
  *   <SigmaExample id="core/events" />
- *   <SigmaExample id="core/events" showSource />
- *   <SigmaExample id="get-started/quickstart" showSource defaultTab="source" />
+ *   <SigmaExample id="get-started/quickstart" defaultTab="source" />
  *
  * Props:
  *   id         — must match a file at src/examples/{id}.astro
  *   height     — iframe height (default "500px")
- *   showSource — extract the <script> content and show it in a tab
  *   defaultTab — which tab to show first: "result" (default) or "source"
  */
 import { Code } from "astro-expressive-code/components";
@@ -18,54 +16,42 @@ import { Code } from "astro-expressive-code/components";
 interface Props {
   id: string;
   height?: string;
-  showSource?: boolean;
   defaultTab?: "result" | "source";
 }
 
-const { id, height = "500px", showSource = false, defaultTab = "result" } = Astro.props;
+const { id, height = "500px", defaultTab = "result" } = Astro.props;
 
 let scriptSource = "";
-if (showSource) {
-  const sources = import.meta.glob("../examples/**/*.astro", { query: "?raw", eager: true });
-  const key = Object.keys(sources).find((k) => k.includes(`/${id}.astro`));
-  if (key) {
-    const raw = (sources[key] as { default: string }).default;
-    const match = raw.match(/<script[^>]*>([\s\S]*?)<\/script>/);
-    if (match) {
-      scriptSource = match[1].replace(/^\n/, "").replace(/\n$/, "").replace(/^  /gm, "");
-    }
+const sources = import.meta.glob("../examples/**/*.astro", { query: "?raw", eager: true });
+const key = Object.keys(sources).find((k) => k.includes(`/${id}.astro`));
+if (key) {
+  const raw = (sources[key] as { default: string }).default;
+  const match = raw.match(/<script[^>]*>([\s\S]*?)<\/script>/);
+  if (match) {
+    scriptSource = match[1].replace(/^\n/, "").replace(/\n$/, "").replace(/^  /gm, "");
   }
 }
 
-const hasSource = showSource && scriptSource;
-const sourceFirst = hasSource && defaultTab === "source";
+const sourceFirst = defaultTab === "source";
 ---
 
-<div class={`sigma-example not-content ${hasSource ? "has-tabs" : ""}`} style={`--panel-height: ${height}`}>
+<div class="sigma-example not-content" style={`--panel-height: ${height}`}>
   <div class={`sigma-example-panel sigma-example-result ${sourceFirst ? "" : "active"}`} data-panel="result">
     <iframe src={`/embed/${id}/?stage-only`} title={`sigma.js example: ${id}`} loading="lazy"
     ></iframe>
   </div>
-  {
-    hasSource && (
-      <div class={`sigma-example-panel sigma-example-source ${sourceFirst ? "active" : ""}`} data-panel="source">
-        <Code code={scriptSource} lang="typescript" />
-      </div>
-    )
-  }
+  <div class={`sigma-example-panel sigma-example-source ${sourceFirst ? "active" : ""}`} data-panel="source">
+    <Code code={scriptSource} lang="typescript" />
+  </div>
   <div class="sigma-example-toolbar">
-    {
-      hasSource && (
-        <div class="sigma-example-tabs">
-          <button class={`sigma-example-tab ${sourceFirst ? "" : "active"}`} data-tab="result">
-            Result
-          </button>
-          <button class={`sigma-example-tab ${sourceFirst ? "active" : ""}`} data-tab="source">
-            Source
-          </button>
-        </div>
-      )
-    }
+    <div class="sigma-example-tabs">
+      <button class={`sigma-example-tab ${sourceFirst ? "" : "active"}`} data-tab="result">
+        Result
+      </button>
+      <button class={`sigma-example-tab ${sourceFirst ? "active" : ""}`} data-tab="source">
+        Source
+      </button>
+    </div>
     <div class="sigma-example-links">
       <a
         href={`https://github.com/jacomyal/sigma.js/blob/v4/packages/website/src/examples/${id}.astro`}
@@ -79,7 +65,7 @@ const sourceFirst = hasSource && defaultTab === "source";
 </div>
 
 <script>
-  document.querySelectorAll<HTMLElement>(".sigma-example.has-tabs").forEach((example) => {
+  document.querySelectorAll<HTMLElement>(".sigma-example").forEach((example) => {
     example.querySelectorAll<HTMLButtonElement>(".sigma-example-tab").forEach((tab) => {
       tab.addEventListener("click", () => {
         const tabName = tab.dataset.tab!;

@@ -17,7 +17,14 @@
 
   const graph = getSmallGraph();
 
-  const BORDER_COLORS: Record<string, string> = { a: "red", b: "red", c: "red", d: "blue", e: "blue", f: "blue" };
+  const BORDER_COLORS: Record<string, string> = {
+    a: "darkgrey",
+    b: "darkgrey",
+    c: "darkgrey",
+    d: "lightgrey",
+    e: "lightgrey",
+    f: "lightgrey",
+  };
   graph.forEachNode((node) => {
     graph.setNodeAttribute(node, "borderColor", BORDER_COLORS[node]);
   });
@@ -31,7 +38,7 @@
         layers: [
           layerBorder({
             borders: [
-              { size: 0.1, color: { attribute: "borderColor" }, mode: "relative" },
+              { size: 0.3, color: { attribute: "borderColor" }, mode: "relative" },
               { size: 0, color: { attribute: "color" }, fill: true },
             ],
           }),

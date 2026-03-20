@@ -341,9 +341,8 @@ export function registerControls<T extends Record<string, ControlDef>>(defs: T):
     }
   }
 
-  const stageOnly = params.has("stage-only");
   const container = document.getElementById("controls");
-  if (container && !stageOnly) {
+  if (container) {
     buildControls(container, defs, values);
     // Trigger resize so sigma re-measures its container after controls are injected
     window.dispatchEvent(new Event("resize"));

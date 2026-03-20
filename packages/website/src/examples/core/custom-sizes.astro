@@ -11,6 +11,8 @@
   import Graph from "graphology";
   import Sigma from "sigma";
   import { registerControls } from "../_controls";
+  import { sdfSquare } from "sigma/rendering";
+  import { DEFAULT_STYLES } from "sigma/types";
 
   const container = document.getElementById("sigma-container") as HTMLElement;
 
@@ -66,13 +68,11 @@
       graph.addNode(id, {
         x: col * SPACING,
         y: -row * SPACING,
-        size: 5 + ((row * COLS + col) % 10) * 3,
         color: COLORS[(row + col) % COLORS.length],
-        label: `(${col},${row})`,
       });
 
-      if (col > 0) graph.addEdge(`${row}-${col - 1}`, id, { size: 2 });
-      if (row > 0) graph.addEdge(`${row - 1}-${col}`, id, { size: 2 });
+      if (col > 0) graph.addEdge(`${row}-${col - 1}`, id);
+      if (row > 0) graph.addEdge(`${row - 1}-${col}`, id);
     }
   }
 
@@ -86,6 +86,26 @@
       autoRescale: autoRescaleValue,
       itemSizesReference: itemSizesReference as "screen" | "positions",
       zoomToSizeRatioFunction: ZOOM_FUNCTIONS[zoomScaling],
+    },
+    primitives: {
+      nodes: {
+        shapes: [sdfSquare()],
+      },
+    },
+    styles: {
+      edges: [
+        DEFAULT_STYLES.edges,
+        {
+          size: 10,
+          color: "darkgrey",
+        },
+      ],
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          size: 10,
+        },
+      ],
     },
   });
 </script>

@@ -31,11 +31,9 @@
   const COL_SPACING = 120;
   const ROW_SPACING = 80;
   const NODE_SPACING = 60;
-  const NODE_SIZE = 12;
   const EDGE_SIZE = 6;
 
   const ROW_COLORS = ["#5B8FF9", "#61DDAA", "#F6903D", "#E8684A"];
-  const NODE_COLOR = "#5B8FF9";
 
   const PATH_NAMES = ["straight", "curved", "stepCurved", "curvedS"] as const;
 
@@ -60,18 +58,12 @@
       graph.addNode(sourceId, {
         x: cellX - NODE_SPACING / 2,
         y: cellY,
-        size: NODE_SIZE,
-        color: NODE_COLOR,
-        shape: "diamond",
       });
 
       const targetId = `${pathName}-${colIdx}-target`;
       graph.addNode(targetId, {
         x: cellX + NODE_SPACING / 2,
         y: cellY + NODE_SPACING / 2,
-        size: NODE_SIZE,
-        color: NODE_COLOR,
-        shape: "triangle",
       });
 
       graph.addEdge(sourceId, targetId, {
@@ -89,10 +81,6 @@
 
   new Sigma(graph, container, {
     primitives: {
-      nodes: {
-        shapes: [sdfDiamond(), sdfTriangle()],
-        layers: [layerFill()],
-      },
       edges: {
         variables: {
           dashColor: { type: "color", default: "#000" },
@@ -112,7 +100,7 @@
       },
     },
     styles: {
-      nodes: [DEFAULT_STYLES.nodes, { shape: { attribute: "shape" } }],
+      nodes: [DEFAULT_STYLES.nodes, { size: 12, color: "darkgrey" }],
       edges: [
         DEFAULT_STYLES.edges,
         { path: { attribute: "path" }, head: { attribute: "head" }, tail: { attribute: "tail" } },

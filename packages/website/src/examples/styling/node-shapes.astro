@@ -35,16 +35,6 @@
         label: col === 0 ? shape : "",
       });
     }
-    // Connect nodes in a row
-    for (let col = 0; col < 3; col++) {
-      graph.addEdge(`${shape}-${col}`, `${shape}-${col + 1}`, { size: 2 });
-    }
-  }
-
-  // Connect across rows
-  for (let row = 0; row < SHAPES.length - 1; row++) {
-    graph.addEdge(`${SHAPES[row]}-1`, `${SHAPES[row + 1]}-1`, { size: 2 });
-    graph.addEdge(`${SHAPES[row]}-2`, `${SHAPES[row + 1]}-2`, { size: 2 });
   }
 
   new Sigma(graph, container, {

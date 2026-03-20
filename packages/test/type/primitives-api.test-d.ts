@@ -17,6 +17,8 @@ import { colorProp, enumProp, numberProp, stringProp } from "sigma/primitives";
 import { defineSigmaOptions } from "sigma/types";
 // Import factory functions
 import { sdfCircle, sdfSquare, sdfTriangle, layerFill, pathLine, layerPlain } from "sigma/rendering";
+import Graph from "graphology";
+import Sigma from "sigma";
 import { describe, expectTypeOf, test } from "vitest";
 
 // =============================================================================
@@ -238,6 +240,101 @@ describe("defineSigmaOptions - Error Cases", () => {
       styles: {
         // @ts-expect-error - 'nonExistentState' is not a valid state property
         nodes: { color: { when: "nonExistentState", then: "#f00", else: "#666" } },
+      },
+    });
+  });
+});
+
+// =============================================================================
+// TYPE TESTS: new Sigma() - Variable inference from primitives to styles
+// =============================================================================
+
+describe("new Sigma() - Variable inference from primitives to styles", () => {
+  const graph = new Graph();
+  const container = document.createElement("div");
+
+  test("declared node variables are accepted in styles", () => {
+    new Sigma(graph, container, {
+      primitives: {
+        nodes: {
+          variables: {
+            borderSize: { type: "number", default: 0 },
+            borderColor: { type: "color", default: "#000" },
+          },
+        },
+      },
+      styles: {
+        nodes: {
+          borderSize: 2,
+          borderColor: "#fff",
+        },
+      },
+    });
+  });
+
+  test("declared edge variables are accepted in styles", () => {
+    new Sigma(graph, container, {
+      primitives: {
+        edges: {
+          variables: {
+            dashSize: { type: "number", default: 0 },
+            dashColor: { type: "color", default: "transparent" },
+          },
+        },
+      },
+      styles: {
+        edges: [{ dashSize: 5 }, { dashColor: "#ff0000" }],
+      },
+    });
+  });
+
+  test("rejects undeclared node variable in styles", () => {
+    new Sigma(graph, container, {
+      primitives: {
+        nodes: {
+          variables: {
+            borderSize: { type: "number", default: 0 },
+          },
+        },
+      },
+      styles: {
+        nodes: {
+          borderSize: 2,
+          // @ts-expect-error - 'borderColor' was not declared in variables
+          borderColor: "#fff",
+        },
+      },
+    });
+  });
+
+  test("rejects undeclared edge variable in styles", () => {
+    new Sigma(graph, container, {
+      primitives: {
+        edges: {
+          variables: {
+            dashSize: { type: "number", default: 0 },
+          },
+        },
+      },
+      styles: {
+        // @ts-expect-error - 'bogusVar' was not declared in variables
+        edges: [{ bogusVar: 42 }],
+      },
+    });
+  });
+
+  test("rejects wrong type for declared variable", () => {
+    new Sigma(graph, container, {
+      primitives: {
+        nodes: {
+          variables: {
+            borderSize: { type: "number", default: 0 },
+          },
+        },
+      },
+      styles: {
+        // @ts-expect-error - borderSize should be a number, not a string
+        nodes: { borderSize: "thick" },
       },
     });
   });

@@ -190,6 +190,20 @@ export type ExtractAllEdgeVariables<E extends EdgePrimitives> = E["variables"] e
   ? VariablesDefinitionToType<E["variables"]>
   : object;
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export type ExtractNodeVarsFromPrimitives<P extends PrimitivesDeclaration> = P extends {
+  nodes: infer NP extends NodePrimitives;
+}
+  ? ExtractAllNodeVariables<NP>
+  : {};
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export type ExtractEdgeVarsFromPrimitives<P extends PrimitivesDeclaration> = P extends {
+  edges: infer EP extends EdgePrimitives;
+}
+  ? ExtractAllEdgeVariables<EP>
+  : {};
+
 // =============================================================================
 
 // =============================================================================

@@ -14,6 +14,8 @@ import { SDFAtlasManager } from "./core/sdf-atlas";
 import { StyleAnalysis, analyzeStyleDeclaration, evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
 import {
   DEFAULT_DEPTH_LAYERS,
+  ExtractEdgeVarsFromPrimitives,
+  ExtractNodeVarsFromPrimitives,
   LabelAttachmentContext,
   PrimitivesDeclaration,
   VariablesDefinition,
@@ -161,6 +163,7 @@ export default class Sigma<
   NS extends BaseNodeState = BaseNodeState,
   ES extends BaseEdgeState = BaseEdgeState,
   GS extends BaseGraphState = BaseGraphState,
+  P extends PrimitivesDeclaration = PrimitivesDeclaration,
 > extends TypedEventEmitter<SigmaEvents> {
   private settings: Settings;
   private graph: Graph<N, E, G>;
@@ -328,8 +331,8 @@ export default class Sigma<
     graph: Graph<N, E, G>,
     container: HTMLElement,
     options: {
-      primitives?: PrimitivesDeclaration;
-      styles?: StylesDeclaration<N, E, NS, ES, GS>;
+      primitives?: P;
+      styles?: StylesDeclaration<N, E, NS, ES, GS, ExtractNodeVarsFromPrimitives<P>, ExtractEdgeVarsFromPrimitives<P>>;
       settings?: Partial<Settings>;
       nodeReducer?: NodeReducer<N, E, G, NS, GS>;
       edgeReducer?: EdgeReducer<N, E, G, ES, GS>;

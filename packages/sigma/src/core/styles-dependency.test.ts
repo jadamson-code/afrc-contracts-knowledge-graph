@@ -128,6 +128,43 @@ describe("analyzeStyleDeclaration", () => {
         ).toBe("graph-state");
       });
     });
+
+    describe("match/cases styles", () => {
+      test("returns 'static' for match/cases with literal values", () => {
+        expect(
+          analyzeStyleDeclaration([{ match: "type", cases: { A: { color: "#f00" }, B: { color: "#0f0" } } }])
+            .dependency,
+        ).toBe("static");
+      });
+
+      test("returns 'static' for match/cases with attribute bindings", () => {
+        expect(
+          analyzeStyleDeclaration([{ match: "type", cases: { A: { size: { attribute: "score", min: 5, max: 50 } } } }])
+            .dependency,
+        ).toBe("static");
+      });
+
+      test("returns 'graph-state' for match/cases with function values", () => {
+        expect(analyzeStyleDeclaration([{ match: "type", cases: { A: { color: () => "#f00" } } }]).dependency).toBe(
+          "graph-state",
+        );
+      });
+
+      test("returns 'static' when mixed with other static rules", () => {
+        expect(
+          analyzeStyleDeclaration([{ color: "#666" }, { match: "type", cases: { A: { color: "#f00" } } }]).dependency,
+        ).toBe("static");
+      });
+
+      test("returns 'item-state' when mixed with item-state rules", () => {
+        expect(
+          analyzeStyleDeclaration([
+            { match: "type", cases: { A: { color: "#f00" } } },
+            { when: "isHovered", then: { size: 20 } },
+          ]).dependency,
+        ).toBe("item-state");
+      });
+    });
   });
 
   describe("position attribute extraction", () => {

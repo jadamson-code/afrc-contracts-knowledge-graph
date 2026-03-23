@@ -400,6 +400,57 @@ describe("Style evaluation system", () => {
     });
   });
 
+  describe("match/cases rules", () => {
+    const graph = createTestGraph();
+
+    test("applies matching case for nodes", () => {
+      const attrs = { x: 0, y: 0, type: "person" };
+      const styles = [
+        { color: "#666" },
+        { match: "type", cases: { person: { color: "#f00" }, company: { color: "#0f0" } } },
+      ];
+      const result = evaluateNodeStyle(styles, attrs, defaultNodeState, defaultGraphState, graph);
+      expect(result.color).toBe("#f00");
+    });
+
+    test("skips when no case matches", () => {
+      const attrs = { x: 0, y: 0, type: "unknown" };
+      const styles = [{ color: "#666" }, { match: "type", cases: { person: { color: "#f00" } } }];
+      const result = evaluateNodeStyle(styles, attrs, defaultNodeState, defaultGraphState, graph);
+      expect(result.color).toBe("#666");
+    });
+
+    test("skips when attribute is missing", () => {
+      const attrs = { x: 0, y: 0 };
+      const styles = [{ color: "#666" }, { match: "type", cases: { person: { color: "#f00" } } }];
+      const result = evaluateNodeStyle(styles, attrs, defaultNodeState, defaultGraphState, graph);
+      expect(result.color).toBe("#666");
+    });
+
+    test("applies multiple properties from matched case", () => {
+      const attrs = { x: 0, y: 0, type: "person" };
+      const styles = [{ match: "type", cases: { person: { color: "#f00", size: 20, opacity: 0.5 } } }];
+      const result = evaluateNodeStyle(styles, attrs, defaultNodeState, defaultGraphState, graph);
+      expect(result.color).toBe("#f00");
+      expect(result.size).toBe(20);
+      expect(result.opacity).toBe(0.5);
+    });
+
+    test("later rules override match/cases", () => {
+      const attrs = { x: 0, y: 0, type: "person" };
+      const styles = [{ match: "type", cases: { person: { color: "#f00" } } }, { color: "#000" }];
+      const result = evaluateNodeStyle(styles, attrs, defaultNodeState, defaultGraphState, graph);
+      expect(result.color).toBe("#000");
+    });
+
+    test("coerces numeric attribute values to strings for case lookup", () => {
+      const attrs = { x: 0, y: 0, cluster: 2 };
+      const styles = [{ match: "cluster", cases: { "1": { color: "#f00" }, "2": { color: "#0f0" } } }];
+      const result = evaluateNodeStyle(styles, attrs, defaultNodeState, defaultGraphState, graph);
+      expect(result.color).toBe("#0f0");
+    });
+  });
+
   describe("evaluateEdgeStyle", () => {
     const graph = createTestGraph();
     const defaultEdgeState: BaseEdgeState = {
@@ -451,6 +502,23 @@ describe("Style evaluation system", () => {
       const resultHovered = evaluateEdgeStyle(styles, attrs, hoveredState, defaultGraphState, graph);
       expect(resultHovered.color).toBe("#f00");
       expect(resultHovered.size).toBe(3);
+    });
+
+    test("applies match/cases rules for edges", () => {
+      const attrs = { type: "coauthored" };
+      const styles = [
+        { color: "#ccc" },
+        {
+          match: "type",
+          cases: {
+            cites: { color: "#0f0", size: 1 },
+            coauthored: { color: "#f00", size: 3 },
+          },
+        },
+      ];
+      const result = evaluateEdgeStyle(styles, attrs, defaultEdgeState, defaultGraphState, graph);
+      expect(result.color).toBe("#f00");
+      expect(result.size).toBe(3);
     });
   });
 });

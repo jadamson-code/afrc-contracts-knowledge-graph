@@ -450,6 +450,36 @@ export interface EdgeStyleRuleConditional<
 }
 
 /**
+ * Rule-level categorical match for nodes.
+ * Selects a style block based on an attribute value.
+ * Classified as "static" — only depends on graph attributes.
+ */
+export interface NodeStyleRuleMatch<
+  NA extends Attributes = Attributes,
+  NS extends BaseNodeState = BaseNodeState,
+  GS extends BaseGraphState = BaseGraphState,
+  ProgramVariables = EmptyVariables,
+> {
+  match: string;
+  cases: Record<string, NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>>;
+}
+
+/**
+ * Rule-level categorical match for edges.
+ * Selects a style block based on an attribute value.
+ * Classified as "static" — only depends on graph attributes.
+ */
+export interface EdgeStyleRuleMatch<
+  EA extends Attributes = Attributes,
+  ES extends BaseEdgeState = BaseEdgeState,
+  GS extends BaseGraphState = BaseGraphState,
+  ProgramVariables = EmptyVariables,
+> {
+  match: string;
+  cases: Record<string, EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>>;
+}
+
+/**
  * Node style properties object where each property CAN have conditionals.
  */
 export type NodeStylePropertiesWithConditionals<
@@ -496,12 +526,14 @@ export type NodeStyleRule<
   ProgramVariables = EmptyVariables,
 > =
   | NodeStyleRuleConditional<NA, NS, GS, ProgramVariables>
+  | NodeStyleRuleMatch<NA, NS, GS, ProgramVariables>
   | NodeStylePropertiesWithConditionals<NA, NS, GS, ProgramVariables>;
 
 /**
  * A style rule for edges.
  * Either:
  * - A rule-level conditional (then/else have NO nested conditionals)
+ * - A rule-level match (categorical branching on an attribute)
  * - A properties object (each property CAN have conditionals)
  */
 export type EdgeStyleRule<
@@ -511,6 +543,7 @@ export type EdgeStyleRule<
   ProgramVariables = EmptyVariables,
 > =
   | EdgeStyleRuleConditional<EA, ES, GS, ProgramVariables>
+  | EdgeStyleRuleMatch<EA, ES, GS, ProgramVariables>
   | EdgeStylePropertiesWithConditionals<EA, ES, GS, ProgramVariables>;
 
 /**

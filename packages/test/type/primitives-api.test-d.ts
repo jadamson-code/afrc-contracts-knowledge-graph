@@ -339,3 +339,71 @@ describe("new Sigma() - Variable inference from primitives to styles", () => {
     });
   });
 });
+
+// =============================================================================
+// TYPE TESTS: match/cases style rules
+// =============================================================================
+
+describe("match/cases style rules", () => {
+  const graph = new Graph();
+  const container = document.createElement("div");
+
+  test("match/cases rule with node styles compiles", () => {
+    new Sigma(graph, container, {
+      styles: {
+        nodes: [
+          { color: "#666" },
+          { match: "type", cases: { person: { color: "#f00", size: 20 }, company: { color: "#0f0" } } },
+        ],
+      },
+    });
+  });
+
+  test("match/cases rule with edge styles compiles", () => {
+    new Sigma(graph, container, {
+      styles: {
+        edges: [
+          { color: "#ccc" },
+          { match: "type", cases: { cites: { color: "#0f0" }, coauthored: { color: "#f00", size: 3 } } },
+        ],
+      },
+    });
+  });
+
+  test("match/cases with declared edge variables compiles", () => {
+    new Sigma(graph, container, {
+      primitives: {
+        edges: {
+          variables: {
+            dashSize: { type: "number", default: 0 },
+            dashColor: { type: "color", default: "transparent" },
+          },
+        },
+      },
+      styles: {
+        edges: [
+          { match: "type", cases: { dashed: { dashSize: 5, dashColor: "#f00" } } },
+        ],
+      },
+    });
+  });
+
+  test("match/cases with attribute binding in case values compiles", () => {
+    new Sigma(graph, container, {
+      styles: {
+        nodes: [
+          { match: "type", cases: { person: { size: { attribute: "score", min: 5, max: 50 } } } },
+        ],
+      },
+    });
+  });
+
+  test("match/cases rejects wrong value type in case", () => {
+    new Sigma(graph, container, {
+      styles: {
+        // @ts-expect-error - size should be a number, not a string
+        nodes: [{ match: "type", cases: { person: { size: "big" } } }],
+      },
+    });
+  });
+});

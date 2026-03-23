@@ -349,8 +349,17 @@ export function analyzeStyleDeclaration(
   let yAttribute: string | null = null;
 
   for (const rule of rules) {
+    // Match/cases rule — only depends on attributes, classify branch values
+    if ("match" in rule && "cases" in rule) {
+      const cases = rule.cases as Record<string, Record<string, unknown>>;
+      for (const branch of Object.values(cases)) {
+        for (const value of Object.values(branch)) {
+          dependency = worstDependency(dependency, classifyValue(value));
+        }
+      }
+    }
     // Conditional rule with `when` predicate
-    if ("when" in rule) {
+    else if ("when" in rule) {
       dependency = worstDependency(dependency, classifyPredicate(rule.when));
       // Also check values inside `then` and `else` branches
       const thenObj = rule.then as Record<string, unknown> | undefined;
@@ -544,16 +553,19 @@ export function evaluateNodeStyle<
 
   // Process each rule
   for (const rule of rules) {
-    // Check if this is a conditional rule (has 'when' property)
-    if ("when" in rule && "then" in rule) {
+    if ("match" in rule && "cases" in rule) {
+      const { match, cases } = rule as { match: string; cases: Record<string, Record<string, unknown>> };
+      const key = String(attributes[match] ?? "");
+      if (key in cases) {
+        applyNodeStyleRule(result, cases[key], attributes, state, graphState, graph);
+      }
+    } else if ("when" in rule && "then" in rule) {
       const conditional = rule as { when: StatePredicate<NA, NS, GS>; then: Record<string, unknown> };
       if (!evaluateStatePredicate(conditional.when, attributes, state, graphState, graph)) {
-        continue; // Skip this rule
+        continue;
       }
-      // Apply the 'then' values
       applyNodeStyleRule(result, conditional.then, attributes, state, graphState, graph);
     } else {
-      // Regular rule - apply all properties
       applyNodeStyleRule(result, rule, attributes, state, graphState, graph);
     }
   }
@@ -623,16 +635,19 @@ export function evaluateEdgeStyle<
 
   // Process each rule
   for (const rule of rules) {
-    // Check if this is a conditional rule (has 'when' property)
-    if ("when" in rule && "then" in rule) {
+    if ("match" in rule && "cases" in rule) {
+      const { match, cases } = rule as { match: string; cases: Record<string, Record<string, unknown>> };
+      const key = String(attributes[match] ?? "");
+      if (key in cases) {
+        applyEdgeStyleRule(result, cases[key], attributes, state, graphState, graph);
+      }
+    } else if ("when" in rule && "then" in rule) {
       const conditional = rule as { when: StatePredicate<EA, ES, GS>; then: Record<string, unknown> };
       if (!evaluateStatePredicate(conditional.when, attributes, state, graphState, graph)) {
-        continue; // Skip this rule
+        continue;
       }
-      // Apply the 'then' values
       applyEdgeStyleRule(result, conditional.then, attributes, state, graphState, graph);
     } else {
-      // Regular rule - apply all properties
       applyEdgeStyleRule(result, rule, attributes, state, graphState, graph);
     }
   }

@@ -226,6 +226,27 @@ styles: {
 
 Rules are evaluated in order. Later rules override earlier ones for any properties they set.
 
+### Rule-level match
+
+When you need to branch styles on a categorical attribute (e.g. node type), use `match`/`cases` instead of function predicates:
+
+```typescript
+styles: {
+  nodes: [
+    { color: "#666", size: 10 },
+    {
+      match: "type",
+      cases: {
+        person: { shape: "circle", color: "#e22653" },
+        company: { shape: "square", color: "#277da1" },
+      },
+    },
+  ],
+}
+```
+
+This is more efficient than function-based `when` predicates because sigma knows the rule only depends on graph attributes, not interaction state. See the [Style value types](/reference/style-value-types/#rule-level-match) reference for details.
+
 ### State predicates
 
 The `when` clause supports several forms:

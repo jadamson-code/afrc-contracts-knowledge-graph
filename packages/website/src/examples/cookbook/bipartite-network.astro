@@ -43,25 +43,22 @@
             backdropPadding: 6,
           },
         },
-        // Disease nodes: circles with bold labels rendered over them
         {
-          when: (attrs) => attrs.type === "disease",
-          then: {
-            shape: "circle",
-            labelFont: "bold Arial, sans-serif",
-            labelSize: 16,
-            labelPosition: "over",
-          },
-        },
-        // Gene nodes: diamonds with small monospace labels at an angle
-        {
-          when: (attrs) => attrs.type === "gene",
-          then: {
-            shape: "diamond",
-            labelFont: "'Courier New', monospace",
-            labelSize: 10,
-            labelPosition: "right",
-            labelAngle: Math.PI / 4,
+          match: "type",
+          cases: {
+            disease: {
+              shape: "circle",
+              labelFont: "bold Arial, sans-serif",
+              labelSize: 16,
+              labelPosition: "over",
+            },
+            gene: {
+              shape: "diamond",
+              labelFont: "'Courier New', monospace",
+              labelSize: 10,
+              labelPosition: "right",
+              labelAngle: Math.PI / 4,
+            },
           },
         },
       ],

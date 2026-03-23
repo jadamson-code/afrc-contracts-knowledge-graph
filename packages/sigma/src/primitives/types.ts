@@ -6,12 +6,16 @@
  *
  * @module
  */
-import { layerPlain } from "../rendering/edges/layers";
-import { pathLine, pathLoop } from "../rendering/edges/paths";
-import type { EdgeExtremity, EdgeLabelOptions, EdgeLayer, EdgePath } from "../rendering/edges/types";
-import { layerFill } from "../rendering/nodes/layers";
-import { sdfCircle } from "../rendering/nodes/shapes";
-import type { FragmentLayer, LabelOptions, SDFShape } from "../rendering/nodes/types";
+import { layerFill, layerPlain, pathLine, pathLoop, sdfCircle } from "../rendering";
+import type {
+  EdgeExtremity,
+  EdgeLabelOptions,
+  EdgeLayer,
+  EdgePath,
+  FragmentLayer,
+  LabelOptions,
+  SDFShape,
+} from "../rendering";
 
 // =============================================================================
 // GRAPHIC VARIABLES
@@ -190,19 +194,19 @@ export type ExtractAllEdgeVariables<E extends EdgePrimitives> = E["variables"] e
   ? VariablesDefinitionToType<E["variables"]>
   : object;
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export type ExtractNodeVarsFromPrimitives<P extends PrimitivesDeclaration> = P extends {
   nodes: infer NP extends NodePrimitives;
 }
   ? ExtractAllNodeVariables<NP>
-  : {};
+  : // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+    {};
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export type ExtractEdgeVarsFromPrimitives<P extends PrimitivesDeclaration> = P extends {
   edges: infer EP extends EdgePrimitives;
 }
   ? ExtractAllEdgeVariables<EP>
-  : {};
+  : // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+    {};
 
 // =============================================================================
 

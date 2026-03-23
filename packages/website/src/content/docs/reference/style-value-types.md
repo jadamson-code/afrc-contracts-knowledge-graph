@@ -132,6 +132,34 @@ styles: {
 
 Rules are evaluated in order. Later rules override earlier ones for any properties they set.
 
+## Rule-level match
+
+When you need to apply different styles based on a categorical attribute (e.g. node type, edge kind), use a `match`/`cases` rule. It selects a style block based on the value of a graph attribute:
+
+```typescript
+styles: {
+  edges: [
+    { color: "#ccc", size: 1 },
+    {
+      match: "type",
+      cases: {
+        citation: { color: "#0f0", head: "arrow" },
+        coauthorship: { color: "#f00", size: 3 },
+      },
+    },
+  ],
+}
+```
+
+| Field   | Type                            | Required | Description                                    |
+| ------- | ------------------------------- | -------- | ---------------------------------------------- |
+| `match` | `string`                        | Yes      | Attribute name to read from the element        |
+| `cases` | `Record<string, StyleProperties>` | Yes    | Mapping from attribute values to style blocks  |
+
+If the attribute value doesn't match any case, the rule is skipped. Attribute values are coerced to strings for lookup (so a numeric attribute `2` matches the key `"2"`).
+
+Unlike function-based `when` predicates, `match`/`cases` only reads graph attributes, so sigma can skip re-evaluation when only the interaction state changes (e.g. hovering). This makes it the preferred approach for attribute-based branching on large graphs.
+
 ## State predicates
 
 The `when` clause in both inline and rule-level conditionals supports several forms:

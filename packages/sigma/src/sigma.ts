@@ -94,7 +94,6 @@ import {
   getMatrixImpact,
   getPixelColor,
   getPixelRatio,
-  graphExtent,
   identity,
   matrixFromCamera,
   multiplyVec2,
@@ -202,6 +201,7 @@ export default class Sigma<
   private nodesWithForcedLabels: Set<string> = new Set<string>();
   private edgesWithForcedLabels: Set<string> = new Set<string>();
   private nodesWithBackdrop: Set<string> = new Set<string>();
+  private nodeGraphCoords: Record<string, Coordinates> = {};
   private nodeExtent: { x: Extent; y: Extent } = { x: [0, 1], y: [0, 1] };
 
   private matrix: Float32Array = identity();
@@ -1028,7 +1028,7 @@ export default class Sigma<
     //
     // Skip extent recomputation when autoRescale is "once" and already frozen
     if (this.settings.autoRescale !== "once" || !this.autoRescaleFrozen) {
-      this.nodeExtent = graphExtent(this.graph);
+      this.nodeExtent = this.computeNodeExtent();
       if (this.settings.autoRescale === "once") {
         this.autoRescaleFrozen = true;
       }
@@ -1071,10 +1071,11 @@ export default class Sigma<
       const node = nodes[i];
       const data = this.nodeDataCache[node];
 
-      // Get initial coordinates
-      const attrs = graph.getNodeAttributes(node);
-      data.x = attrs.x;
-      data.y = attrs.y;
+      // Restore un-normalized graph coords before normalizing
+      // (nodeDataCache may hold stale normalized values from a previous process cycle)
+      const graphCoords = this.nodeGraphCoords[node];
+      data.x = graphCoords.x;
+      data.y = graphCoords.y;
       this.normalizationFunction.applyTo(data);
 
       // labelgrid
@@ -2162,17 +2163,18 @@ export default class Sigma<
       labelAttachmentPlacement: resolvedStyle.labelAttachmentPlacement ?? "below",
     };
 
-    // Validate position
-    if (typeof data.x !== "number" || typeof data.y !== "number") {
-      throw new Error(
-        `Sigma: could not find a valid position (x, y) for node "${key}". All your nodes must have a number "x" and "y".`,
-      );
-    }
-
     // Apply reducer if provided
     if (this.nodeReducer) {
       const reduced = this.nodeReducer(key, data, attrs, nodeState, this.graphState, this.graph);
       data = { ...data, ...reduced };
+    }
+
+    // Validate position (after styles + reducer, so all sources have had a chance to provide x/y)
+    if (typeof data.x !== "number" || typeof data.y !== "number") {
+      throw new Error(
+        `Sigma: could not find a valid position (x, y) for node "${key}". ` +
+          "Provide coordinates via node attributes, styles, or a nodeReducer.",
+      );
     }
 
     // Set shape for edge clamping and multi-shape program selection
@@ -2194,6 +2196,7 @@ export default class Sigma<
     }
 
     this.nodeDataCache[key] = data;
+    this.nodeGraphCoords[key] = { x: data.x, y: data.y };
 
     // Label:
     // We delete and add if needed because this function is also used from
@@ -2334,6 +2337,7 @@ export default class Sigma<
     }
     // Remove from node cache
     delete this.nodeDataCache[key];
+    delete this.nodeGraphCoords[key];
     // Remove from node program index
     delete this.nodeProgramIndex[key];
     // Remove from node state
@@ -2620,6 +2624,7 @@ export default class Sigma<
     this.labelGrid = new LabelGrid();
     this.nodeExtent = { x: [0, 1], y: [0, 1] };
     this.nodeDataCache = {};
+    this.nodeGraphCoords = {};
     this.edgeProgramIndex = {};
     this.nodesWithForcedLabels = new Set<string>();
     this.nodesWithBackdrop = new Set<string>();
@@ -3958,6 +3963,31 @@ export default class Sigma<
     const viewportD = Math.sqrt(Math.pow(viewportP1.x - viewportP2.x, 2) + Math.pow(viewportP1.y - viewportP2.y, 2));
 
     return viewportD / graphD;
+  }
+
+  /**
+   * Compute node extent from un-normalized graph coordinates,
+   * which accounts for coordinate remapping via styles.
+   */
+  private computeNodeExtent(): { x: Extent; y: Extent } {
+    const coords = this.nodeGraphCoords;
+    const keys = Object.keys(coords);
+    if (!keys.length) return { x: [0, 1], y: [0, 1] };
+
+    let xMin = Infinity;
+    let xMax = -Infinity;
+    let yMin = Infinity;
+    let yMax = -Infinity;
+
+    for (let i = 0, l = keys.length; i < l; i++) {
+      const { x, y } = coords[keys[i]];
+      if (x < xMin) xMin = x;
+      if (x > xMax) xMax = x;
+      if (y < yMin) yMin = y;
+      if (y > yMax) yMax = y;
+    }
+
+    return { x: [xMin, xMax], y: [yMin, yMax] };
   }
 
   /**

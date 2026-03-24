@@ -82,6 +82,7 @@
           backdropBorderColor: "black",
           backdropBorderWidth: 2,
           backdropPadding: 4,
+          cursor: "grab",
         },
         {
           when: (_, state, graphState) =>
@@ -104,12 +105,17 @@
           then: {
             depth: "topNodes",
             labelDepth: "topNodeLabels",
+            cursor: "grabbing",
           },
         },
       ],
       edges: {
         size: 1,
         color: (_, _state, graphState) => (graphState.selectionSize || graphState.isDragging ? "lightgrey" : "grey"),
+      },
+      stage: {
+        when: "isDragging",
+        then: { cursor: "grabbing" },
       },
     },
   });

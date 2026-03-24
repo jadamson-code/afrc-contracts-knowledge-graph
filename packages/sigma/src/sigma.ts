@@ -11,7 +11,14 @@ import MouseCaptor from "./core/captors/mouse";
 import TouchCaptor from "./core/captors/touch";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
-import { StyleAnalysis, analyzeStyleDeclaration, evaluateEdgeStyle, evaluateNodeStyle } from "./core/styles";
+import {
+  ResolvedStageStyle,
+  StyleAnalysis,
+  analyzeStyleDeclaration,
+  evaluateEdgeStyle,
+  evaluateNodeStyle,
+  evaluateStageStyle,
+} from "./core/styles";
 import {
   DEFAULT_DEPTH_LAYERS,
   ExtractEdgeVarsFromPrimitives,
@@ -255,6 +262,7 @@ export default class Sigma<
   // New v4 API: primitives and styles declarations
   private primitives: PrimitivesDeclaration | null = null;
   private stylesDeclaration: StylesDeclaration<N, E, NS, ES, GS> | null = null;
+  private resolvedStageStyle: ResolvedStageStyle = {};
 
   // Internal states
   private renderFrame: number | null = null;
@@ -350,6 +358,7 @@ export default class Sigma<
       ? ({
           nodes: styles.nodes ?? DEFAULT_STYLES.nodes,
           edges: styles.edges ?? DEFAULT_STYLES.edges,
+          stage: styles.stage,
         } as StylesDeclaration<N, E, NS, ES, GS>)
       : (DEFAULT_STYLES as unknown as StylesDeclaration<N, E, NS, ES, GS>);
 
@@ -363,6 +372,14 @@ export default class Sigma<
     if (this.nodeReducer) this.nodeStyleAnalysis.dependency = "graph-state";
     this.edgeStyleAnalysis = analyzeStyleDeclaration(this.stylesDeclaration!.edges as Record<string, unknown>);
     if (this.edgeReducer) this.edgeStyleAnalysis.dependency = "graph-state";
+
+    // Initial stage style evaluation
+    if (this.stylesDeclaration!.stage) {
+      this.resolvedStageStyle = evaluateStageStyle(
+        this.stylesDeclaration!.stage as Record<string, unknown> | Record<string, unknown>[],
+        this.graphState,
+      );
+    }
 
     // Resolving settings
     this.settings = resolveSettings(settings);
@@ -399,6 +416,14 @@ export default class Sigma<
 
     // Initial resize
     this.resize();
+
+    // Apply initial stage styles
+    if (this.resolvedStageStyle.background) {
+      this.container.style.backgroundColor = this.resolvedStageStyle.background;
+    }
+    if (this.resolvedStageStyle.cursor) {
+      this.container.style.cursor = this.resolvedStageStyle.cursor;
+    }
 
     // Initialize node data texture for sharing position/size/shape data between node and edge programs
     this.nodeDataTexture = new NodeDataTexture(this.webGLContext!);
@@ -646,6 +671,7 @@ export default class Sigma<
 
         this.setNodeState(nodeToHover, { isHovered: true } as Partial<NS>);
         this.emit("enterNode", { ...baseEvent, node: nodeToHover });
+        this.updateContainerCursor();
         return;
       }
 
@@ -656,6 +682,7 @@ export default class Sigma<
           this.hoveredNode = null;
           this.setNodeState(node, { isHovered: false } as Partial<NS>);
           this.emit("leaveNode", { ...baseEvent, node });
+          this.updateContainerCursor();
           return;
         }
       }
@@ -673,6 +700,7 @@ export default class Sigma<
             this.setEdgeState(edgeToHover, { isHovered: true } as Partial<ES>);
             this.emit("enterEdge", { ...baseEvent, edge: edgeToHover });
           }
+          this.updateContainerCursor();
         }
       }
     };
@@ -2161,6 +2189,7 @@ export default class Sigma<
       backdropArea: resolvedStyle.backdropArea,
       labelAttachment: resolvedStyle.labelAttachment ?? null,
       labelAttachmentPlacement: resolvedStyle.labelAttachmentPlacement ?? "below",
+      cursor: resolvedStyle.cursor,
     };
 
     // Apply reducer if provided
@@ -2516,6 +2545,7 @@ export default class Sigma<
         typeof resolvedStyle.labelPosition === "string"
           ? (resolvedStyle.labelPosition as EdgeLabelPosition)
           : undefined,
+      cursor: resolvedStyle.cursor,
     };
 
     // Apply reducer if provided
@@ -3361,6 +3391,40 @@ export default class Sigma<
   }
 
   /**
+   * Update the container's CSS cursor based on the currently hovered item,
+   * falling back to the stage cursor style.
+   */
+  private updateContainerCursor(): void {
+    if (this.hoveredNode) {
+      this.container.style.cursor =
+        this.nodeDataCache[this.hoveredNode]?.cursor || this.resolvedStageStyle.cursor || "";
+    } else if (this.hoveredEdge) {
+      this.container.style.cursor =
+        this.edgeDataCache[this.hoveredEdge]?.cursor || this.resolvedStageStyle.cursor || "";
+    } else {
+      this.container.style.cursor = this.resolvedStageStyle.cursor || "";
+    }
+  }
+
+  /**
+   * Re-evaluate stage styles and apply them to the container.
+   */
+  private refreshStageStyle(): void {
+    this.resolvedStageStyle = evaluateStageStyle(
+      this.stylesDeclaration!.stage as Record<string, unknown> | Record<string, unknown>[],
+      this.graphState,
+    );
+
+    // Apply background
+    if (this.resolvedStageStyle.background !== undefined) {
+      this.container.style.backgroundColor = this.resolvedStageStyle.background;
+    }
+
+    // Apply cursor (respecting hovered item override)
+    this.updateContainerCursor();
+  }
+
+  /**
    * Update hovered node tracking for event system (enter/leave events).
    */
   private updateHoveredNodeTracking(key: string, oldState: NS, newState: NS): void {
@@ -3641,6 +3705,11 @@ export default class Sigma<
       for (const edge of this.dirtyEdges) {
         this.refreshEdgeState(edge);
       }
+    }
+
+    // Stage styles
+    if (this.graphStateChanged && this.stylesDeclaration?.stage) {
+      this.refreshStageStyle();
     }
 
     this.dirtyNodes.clear();

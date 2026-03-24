@@ -214,6 +214,8 @@ export interface NodeBuiltInVariables<
   depth?: GraphicValue<NA, NS, GS, Layer>;
   /** Z-index within the depth layer */
   zIndex?: GraphicValue<NA, NS, GS, number>;
+  /** CSS cursor to show when hovering this node */
+  cursor?: GraphicValue<NA, NS, GS, string>;
 }
 
 /**
@@ -329,6 +331,8 @@ export interface EdgeBuiltInVariables<
   depth?: GraphicValue<EA, ES, GS, Layer>;
   /** Z-index within the depth layer */
   zIndex?: GraphicValue<EA, ES, GS, number>;
+  /** CSS cursor to show when hovering this edge */
+  cursor?: GraphicValue<EA, ES, GS, string>;
 }
 
 /**
@@ -584,6 +588,52 @@ export type EdgeStyles<
  * - NodeProgramVariables: Additional variables exposed by node program layers
  * - EdgeProgramVariables: Additional variables exposed by edge program layers
  */
+/**
+ * Stage style predicate: matches against graph state flags.
+ */
+export type StagePredicate<GS extends BaseGraphState = BaseGraphState> =
+  | keyof GS
+  | readonly (keyof GS)[]
+  | Partial<GS>
+  | ((graphState: GS) => boolean);
+
+/**
+ * Stage style inline conditional.
+ */
+export interface StageInlineConditional<GS extends BaseGraphState, T> {
+  when: StagePredicate<GS>;
+  then: T | ((graphState: GS) => T);
+  else?: T | ((graphState: GS) => T);
+}
+
+/**
+ * Value type for stage style properties.
+ * Supports direct values, graph-state functions, and inline conditionals.
+ */
+export type StageStyleValue<GS extends BaseGraphState, T> = T | ((graphState: GS) => T) | StageInlineConditional<GS, T>;
+
+/**
+ * Built-in stage style properties.
+ */
+export interface StageStyleProperties<GS extends BaseGraphState = BaseGraphState> {
+  /** CSS cursor on the stage (used as fallback when no item is hovered) */
+  cursor?: StageStyleValue<GS, string>;
+  /** Stage background color */
+  background?: StageStyleValue<GS, string>;
+}
+
+/**
+ * A stage style rule: either a conditional block or a direct properties object.
+ */
+export type StageStyleRule<GS extends BaseGraphState = BaseGraphState> =
+  | { when: StagePredicate<GS>; then: StageStyleProperties<GS>; else?: StageStyleProperties<GS> }
+  | StageStyleProperties<GS>;
+
+/**
+ * Stage styles declaration: a single rule or an array of rules.
+ */
+export type StageStyles<GS extends BaseGraphState = BaseGraphState> = StageStyleRule<GS> | StageStyleRule<GS>[];
+
 export interface StylesDeclaration<
   NA extends Attributes = Attributes,
   EA extends Attributes = Attributes,
@@ -595,6 +645,7 @@ export interface StylesDeclaration<
 > {
   nodes?: NodeStyles<NA, NS, GS, NodeProgramVariables>;
   edges?: EdgeStyles<EA, ES, GS, EdgeProgramVariables>;
+  stage?: StageStyles<GS>;
 }
 
 /**

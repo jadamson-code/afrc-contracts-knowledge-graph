@@ -29,6 +29,12 @@ These are the built-in style properties available for nodes:
 | `opacity`    | `number`                | Opacity from 0 (transparent) to 1 (opaque) |
 | `visibility` | `"visible" \| "hidden"` | Whether the node is visible                |
 
+### Interaction
+
+| Property | Type     | Description                                          |
+| -------- | -------- | ---------------------------------------------------- |
+| `cursor` | `string` | CSS cursor to show when hovering (e.g. `"pointer"`)  |
+
 ### Ordering
 
 | Property | Type     | Description                                                                      |
@@ -85,6 +91,12 @@ Backdrops render a background shape behind nodes and their labels, typically use
 | `parallelPath`   | `string`                | Path type override for parallel edges                                                    |
 | `parallelSpread` | `number`                | Spread factor for parallel edge separation (default: `0.25`)                             |
 
+### Interaction
+
+| Property | Type     | Description                                        |
+| -------- | -------- | -------------------------------------------------- |
+| `cursor` | `string` | CSS cursor to show when hovering (e.g. `"pointer"`) |
+
 ### Ordering
 
 | Property | Type     | Description                     |
@@ -103,6 +115,29 @@ Backdrops render a background shape behind nodes and their labels, typically use
 | `labelVisibility` | `"auto" \| "visible" \| "hidden"`        | Label visibility mode              |
 | `labelPosition`   | `"over" \| "above" \| "below" \| "auto"` | Position relative to the edge path |
 | `labelDepth`      | `string`                                 | Depth layer for label rendering    |
+
+## Stage style properties
+
+Stage styles apply to the sigma container itself. Unlike node and edge styles, stage styles only support [graph state](/reference/style-value-types/) conditionals (not attribute bindings).
+
+| Property     | Type     | Description                                           |
+| ------------ | -------- | ----------------------------------------------------- |
+| `cursor`     | `string` | CSS cursor on the stage (fallback when nothing hovered) |
+| `background` | `string` | Stage background color                                |
+
+Stage styles support the same rule-level conditionals as nodes/edges, but predicates match against **graph state** flags (e.g. `isDragging`, `hasHovered`):
+
+```typescript
+const renderer = new Sigma(graph, container, {
+  styles: {
+    nodes: { cursor: "grab" },
+    stage: {
+      when: "isDragging",
+      then: { cursor: "grabbing" },
+    },
+  },
+});
+```
 
 ## Custom variables
 

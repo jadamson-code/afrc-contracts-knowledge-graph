@@ -74,6 +74,7 @@ export interface DisplayData {
   zIndex: number;
   depth: string;
   labelDepth: string;
+  cursor?: string;
 }
 
 export interface NodeDisplayData extends Coordinates, DisplayData {
@@ -375,6 +376,8 @@ export type {
   DirectAttributeBinding,
   NumericalAttributeBinding,
   GraphicValue,
+  StageStyleValue,
+  StageStyles,
 } from "./types/styles";
 export { DEFAULT_STYLES } from "./types/styles";
 export {
@@ -384,7 +387,13 @@ export {
   evaluateEdgeStyle,
   analyzeStyleDeclaration,
 } from "./core/styles";
-export type { ResolvedNodeStyle, ResolvedEdgeStyle, StyleDependency, StyleAnalysis } from "./core/styles";
+export type {
+  ResolvedNodeStyle,
+  ResolvedEdgeStyle,
+  ResolvedStageStyle,
+  StyleDependency,
+  StyleAnalysis,
+} from "./core/styles";
 
 /**
  * Primitives API:

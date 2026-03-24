@@ -29,13 +29,23 @@
     styles: {
       nodes: [
         DEFAULT_STYLES.nodes,
-        { size: (attributes) => attributes.size / 2 },
+        {
+          size: (attributes) => attributes.size / 2,
+          cursor: "grab",
+        },
         {
           when: "isDragged",
           then: {
             labelVisibility: "visible",
             backdropVisibility: "visible",
+            cursor: "grabbing",
           },
+        },
+      ],
+      stage: [
+        {
+          when: "isDragging",
+          then: { cursor: "grabbing" },
         },
       ],
     },

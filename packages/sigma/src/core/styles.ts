@@ -20,6 +20,9 @@ import {
   GraphicValue,
   InlineConditional,
   NumericalAttributeBinding,
+  type StageInlineConditional,
+  type StagePredicate,
+  type StageStyleValue,
   StatePredicate,
   ValueFunction,
   isAttributeBinding,
@@ -426,6 +429,7 @@ export interface ResolvedNodeStyle {
   backdropArea: "both" | "node" | "label";
   labelAttachment: string | null;
   labelAttachmentPlacement: "below" | "above" | "left" | "right";
+  cursor?: string;
   // Additional program-declared variables stored here
   [key: string]: unknown;
 }
@@ -453,6 +457,7 @@ export interface ResolvedEdgeStyle {
   labelVisibility: "auto" | "visible" | "hidden";
   labelPosition: number | "over" | "above" | "below" | "auto";
   labelDepth: string;
+  cursor?: string;
   // Additional program-declared variables stored here
   [key: string]: unknown;
 }
@@ -677,6 +682,89 @@ function applyEdgeStyleRule<EA extends Attributes, ES extends BaseEdgeState, GS 
       graphState,
       graph,
       defaultValue,
+    );
+  }
+}
+
+/**
+ * Resolved stage style values.
+ */
+export interface ResolvedStageStyle {
+  cursor?: string;
+  background?: string;
+}
+
+/**
+ * Resolves a single StageStyleValue to a concrete value.
+ */
+function resolveStageStyleValue<GS extends BaseGraphState, T>(
+  value: StageStyleValue<GS, T> | undefined,
+  graphState: GS,
+  defaultValue?: T,
+): T | undefined {
+  if (value === undefined || value === null) return defaultValue;
+  if (typeof value === "function") return (value as (gs: GS) => T)(graphState) ?? defaultValue;
+  if (typeof value === "object" && "when" in value) {
+    const cond = value as StageInlineConditional<GS, T>;
+    const matches = evaluateStagePredicate(cond.when, graphState);
+    const branch = matches ? cond.then : cond.else;
+    if (branch === undefined) return defaultValue;
+    if (typeof branch === "function") return (branch as (gs: GS) => T)(graphState) ?? defaultValue;
+    return branch ?? defaultValue;
+  }
+  return (value as T) ?? defaultValue;
+}
+
+/**
+ * Evaluates a stage predicate against graph state.
+ */
+function evaluateStagePredicate<GS extends BaseGraphState>(predicate: StagePredicate<GS>, graphState: GS): boolean {
+  if (typeof predicate === "function") return predicate(graphState);
+  if (typeof predicate === "string") return graphState[predicate as keyof GS] === true;
+  if (Array.isArray(predicate)) return predicate.every((flag) => graphState[flag as keyof GS] === true);
+  if (typeof predicate === "object" && predicate !== null) {
+    return Object.entries(predicate).every(([key, value]) => graphState[key as keyof GS] === value);
+  }
+  return false;
+}
+
+/**
+ * Evaluates a complete stage style declaration.
+ */
+export function evaluateStageStyle<GS extends BaseGraphState>(
+  styleDeclaration: Record<string, unknown> | Record<string, unknown>[] | undefined,
+  graphState: GS,
+): ResolvedStageStyle {
+  const result: ResolvedStageStyle = {};
+  if (!styleDeclaration) return result;
+
+  const rules = Array.isArray(styleDeclaration) ? styleDeclaration : [styleDeclaration];
+
+  for (const rule of rules) {
+    if ("when" in rule && "then" in rule) {
+      const matches = evaluateStagePredicate(rule.when as StagePredicate<GS>, graphState);
+      const branch = matches ? rule.then : rule.else;
+      if (branch && typeof branch === "object") {
+        applyStageStyleRule(result, branch as Record<string, unknown>, graphState);
+      }
+    } else {
+      applyStageStyleRule(result, rule, graphState);
+    }
+  }
+
+  return result;
+}
+
+function applyStageStyleRule<GS extends BaseGraphState>(
+  result: ResolvedStageStyle,
+  rule: Record<string, unknown>,
+  graphState: GS,
+): void {
+  for (const [key, value] of Object.entries(rule)) {
+    if (key === "when" || key === "then" || key === "else") continue;
+    (result as Record<string, unknown>)[key] = resolveStageStyleValue(
+      value as StageStyleValue<GS, unknown>,
+      graphState,
     );
   }
 }

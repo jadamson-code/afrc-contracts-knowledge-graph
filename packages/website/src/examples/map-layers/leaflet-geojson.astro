@@ -14,26 +14,57 @@
   import Graph from "graphology";
   import L from "leaflet";
   import Sigma from "sigma";
+  import { DEFAULT_STYLES } from "sigma/types";
 
   const container = document.getElementById("sigma-container") as HTMLElement;
   const graph = new Graph();
-  graph.addNode("b-cycle-51", { x: 0, y: 0, lat: 39.7471494, lng: -104.9998241, size: 20, color: "#e22352" });
-  graph.addNode("b-cycle-52", { x: 0, y: 0, lat: 39.7502833, lng: -104.9983545, size: 20, color: "#e22352" });
-  graph.addEdge("b-cycle-51", "b-cycle-52");
+  graph.addNode("paris", { x: 0, y: 0, lat: 48.8566, lng: 2.3522, label: "Paris" });
+  graph.addNode("london", { x: 0, y: 0, lat: 51.5074, lng: -0.1278, label: "London" });
+  graph.addEdge("paris", "london");
 
-  const renderer = new Sigma(graph, container);
+  const renderer = new Sigma(graph, container, {
+    settings: {
+      labelRenderedSizeThreshold: 0,
+    },
+    styles: {
+      nodes: [DEFAULT_STYLES.nodes, { color: "black", size: 0.004 }],
+      edges: [DEFAULT_STYLES.edges, { color: "black", size: 0.001 }],
+    },
+  });
   const { map } = bindLeafletLayer(renderer);
 
+  // Approximate Channel Tunnel route as inline GeoJSON
+  const channelTunnelGeoJSON: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [1.8, 50.93],
+            [1.6, 50.95],
+            [1.4, 50.97],
+            [1.3, 50.98],
+            [1.2, 50.99],
+            [1.1, 51.0],
+            [1.0, 51.01],
+            [0.9, 51.02],
+          ],
+        },
+        properties: { name: "Channel Tunnel (approximate)" },
+      },
+    ],
+  };
+
   // Add GeoJSON layer to the map
-  const geojsonRes = await fetch("/data/sample-geojson.json");
-  const geojson = await geojsonRes.json();
-  L.geoJSON(geojson as FeatureCollection).addTo(map);
+  L.geoJSON(channelTunnelGeoJSON).addTo(map);
 
   // Click on the stage to place a marker
   let markerOnClick: null | L.Marker = null;
   renderer.on("clickStage", (e) => {
     const graphCoords = renderer.viewportToGraph({ x: e.event.x, y: e.event.y });
-    const geoCoords = graphToLatlng(map, graphCoords);
+    const geoCoords = graphToLatlng(graphCoords);
     if (markerOnClick) markerOnClick.remove();
     markerOnClick = L.marker(geoCoords);
     markerOnClick.addTo(map);

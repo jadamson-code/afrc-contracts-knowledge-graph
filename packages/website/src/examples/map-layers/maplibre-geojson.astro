@@ -14,6 +14,7 @@
   import { Marker } from "maplibre-gl";
   import Sigma from "sigma";
   import { DEFAULT_STYLES } from "sigma/types";
+  import type { FeatureCollection } from "geojson";
 
   const container = document.getElementById("sigma-container") as HTMLElement;
   const graph = new Graph();
@@ -22,13 +23,13 @@
   graph.addEdge("paris", "london");
 
   // Approximate Channel Tunnel route as inline GeoJSON
-  const channelTunnelGeoJSON = {
-    type: "FeatureCollection" as const,
+  const channelTunnelGeoJSON: FeatureCollection = {
+    type: "FeatureCollection",
     features: [
       {
-        type: "Feature" as const,
+        type: "Feature",
         geometry: {
-          type: "LineString" as const,
+          type: "LineString",
           coordinates: [
             [1.8, 50.93],
             [1.6, 50.95],

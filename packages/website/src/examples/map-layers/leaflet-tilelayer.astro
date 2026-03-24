@@ -11,6 +11,7 @@
 <script>
   import bindLeafletLayer from "@sigma/layer-leaflet";
   import Graph from "graphology";
+  import { nodeExtent } from "graphology-metrics/graph";
   import type { Attributes, SerializedGraph } from "graphology-types";
   import Sigma from "sigma";
   import { DEFAULT_STYLES } from "sigma/types";
@@ -20,26 +21,36 @@
   const res = await fetch("/data/airports.json");
   const data = await res.json();
   const graph = Graph.from(data as SerializedGraph);
-  graph.updateEachNodeAttributes((_node, attributes) => ({
+  graph.updateEachNodeAttributes((node, attributes) => ({
     ...attributes,
     label: attributes.fullName,
+    degree: graph.degree(node),
     x: 0,
     y: 0,
   }));
 
+  const [minDegree, maxDegree] = nodeExtent(graph, "degree");
   const renderer = new Sigma(graph, container, {
     settings: {
       labelRenderedSizeThreshold: 20,
       minEdgeThickness: 1,
     },
     styles: {
-      nodes: [DEFAULT_STYLES.nodes, { color: "#e22352" }],
-      edges: [DEFAULT_STYLES.edges, { color: "#ffaeaf" }],
+      edges: [DEFAULT_STYLES.edges, { color: "#ffaeaf", size: 0.0001 }],
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          color: "#e22352",
+          size: {
+            attribute: "degree",
+            min: 0.001,
+            max: 0.005,
+            minValue: minDegree,
+            maxValue: maxDegree,
+          },
+        },
+      ],
     },
-    nodeReducer: (node, data) => ({
-      ...data,
-      size: Math.sqrt(graph.degree(node)) * 5,
-    }),
   });
 
   bindLeafletLayer(renderer, {

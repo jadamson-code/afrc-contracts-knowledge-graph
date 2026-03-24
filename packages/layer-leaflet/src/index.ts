@@ -1,10 +1,11 @@
 /** @module @sigma/layer-leaflet */
+import { getCameraStateToFitViewportToNodes } from "@sigma/utils";
 import Graph from "graphology";
 import { Attributes } from "graphology-types";
-import L, { MapOptions } from "leaflet";
+import { LatLngBounds, MapOptions, TileLayer, latLng, map as leafletMap } from "leaflet";
 import { Sigma } from "sigma";
 
-import { graphToLatlng, latlngToGraph, setSigmaRatioBounds, syncMapWithSigma, syncSigmaWithMap } from "./utils";
+import { graphToLatlng, latlngToGraph } from "./utils";
 
 /**
  * On the graph, we store the 2D projection of the geographical lat/long.
@@ -17,7 +18,20 @@ import { graphToLatlng, latlngToGraph, setSigmaRatioBounds, syncMapWithSigma, sy
 export default function bindLeafletLayer(
   sigma: Sigma,
   opts?: {
-    mapOptions?: Omit<MapOptions, "zoomControl" | "zoomSnap" | "zoom" | "maxZoom">;
+    mapOptions?: Omit<
+      MapOptions,
+      | "zoomControl"
+      | "zoomSnap"
+      | "zoom"
+      | "maxZoom"
+      | "zoomAnimation"
+      | "dragging"
+      | "scrollWheelZoom"
+      | "doubleClickZoom"
+      | "touchZoom"
+      | "boxZoom"
+      | "keyboard"
+    >;
     tileLayer?: { urlTemplate: string; attribution?: string };
     getNodeLatLng?: (nodeAttributes: Attributes) => { lat: number; lng: number };
   },
@@ -25,55 +39,23 @@ export default function bindLeafletLayer(
   // Keeping data for the cleanup
   let isKilled = false;
   const prevSigmaSettings = sigma.getSettings();
-
-  // Creating map container
-  const mapLayerName = "layer-leaflet";
-  const mapContainer = sigma.createLayer(mapLayerName, "div", {
-    style: { position: "absolute", inset: "0", zIndex: "0" },
-    // 'stage' is the first sigma layer
-    beforeLayer: "stage",
-  });
-  sigma.getContainer().prepend(mapContainer);
-
-  // Initialize the map
-  const map = L.map(mapContainer, {
-    ...(opts?.mapOptions || {}),
-    zoomControl: false,
-    zoomSnap: 0,
-    zoom: 0,
-    // we force the maxZoom with a higher tile value so leaflet function are not stuck
-    // in a restricted area. It avoids side effect
-    maxZoom: 20,
-  }).setView([0, 0], 0);
-  let tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-  let tileAttribution: string | undefined =
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-  if (opts?.tileLayer) {
-    tileUrl = opts.tileLayer.urlTemplate;
-    tileAttribution = opts.tileLayer.attribution;
-  }
-  L.tileLayer(tileUrl, { attribution: tileAttribution }).addTo(map);
-
-  let mapIsMoving = false;
-  map.on("move", () => {
-    mapIsMoving = true;
-  });
-  map.on("moveend", () => {
-    mapIsMoving = false;
-  });
+  const prevCustomBBox = sigma.getCustomBBox();
 
   // `stagePadding: 0` is mandatory, so the bbox of the map & Sigma is the same.
   sigma.setSetting("stagePadding", 0);
-
   // disable camera rotation
   sigma.setSetting("enableCameraRotation", false);
 
-  // Function that change the given graph by generating the sigma x,y coords by taking the geo coordinates
-  // and project them in the 2D space of the map
+  // Mercator graph coordinates are in [0,1]. Set customBBox to make
+  // normalization identity, and force a synchronous refresh so the
+  // normalization function is updated before camera constraints are applied.
+  sigma.setCustomBBox({ x: [0, 1], y: [0, 1] });
+
+  // Function that updates graph node positions from geo coordinates to
+  // Mercator [0,1] space
   function updateGraphCoordinates(graph: Graph) {
     graph.updateEachNodeAttributes((_node, attrs) => {
       const coords = latlngToGraph(
-        map,
         opts?.getNodeLatLng ? opts.getNodeLatLng(attrs) : { lat: attrs.lat, lng: attrs.lng },
       );
       return {
@@ -84,42 +66,115 @@ export default function bindLeafletLayer(
     });
   }
 
-  // Function that sync the map with sigma
-  function fnSyncMapWithSigma(firstIteration = false) {
-    syncMapWithSigma(sigma, map, firstIteration);
+  // Update graph coordinates and refresh sigma so normalization is ready
+  updateGraphCoordinates(sigma.getGraph());
+  sigma.refresh();
+
+  // Now that normalization is correct, fit the camera to the graph's
+  // Mercator extent so the initial view frames the nodes.
+  const graph = sigma.getGraph();
+  if (graph.order) {
+    sigma.getCamera().setState(getCameraStateToFitViewportToNodes(sigma, graph.nodes()));
   }
 
-  // Function that sync sigma with map if it's needed
-  function fnSyncSigmaWithMap() {
-    if (!sigma.getCamera().isAnimated() && !mapIsMoving) {
-      // Check that sigma & map are already in sync
-      const southWest = graphToLatlng(map, sigma.viewportToGraph({ x: 0, y: sigma.getDimensions().height }));
-      const northEast = graphToLatlng(map, sigma.viewportToGraph({ x: sigma.getDimensions().width, y: 0 }));
-      const diff = Math.max(
-        map.getBounds().getSouthWest().distanceTo(southWest),
-        map.getBounds().getNorthEast().distanceTo(northEast),
-      );
-      if (diff > 10000 / map.getZoom()) {
-        syncSigmaWithMap(sigma, map);
-      }
+  // Apply camera constraints. cameraPanBoundaries triggers cleanCameraState
+  // which uses graphToViewport — it needs the correct normalization.
+  sigma.setSetting("cameraPanBoundaries", { boundaries: { x: [-1, 2], y: [0, 1] } });
+
+  // Prevent zooming out beyond the world. The max ratio depends on the
+  // viewport aspect ratio: for a square graph, the Y range [0,1] fills the
+  // viewport height when ratio = min(width, height) / height.
+  function updateMaxCameraRatio() {
+    const { width, height } = sigma.getDimensions();
+    sigma.setSetting("maxCameraRatio", Math.min(width, height) / height);
+  }
+  updateMaxCameraRatio();
+
+  // Compute sigma viewport bounds as a Leaflet LatLngBounds
+  function getSigmaViewportBounds(): LatLngBounds {
+    const dims = sigma.getDimensions();
+    const graphBottomLeft = sigma.viewportToGraph({ x: 0, y: dims.height }, { padding: 0 });
+    const graphTopRight = sigma.viewportToGraph({ x: dims.width, y: 0 }, { padding: 0 });
+    return new LatLngBounds(latLng(graphToLatlng(graphBottomLeft)), latLng(graphToLatlng(graphTopRight)));
+  }
+
+  // Creating map container
+  const mapLayerName = "layer-leaflet";
+  const mapContainer = sigma.createLayer(mapLayerName, "div", {
+    style: { position: "absolute", inset: "0", zIndex: "0" },
+    // 'stage' is the first sigma layer
+    beforeLayer: "stage",
+  });
+  sigma.getContainer().prepend(mapContainer);
+
+  // Initialize the map (non-interactive: sigma controls all interaction).
+  // Disable fade/zoom animations to prevent tile blinking: Leaflet sets
+  // newly loaded tiles to opacity 0 and fades them in over 200ms, which
+  // causes visible flicker when fitBounds is called on every sigma render.
+  const map = leafletMap(mapContainer, {
+    ...opts?.mapOptions,
+    zoomControl: false,
+    zoomSnap: 0,
+    // we force the maxZoom with a higher tile value so leaflet function are not stuck
+    // in a restricted area. It avoids side effect
+    maxZoom: 20,
+    zoomAnimation: false,
+    dragging: false,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    touchZoom: false,
+    boxZoom: false,
+    keyboard: false,
+  });
+  map.fitBounds(getSigmaViewportBounds());
+
+  let tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+  let tileAttribution: string | undefined =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  if (opts?.tileLayer) {
+    tileUrl = opts.tileLayer.urlTemplate;
+    tileAttribution = opts.tileLayer.attribution;
+  }
+
+  // Subclass TileLayer to prevent tile blinking on view changes.
+  // Leaflet's default GridLayer listens to viewprereset and calls
+  // _invalidateAll, which destroys every tile and reloads from scratch.
+  // Since we only change the viewport (never the CRS), this is unnecessary
+  // and causes a visible blink. The other handlers (viewreset, zoom,
+  // moveend) still run and handle tile updates gracefully.
+  class SmoothTileLayer extends TileLayer {
+    getEvents() {
+      const events = super.getEvents!();
+      delete events.viewprereset;
+      return events;
     }
   }
+  new SmoothTileLayer(tileUrl, { attribution: tileAttribution }).addTo(map);
 
-  // When sigma is resize, we need to update the graph coordinate (the ref has changed)
-  // and recompute the zoom bounds
+  // Camera state memoization to skip redundant fitBounds calls
+  let lx = NaN,
+    ly = NaN,
+    lr = NaN,
+    la = NaN;
+
+  // Sync map bounds to match sigma's viewport
+  function syncMapFromSigma() {
+    const { x, y, ratio, angle } = sigma.getCamera().getState();
+    if (x === lx && y === ly && ratio === lr && angle === la) return;
+    lx = x;
+    ly = y;
+    lr = ratio;
+    la = angle;
+
+    map.fitBounds(getSigmaViewportBounds(), { animate: false });
+  }
+
+  // When sigma is resized, resize the map, recompute zoom limit, and re-sync
   function fnOnResize() {
-    // Ask the map to resize
-    // NB: resize can change the center of the map, and we want to keep it
-    const center = map.getCenter();
-    map.invalidateSize({ pan: false, animate: false, duration: 0 });
-    map.setView(center);
-
-    // Map ref has changed, we need to update the graph coordinates & bounds
-    updateGraphCoordinates(sigma.getGraph());
-    setSigmaRatioBounds(sigma, map);
-
-    // Do the sync
-    fnSyncSigmaWithMap();
+    map.invalidateSize({ pan: false, animate: false });
+    updateMaxCameraRatio();
+    lx = NaN;
+    syncMapFromSigma();
   }
 
   // Clean up function to remove everything
@@ -131,36 +186,23 @@ export default function bindLeafletLayer(
 
       sigma.killLayer(mapLayerName);
 
-      sigma.off("afterRender", fnSyncMapWithSigma);
+      sigma.off("afterRender", syncMapFromSigma);
       sigma.off("resize", fnOnResize);
+      sigma.off("kill", clean);
 
       // Reset settings
       sigma.setSetting("stagePadding", prevSigmaSettings.stagePadding);
       sigma.setSetting("enableCameraRotation", prevSigmaSettings.enableCameraRotation);
-      sigma.setSetting("minCameraRatio", prevSigmaSettings.minCameraRatio);
       sigma.setSetting("maxCameraRatio", prevSigmaSettings.maxCameraRatio);
+      sigma.setSetting("cameraPanBoundaries", prevSigmaSettings.cameraPanBoundaries);
+      sigma.setCustomBBox(prevCustomBBox);
     }
   }
 
-  // When the map is ready
+  // When the map is ready, start syncing
   map.whenReady(() => {
-    // Update the sigma graph for geospatial coords
-    updateGraphCoordinates(sigma.getGraph());
-
-    // Do the first sync
-    fnSyncMapWithSigma(true);
-
-    // Compute sigma ratio bounds
-    map.once("moveend", () => {
-      setSigmaRatioBounds(sigma, map);
-      fnSyncSigmaWithMap();
-    });
-
-    // At each render of sigma, we do the map sync
-    sigma.on("afterRender", fnSyncMapWithSigma);
-    // Listen on resize
+    sigma.on("afterRender", syncMapFromSigma);
     sigma.on("resize", fnOnResize);
-    // Do the cleanup
     sigma.on("kill", clean);
   });
 

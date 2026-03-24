@@ -36,6 +36,9 @@
       "index.ts"
     ]
   },
+  "dependencies": {
+    "@sigma/utils": ">=3.0.0"
+  },
   "peerDependencies": {
     "leaflet": "^1.9.4",
     "sigma": ">=3.0.0-beta.10"

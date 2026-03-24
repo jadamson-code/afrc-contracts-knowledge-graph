@@ -35,11 +35,15 @@ The same concept using MapLibre GL as the map provider. The `mapOptions` object 
 
 <SigmaExample id="map-layers/maplibre-basic" height="400px" />
 
-## Custom tile layer
+## Custom map styles
 
-By default, `@sigma/layer-leaflet` uses OpenStreetMap tiles. You can provide a different tile source via the `tileLayer` option:
+Both map layers support custom styling. For Leaflet, you can provide a different tile source via the `tileLayer` option:
 
 <SigmaExample id="map-layers/leaflet-tilelayer" height="400px" />
+
+For MapLibre, pass a custom `style` object through `mapOptions`:
+
+<SigmaExample id="map-layers/maplibre-styles" height="400px" />
 
 ## GeoJSON overlays
 
@@ -48,14 +52,6 @@ Combining graph nodes with GeoJSON polygon overlays:
 <SigmaExample id="map-layers/leaflet-geojson" height="400px" />
 
 <SigmaExample id="map-layers/maplibre-geojson" height="400px" />
-
-## Resizing
-
-The map and sigma stay synchronized when the container is resized:
-
-<SigmaExample id="map-layers/leaflet-resize" height="400px" />
-
-<SigmaExample id="map-layers/maplibre-resize" height="400px" />
 
 ## Cleanup
 
@@ -75,3 +71,11 @@ clean();
 - **Camera rotation is disabled** while the map layer is active.
 - **Stage padding is set to 0** so that sigma and the map share the same bounding box.
 - Both constraints are restored when you call `clean()`.
+
+## Precision at high zoom levels
+
+The map layers use a fixed [Web Mercator](https://en.wikipedia.org/wiki/Web_Mercator_projection) coordinate space covering the entire world. When your graph nodes are clustered in a small geographic area and you zoom in deeply, the WebGL shaders may produce visual artifacts due to **float32 precision limits** — nodes and edges can appear to jitter or misalign.
+
+This affects both `@sigma/layer-leaflet` and `@sigma/layer-maplibre`.
+
+To minimize precision issues, design your graph so that nodes span a reasonably large portion of the world map rather than being concentrated in a very small area. For graphs that cover a city block or less, consider whether a geographic map layer is the right fit.

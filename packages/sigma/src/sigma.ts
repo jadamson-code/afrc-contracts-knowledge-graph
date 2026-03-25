@@ -1634,6 +1634,7 @@ export default class Sigma<
     }
 
     // Render WebGL labels (programs handle two-pass rendering internally)
+    this.labelProgram.invalidateBuffers();
     this.labelProgram.render(params);
   }
 
@@ -1742,6 +1743,7 @@ export default class Sigma<
       this.backdropProgram.processBackdrop(i, backdropData);
     }
 
+    this.backdropProgram.invalidateBuffers();
     this.backdropProgram.render(params);
   }
 
@@ -1836,6 +1838,7 @@ export default class Sigma<
     // Set atlas texture and render
     this.attachmentProgram.reallocateAttachments(validCount);
     this.attachmentManager.bindTexture(ATTACHMENT_TEXTURE_UNIT);
+    this.attachmentProgram.invalidateBuffers();
     this.attachmentProgram.render(params);
   }
 
@@ -1985,6 +1988,7 @@ export default class Sigma<
     }
 
     // Render WebGL edge labels
+    this.edgeLabelProgram.invalidateBuffers();
     this.edgeLabelProgram.render(params);
 
     this.displayedEdgeLabels = displayedLabels;
@@ -2776,6 +2780,7 @@ export default class Sigma<
     // Get the node's texture index (already allocated during processing)
     const textureIndex = this.nodeDataTexture!.getIndex(node);
     this.nodeProgram!.process(fingerprint, position, data, textureIndex, node);
+    this.nodeProgram!.invalidateBuffers();
     // Saving program index
     this.nodeProgramIndex[node] = position;
   }
@@ -2870,6 +2875,7 @@ export default class Sigma<
     );
 
     this.edgeProgram!.process(fingerprint, position, sourceData, targetData, data, edgeTextureIndex);
+    this.edgeProgram!.invalidateBuffers();
     // Saving program index
     this.edgeProgramIndex[edge] = position;
   }

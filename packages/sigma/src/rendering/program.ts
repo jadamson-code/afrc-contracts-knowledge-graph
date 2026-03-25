@@ -74,6 +74,13 @@ export abstract class Program<
   writeCount = 0;
   bytesWritten = 0;
 
+  // Generation counter for buffer invalidation: incremented when array data
+  // changes, tracked per GL buffer to know which ones need re-upload.
+  private bufferGeneration = 0;
+  private uploadedGeneration: Map<WebGLBuffer, number> = new Map();
+  private constantBufferGeneration = 0;
+  private uploadedConstantGeneration: Map<WebGLBuffer, number> = new Map();
+
   protected renderOffset = 0;
   protected renderCount = -1;
 
@@ -211,27 +218,36 @@ export abstract class Program<
 
       offset = 0;
       this.ATTRIBUTES.forEach((attr) => (offset += this.bindAttribute(attr, program, offset)));
-      gl.bufferData(gl.ARRAY_BUFFER, this.array, gl.DYNAMIC_DRAW);
-      this.writeCount++;
-      this.bytesWritten += this.array.byteLength;
+      if (this.uploadedGeneration.get(buffer) !== this.bufferGeneration) {
+        gl.bufferData(gl.ARRAY_BUFFER, this.array, gl.DYNAMIC_DRAW);
+        this.uploadedGeneration.set(buffer, this.bufferGeneration);
+        this.writeCount++;
+        this.bytesWritten += this.array.byteLength;
+      }
     } else {
       // Handle constant data (things that remain unchanged for all items):
       gl.bindBuffer(gl.ARRAY_BUFFER, program.constantBuffer);
 
       offset = 0;
       this.CONSTANT_ATTRIBUTES.forEach((attr) => (offset += this.bindAttribute(attr, program, offset, false)));
-      gl.bufferData(gl.ARRAY_BUFFER, this.constantArray, gl.STATIC_DRAW);
-      this.writeCount++;
-      this.bytesWritten += this.constantArray.byteLength;
+      if (this.uploadedConstantGeneration.get(program.constantBuffer) !== this.constantBufferGeneration) {
+        gl.bufferData(gl.ARRAY_BUFFER, this.constantArray, gl.STATIC_DRAW);
+        this.uploadedConstantGeneration.set(program.constantBuffer, this.constantBufferGeneration);
+        this.writeCount++;
+        this.bytesWritten += this.constantArray.byteLength;
+      }
 
       // Handle "instance specific" data (things that vary for each item):
       gl.bindBuffer(gl.ARRAY_BUFFER, program.buffer);
 
       offset = this.renderOffset * this.ATTRIBUTES_ITEMS_COUNT * Float32Array.BYTES_PER_ELEMENT;
       this.ATTRIBUTES.forEach((attr) => (offset += this.bindAttribute(attr, program, offset, true)));
-      gl.bufferData(gl.ARRAY_BUFFER, this.array, gl.DYNAMIC_DRAW);
-      this.writeCount++;
-      this.bytesWritten += this.array.byteLength;
+      if (this.uploadedGeneration.get(buffer) !== this.bufferGeneration) {
+        gl.bufferData(gl.ARRAY_BUFFER, this.array, gl.DYNAMIC_DRAW);
+        this.uploadedGeneration.set(buffer, this.bufferGeneration);
+        this.writeCount++;
+        this.bytesWritten += this.array.byteLength;
+      }
     }
 
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
@@ -302,6 +318,16 @@ export abstract class Program<
         ? this.verticesCount * this.ATTRIBUTES_ITEMS_COUNT
         : this.capacity * this.ATTRIBUTES_ITEMS_COUNT,
     );
+    this.invalidateBuffers();
+  }
+
+  /**
+   * Mark GPU buffers as needing re-upload. Call this after modifying
+   * the array data outside of reallocate.
+   */
+  invalidateBuffers(): void {
+    this.bufferGeneration++;
+    this.constantBufferGeneration++;
   }
 
   hasNothingToRender(): boolean {

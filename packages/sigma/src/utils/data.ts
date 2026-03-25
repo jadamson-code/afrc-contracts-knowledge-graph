@@ -33,3 +33,16 @@ export function assign<T>(target: Partial<T> | undefined, ...objects: Array<Part
 
   return target as T;
 }
+
+/**
+ * Returns true if any own property of `partial` differs (strict equality)
+ * from the corresponding property in `current`. Uses for...in for speed
+ * and short-circuits on the first difference.
+ */
+export function hasNewPartialProps<T extends Record<string, unknown>>(current: T, partial: Partial<T>): boolean {
+  for (const k in partial) {
+    if (!Object.prototype.hasOwnProperty.call(partial, k)) continue;
+    if (partial[k] !== current[k]) return true;
+  }
+  return false;
+}

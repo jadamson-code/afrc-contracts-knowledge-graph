@@ -105,6 +105,7 @@ import {
   getMatrixImpact,
   getPixelColor,
   getPixelRatio,
+  hasNewPartialProps,
   identity,
   matrixFromCamera,
   multiplyVec2,
@@ -3320,6 +3321,8 @@ export default class Sigma<
    */
   setNodeState(key: string, state: Partial<BaseNodeState> | Partial<FullNodeState<NS>>): this {
     const currentState = this.getNodeState(key);
+    if (!hasNewPartialProps(currentState as Record<string, unknown>, state as Record<string, unknown>)) return this;
+
     const newState = { ...currentState, ...state };
     this.nodeStates.set(key, newState);
 
@@ -3344,6 +3347,8 @@ export default class Sigma<
    */
   setEdgeState(key: string, state: Partial<BaseEdgeState> | Partial<FullEdgeState<ES>>): this {
     const currentState = this.getEdgeState(key);
+    if (!hasNewPartialProps(currentState as Record<string, unknown>, state as Record<string, unknown>)) return this;
+
     const newState = { ...currentState, ...state };
     this.edgeStates.set(key, newState);
 
@@ -3366,10 +3371,11 @@ export default class Sigma<
    * @return {this}
    */
   setGraphState(state: Partial<BaseGraphState> | Partial<FullGraphState<GS>>): this {
+    if (!hasNewPartialProps(this.graphState as Record<string, unknown>, state as Record<string, unknown>)) return this;
+
     this.graphState = { ...this.graphState, ...state };
     this.graphStateChanged = true;
 
-    // Re-evaluate styles in-place (no reprocess)
     this.scheduleStateRefresh();
 
     return this;
@@ -3383,16 +3389,21 @@ export default class Sigma<
    * @return {this}
    */
   setNodesState(keys: string[], state: Partial<BaseNodeState> | Partial<FullNodeState<NS>>): this {
+    let changed = false;
     for (const key of keys) {
       const currentState = this.getNodeState(key);
+      if (!hasNewPartialProps(currentState as Record<string, unknown>, state as Record<string, unknown>)) continue;
       const newState = { ...currentState, ...state };
       this.nodeStates.set(key, newState);
       this.dirtyNodes.add(key);
       this.updateHoveredNodeTracking(key, currentState, newState);
+      changed = true;
     }
 
-    this.graphStateFlagsDirty = true;
-    this.scheduleStateRefresh();
+    if (changed) {
+      this.graphStateFlagsDirty = true;
+      this.scheduleStateRefresh();
+    }
 
     return this;
   }
@@ -3405,16 +3416,21 @@ export default class Sigma<
    * @return {this}
    */
   setEdgesState(keys: string[], state: Partial<BaseEdgeState> | Partial<FullEdgeState<ES>>): this {
+    let changed = false;
     for (const key of keys) {
       const currentState = this.getEdgeState(key);
+      if (!hasNewPartialProps(currentState as Record<string, unknown>, state as Record<string, unknown>)) continue;
       const newState = { ...currentState, ...state };
       this.edgeStates.set(key, newState);
       this.dirtyEdges.add(key);
       this.updateHoveredEdgeTracking(key, currentState, newState);
+      changed = true;
     }
 
-    this.graphStateFlagsDirty = true;
-    this.scheduleStateRefresh();
+    if (changed) {
+      this.graphStateFlagsDirty = true;
+      this.scheduleStateRefresh();
+    }
 
     return this;
   }

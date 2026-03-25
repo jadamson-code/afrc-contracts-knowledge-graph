@@ -74,6 +74,12 @@ for (const topicKey of topicOrder) {
 }
 ---
 
+<style>
+  .nowrap {
+    white-space: nowrap;
+  }
+</style>
+
 {
   groups.map((group) => (
     <section>
@@ -93,7 +99,7 @@ for (const topicKey of topicOrder) {
               <td>
                 <code>{ex.name}</code>
               </td>
-              <td>
+              <td class="nowrap">
                 <a href={ex.embedUrl}>embed</a>
                 {" · "}
                 <a href={ex.sourceUrl}>source</a>

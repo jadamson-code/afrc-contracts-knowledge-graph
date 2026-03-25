@@ -151,10 +151,10 @@ styles: {
 }
 ```
 
-| Field   | Type                            | Required | Description                                    |
-| ------- | ------------------------------- | -------- | ---------------------------------------------- |
-| `match` | `string`                        | Yes      | Attribute name to read from the element        |
-| `cases` | `Record<string, StyleProperties>` | Yes    | Mapping from attribute values to style blocks  |
+| Field   | Type                              | Required | Description                                   |
+| ------- | --------------------------------- | -------- | --------------------------------------------- |
+| `match` | `string`                          | Yes      | Attribute name to read from the element       |
+| `cases` | `Record<string, StyleProperties>` | Yes      | Mapping from attribute values to style blocks |
 
 If the attribute value doesn't match any case, the rule is skipped. Attribute values are coerced to strings for lookup (so a numeric attribute `2` matches the key `"2"`).
 

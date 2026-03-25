@@ -31,9 +31,9 @@ These are the built-in style properties available for nodes:
 
 ### Interaction
 
-| Property | Type     | Description                                          |
-| -------- | -------- | ---------------------------------------------------- |
-| `cursor` | `string` | CSS cursor to show when hovering (e.g. `"pointer"`)  |
+| Property | Type     | Description                                         |
+| -------- | -------- | --------------------------------------------------- |
+| `cursor` | `string` | CSS cursor to show when hovering (e.g. `"pointer"`) |
 
 ### Ordering
 
@@ -93,8 +93,8 @@ Backdrops render a background shape behind nodes and their labels, typically use
 
 ### Interaction
 
-| Property | Type     | Description                                        |
-| -------- | -------- | -------------------------------------------------- |
+| Property | Type     | Description                                         |
+| -------- | -------- | --------------------------------------------------- |
 | `cursor` | `string` | CSS cursor to show when hovering (e.g. `"pointer"`) |
 
 ### Ordering
@@ -120,10 +120,10 @@ Backdrops render a background shape behind nodes and their labels, typically use
 
 Stage styles apply to the sigma container itself. Unlike node and edge styles, stage styles only support [graph state](/reference/style-value-types/) conditionals (not attribute bindings).
 
-| Property     | Type     | Description                                           |
-| ------------ | -------- | ----------------------------------------------------- |
+| Property     | Type     | Description                                             |
+| ------------ | -------- | ------------------------------------------------------- |
 | `cursor`     | `string` | CSS cursor on the stage (fallback when nothing hovered) |
-| `background` | `string` | Stage background color                                |
+| `background` | `string` | Stage background color                                  |
 
 Stage styles support the same rule-level conditionals as nodes/edges, but predicates match against **graph state** flags (e.g. `isDragging`, `hasHovered`):
 

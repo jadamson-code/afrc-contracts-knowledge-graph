@@ -285,6 +285,7 @@ export default class Sigma<
   private dirtyNodes: Set<string> = new Set();
   private dirtyEdges: Set<string> = new Set();
   private graphStateChanged = false;
+  private graphStateFlagsDirty = false;
 
   // Programs (single program per item kind)
   private nodeProgram: NodeProgram<string, N, E, G> | null = null;
@@ -3302,6 +3303,11 @@ export default class Sigma<
    * @return {FullGraphState<GS>} The graph's state.
    */
   getGraphState(): FullGraphState<GS> {
+    if (this.graphStateFlagsDirty) {
+      this.updateGraphStateFromNodes();
+      this.updateGraphStateFromEdges();
+      this.graphStateFlagsDirty = false;
+    }
     return this.graphState;
   }
 
@@ -3323,10 +3329,7 @@ export default class Sigma<
     // Update hovered node tracking for event system
     this.updateHoveredNodeTracking(key, currentState, newState);
 
-    // Update graph state flags
-    this.updateGraphStateFromNodes();
-
-    // Re-evaluate styles in-place (no reprocess)
+    this.graphStateFlagsDirty = true;
     this.scheduleStateRefresh();
 
     return this;
@@ -3350,10 +3353,7 @@ export default class Sigma<
     // Update hovered edge tracking for event system
     this.updateHoveredEdgeTracking(key, currentState, newState);
 
-    // Update graph state flags
-    this.updateGraphStateFromEdges();
-
-    // Re-evaluate styles in-place (no reprocess)
+    this.graphStateFlagsDirty = true;
     this.scheduleStateRefresh();
 
     return this;
@@ -3391,10 +3391,7 @@ export default class Sigma<
       this.updateHoveredNodeTracking(key, currentState, newState);
     }
 
-    // Update graph state flags once
-    this.updateGraphStateFromNodes();
-
-    // Re-evaluate styles in-place (no reprocess)
+    this.graphStateFlagsDirty = true;
     this.scheduleStateRefresh();
 
     return this;
@@ -3416,10 +3413,7 @@ export default class Sigma<
       this.updateHoveredEdgeTracking(key, currentState, newState);
     }
 
-    // Update graph state flags once
-    this.updateGraphStateFromEdges();
-
-    // Re-evaluate styles in-place (no reprocess)
+    this.graphStateFlagsDirty = true;
     this.scheduleStateRefresh();
 
     return this;
@@ -3721,6 +3715,13 @@ export default class Sigma<
    * items whose styles can't have changed.
    */
   private refreshState(): void {
+    // Recompute graph-level flags from node/edge states (deferred from setState calls)
+    if (this.graphStateFlagsDirty) {
+      this.updateGraphStateFromNodes();
+      this.updateGraphStateFromEdges();
+      this.graphStateFlagsDirty = false;
+    }
+
     const needFullNodeRefresh = this.graphStateChanged && this.nodeStyleAnalysis.dependency === "graph-state";
     const needFullEdgeRefresh = this.graphStateChanged && this.edgeStyleAnalysis.dependency === "graph-state";
 

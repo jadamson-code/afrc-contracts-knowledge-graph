@@ -19,7 +19,7 @@
     "createPackage": "ts-node bin/create-package.ts",
     "postinstall": "preconstruct dev",
     "postpublish": "preconstruct dev",
-    "website:build": "npm run build --workspace=@sigma/website && npm run build --workspace=@sigma/demo && cp -R packages/demo/build packages/website/dist/demo",
+    "website:build": "npm run build --workspace=@sigma/website",
     "prepublishOnly": "npm run test && npm run build && npm run lint"
   },
   "devDependencies": {

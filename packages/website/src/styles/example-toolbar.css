@@ -1,0 +1,58 @@
+/* Shared toolbar for example embeds (used by SigmaExample and homepage demo) */
+
+.example-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 0.75rem;
+  border-top: 1px solid var(--toolbar-border-color, #e0e0e0);
+  background: var(--toolbar-bg, #f5f5f5);
+  font-size: 0.8rem;
+  min-height: 2rem;
+}
+
+/* Left-side controls (tabs or buttons) */
+.example-toolbar-controls {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+}
+.example-toolbar-control {
+  padding: 0 0.75rem;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--toolbar-text-color, #666);
+  border-top: 2px solid transparent;
+}
+.example-toolbar-control.active {
+  color: var(--toolbar-accent-color, #c41e47);
+  border-top-color: var(--toolbar-accent-color, #c41e47);
+}
+.example-toolbar-control[disabled] {
+  color: var(--toolbar-disabled-color, #aaa);
+  cursor: default;
+}
+
+/* Right-side links */
+.example-toolbar-links {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.example-toolbar-sep {
+  width: 1px;
+  height: 0.9em;
+  background: var(--toolbar-border-color, #ccc);
+}
+.example-toolbar-links a {
+  color: var(--toolbar-accent-color, #0369a1);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.example-toolbar-links a:hover {
+  text-decoration: underline;
+}

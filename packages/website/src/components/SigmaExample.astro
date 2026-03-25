@@ -37,28 +37,23 @@ const sourceFirst = defaultTab === "source";
 
 <div class="sigma-example not-content" style={`--panel-height: ${height}`}>
   <div class={`sigma-example-panel sigma-example-result ${sourceFirst ? "" : "active"}`} data-panel="result">
-    <iframe src={`/embed/${id}/?stage-only`} title={`sigma.js example: ${id}`} loading="lazy"
-    ></iframe>
+    <iframe src={`/embed/${id}/?stage-only`} title={`sigma.js example: ${id}`} loading="lazy"></iframe>
   </div>
   <div class={`sigma-example-panel sigma-example-source ${sourceFirst ? "active" : ""}`} data-panel="source">
     <Code code={scriptSource} lang="typescript" />
   </div>
-  <div class="sigma-example-toolbar">
-    <div class="sigma-example-tabs">
-      <button class={`sigma-example-tab ${sourceFirst ? "" : "active"}`} data-tab="result">
-        Result
-      </button>
-      <button class={`sigma-example-tab ${sourceFirst ? "active" : ""}`} data-tab="source">
-        Source
-      </button>
+  <div class="example-toolbar">
+    <div class="example-toolbar-controls">
+      <button class={`example-toolbar-control ${sourceFirst ? "" : "active"}`} data-tab="result"> Result </button>
+      <button class={`example-toolbar-control ${sourceFirst ? "active" : ""}`} data-tab="source"> Source </button>
     </div>
-    <div class="sigma-example-links">
+    <div class="example-toolbar-links">
       <a
         href={`https://github.com/jacomyal/sigma.js/blob/v4/packages/website/src/examples/${id}.astro`}
         target="_blank"
         rel="noopener">View full source on GitHub</a
       >
-      <span class="sigma-example-toolbar-sep"></span>
+      <span class="example-toolbar-sep"></span>
       <a href={`/embed/${id}/`} target="_blank" rel="noopener">Open in new tab</a>
     </div>
   </div>
@@ -66,11 +61,11 @@ const sourceFirst = defaultTab === "source";
 
 <script>
   document.querySelectorAll<HTMLElement>(".sigma-example").forEach((example) => {
-    example.querySelectorAll<HTMLButtonElement>(".sigma-example-tab").forEach((tab) => {
+    example.querySelectorAll<HTMLButtonElement>(".example-toolbar-control").forEach((tab) => {
       tab.addEventListener("click", () => {
         const tabName = tab.dataset.tab!;
         example
-          .querySelectorAll(".sigma-example-tab")
+          .querySelectorAll(".example-toolbar-control")
           .forEach((t) => t.classList.toggle("active", (t as HTMLElement).dataset.tab === tabName));
         example
           .querySelectorAll(".sigma-example-panel")

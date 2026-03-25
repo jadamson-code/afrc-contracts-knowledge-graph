@@ -1,0 +1,138 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import Graph from "graphology";
+  import Sigma from "sigma";
+  import { layerDashed, layerPlain, pathCurved, pathLine, pathLoop } from "sigma/rendering";
+  import { DEFAULT_STYLES } from "sigma/types";
+  import { nodeExtent } from "graphology-metrics/graph/extent";
+
+  function parseCSVRow(line: string): string[] {
+    const fields: string[] = [];
+    let current = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          current += ch;
+        }
+      } else if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ",") {
+        fields.push(current);
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+    fields.push(current);
+    return fields;
+  }
+
+  const [nodesRes, edgesRes] = await Promise.all([fetch("/data/demo-nodes.csv"), fetch("/data/demo-edges.csv")]);
+  const [nodesText, edgesText] = await Promise.all([nodesRes.text(), edgesRes.text()]);
+
+  const nodeLines = nodesText.trim().split("\n").slice(1);
+  const edgeLines = edgesText.trim().split("\n").slice(1);
+
+  // Build graph (multi to support both citation and co-authorship between same nodes)
+  const graph = new Graph({ multi: true, type: "directed" });
+
+  const nodeKeys: string[] = [];
+  for (const line of nodeLines) {
+    const fields = parseCSVRow(line);
+    const key = String(nodeKeys.length);
+    nodeKeys.push(key);
+
+    graph.addNode(key, {
+      label: fields[0],
+      x: parseFloat(fields[1]),
+      y: parseFloat(fields[2]),
+      score: parseFloat(fields[3]),
+      modularityClass: parseInt(fields[4], 10),
+    });
+  }
+
+  for (const line of edgeLines) {
+    const [source, target, type] = line.split(",");
+    if (graph.hasNode(source) && graph.hasNode(target)) {
+      graph.addEdge(source, target, {
+        type: type === "a" ? "coauthored" : "cites",
+      });
+    }
+  }
+
+  const [minScore, maxScore] = nodeExtent(graph, "score");
+
+  new Sigma(graph, document.getElementById("sigma-container") as HTMLElement, {
+    primitives: {
+      edges: {
+        variables: {
+          dashSize: { type: "number", default: 0 },
+          dashColor: { type: "color", default: "transparent" },
+        },
+        paths: [pathLine(), pathCurved(), pathLoop()],
+        layers: [
+          layerPlain(),
+          layerDashed({
+            dashColor: { attribute: "dashColor" },
+            dashSize: { attribute: "dashSize", default: 0, mode: "pixels" },
+            gapSize: { value: 500, mode: "pixels" },
+            gapColor: 0,
+          }),
+        ],
+      },
+    },
+    styles: {
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          color: "#271033",
+          size: {
+            attribute: "score",
+            min: 50,
+            max: 200,
+            minValue: minScore,
+            maxValue: maxScore,
+          },
+        },
+      ],
+      edges: [
+        {
+          path: "straight",
+          parallelPath: "curved",
+          selfLoopPath: "loop",
+          opacity: 0.3,
+          dashSize: 0,
+          size: 10,
+        },
+        {
+          match: "type",
+          cases: {
+            cites: { color: "#FA8334" },
+            coauthored: { dashColor: "#388697", dashSize: 500 },
+          },
+        },
+      ],
+    },
+    settings: {
+      itemSizesReference: "positions",
+      labelDensity: 0.5,
+      labelRenderedSizeThreshold: 6,
+    },
+  });
+</script>

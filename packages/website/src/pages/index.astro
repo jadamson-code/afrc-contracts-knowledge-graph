@@ -46,20 +46,29 @@ import "../styles/homepage.css";
 
       <section class="showcase">
         <div class="wrapper">
-          <iframe allowfullscreen="allowfullscreen" src="/demo/index.html" title="Sigma.js demo" width="100%"></iframe>
+          <iframe
+            allowfullscreen="allowfullscreen"
+            src="/embed/homepage-demo/?stage-only"
+            title="Sigma.js demo"
+            width="100%"></iframe>
           <div class="overlay" tabindex="0">
             <h2><span class="bg">See sigma.js in action</span></h2>
             <div>
-              <span class="bg">Click to explore a network of Wikipedia pages about data visualization.</span>
+              <span class="bg">Click to explore a network of 9,000 of the most-cited AI research papers.</span>
             </div>
           </div>
-        </div>
-        <div class="caption">
-          <div class="links">
-            <a href="/demo/index.html">open demo</a>
-            <a href="https://github.com/jacomyal/sigma.js/tree/main/packages/demo">open demo sources</a>
+          <div class="example-toolbar">
+            <div class="example-toolbar-controls">
+              <button class="example-toolbar-control restore-overlay-button" disabled>Restore overlay</button>
+            </div>
+            <div class="example-toolbar-links">
+              <a href="https://github.com/jacomyal/sigma.js/tree/main/packages/website/src/examples/homepage-demo.astro"
+                >View source on GitHub</a
+              >
+              <span class="example-toolbar-sep"></span>
+              <a href="/embed/homepage-demo/">Open in new tab</a>
+            </div>
           </div>
-          <button class="button button-light restore-overlay-button" disabled>restore overlay over demo</button>
         </div>
       </section>
 

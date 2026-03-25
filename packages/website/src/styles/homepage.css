@@ -1,4 +1,5 @@
 /* Homepage-specific styles (shared styles are in base.css) */
+@import "./example-toolbar.css";
 :root {
   --grid-size: 1000px;
   --grid-h-padding: 2em;
@@ -95,17 +96,6 @@ main {
   border: 2px solid black;
   color: black !important;
 }
-.button.button-light {
-  box-sizing: border-box;
-  background: white;
-  border: 1px solid var(--grey);
-  color: black !important;
-  padding: 0.5em;
-}
-.button[disabled] {
-  color: var(--dark-grey) !important;
-  cursor: default;
-}
 
 /**
  * V4 NOTICE:
@@ -173,33 +163,29 @@ main {
   max-width: var(--showcase-width);
   margin: 0 auto;
   padding: 0 var(--grid-h-padding) 3em;
+
+  --toolbar-border-color: var(--light-grey);
+  --toolbar-bg: var(--cream);
+  --toolbar-text-color: var(--dark-grey);
+  --toolbar-accent-color: var(--ruby);
+  --toolbar-disabled-color: var(--grey);
 }
 .showcase .wrapper {
   position: relative;
   border: var(--border);
   box-sizing: border-box;
-  margin-bottom: 0.5em;
-}
-.showcase .wrapper,
-.showcase iframe {
-  width: 100%;
-  height: var(--showcase-height);
-  max-height: var(--showcase-max-height);
   overflow: hidden;
 }
 .showcase iframe {
+  display: block;
+  width: 100%;
+  height: var(--showcase-height);
+  max-height: var(--showcase-max-height);
   border: none;
 }
-.showcase .caption {
-  font-size: 0.8em;
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: baseline;
-}
-.showcase .caption a {
-  white-space: nowrap;
-  margin-right: 1em;
+.showcase .example-toolbar {
+  position: relative;
+  z-index: 1;
 }
 .showcase .overlay {
   position: absolute;

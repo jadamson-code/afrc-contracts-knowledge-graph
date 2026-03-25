@@ -9,7 +9,14 @@
  */
 import Graph from "graphology";
 import Sigma from "sigma";
-import type { BaseEdgeState, BaseGraphState, BaseNodeState } from "sigma/types";
+import type {
+  BaseEdgeState,
+  BaseGraphState,
+  BaseNodeState,
+  FullEdgeState,
+  FullGraphState,
+  FullNodeState,
+} from "sigma/types";
 import { describe, expectTypeOf, test } from "vitest";
 
 // =============================================================================
@@ -17,26 +24,26 @@ import { describe, expectTypeOf, test } from "vitest";
 // =============================================================================
 
 /**
- * Extended node state with custom properties.
+ * Additional node state with custom properties.
  */
-interface CustomNodeState extends BaseNodeState {
+interface CustomNodeState {
   isSelected: boolean;
   isPinned: boolean;
   customScore: number;
 }
 
 /**
- * Extended edge state with custom properties.
+ * Additional edge state with custom properties.
  */
-interface CustomEdgeState extends BaseEdgeState {
+interface CustomEdgeState {
   isSelected: boolean;
   weight: number;
 }
 
 /**
- * Extended graph state with custom properties.
+ * Additional graph state with custom properties.
  */
-interface CustomGraphState extends BaseGraphState {
+interface CustomGraphState {
   isFiltered: boolean;
   searchQuery: string;
 }
@@ -50,21 +57,21 @@ describe("Default state types", () => {
     const graph = new Graph();
     const sigma = new Sigma(graph, document.createElement("div"));
 
-    // getNodeState returns BaseNodeState
+    // getNodeState returns BaseNodeState (FullNodeState<{}>)
     const nodeState = sigma.getNodeState("n1");
     expectTypeOf(nodeState).toMatchTypeOf<BaseNodeState>();
     expectTypeOf(nodeState.isHovered).toBeBoolean();
     expectTypeOf(nodeState.isHidden).toBeBoolean();
     expectTypeOf(nodeState.isHighlighted).toBeBoolean();
 
-    // getEdgeState returns BaseEdgeState
+    // getEdgeState returns BaseEdgeState (FullEdgeState<{}>)
     const edgeState = sigma.getEdgeState("e1");
     expectTypeOf(edgeState).toMatchTypeOf<BaseEdgeState>();
     expectTypeOf(edgeState.isHovered).toBeBoolean();
     expectTypeOf(edgeState.isHidden).toBeBoolean();
     expectTypeOf(edgeState.isHighlighted).toBeBoolean();
 
-    // getGraphState returns BaseGraphState
+    // getGraphState returns BaseGraphState (FullGraphState<{}>)
     const graphState = sigma.getGraphState();
     expectTypeOf(graphState).toMatchTypeOf<BaseGraphState>();
     expectTypeOf(graphState.isIdle).toBeBoolean();
@@ -86,24 +93,20 @@ describe("Default state types", () => {
 });
 
 // =============================================================================
-// TYPE TESTS: Custom State Types
+// TYPE TESTS: Custom State Types (via explicit generics)
 // =============================================================================
 
-describe("Custom state types", () => {
+describe("Custom state types via explicit generics", () => {
   test("Sigma with custom node state has correctly typed methods", () => {
     const graph = new Graph();
-    const sigma = new Sigma<
-      Record<string, unknown>,
-      Record<string, unknown>,
-      Record<string, unknown>,
-      CustomNodeState,
-      BaseEdgeState,
-      BaseGraphState
-    >(graph, document.createElement("div"));
+    const sigma = new Sigma<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>, CustomNodeState>(
+      graph,
+      document.createElement("div"),
+    );
 
-    // getNodeState returns CustomNodeState
+    // getNodeState returns FullNodeState<CustomNodeState>
     const nodeState = sigma.getNodeState("n1");
-    expectTypeOf(nodeState).toMatchTypeOf<CustomNodeState>();
+    expectTypeOf(nodeState).toMatchTypeOf<FullNodeState<CustomNodeState>>();
     expectTypeOf(nodeState.isSelected).toBeBoolean();
     expectTypeOf(nodeState.isPinned).toBeBoolean();
     expectTypeOf(nodeState.customScore).toBeNumber();
@@ -119,14 +122,13 @@ describe("Custom state types", () => {
       Record<string, unknown>,
       Record<string, unknown>,
       Record<string, unknown>,
-      BaseNodeState,
-      CustomEdgeState,
-      BaseGraphState
+      {},
+      CustomEdgeState
     >(graph, document.createElement("div"));
 
-    // getEdgeState returns CustomEdgeState
+    // getEdgeState returns FullEdgeState<CustomEdgeState>
     const edgeState = sigma.getEdgeState("e1");
-    expectTypeOf(edgeState).toMatchTypeOf<CustomEdgeState>();
+    expectTypeOf(edgeState).toMatchTypeOf<FullEdgeState<CustomEdgeState>>();
     expectTypeOf(edgeState.isSelected).toBeBoolean();
     expectTypeOf(edgeState.weight).toBeNumber();
 
@@ -140,14 +142,14 @@ describe("Custom state types", () => {
       Record<string, unknown>,
       Record<string, unknown>,
       Record<string, unknown>,
-      BaseNodeState,
-      BaseEdgeState,
+      {},
+      {},
       CustomGraphState
     >(graph, document.createElement("div"));
 
-    // getGraphState returns CustomGraphState
+    // getGraphState returns FullGraphState<CustomGraphState>
     const graphState = sigma.getGraphState();
-    expectTypeOf(graphState).toMatchTypeOf<CustomGraphState>();
+    expectTypeOf(graphState).toMatchTypeOf<FullGraphState<CustomGraphState>>();
     expectTypeOf(graphState.isFiltered).toBeBoolean();
     expectTypeOf(graphState.searchQuery).toBeString();
 
@@ -155,22 +157,51 @@ describe("Custom state types", () => {
     expectTypeOf(graphState.isIdle).toBeBoolean();
     expectTypeOf(graphState.hasHovered).toBeBoolean();
   });
+});
 
-  test("Sigma with all custom states has correctly typed methods", () => {
+// =============================================================================
+// TYPE TESTS: Custom State Types (via inference from defaults)
+// =============================================================================
+
+describe("Custom state types via inference from defaults", () => {
+  test("NS is inferred from customNodeState", () => {
     const graph = new Graph();
-    const sigma = new Sigma<
-      Record<string, unknown>,
-      Record<string, unknown>,
-      Record<string, unknown>,
-      CustomNodeState,
-      CustomEdgeState,
-      CustomGraphState
-    >(graph, document.createElement("div"));
+    const sigma = new Sigma(graph, document.createElement("div"), {
+      customNodeState: { isSelected: false, isPinned: false, customScore: 0 },
+    });
 
-    // All custom types are correctly inferred
-    expectTypeOf(sigma.getNodeState("n1")).toMatchTypeOf<CustomNodeState>();
-    expectTypeOf(sigma.getEdgeState("e1")).toMatchTypeOf<CustomEdgeState>();
-    expectTypeOf(sigma.getGraphState()).toMatchTypeOf<CustomGraphState>();
+    const nodeState = sigma.getNodeState("n1");
+    expectTypeOf(nodeState.isSelected).toBeBoolean();
+    expectTypeOf(nodeState.isPinned).toBeBoolean();
+    expectTypeOf(nodeState.customScore).toBeNumber();
+    // Base properties still available
+    expectTypeOf(nodeState.isHovered).toBeBoolean();
+  });
+
+  test("ES is inferred from customEdgeState", () => {
+    const graph = new Graph();
+    const sigma = new Sigma(graph, document.createElement("div"), {
+      customEdgeState: { isSelected: false, weight: 0 },
+    });
+
+    const edgeState = sigma.getEdgeState("e1");
+    expectTypeOf(edgeState.isSelected).toBeBoolean();
+    expectTypeOf(edgeState.weight).toBeNumber();
+    // Base properties still available
+    expectTypeOf(edgeState.isHovered).toBeBoolean();
+  });
+
+  test("GS is inferred from customGraphState", () => {
+    const graph = new Graph();
+    const sigma = new Sigma(graph, document.createElement("div"), {
+      customGraphState: { isFiltered: false, searchQuery: "" },
+    });
+
+    const graphState = sigma.getGraphState();
+    expectTypeOf(graphState.isFiltered).toBeBoolean();
+    expectTypeOf(graphState.searchQuery).toBeString();
+    // Base properties still available
+    expectTypeOf(graphState.isIdle).toBeBoolean();
   });
 });
 
@@ -181,14 +212,9 @@ describe("Custom state types", () => {
 describe("State mutation with custom types", () => {
   test("setNodeState accepts custom state properties", () => {
     const graph = new Graph();
-    const sigma = new Sigma<
-      Record<string, unknown>,
-      Record<string, unknown>,
-      Record<string, unknown>,
-      CustomNodeState,
-      BaseEdgeState,
-      BaseGraphState
-    >(graph, document.createElement("div"));
+    const sigma = new Sigma(graph, document.createElement("div"), {
+      customNodeState: { isSelected: false, isPinned: false, customScore: 0 },
+    });
 
     // Valid custom properties
     sigma.setNodeState("n1", { isSelected: true });
@@ -198,14 +224,9 @@ describe("State mutation with custom types", () => {
 
   test("setEdgeState accepts custom state properties", () => {
     const graph = new Graph();
-    const sigma = new Sigma<
-      Record<string, unknown>,
-      Record<string, unknown>,
-      Record<string, unknown>,
-      BaseNodeState,
-      CustomEdgeState,
-      BaseGraphState
-    >(graph, document.createElement("div"));
+    const sigma = new Sigma(graph, document.createElement("div"), {
+      customEdgeState: { isSelected: false, weight: 0 },
+    });
 
     // Valid custom properties
     sigma.setEdgeState("e1", { isSelected: true });
@@ -214,14 +235,9 @@ describe("State mutation with custom types", () => {
 
   test("setGraphState accepts custom state properties", () => {
     const graph = new Graph();
-    const sigma = new Sigma<
-      Record<string, unknown>,
-      Record<string, unknown>,
-      Record<string, unknown>,
-      BaseNodeState,
-      BaseEdgeState,
-      CustomGraphState
-    >(graph, document.createElement("div"));
+    const sigma = new Sigma(graph, document.createElement("div"), {
+      customGraphState: { isFiltered: false, searchQuery: "" },
+    });
 
     // Valid custom properties
     sigma.setGraphState({ isFiltered: true });
@@ -231,14 +247,9 @@ describe("State mutation with custom types", () => {
 
   test("setNodesState batch updates with custom state", () => {
     const graph = new Graph();
-    const sigma = new Sigma<
-      Record<string, unknown>,
-      Record<string, unknown>,
-      Record<string, unknown>,
-      CustomNodeState,
-      BaseEdgeState,
-      BaseGraphState
-    >(graph, document.createElement("div"));
+    const sigma = new Sigma(graph, document.createElement("div"), {
+      customNodeState: { isSelected: false, isPinned: false, customScore: 0 },
+    });
 
     // Batch update with custom properties
     sigma.setNodesState(["n1", "n2"], { isSelected: true });
@@ -253,14 +264,9 @@ describe("State mutation with custom types", () => {
 describe("Custom state error cases", () => {
   test("rejects invalid property types on custom node state", () => {
     const graph = new Graph();
-    const sigma = new Sigma<
-      Record<string, unknown>,
-      Record<string, unknown>,
-      Record<string, unknown>,
-      CustomNodeState,
-      BaseEdgeState,
-      BaseGraphState
-    >(graph, document.createElement("div"));
+    const sigma = new Sigma(graph, document.createElement("div"), {
+      customNodeState: { customScore: 0, isSelected: false },
+    });
 
     // @ts-expect-error - customScore should be number, not string
     sigma.setNodeState("n1", { customScore: "high" });
@@ -271,14 +277,9 @@ describe("Custom state error cases", () => {
 
   test("rejects invalid property types on custom edge state", () => {
     const graph = new Graph();
-    const sigma = new Sigma<
-      Record<string, unknown>,
-      Record<string, unknown>,
-      Record<string, unknown>,
-      BaseNodeState,
-      CustomEdgeState,
-      BaseGraphState
-    >(graph, document.createElement("div"));
+    const sigma = new Sigma(graph, document.createElement("div"), {
+      customEdgeState: { weight: 0 },
+    });
 
     // @ts-expect-error - weight should be number, not string
     sigma.setEdgeState("e1", { weight: "heavy" });
@@ -286,35 +287,30 @@ describe("Custom state error cases", () => {
 
   test("rejects invalid property types on custom graph state", () => {
     const graph = new Graph();
-    const sigma = new Sigma<
-      Record<string, unknown>,
-      Record<string, unknown>,
-      Record<string, unknown>,
-      BaseNodeState,
-      BaseEdgeState,
-      CustomGraphState
-    >(graph, document.createElement("div"));
+    const sigma = new Sigma(graph, document.createElement("div"), {
+      customGraphState: { searchQuery: "" },
+    });
 
     // @ts-expect-error - searchQuery should be string, not number
     sigma.setGraphState({ searchQuery: 123 });
   });
 
-  test("state types that do not extend base types are rejected", () => {
+  test("rejects custom state keys that collide with base state", () => {
     const graph = new Graph();
 
-    // This should fail because InvalidNodeState doesn't extend BaseNodeState
-    interface InvalidNodeState {
-      customOnly: boolean;
-    }
+    new Sigma(graph, document.createElement("div"), {
+      // @ts-expect-error - isHovered collides with BaseNodeState
+      customNodeState: { isHovered: true },
+    });
 
-    new Sigma<
-      Record<string, unknown>,
-      Record<string, unknown>,
-      Record<string, unknown>,
-      // @ts-expect-error - InvalidNodeState does not extend BaseNodeState
-      InvalidNodeState,
-      BaseEdgeState,
-      BaseGraphState
-    >(graph, document.createElement("div"));
+    new Sigma(graph, document.createElement("div"), {
+      // @ts-expect-error - isHidden collides with BaseEdgeState
+      customEdgeState: { isHidden: false },
+    });
+
+    new Sigma(graph, document.createElement("div"), {
+      // @ts-expect-error - isIdle collides with BaseGraphState
+      customGraphState: { isIdle: true },
+    });
   });
 });

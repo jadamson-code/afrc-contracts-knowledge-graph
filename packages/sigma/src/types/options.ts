@@ -22,14 +22,16 @@ import {
   NodePrimitives,
   NodeShapeSpec,
   PrimitivesDeclaration,
-} from "../primitives/types";
-import type { EdgeExtremity, EdgePath } from "../rendering/edges/types";
-import type { SDFShape } from "../rendering/nodes/types";
+} from "../primitives";
+import type { EdgeExtremity, EdgePath, SDFShape } from "../rendering";
 import {
   BaseEdgeState,
   BaseGraphState,
   BaseNodeState,
   EdgeStyleProperties,
+  FullEdgeState,
+  FullGraphState,
+  FullNodeState,
   GraphicValue,
   InlineConditional,
   NodeStyleProperties,
@@ -104,9 +106,9 @@ export interface SigmaOptionsInput<
   P extends PrimitivesDeclaration,
   NA extends Attributes = Attributes,
   EA extends Attributes = Attributes,
-  NS extends BaseNodeState = BaseNodeState,
-  ES extends BaseEdgeState = BaseEdgeState,
-  GS extends BaseGraphState = BaseGraphState,
+  NS = {}, // additional custom node state fields
+  ES = {}, // additional custom edge state fields
+  GS = {}, // additional custom graph state fields
 > {
   primitives?: P;
   styles?: InferredStylesDeclaration<P, NA, EA, NS, ES, GS>;
@@ -119,12 +121,12 @@ export type InferredStylesDeclaration<
   P extends PrimitivesDeclaration,
   NA extends Attributes = Attributes,
   EA extends Attributes = Attributes,
-  NS extends BaseNodeState = BaseNodeState,
-  ES extends BaseEdgeState = BaseEdgeState,
-  GS extends BaseGraphState = BaseGraphState,
+  NS = {}, // additional custom node state fields
+  ES = {}, // additional custom edge state fields
+  GS = {}, // additional custom graph state fields
 > = {
-  nodes?: InferredNodeStyles<P, NA, NS, GS>;
-  edges?: InferredEdgeStyles<P, EA, ES, GS>;
+  nodes?: InferredNodeStyles<P, NA, FullNodeState<NS>, FullGraphState<GS>>;
+  edges?: InferredEdgeStyles<P, EA, FullEdgeState<ES>, FullGraphState<GS>>;
 };
 
 /**
@@ -232,12 +234,16 @@ type InferredEdgeStyleRule<
 export interface StylesDeclaration<
   NA extends Attributes = Attributes,
   EA extends Attributes = Attributes,
-  NS extends BaseNodeState = BaseNodeState,
-  ES extends BaseEdgeState = BaseEdgeState,
-  GS extends BaseGraphState = BaseGraphState,
+  NS = {}, // additional custom node state fields
+  ES = {}, // additional custom edge state fields
+  GS = {}, // additional custom graph state fields
 > {
-  nodes?: NodeStyleProperties<NA, NS, GS> | NodeStyleProperties<NA, NS, GS>[];
-  edges?: EdgeStyleProperties<EA, ES, GS> | EdgeStyleProperties<EA, ES, GS>[];
+  nodes?:
+    | NodeStyleProperties<NA, FullNodeState<NS>, FullGraphState<GS>>
+    | NodeStyleProperties<NA, FullNodeState<NS>, FullGraphState<GS>>[];
+  edges?:
+    | EdgeStyleProperties<EA, FullEdgeState<ES>, FullGraphState<GS>>
+    | EdgeStyleProperties<EA, FullEdgeState<ES>, FullGraphState<GS>>[];
 }
 
 // =============================================================================
@@ -277,7 +283,7 @@ export interface StylesDeclaration<
  * ```
  */
 export function defineSigmaOptions<const P extends PrimitivesDeclaration>(
-  options: SigmaOptionsInput<P, Attributes, Attributes, BaseNodeState, BaseEdgeState, BaseGraphState>,
-): SigmaOptionsInput<P, Attributes, Attributes, BaseNodeState, BaseEdgeState, BaseGraphState> {
+  options: SigmaOptionsInput<P>,
+): SigmaOptionsInput<P> {
   return options;
 }

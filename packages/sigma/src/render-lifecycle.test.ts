@@ -10,7 +10,6 @@
  */
 import Graph from "graphology";
 import Sigma from "sigma";
-import type { BaseGraphState, BaseNodeState } from "sigma/types";
 import { createElement } from "sigma/utils";
 import { describe, expect, test } from "vitest";
 
@@ -24,19 +23,14 @@ describe("Render lifecycle", () => {
     const container = createElement("div", { width: "100px", height: "100px" });
     document.body.append(container);
 
-    interface NS extends BaseNodeState {
-      isSelected?: boolean;
-    }
-    interface GS extends BaseGraphState {
-      selectionSize?: number;
-    }
-
-    const sigma = new Sigma<object, object, object, NS, object, GS>(graph, container, {
+    const sigma = new Sigma(graph, container, {
+      customNodeState: { isSelected: false },
+      customGraphState: { selectionSize: 0 },
       styles: {
         nodes: [
           { color: "#666", size: 10 },
           {
-            when: (_: object, state: NS, graphState: GS) => !!graphState.selectionSize && !state.isSelected,
+            when: (_attrs, state, graphState) => !!graphState.selectionSize && !state.isSelected,
             then: { color: "#ccc" },
           },
           { when: "isSelected", then: { color: "#ff0000" } },

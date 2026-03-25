@@ -17,7 +17,6 @@ export type Attributes = Record<string, unknown>;
 /**
  * Empty record type for default program variables (no additional variables).
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export type EmptyVariables = {};
 
 /**
@@ -57,6 +56,21 @@ export interface BaseGraphState {
   hasHovered: boolean;
   hasHighlighted: boolean;
 }
+
+/**
+ * Full state types: base state merged with user-provided additional fields.
+ * NS/ES/GS generics throughout the codebase represent only the *additional*
+ * custom fields. These utility types produce the complete state.
+ */
+export type FullNodeState<NS = {}> = NS & BaseNodeState;
+export type FullEdgeState<ES = {}> = ES & BaseEdgeState;
+export type FullGraphState<GS = {}> = GS & BaseGraphState;
+
+/**
+ * Prevents custom state from shadowing built-in base state keys.
+ * Properties that collide with base keys resolve to `never`, causing a type error.
+ */
+export type ForbidBaseKeys<Base, T> = { [K in keyof T]: K extends keyof Base ? never : T[K] };
 
 /**
  * State predicate for conditional styling.
@@ -637,15 +651,15 @@ export type StageStyles<GS extends BaseGraphState = BaseGraphState> = StageStyle
 export interface StylesDeclaration<
   NA extends Attributes = Attributes,
   EA extends Attributes = Attributes,
-  NS extends BaseNodeState = BaseNodeState,
-  ES extends BaseEdgeState = BaseEdgeState,
-  GS extends BaseGraphState = BaseGraphState,
+  NS = {}, // additional custom node state fields
+  ES = {}, // additional custom edge state fields
+  GS = {}, // additional custom graph state fields
   NodeProgramVariables = EmptyVariables,
   EdgeProgramVariables = EmptyVariables,
 > {
-  nodes?: NodeStyles<NA, NS, GS, NodeProgramVariables>;
-  edges?: EdgeStyles<EA, ES, GS, EdgeProgramVariables>;
-  stage?: StageStyles<GS>;
+  nodes?: NodeStyles<NA, FullNodeState<NS>, FullGraphState<GS>, NodeProgramVariables>;
+  edges?: EdgeStyles<EA, FullEdgeState<ES>, FullGraphState<GS>, EdgeProgramVariables>;
+  stage?: StageStyles<FullGraphState<GS>>;
 }
 
 /**
@@ -683,23 +697,26 @@ export const DEFAULT_GRAPH_STATE: BaseGraphState = {
 
 /**
  * Creates a new node state with default values.
+ * NS represents additional custom fields only.
  */
-export function createNodeState<NS extends BaseNodeState = BaseNodeState>(defaults?: Partial<NS>): NS {
-  return { ...DEFAULT_NODE_STATE, ...defaults } as NS;
+export function createNodeState<NS = {}>(defaults?: NS): FullNodeState<NS> {
+  return { ...DEFAULT_NODE_STATE, ...defaults } as FullNodeState<NS>;
 }
 
 /**
  * Creates a new edge state with default values.
+ * ES represents additional custom fields only.
  */
-export function createEdgeState<ES extends BaseEdgeState = BaseEdgeState>(defaults?: Partial<ES>): ES {
-  return { ...DEFAULT_EDGE_STATE, ...defaults } as ES;
+export function createEdgeState<ES = {}>(defaults?: ES): FullEdgeState<ES> {
+  return { ...DEFAULT_EDGE_STATE, ...defaults } as FullEdgeState<ES>;
 }
 
 /**
  * Creates a new graph state with default values.
+ * GS represents additional custom fields only.
  */
-export function createGraphState<GS extends BaseGraphState = BaseGraphState>(defaults?: Partial<GS>): GS {
-  return { ...DEFAULT_GRAPH_STATE, ...defaults } as GS;
+export function createGraphState<GS = {}>(defaults?: GS): FullGraphState<GS> {
+  return { ...DEFAULT_GRAPH_STATE, ...defaults } as FullGraphState<GS>;
 }
 
 /**

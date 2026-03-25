@@ -19,21 +19,9 @@
 <script>
   import Graph from "graphology";
   import Sigma from "sigma";
-  import type { BaseEdgeState, BaseGraphState, BaseNodeState, Coordinates } from "sigma/types";
+  import type { Coordinates } from "sigma/types";
 
   import data from "../_data/data.json";
-
-  interface CustomNodeState extends BaseNodeState {
-    isActive: boolean;
-  }
-
-  interface CustomEdgeState extends BaseEdgeState {
-    isActive: boolean;
-  }
-
-  interface CustomGraphState extends BaseGraphState {
-    hasActiveSubgraph: boolean;
-  }
 
   const container = document.getElementById("sigma-container") as HTMLElement;
   const searchInput = document.getElementById("search-input") as HTMLInputElement;
@@ -44,51 +32,55 @@
 
   const GREY = "#f6f6f6";
 
-  const renderer = new Sigma<object, object, object, CustomNodeState, CustomEdgeState, CustomGraphState>(
-    graph,
-    container,
-    {
-      primitives: {
-        depthLayers: ["edges", "nodes", "nodeLabels", "topEdges", "topNodes", "topNodeLabels"],
-      },
-      styles: {
-        nodes: [
-          {
-            color: { attribute: "color" },
-            size: { attribute: "size" },
-            label: { attribute: "label" },
-          },
-          {
-            when: "isHighlighted",
-            then: { labelVisibility: "visible" },
-          },
-          {
-            when: (_attrs, state, graphState) =>
-              graphState.hasActiveSubgraph && !state.isActive && !state.isHighlighted,
-            then: { color: GREY, label: "" },
-          },
-          {
-            when: "isActive",
-            then: { depth: "topNodes", labelDepth: "topNodeLabels", labelVisibility: "visible" },
-          },
-        ],
-        edges: [
-          {
-            color: { attribute: "color", defaultValue: "#ccc" },
-            size: { attribute: "size", defaultValue: 1 },
-          },
-          {
-            when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive,
-            then: { color: GREY },
-          },
-          {
-            when: "isActive",
-            then: { depth: "topEdges" },
-          },
-        ],
-      },
+  const renderer = new Sigma(graph, container, {
+    customNodeState: {
+      isActive: false,
     },
-  );
+    customEdgeState: {
+      isActive: false,
+    },
+    customGraphState: {
+      hasActiveSubgraph: false,
+    },
+    primitives: {
+      depthLayers: ["edges", "nodes", "nodeLabels", "topEdges", "topNodes", "topNodeLabels"],
+    },
+    styles: {
+      nodes: [
+        {
+          color: { attribute: "color" },
+          size: { attribute: "size" },
+          label: { attribute: "label" },
+        },
+        {
+          when: "isHighlighted",
+          then: { labelVisibility: "visible" },
+        },
+        {
+          when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive && !state.isHighlighted,
+          then: { color: GREY, label: "" },
+        },
+        {
+          when: "isActive",
+          then: { depth: "topNodes", labelDepth: "topNodeLabels", labelVisibility: "visible" },
+        },
+      ],
+      edges: [
+        {
+          color: { attribute: "color", defaultValue: "#ccc" },
+          size: { attribute: "size", defaultValue: 1 },
+        },
+        {
+          when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive,
+          then: { color: GREY },
+        },
+        {
+          when: "isActive",
+          then: { depth: "topEdges" },
+        },
+      ],
+    },
+  });
 
   searchSuggestions.innerHTML = graph
     .nodes()

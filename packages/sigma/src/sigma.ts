@@ -84,6 +84,10 @@ import {
   BaseEdgeState,
   BaseGraphState,
   BaseNodeState,
+  ForbidBaseKeys,
+  FullEdgeState,
+  FullGraphState,
+  FullNodeState,
   StylesDeclaration,
   createEdgeState,
   createGraphState,
@@ -128,14 +132,14 @@ export type NodeReducer<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
-  NS extends BaseNodeState = BaseNodeState,
-  GS extends BaseGraphState = BaseGraphState,
+  NS = {}, // additional custom node state fields
+  GS = {}, // additional custom graph state fields
 > = (
   key: string,
   data: NodeDisplayData,
   attrs: N,
-  state: NS,
-  graphState: GS,
+  state: FullNodeState<NS>,
+  graphState: FullGraphState<GS>,
   graph: Graph<N, E, G>,
 ) => Partial<NodeDisplayData>;
 
@@ -143,14 +147,14 @@ export type EdgeReducer<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
-  ES extends BaseEdgeState = BaseEdgeState,
-  GS extends BaseGraphState = BaseGraphState,
+  ES = {}, // additional custom edge state fields
+  GS = {}, // additional custom graph state fields
 > = (
   key: string,
   data: EdgeDisplayData,
   attrs: E,
-  state: ES,
-  graphState: GS,
+  state: FullEdgeState<ES>,
+  graphState: FullGraphState<GS>,
   graph: Graph<N, E, G>,
 ) => Partial<EdgeDisplayData>;
 
@@ -166,9 +170,9 @@ export default class Sigma<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
-  NS extends BaseNodeState = BaseNodeState,
-  ES extends BaseEdgeState = BaseEdgeState,
-  GS extends BaseGraphState = BaseGraphState,
+  NS = {}, // additional custom node state fields
+  ES = {}, // additional custom edge state fields
+  GS = {}, // additional custom graph state fields
   P extends PrimitivesDeclaration = PrimitivesDeclaration,
 > extends TypedEventEmitter<SigmaEvents> {
   private settings: Settings;
@@ -237,9 +241,12 @@ export default class Sigma<
   private displayedEdgeLabels: Set<string> = new Set();
 
   // State management (new API)
-  private nodeStates: Map<string, NS> = new Map();
-  private edgeStates: Map<string, ES> = new Map();
-  private graphState: GS = createGraphState<GS>();
+  private nodeStates: Map<string, FullNodeState<NS>> = new Map();
+  private edgeStates: Map<string, FullEdgeState<ES>> = new Map();
+  private graphState = createGraphState<GS>();
+  private customNodeStateDefaults: NS | undefined;
+  private customEdgeStateDefaults: ES | undefined;
+  private customGraphStateDefaults: GS | undefined;
 
   // Tracking for event system (which node/edge is currently hovered for enter/leave events)
   private hoveredNode: string | null = null;
@@ -340,16 +347,44 @@ export default class Sigma<
     container: HTMLElement,
     options: {
       primitives?: P;
-      styles?: StylesDeclaration<N, E, NS, ES, GS, ExtractNodeVarsFromPrimitives<P>, ExtractEdgeVarsFromPrimitives<P>>;
+      styles?: StylesDeclaration<
+        N,
+        E,
+        NoInfer<NS>,
+        NoInfer<ES>,
+        NoInfer<GS>,
+        ExtractNodeVarsFromPrimitives<P>,
+        ExtractEdgeVarsFromPrimitives<P>
+      >;
       settings?: Partial<Settings>;
       nodeReducer?: NodeReducer<N, E, G, NS, GS>;
       edgeReducer?: EdgeReducer<N, E, G, ES, GS>;
+      customNodeState?: ForbidBaseKeys<BaseNodeState, NS>;
+      customEdgeState?: ForbidBaseKeys<BaseEdgeState, ES>;
+      customGraphState?: ForbidBaseKeys<BaseGraphState, GS>;
     } = {},
   ) {
     super();
 
     // Extract options
-    const { primitives, styles, settings = {}, nodeReducer, edgeReducer } = options;
+    const {
+      primitives,
+      styles,
+      settings = {},
+      nodeReducer,
+      edgeReducer,
+      customNodeState,
+      customEdgeState,
+      customGraphState,
+    } = options;
+
+    // Store custom state defaults for lazy initialization
+    this.customNodeStateDefaults = customNodeState as NS | undefined;
+    this.customEdgeStateDefaults = customEdgeState as ES | undefined;
+    this.customGraphStateDefaults = customGraphState as GS | undefined;
+    if (customGraphState) {
+      this.graphState = createGraphState<GS>(customGraphState);
+    }
 
     // Store primitives and styles declarations for v4 API
     // Use DEFAULT_STYLES when styles not provided, merging at nodes/edges level
@@ -663,13 +698,13 @@ export default class Sigma<
         if (this.hoveredNode) {
           const previousNode = this.hoveredNode;
           this.hoveredNode = nodeToHover;
-          this.setNodeState(previousNode, { isHovered: false } as Partial<NS>);
+          this.setNodeState(previousNode, { isHovered: false });
           this.emit("leaveNode", { ...baseEvent, node: previousNode });
         } else {
           this.hoveredNode = nodeToHover;
         }
 
-        this.setNodeState(nodeToHover, { isHovered: true } as Partial<NS>);
+        this.setNodeState(nodeToHover, { isHovered: true });
         this.emit("enterNode", { ...baseEvent, node: nodeToHover });
         this.updateContainerCursor();
         return;
@@ -680,7 +715,7 @@ export default class Sigma<
         if (this.getNodeAtPosition(event) !== this.hoveredNode) {
           const node = this.hoveredNode;
           this.hoveredNode = null;
-          this.setNodeState(node, { isHovered: false } as Partial<NS>);
+          this.setNodeState(node, { isHovered: false });
           this.emit("leaveNode", { ...baseEvent, node });
           this.updateContainerCursor();
           return;
@@ -692,12 +727,12 @@ export default class Sigma<
 
         if (edgeToHover !== this.hoveredEdge) {
           if (this.hoveredEdge) {
-            this.setEdgeState(this.hoveredEdge, { isHovered: false } as Partial<ES>);
+            this.setEdgeState(this.hoveredEdge, { isHovered: false });
             this.emit("leaveEdge", { ...baseEvent, edge: this.hoveredEdge });
           }
           this.hoveredEdge = edgeToHover;
           if (edgeToHover) {
-            this.setEdgeState(edgeToHover, { isHovered: true } as Partial<ES>);
+            this.setEdgeState(edgeToHover, { isHovered: true });
             this.emit("enterEdge", { ...baseEvent, edge: edgeToHover });
           }
           this.updateContainerCursor();
@@ -757,14 +792,14 @@ export default class Sigma<
       if (this.hoveredNode) {
         const node = this.hoveredNode;
         this.hoveredNode = null;
-        this.setNodeState(node, { isHovered: false } as Partial<NS>);
+        this.setNodeState(node, { isHovered: false });
         this.emit("leaveNode", { ...baseEvent, node });
       }
 
       if (this.settings.enableEdgeEvents && this.hoveredEdge) {
         const edge = this.hoveredEdge;
         this.hoveredEdge = null;
-        this.setEdgeState(edge, { isHovered: false } as Partial<ES>);
+        this.setEdgeState(edge, { isHovered: false });
         this.emit("leaveEdge", { ...baseEvent, edge });
       }
 
@@ -2311,7 +2346,7 @@ export default class Sigma<
       yAttr,
     };
 
-    this.setNodesState(allNodes, { isDragged: true } as Partial<NS>);
+    this.setNodesState(allNodes, { isDragged: true });
   }
 
   /**
@@ -2320,7 +2355,7 @@ export default class Sigma<
    */
   private endDrag(): void {
     if (this.dragSession) {
-      this.setNodesState(this.dragSession.allNodes, { isDragged: false } as Partial<NS>);
+      this.setNodesState(this.dragSession.allNodes, { isDragged: false });
     }
     this.pendingDragNode = null;
     this.dragSession = null;
@@ -2724,7 +2759,7 @@ export default class Sigma<
   private clearState(): void {
     this.clearEdgeState();
     this.clearNodeState();
-    this.graphState = createGraphState<GS>();
+    this.graphState = createGraphState<GS>(this.customGraphStateDefaults);
   }
 
   /**
@@ -3235,12 +3270,12 @@ export default class Sigma<
    * Method returning a node's state.
    *
    * @param  {string} key - The node's key.
-   * @return {NS} The node's state.
+   * @return {FullNodeState<NS>} The node's state.
    */
-  getNodeState(key: string): NS {
+  getNodeState(key: string): FullNodeState<NS> {
     let state = this.nodeStates.get(key);
     if (!state) {
-      state = createNodeState<NS>();
+      state = createNodeState<NS>(this.customNodeStateDefaults);
       this.nodeStates.set(key, state);
     }
     return state;
@@ -3250,12 +3285,12 @@ export default class Sigma<
    * Method returning an edge's state.
    *
    * @param  {string} key - The edge's key.
-   * @return {ES} The edge's state.
+   * @return {FullEdgeState<ES>} The edge's state.
    */
-  getEdgeState(key: string): ES {
+  getEdgeState(key: string): FullEdgeState<ES> {
     let state = this.edgeStates.get(key);
     if (!state) {
-      state = createEdgeState<ES>();
+      state = createEdgeState<ES>(this.customEdgeStateDefaults);
       this.edgeStates.set(key, state);
     }
     return state;
@@ -3264,9 +3299,9 @@ export default class Sigma<
   /**
    * Method returning the graph's state.
    *
-   * @return {GS} The graph's state.
+   * @return {FullGraphState<GS>} The graph's state.
    */
-  getGraphState(): GS {
+  getGraphState(): FullGraphState<GS> {
     return this.graphState;
   }
 
@@ -3274,12 +3309,12 @@ export default class Sigma<
    * Method to update a node's state.
    *
    * @param  {string} key - The node's key.
-   * @param  {Partial<NS>} state - Partial state to merge.
+   * @param  {Partial<FullNodeState<NS>>} state - Partial state to merge.
    * @return {this}
    */
-  setNodeState(key: string, state: Partial<NS>): this {
+  setNodeState(key: string, state: Partial<BaseNodeState> | Partial<FullNodeState<NS>>): this {
     const currentState = this.getNodeState(key);
-    const newState = { ...currentState, ...state } as NS;
+    const newState = { ...currentState, ...state };
     this.nodeStates.set(key, newState);
 
     // Track dirty node for selective refresh
@@ -3301,12 +3336,12 @@ export default class Sigma<
    * Method to update an edge's state.
    *
    * @param  {string} key - The edge's key.
-   * @param  {Partial<ES>} state - Partial state to merge.
+   * @param  {Partial<FullEdgeState<ES>>} state - Partial state to merge.
    * @return {this}
    */
-  setEdgeState(key: string, state: Partial<ES>): this {
+  setEdgeState(key: string, state: Partial<BaseEdgeState> | Partial<FullEdgeState<ES>>): this {
     const currentState = this.getEdgeState(key);
-    const newState = { ...currentState, ...state } as ES;
+    const newState = { ...currentState, ...state };
     this.edgeStates.set(key, newState);
 
     // Track dirty edge for selective refresh
@@ -3327,11 +3362,11 @@ export default class Sigma<
   /**
    * Method to update the graph's state.
    *
-   * @param  {Partial<GS>} state - Partial state to merge.
+   * @param  {Partial<FullGraphState<GS>>} state - Partial state to merge.
    * @return {this}
    */
-  setGraphState(state: Partial<GS>): this {
-    this.graphState = { ...this.graphState, ...state } as GS;
+  setGraphState(state: Partial<BaseGraphState> | Partial<FullGraphState<GS>>): this {
+    this.graphState = { ...this.graphState, ...state };
     this.graphStateChanged = true;
 
     // Re-evaluate styles in-place (no reprocess)
@@ -3344,13 +3379,13 @@ export default class Sigma<
    * Method to update multiple nodes' states at once.
    *
    * @param  {string[]} keys - The nodes' keys.
-   * @param  {Partial<NS>} state - Partial state to merge.
+   * @param  {Partial<FullNodeState<NS>>} state - Partial state to merge.
    * @return {this}
    */
-  setNodesState(keys: string[], state: Partial<NS>): this {
+  setNodesState(keys: string[], state: Partial<BaseNodeState> | Partial<FullNodeState<NS>>): this {
     for (const key of keys) {
       const currentState = this.getNodeState(key);
-      const newState = { ...currentState, ...state } as NS;
+      const newState = { ...currentState, ...state };
       this.nodeStates.set(key, newState);
       this.dirtyNodes.add(key);
       this.updateHoveredNodeTracking(key, currentState, newState);
@@ -3369,13 +3404,13 @@ export default class Sigma<
    * Method to update multiple edges' states at once.
    *
    * @param  {string[]} keys - The edges' keys.
-   * @param  {Partial<ES>} state - Partial state to merge.
+   * @param  {Partial<FullEdgeState<ES>>} state - Partial state to merge.
    * @return {this}
    */
-  setEdgesState(keys: string[], state: Partial<ES>): this {
+  setEdgesState(keys: string[], state: Partial<BaseEdgeState> | Partial<FullEdgeState<ES>>): this {
     for (const key of keys) {
       const currentState = this.getEdgeState(key);
-      const newState = { ...currentState, ...state } as ES;
+      const newState = { ...currentState, ...state };
       this.edgeStates.set(key, newState);
       this.dirtyEdges.add(key);
       this.updateHoveredEdgeTracking(key, currentState, newState);
@@ -3427,13 +3462,13 @@ export default class Sigma<
   /**
    * Update hovered node tracking for event system (enter/leave events).
    */
-  private updateHoveredNodeTracking(key: string, oldState: NS, newState: NS): void {
+  private updateHoveredNodeTracking(key: string, oldState: FullNodeState<NS>, newState: FullNodeState<NS>): void {
     if (oldState.isHovered !== newState.isHovered) {
       if (newState.isHovered) {
         // Clear previous hovered node if any
         if (this.hoveredNode && this.hoveredNode !== key) {
           const prevState = this.getNodeState(this.hoveredNode);
-          this.nodeStates.set(this.hoveredNode, { ...prevState, isHovered: false } as NS);
+          this.nodeStates.set(this.hoveredNode, { ...prevState, isHovered: false });
           this.dirtyNodes.add(this.hoveredNode);
         }
         this.hoveredNode = key;
@@ -3446,13 +3481,13 @@ export default class Sigma<
   /**
    * Update hovered edge tracking for event system (enter/leave events).
    */
-  private updateHoveredEdgeTracking(key: string, oldState: ES, newState: ES): void {
+  private updateHoveredEdgeTracking(key: string, oldState: FullEdgeState<ES>, newState: FullEdgeState<ES>): void {
     if (oldState.isHovered !== newState.isHovered) {
       if (newState.isHovered) {
         // Clear previous hovered edge if any
         if (this.hoveredEdge && this.hoveredEdge !== key) {
           const prevState = this.getEdgeState(this.hoveredEdge);
-          this.edgeStates.set(this.hoveredEdge, { ...prevState, isHovered: false } as ES);
+          this.edgeStates.set(this.hoveredEdge, { ...prevState, isHovered: false });
           this.dirtyEdges.add(this.hoveredEdge);
         }
         this.hoveredEdge = key;
@@ -3493,7 +3528,7 @@ export default class Sigma<
       hasHovered,
       hasHighlighted,
       isDragging,
-    } as GS;
+    };
   }
 
   /**
@@ -3518,7 +3553,7 @@ export default class Sigma<
     this.graphState = {
       ...this.graphState,
       hasHovered,
-    } as GS;
+    };
   }
 
   /**

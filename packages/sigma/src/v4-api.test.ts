@@ -4,7 +4,6 @@
 import Graph from "graphology";
 import Sigma from "sigma";
 import { layerFill, sdfCircle } from "sigma/rendering";
-import { BaseEdgeState, BaseNodeState } from "sigma/types";
 import { createElement } from "sigma/utils";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
@@ -365,21 +364,13 @@ describe("Sigma v4 API", () => {
   });
 
   describe("Custom state type parameters", () => {
-    // Custom node state with additional properties
-    interface CustomNodeState extends BaseNodeState {
-      importance: number; // custom property
-    }
-
-    // Custom edge state with additional properties
-    interface CustomEdgeState extends BaseEdgeState {
-      weight: number; // custom property
-    }
-
     test<SigmaTestContext>("custom node state properties can be set and retrieved", ({ container }) => {
       const graph = new Graph();
       graph.addNode("n1", { x: 0, y: 0 });
 
-      const sigma = new Sigma<object, object, object, CustomNodeState, CustomEdgeState>(graph, container);
+      const sigma = new Sigma(graph, container, {
+        customNodeState: { importance: 0 },
+      });
 
       // Set custom state property
       sigma.setNodeState("n1", { importance: 5 });
@@ -399,7 +390,9 @@ describe("Sigma v4 API", () => {
       graph.addNode("n2", { x: 1, y: 1 });
       graph.addEdge("n1", "n2");
 
-      const sigma = new Sigma<object, object, object, CustomNodeState, CustomEdgeState>(graph, container);
+      const sigma = new Sigma(graph, container, {
+        customEdgeState: { weight: 0 },
+      });
 
       const edgeKey = graph.edges()[0];
 
@@ -419,7 +412,8 @@ describe("Sigma v4 API", () => {
       const graph = new Graph();
       graph.addNode("n1", { x: 0, y: 0 });
 
-      const sigma = new Sigma<object, object, object, CustomNodeState, CustomEdgeState>(graph, container, {
+      const sigma = new Sigma(graph, container, {
+        customNodeState: { importance: 0 },
         styles: {
           nodes: {
             // Use custom state property in style function

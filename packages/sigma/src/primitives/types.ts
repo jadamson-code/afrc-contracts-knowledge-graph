@@ -198,15 +198,13 @@ export type ExtractNodeVarsFromPrimitives<P extends PrimitivesDeclaration> = P e
   nodes: infer NP extends NodePrimitives;
 }
   ? ExtractAllNodeVariables<NP>
-  : // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-    {};
+  : {};
 
 export type ExtractEdgeVarsFromPrimitives<P extends PrimitivesDeclaration> = P extends {
   edges: infer EP extends EdgePrimitives;
 }
   ? ExtractAllEdgeVariables<EP>
-  : // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-    {};
+  : {};
 
 // =============================================================================
 

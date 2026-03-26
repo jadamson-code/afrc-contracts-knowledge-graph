@@ -11,6 +11,7 @@
  *
  * @module
  */
+import { colorToArray } from "../utils";
 
 const INITIAL_CAPACITY = 1024;
 const GROWTH_FACTOR = 1.5;
@@ -45,7 +46,7 @@ export abstract class DataTexture {
   protected dirtyRangeEnd: number = -1;
 
   // Item key -> texture index mapping
-  protected indexMap: Map<string, number> = new Map();
+  protected indexMap: Map<string | number, number> = new Map();
   // Free list for recycling indices when items are removed
   protected freeIndices: number[] = [];
   // Next index to allocate if free list is empty
@@ -151,7 +152,7 @@ export abstract class DataTexture {
    * Allocates a texture index for an item.
    * Returns existing index if item already allocated.
    */
-  allocate(key: string): number {
+  allocate(key: string | number): number {
     // Check if already allocated
     const existing = this.indexMap.get(key);
     if (existing !== undefined) {
@@ -178,7 +179,7 @@ export abstract class DataTexture {
   /**
    * Frees an item's texture index for reuse.
    */
-  free(key: string): void {
+  free(key: string | number): void {
     const index = this.indexMap.get(key);
     if (index === undefined) return;
 
@@ -198,14 +199,14 @@ export abstract class DataTexture {
    * Gets the texture index for an item.
    * Returns -1 if item not found.
    */
-  getIndex(key: string): number {
+  getIndex(key: string | number): number {
     return this.indexMap.get(key) ?? -1;
   }
 
   /**
    * Checks if an item has been allocated.
    */
-  has(key: string): boolean {
+  has(key: string | number): boolean {
     return this.indexMap.has(key);
   }
 
@@ -458,7 +459,7 @@ export class ItemAttributeTexture extends DataTexture {
    * defined by the layout offsets.
    * Auto-allocates the item if not already allocated.
    */
-  updateAllAttributes(key: string, packedData: ArrayLike<number>): void {
+  updateAllAttributes(key: string | number, packedData: ArrayLike<number>): void {
     let index = this.indexMap.get(key);
     if (index === undefined) {
       index = this.allocate(key);
@@ -479,6 +480,129 @@ export class ItemAttributeTexture extends DataTexture {
    */
   getTexelsPerItem(): number {
     return this.TEXELS_PER_ITEM;
+  }
+}
+
+/**
+ * Pre-computed descriptor for a single attribute, used to avoid
+ * per-item string operations and dynamic dispatch in hot loops.
+ */
+export interface AttrDescriptor {
+  /** Property name to read from display data (pre-stripped of "a_" prefix) */
+  sourceKey: string;
+  /** Pre-computed offset into the packed Float32Array */
+  packedOffset: number;
+  /** Attribute component count */
+  size: number;
+  /** Whether this is a color attribute (size===4 && normalized) */
+  isColor: boolean;
+  /** Default numeric value (for size===1) */
+  defaultNum: number;
+  /** Default color string (for color attributes) */
+  defaultColor: string;
+  /** Index of the source (layer/path) in the original array, for lifecycle hook lookup */
+  sourceIndex: number;
+  /** Whether this attribute's source has a lifecycle getAttributeData hook */
+  hasLifecycleHook: boolean;
+}
+
+/** Minimal attribute spec needed by buildAttrDescriptors. */
+interface AttrSpec {
+  name: string;
+  size: number;
+  normalized?: boolean;
+  source?: string;
+  defaultValue?: unknown;
+}
+
+/** Minimal lifecycle hook interface needed by buildAttrDescriptors. */
+interface AttrLifecycleHooks {
+  getAttributeData?: (data: Record<string, unknown>, sourceName: string) => unknown;
+}
+
+/**
+ * Builds a flat array of AttrDescriptors from paths/layers, pre-computing
+ * all the information that processVisibleItem needs per attribute.
+ */
+export function buildAttrDescriptors(
+  sources: Array<{ attributes: AttrSpec[] }>,
+  layout: AttributeLayout,
+  lifecycleMap?: Map<number, AttrLifecycleHooks>,
+): AttrDescriptor[] {
+  const descriptors: AttrDescriptor[] = [];
+  const seen = new Set<string>();
+
+  for (let srcIdx = 0; srcIdx < sources.length; srcIdx++) {
+    const source = sources[srcIdx];
+    for (const attr of source.attributes) {
+      const name = attr.name.replace(/^a_/, "");
+      if (seen.has(name)) continue;
+      seen.add(name);
+
+      const offset = layout.offsets[name];
+      if (offset === undefined) continue;
+
+      const hooks = lifecycleMap?.get(srcIdx);
+
+      descriptors.push({
+        sourceKey: attr.source || name,
+        packedOffset: offset,
+        size: attr.size,
+        isColor: attr.size === 4 && !!attr.normalized,
+        defaultNum: typeof attr.defaultValue === "number" ? attr.defaultValue : 0,
+        defaultColor: typeof attr.defaultValue === "string" ? attr.defaultValue : "",
+        sourceIndex: srcIdx,
+        hasLifecycleHook: !!hooks?.getAttributeData,
+      });
+    }
+  }
+
+  return descriptors;
+}
+
+/**
+ * Packs attribute values into a Float32Array according to pre-computed descriptors.
+ * Shared by both node and edge factories.
+ */
+export function packAttributes(
+  descriptors: AttrDescriptor[],
+  data: Record<string, unknown>,
+  packed: Float32Array,
+  color: string,
+  opacity: number,
+  lifecycles: Map<number, { getAttributeData?: (data: Record<string, unknown>, sourceName: string) => unknown }>,
+  lifecycleIndexOffset: number,
+): void {
+  packed.fill(0);
+
+  for (let di = 0, dl = descriptors.length; di < dl; di++) {
+    const d = descriptors[di];
+    const off = d.packedOffset;
+
+    let value: unknown;
+    if (d.hasLifecycleHook) {
+      const hooks = lifecycles.get(d.sourceIndex - lifecycleIndexOffset);
+      value = hooks!.getAttributeData!(data, d.sourceKey);
+      if (value === null) value = data[d.sourceKey];
+    } else {
+      value = data[d.sourceKey];
+    }
+
+    if (d.isColor) {
+      const colorStr = typeof value === "string" ? value : d.defaultColor || color;
+      const [r, g, b, a] = colorToArray(colorStr);
+      packed[off] = r / 255;
+      packed[off + 1] = g / 255;
+      packed[off + 2] = b / 255;
+      packed[off + 3] = (a / 255) * opacity;
+    } else if (d.size === 1) {
+      packed[off] = typeof value === "number" ? value : d.defaultNum;
+    } else {
+      const arr = Array.isArray(value) ? value : null;
+      if (arr) {
+        for (let i = 0; i < d.size; i++) packed[off + i] = arr[i] ?? 0;
+      }
+    }
   }
 }
 

@@ -12,8 +12,13 @@ import { Attributes } from "graphology-types";
 
 import Sigma from "../../sigma";
 import { NodeDisplayData, RenderParams } from "../../types";
-import { colorToArray } from "../../utils";
-import { ItemAttributeTexture, computeAttributeLayout } from "../data-texture";
+import {
+  AttrDescriptor,
+  ItemAttributeTexture,
+  buildAttrDescriptors,
+  computeAttributeLayout,
+  packAttributes,
+} from "../data-texture";
 import { getShapeId, registerShapeInstance } from "../shapes";
 import { ProgramInfo } from "../utils";
 import { createBackdropProgram } from "./backdrops";
@@ -145,6 +150,9 @@ export function createNodeProgram<
     private layerAttributeTexture: ItemAttributeTexture;
     private readonly packedAttributeData: Float32Array;
 
+    // Pre-computed attribute descriptors for fast processVisibleItem
+    private attrDescriptors: AttrDescriptor[] = [];
+
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
       super(gl, pickingBuffer, renderer);
       this._pickingBuffer = pickingBuffer;
@@ -188,6 +196,22 @@ export function createNodeProgram<
       this.layerLifecycles.forEach((hooks) => {
         hooks.init?.();
       });
+
+      // Build pre-computed attribute descriptors.
+      // For nodes, sources are just layers (no paths).
+      const lifecycleMapForDescriptors = new Map<
+        number,
+        { getAttributeData?: (data: Record<string, unknown>, sourceName: string) => unknown }
+      >();
+      this.layerLifecycles.forEach((hooks, layerIndex) => {
+        if (hooks.getAttributeData) {
+          lifecycleMapForDescriptors.set(
+            layerIndex,
+            hooks as { getAttributeData: (data: Record<string, unknown>, sourceName: string) => unknown },
+          );
+        }
+      });
+      this.attrDescriptors = buildAttrDescriptors(layers, layerAttributeLayout, lifecycleMapForDescriptors);
     }
 
     getDefinition() {
@@ -292,67 +316,24 @@ export function createNodeProgram<
       const array = this.array;
 
       // Buffer: only a_nodeIndex and a_id
-      // Position and size are fetched from node data texture via textureIndex
-      // Layer attributes are fetched from layer attribute texture via textureIndex
-      array[startIndex++] = textureIndex; // a_nodeIndex (index into both textures)
-      array[startIndex++] = nodeIndex; // a_id (for picking)
+      array[startIndex++] = textureIndex;
+      array[startIndex++] = nodeIndex;
 
-      // Pack layer attributes into texture
+      // Pack layer attributes via pre-computed descriptors
+      if (layerAttributeLayout.floatsPerItem === 0) return;
+
       const packed = this.packedAttributeData;
-      const layout = layerAttributeLayout;
+      packAttributes(
+        this.attrDescriptors,
+        data as unknown as Record<string, unknown>,
+        packed,
+        data.color,
+        data.opacity ?? 1,
+        this.layerLifecycles,
+        0,
+      );
 
-      // Process each layer's attributes and pack into the texture data
-      layers.forEach((layer, layerIndex) => {
-        const hooks = this.layerLifecycles.get(layerIndex);
-
-        layer.attributes.forEach((attr) => {
-          // Get the source property name (defaults to attribute name without 'a_' prefix)
-          const attrName = attr.name.replace(/^a_/, "");
-          const sourceName = attr.source || attrName;
-          const offset = layout.offsets[attrName];
-
-          // Skip if attribute not in layout (shouldn't happen)
-          if (offset === undefined) return;
-
-          // First, check if lifecycle provides data for this source
-          let value: unknown = null;
-          if (hooks?.getAttributeData) {
-            value = hooks.getAttributeData(data as unknown as Record<string, unknown>, sourceName);
-          }
-
-          // Fall back to node data if lifecycle didn't provide a value
-          if (value === null) {
-            value = (data as unknown as Record<string, unknown>)[sourceName];
-          }
-
-          if (attr.size === 4 && attr.normalized) {
-            // Color attribute - convert from CSS color string to RGBA floats [0,1]
-            const defaultColor = typeof attr.defaultValue === "string" ? attr.defaultValue : data.color;
-            const colorStr = typeof value === "string" ? value : defaultColor;
-            const [r, g, b, a] = colorToArray(colorStr);
-            const opacity = data.opacity ?? 1;
-            packed[offset] = r / 255;
-            packed[offset + 1] = g / 255;
-            packed[offset + 2] = b / 255;
-            packed[offset + 3] = (a / 255) * opacity;
-          } else if (attr.size === 1) {
-            // Single float value
-            const defaultNum = typeof attr.defaultValue === "number" ? attr.defaultValue : 0;
-            packed[offset] = typeof value === "number" ? value : defaultNum;
-          } else {
-            // Multi-component value (vec2, vec3, vec4)
-            const arr = Array.isArray(value) ? value : [];
-            for (let i = 0; i < attr.size; i++) {
-              packed[offset + i] = arr[i] ?? 0;
-            }
-          }
-        });
-      });
-
-      // Update the layer attribute texture with packed data
-      if (layout.floatsPerItem > 0) {
-        this.layerAttributeTexture.updateAllAttributes(nodeKey, packed);
-      }
+      this.layerAttributeTexture.updateAllAttributes(nodeKey, packed);
     }
 
     setUniforms(params: RenderParams, programInfo: ProgramInfo): void {

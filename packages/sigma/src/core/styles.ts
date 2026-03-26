@@ -520,6 +520,12 @@ const DEFAULT_RESOLVED_EDGE_STYLE: ResolvedEdgeStyle = {
   labelDepth: "edgeLabels",
 };
 
+// Initialize pre-computed key/value arrays for fast reset
+const NODE_DEFAULT_KEYS = Object.keys(DEFAULT_RESOLVED_NODE_STYLE);
+const NODE_DEFAULT_VALUES = Object.values(DEFAULT_RESOLVED_NODE_STYLE);
+const EDGE_DEFAULT_KEYS = Object.keys(DEFAULT_RESOLVED_EDGE_STYLE);
+const EDGE_DEFAULT_VALUES = Object.values(DEFAULT_RESOLVED_EDGE_STYLE);
+
 /**
  * Evaluates a complete node style declaration for a specific node.
  *
@@ -540,8 +546,12 @@ export function evaluateNodeStyle<
   state: NS,
   graphState: GS,
   graph: AbstractGraph,
+  target?: ResolvedNodeStyle,
 ): ResolvedNodeStyle {
-  const result = { ...DEFAULT_RESOLVED_NODE_STYLE };
+  const result: ResolvedNodeStyle = target || ({} as ResolvedNodeStyle);
+  for (let i = 0, l = NODE_DEFAULT_KEYS.length; i < l; i++) {
+    (result as Record<string, unknown>)[NODE_DEFAULT_KEYS[i]] = NODE_DEFAULT_VALUES[i];
+  }
 
   if (!styleDeclaration) {
     // No styles, resolve from attributes with defaults
@@ -624,11 +634,14 @@ export function evaluateEdgeStyle<
   state: ES,
   graphState: GS,
   graph: AbstractGraph,
+  target?: ResolvedEdgeStyle,
 ): ResolvedEdgeStyle {
-  const result = { ...DEFAULT_RESOLVED_EDGE_STYLE };
+  const result: ResolvedEdgeStyle = target || ({} as ResolvedEdgeStyle);
+  for (let i = 0, l = EDGE_DEFAULT_KEYS.length; i < l; i++) {
+    (result as Record<string, unknown>)[EDGE_DEFAULT_KEYS[i]] = EDGE_DEFAULT_VALUES[i];
+  }
 
   if (!styleDeclaration) {
-    // No styles, resolve from attributes with defaults
     result.size = (attributes.size as number) ?? 1;
     result.color = (attributes.color as string) ?? "#ccc";
     result.label = (attributes.label as string) ?? "";

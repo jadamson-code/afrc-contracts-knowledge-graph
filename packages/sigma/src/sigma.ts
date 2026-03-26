@@ -346,6 +346,10 @@ export default class Sigma<
 
   private camera: Camera;
 
+  // Reusable scratch objects for style evaluation (avoids allocation per item)
+  private _scratchNodeStyle: ResolvedNodeStyle = {} as ResolvedNodeStyle;
+  private _scratchEdgeStyle: ResolvedEdgeStyle = {} as ResolvedEdgeStyle;
+
   constructor(
     graph: Graph<N, E, G>,
     container: HTMLElement,
@@ -3836,7 +3840,7 @@ export default class Sigma<
       return;
     }
 
-    // Re-evaluate style
+    // Re-evaluate style (reuses scratch object to avoid allocation)
     const attrs = this.graph.getNodeAttributes(node);
     const nodeState = this.getNodeState(node);
     const resolvedStyle = evaluateNodeStyle(
@@ -3845,6 +3849,7 @@ export default class Sigma<
       nodeState,
       this.graphState,
       this.graph,
+      this._scratchNodeStyle,
     );
 
     // Save old values before patching
@@ -3954,7 +3959,7 @@ export default class Sigma<
       return;
     }
 
-    // Re-evaluate style (still needed to get new values from state-dependent rules)
+    // Re-evaluate style (reuses scratch object to avoid allocation)
     const attrs = this.graph.getEdgeAttributes(edge);
     const edgeState = this.getEdgeState(edge);
     const resolvedStyle = evaluateEdgeStyle(
@@ -3963,6 +3968,7 @@ export default class Sigma<
       edgeState,
       this.graphState,
       this.graph,
+      this._scratchEdgeStyle,
     );
 
     // Save old values before patching (for skip checks below)
@@ -4013,11 +4019,9 @@ export default class Sigma<
         data.tail !== oldTail;
 
       if (structuralDataChanged) {
-        // Full path: need to recompute edge data texture
         this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
       } else {
-        // Fast path: skip edge data texture, path resolution.
-        // Only update vertex buffer + layer attribute texture via process().
+        // Fast path: skip edge data texture, only update vertex buffer + attribute texture
         const source = this.graph.source(edge);
         const target = this.graph.target(edge);
         const sourceData = this.nodeDataCache[source];

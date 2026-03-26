@@ -12,7 +12,14 @@ import { Attributes } from "graphology-types";
 import Sigma from "../../sigma";
 import { EdgeDisplayData, NodeDisplayData, RenderParams } from "../../types";
 import { colorToArray, floatColor, rgbaToFloat } from "../../utils";
-import { AttributeLayout, ItemAttributeTexture, computeAttributeLayout } from "../data-texture";
+import {
+  AttrDescriptor,
+  AttributeLayout,
+  ItemAttributeTexture,
+  buildAttrDescriptors,
+  computeAttributeLayout,
+  packAttributes,
+} from "../data-texture";
 import { isAttributeSource } from "../nodes";
 import { ProgramInfo } from "../utils";
 import { EdgeProgram as BaseEdgeProgram, EdgeProgramType } from "./base";
@@ -143,6 +150,11 @@ export function createEdgeProgram<
     private packedAttributeData: Float32Array;
     private readonly layout: AttributeLayout = attributeLayout;
 
+    // Pre-computed attribute descriptors for fast processVisibleItem
+    private attrDescriptors: AttrDescriptor[] = [];
+    // Offset to subtract from descriptor sourceIndex to get layerLifecycles key
+    private readonly lifecycleIndexOffset = paths.length;
+
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
       // Generate shaders on first instantiation (after node shapes are registered)
       if (!generated) {
@@ -178,6 +190,23 @@ export function createEdgeProgram<
 
       // Call init hook for all layers
       this.layerLifecycles.forEach((hooks) => hooks.init?.());
+
+      // Build pre-computed attribute descriptors.
+      // Sources are [...paths, ...layers]. Lifecycle hooks are keyed by
+      // layer index (0-based within layers), so we shift by paths.length.
+      const lifecycleMapForDescriptors = new Map<
+        number,
+        { getAttributeData?: (data: Record<string, unknown>, sourceName: string) => unknown }
+      >();
+      this.layerLifecycles.forEach((hooks, layerIndex) => {
+        if (hooks.getAttributeData) {
+          lifecycleMapForDescriptors.set(
+            paths.length + layerIndex,
+            hooks as { getAttributeData: (data: Record<string, unknown>, sourceName: string) => unknown },
+          );
+        }
+      });
+      this.attrDescriptors = buildAttrDescriptors([...paths, ...layers], this.layout, lifecycleMapForDescriptors);
     }
 
     getDefinition() {
@@ -250,8 +279,7 @@ export function createEdgeProgram<
     ) {
       const array = this.array;
 
-      // Core attributes go into vertex buffer
-      // Edge data (node indices, thickness, extremity ratios) fetched from edge data texture via edgeIndex
+      // Core vertex buffer writes
       array[startIndex++] = edgeTextureIndex;
       const opacity = data.opacity ?? 1;
       if (opacity < 1) {
@@ -262,84 +290,20 @@ export function createEdgeProgram<
       }
       array[startIndex++] = edgeIndex;
 
-      // Pack path/layer attributes into the edge attribute texture
+      // Pack attributes into texture via pre-computed descriptors
       const packed = this.packedAttributeData;
-      packed.fill(0);
+      packAttributes(
+        this.attrDescriptors,
+        data as unknown as Record<string, unknown>,
+        packed,
+        data.color,
+        opacity,
+        this.layerLifecycles,
+        this.lifecycleIndexOffset,
+      );
 
-      const layout = this.layout;
-
-      // Process path attributes
-      paths.forEach((p) => {
-        p.attributes.forEach((attr) => {
-          // Get attribute name without prefix
-          const name = attr.name.replace(/^a_/, "");
-          const offset = layout.offsets[name];
-          if (offset === undefined) return; // Not in layout
-
-          const sourceName = attr.source || name;
-          const value = (data as unknown as Record<string, unknown>)[sourceName];
-
-          if (attr.size === 1) {
-            packed[offset] = typeof value === "number" ? value : (attr.defaultValue as number) || 0;
-          } else {
-            const arr = Array.isArray(value) ? value : [];
-            for (let i = 0; i < attr.size; i++) {
-              packed[offset + i] = arr[i] ?? 0;
-            }
-          }
-        });
-      });
-
-      // Process attributes from all layers
-      layers.forEach((layer, layerIndex) => {
-        const layerHooks = this.layerLifecycles.get(layerIndex);
-
-        layer.attributes.forEach(
-          (attr: { name: string; source?: string; size: number; normalized?: boolean; defaultValue?: unknown }) => {
-            // Get attribute name without prefix
-            const name = attr.name.replace(/^a_/, "");
-            const offset = layout.offsets[name];
-            if (offset === undefined) return; // Not in layout
-
-            const sourceName = attr.source || name;
-
-            // Check if lifecycle provides the data
-            let value: unknown = null;
-            if (layerHooks?.getAttributeData) {
-              value = layerHooks.getAttributeData(data as unknown as Record<string, unknown>, sourceName);
-            }
-
-            // Fall back to edge data
-            if (value === null) {
-              value = (data as unknown as Record<string, unknown>)[sourceName];
-            }
-
-            if (attr.size === 4 && attr.normalized) {
-              // Color attribute - convert from CSS color string to RGBA floats [0,1]
-              const defaultColor = typeof attr.defaultValue === "string" ? attr.defaultValue : data.color;
-              const colorStr = typeof value === "string" ? value : defaultColor;
-              const [r, g, b, a] = colorToArray(colorStr);
-              const opacity = data.opacity ?? 1;
-              packed[offset] = r / 255;
-              packed[offset + 1] = g / 255;
-              packed[offset + 2] = b / 255;
-              packed[offset + 3] = (a / 255) * opacity;
-            } else if (attr.size === 1) {
-              packed[offset] = typeof value === "number" ? value : (attr.defaultValue as number) || 0;
-            } else {
-              const arr = Array.isArray(value) ? value : [];
-              for (let i = 0; i < attr.size; i++) {
-                packed[offset + i] = arr[i] ?? 0;
-              }
-            }
-          },
-        );
-      });
-
-      // Update the texture with packed attributes
-      // Use edgeTextureIndex as the key for consistent allocation
-      const edgeKey = `edge_${edgeTextureIndex}`;
-      this.edgeAttributeTexture!.updateAllAttributes(edgeKey, packed);
+      // Use numeric key directly — avoids string allocation per edge
+      this.edgeAttributeTexture!.updateAllAttributes(edgeTextureIndex, packed);
     }
 
     setUniforms(params: RenderParams, programInfo: ProgramInfo): void {

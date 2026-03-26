@@ -12,6 +12,8 @@ import TouchCaptor from "./core/captors/touch";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
 import {
+  ResolvedEdgeStyle,
+  ResolvedNodeStyle,
   ResolvedStageStyle,
   StyleAnalysis,
   analyzeStyleDeclaration,
@@ -25,7 +27,6 @@ import {
   ExtractNodeVarsFromPrimitives,
   LabelAttachmentContext,
   PrimitivesDeclaration,
-  VariablesDefinition,
   generateEdgeProgram,
   generateNodeProgram,
 } from "./primitives";
@@ -197,9 +198,9 @@ export default class Sigma<
   private nodeDataCache: Record<string, NodeDisplayData> = {};
   private edgeDataCache: Record<string, EdgeDisplayData> = {};
 
-  // Variables declared in primitives (for custom layer attributes)
-  private nodeVariables: VariablesDefinition = {};
-  private edgeVariables: VariablesDefinition = {};
+  // Variables declared in primitives (for custom layer attributes), pre-cached as entries
+  private nodeVariableEntries: [string, { type: string; default: unknown }][] = [];
+  private edgeVariableEntries: [string, { type: string; default: unknown }][] = [];
   private edgePathsByName: Map<string, EdgePath> = new Map();
 
   // Parallel edge index: groups edges by sorted endpoint pair
@@ -210,6 +211,7 @@ export default class Sigma<
   // Indices to keep track of the index of the item inside programs
   private nodeProgramIndex: Record<string, number> = {};
   private edgeProgramIndex: Record<string, number> = {};
+  private edgeTextureIndexCache: Record<string, number> = {};
   private nodesWithForcedLabels: Set<string> = new Set<string>();
   private edgesWithForcedLabels: Set<string> = new Set<string>();
   private nodesWithBackdrop: Set<string> = new Set<string>();
@@ -475,7 +477,7 @@ export default class Sigma<
     const { program: NodeProgramClass, variables: nodeVariables } = generateNodeProgram<N, E, G>(
       this.primitives?.nodes,
     );
-    this.nodeVariables = nodeVariables;
+    this.nodeVariableEntries = Object.entries(nodeVariables) as [string, { type: string; default: unknown }][];
     this.nodeProgram = new NodeProgramClass(gl, null, sigma);
 
     // Cache shape information
@@ -515,7 +517,7 @@ export default class Sigma<
       variables: edgeVariables,
       paths: edgePaths,
     } = generateEdgeProgram<N, E, G>(this.primitives?.edges);
-    this.edgeVariables = edgeVariables;
+    this.edgeVariableEntries = Object.entries(edgeVariables) as [string, { type: string; default: unknown }][];
     this.edgePathsByName = new Map(edgePaths.map((p) => [p.name, p]));
     this.edgeProgram = new EdgeProgramClass(gl, null, sigma);
 
@@ -2182,6 +2184,57 @@ export default class Sigma<
   }
 
   /**
+   * Write resolved style properties into a NodeDisplayData object (mutates in place).
+   * Shared by addNode and refreshNodeState to avoid property-list duplication.
+   */
+  private applyResolvedNodeStyle(
+    data: NodeDisplayData,
+    resolvedStyle: ResolvedNodeStyle & Record<string, unknown>,
+    attrs: Attributes,
+    nodeState: BaseNodeState,
+  ): void {
+    data.x = resolvedStyle.x ?? (attrs.x as number);
+    data.y = resolvedStyle.y ?? (attrs.y as number);
+    data.size = resolvedStyle.size ?? 2;
+    data.color = resolvedStyle.color ?? "#666";
+    data.opacity = resolvedStyle.opacity ?? 1;
+    data.labelColor = resolvedStyle.labelColor ?? "#000";
+    data.label = resolvedStyle.label ?? null;
+    data.hidden = resolvedStyle.visibility === "hidden";
+    data.forceLabel = resolvedStyle.labelVisibility === "visible";
+    data.highlighted = nodeState.isHighlighted;
+    data.zIndex = resolvedStyle.zIndex ?? 0;
+    data.depth = resolvedStyle.depth ?? "nodes";
+    data.labelDepth = resolvedStyle.labelDepth ?? "nodeLabels";
+    data.shape = resolvedStyle.shape;
+    data.labelPosition = resolvedStyle.labelPosition;
+    data.labelSize = resolvedStyle.labelSize;
+    data.labelFont = resolvedStyle.labelFont;
+    data.labelAngle = resolvedStyle.labelAngle;
+    data.backdropVisibility = resolvedStyle.backdropVisibility;
+    data.backdropColor = resolvedStyle.backdropColor;
+    data.backdropShadowColor = resolvedStyle.backdropShadowColor;
+    data.backdropShadowBlur = resolvedStyle.backdropShadowBlur;
+    data.backdropPadding = resolvedStyle.backdropPadding;
+    data.backdropBorderColor = resolvedStyle.backdropBorderColor;
+    data.backdropBorderWidth = resolvedStyle.backdropBorderWidth;
+    data.backdropCornerRadius = resolvedStyle.backdropCornerRadius;
+    data.backdropLabelPadding = resolvedStyle.backdropLabelPadding;
+    data.backdropArea = resolvedStyle.backdropArea;
+    data.labelAttachment = resolvedStyle.labelAttachment ?? null;
+    data.labelAttachmentPlacement = resolvedStyle.labelAttachmentPlacement ?? "below";
+    data.cursor = resolvedStyle.cursor;
+
+    // Inject declared variables from primitives into display data
+    // Variables can come from: styles > graph attributes > default value
+    const mutableData = data as unknown as Record<string, unknown>;
+    for (let i = 0, l = this.nodeVariableEntries.length; i < l; i++) {
+      const [varName, varDef] = this.nodeVariableEntries[i];
+      mutableData[varName] = resolvedStyle[varName] ?? attrs[varName] ?? varDef.default;
+    }
+  }
+
+  /**
    * Add a node in the internal data structures.
    * @private
    * @param key The node's graphology ID
@@ -2199,39 +2252,8 @@ export default class Sigma<
       this.graph,
     );
 
-    let data: NodeDisplayData = {
-      x: resolvedStyle.x ?? (attrs.x as number),
-      y: resolvedStyle.y ?? (attrs.y as number),
-      size: resolvedStyle.size ?? 2,
-      color: resolvedStyle.color ?? "#666",
-      opacity: resolvedStyle.opacity ?? 1,
-      labelColor: resolvedStyle.labelColor ?? "#000",
-      label: resolvedStyle.label ?? null,
-      hidden: resolvedStyle.visibility === "hidden",
-      forceLabel: resolvedStyle.labelVisibility === "visible",
-      highlighted: nodeState.isHighlighted,
-      zIndex: resolvedStyle.zIndex ?? 0,
-      depth: resolvedStyle.depth ?? "nodes",
-      labelDepth: resolvedStyle.labelDepth ?? "nodeLabels",
-      shape: resolvedStyle.shape,
-      labelPosition: resolvedStyle.labelPosition,
-      labelSize: resolvedStyle.labelSize,
-      labelFont: resolvedStyle.labelFont,
-      labelAngle: resolvedStyle.labelAngle,
-      backdropVisibility: resolvedStyle.backdropVisibility,
-      backdropColor: resolvedStyle.backdropColor,
-      backdropShadowColor: resolvedStyle.backdropShadowColor,
-      backdropShadowBlur: resolvedStyle.backdropShadowBlur,
-      backdropPadding: resolvedStyle.backdropPadding,
-      backdropBorderColor: resolvedStyle.backdropBorderColor,
-      backdropBorderWidth: resolvedStyle.backdropBorderWidth,
-      backdropCornerRadius: resolvedStyle.backdropCornerRadius,
-      backdropLabelPadding: resolvedStyle.backdropLabelPadding,
-      backdropArea: resolvedStyle.backdropArea,
-      labelAttachment: resolvedStyle.labelAttachment ?? null,
-      labelAttachmentPlacement: resolvedStyle.labelAttachmentPlacement ?? "below",
-      cursor: resolvedStyle.cursor,
-    };
+    let data: NodeDisplayData = {} as NodeDisplayData;
+    this.applyResolvedNodeStyle(data, resolvedStyle, attrs, nodeState);
 
     // Apply reducer if provided
     if (this.nodeReducer) {
@@ -2256,13 +2278,6 @@ export default class Sigma<
     } else if (this.nodeShapeSlug) {
       // Single-shape program: use the program's shape slug
       data.shape = this.nodeShapeSlug;
-    }
-
-    // Inject declared variables from primitives into display data
-    // Variables can come from: styles > graph attributes > default value
-    const mutableData = data as unknown as Record<string, unknown>;
-    for (const [varName, varDef] of Object.entries(this.nodeVariables)) {
-      mutableData[varName] = resolvedStyle[varName] ?? attrs[varName] ?? varDef.default;
     }
 
     this.nodeDataCache[key] = data;
@@ -2549,6 +2564,43 @@ export default class Sigma<
   }
 
   /**
+   * Write resolved style properties into an EdgeDisplayData object (mutates in place).
+   * Shared by addEdge and refreshEdgeState to avoid property-list duplication.
+   */
+  private applyResolvedEdgeStyle(
+    data: EdgeDisplayData,
+    resolvedStyle: ResolvedEdgeStyle & Record<string, unknown>,
+    attrs: Attributes,
+  ): void {
+    data.size = resolvedStyle.size ?? 0.5;
+    data.color = resolvedStyle.color ?? "#ccc";
+    data.opacity = resolvedStyle.opacity ?? 1;
+    data.labelColor = resolvedStyle.labelColor ?? "#666";
+    data.label = resolvedStyle.label ?? "";
+    data.hidden = resolvedStyle.visibility === "hidden";
+    data.forceLabel = resolvedStyle.labelVisibility === "visible";
+    data.zIndex = resolvedStyle.zIndex ?? 0;
+    data.depth = resolvedStyle.depth ?? "edges";
+    data.labelDepth = resolvedStyle.labelDepth ?? "edgeLabels";
+    data.path = resolvedStyle.path;
+    data.selfLoopPath = resolvedStyle.selfLoopPath;
+    data.parallelPath = resolvedStyle.parallelPath;
+    data.head = resolvedStyle.head;
+    data.tail = resolvedStyle.tail;
+    data.labelPosition =
+      typeof resolvedStyle.labelPosition === "string" ? (resolvedStyle.labelPosition as EdgeLabelPosition) : undefined;
+    data.cursor = resolvedStyle.cursor;
+
+    // Inject declared variables from primitives into display data
+    // Variables can come from: styles > graph attributes > default value
+    const mutableData = data as unknown as Record<string, unknown>;
+    for (let i = 0, l = this.edgeVariableEntries.length; i < l; i++) {
+      const [varName, varDef] = this.edgeVariableEntries[i];
+      mutableData[varName] = resolvedStyle[varName] ?? attrs[varName] ?? varDef.default;
+    }
+  }
+
+  /**
    * Add an edge into the internal data structures.
    * @private
    * @param key The edge's graphology ID
@@ -2566,40 +2618,13 @@ export default class Sigma<
       this.graph,
     );
 
-    let data: EdgeDisplayData = {
-      size: resolvedStyle.size ?? 0.5,
-      color: resolvedStyle.color ?? "#ccc",
-      opacity: resolvedStyle.opacity ?? 1,
-      labelColor: resolvedStyle.labelColor ?? "#666",
-      label: resolvedStyle.label ?? "",
-      hidden: resolvedStyle.visibility === "hidden",
-      forceLabel: resolvedStyle.labelVisibility === "visible",
-      zIndex: resolvedStyle.zIndex ?? 0,
-      depth: resolvedStyle.depth ?? "edges",
-      labelDepth: resolvedStyle.labelDepth ?? "edgeLabels",
-      path: resolvedStyle.path,
-      selfLoopPath: resolvedStyle.selfLoopPath,
-      parallelPath: resolvedStyle.parallelPath,
-      head: resolvedStyle.head,
-      tail: resolvedStyle.tail,
-      labelPosition:
-        typeof resolvedStyle.labelPosition === "string"
-          ? (resolvedStyle.labelPosition as EdgeLabelPosition)
-          : undefined,
-      cursor: resolvedStyle.cursor,
-    };
+    let data: EdgeDisplayData = {} as EdgeDisplayData;
+    this.applyResolvedEdgeStyle(data, resolvedStyle, attrs);
 
     // Apply reducer if provided
     if (this.edgeReducer) {
       const reduced = this.edgeReducer(key, data, attrs, edgeState, this.graphState, this.graph);
       data = { ...data, ...reduced };
-    }
-
-    // Inject declared variables from primitives into display data
-    // Variables can come from: styles > graph attributes > default value
-    for (const [varName, varDef] of Object.entries(this.edgeVariables)) {
-      (data as unknown as Record<string, unknown>)[varName] =
-        resolvedStyle[varName] ?? attrs[varName] ?? varDef.default;
     }
 
     // Auto-compute spread variable for parallel edges
@@ -2674,6 +2699,7 @@ export default class Sigma<
     delete this.edgeDataCache[key];
     // Remove from programId index
     delete this.edgeProgramIndex[key];
+    delete this.edgeTextureIndexCache[key];
     // Free edge from edge data texture
     this.edgeDataTexture!.free(key);
     // Remove from edge state
@@ -2713,6 +2739,7 @@ export default class Sigma<
   private clearEdgeIndices(): void {
     this.edgeDataCache = {};
     this.edgeProgramIndex = {};
+    this.edgeTextureIndexCache = {};
     this.edgesWithForcedLabels = new Set<string>();
     // Clear bucket data
     this.itemBuckets.edges.clearAll();
@@ -2794,16 +2821,18 @@ export default class Sigma<
    */
   private addEdgeToProgram(edge: string, fingerprint: number, position: number): void {
     const data = this.edgeDataCache[edge];
-    const extremities = this.graph.extremities(edge),
-      sourceData = this.nodeDataCache[extremities[0]],
-      targetData = this.nodeDataCache[extremities[1]];
-
-    // Get node texture indices for source and target
-    const sourceNodeIndex = this.nodeDataTexture!.getIndex(extremities[0]);
-    const targetNodeIndex = this.nodeDataTexture!.getIndex(extremities[1]);
+    const source = this.graph.source(edge);
+    const target = this.graph.target(edge);
+    const sourceData = this.nodeDataCache[source];
+    const targetData = this.nodeDataCache[target];
 
     // Allocate edge in edge data texture (or get existing allocation)
     const edgeTextureIndex = this.edgeDataTexture!.allocate(edge);
+    this.edgeTextureIndexCache[edge] = edgeTextureIndex;
+
+    // Get node texture indices for source and target
+    const sourceNodeIndex = this.nodeDataTexture!.getIndex(source);
+    const targetNodeIndex = this.nodeDataTexture!.getIndex(target);
 
     // Get program class static properties
     const programStatic = this.edgeProgram!.constructor as unknown as {
@@ -2833,7 +2862,7 @@ export default class Sigma<
     };
 
     // Select path: self-loops use selfLoopPath, parallel edges use parallelPath, others use path
-    const isSelfLoop = this.graph.source(edge) === this.graph.target(edge);
+    const isSelfLoop = source === target;
     const isParallel = !isSelfLoop && (this.getEdgeState(edge)?.parallelCount ?? 1) > 1;
     const pathName = isSelfLoop
       ? edgeData.selfLoopPath
@@ -2861,7 +2890,6 @@ export default class Sigma<
     const tailLengthRatio = extremitiesPool?.[tailId]?.length ?? 0;
 
     // Update edge data texture with core edge data
-    // Path-specific attributes (curvature, etc.) are stored in a per-program attribute texture
     this.edgeDataTexture!.updateEdge(
       edge,
       sourceNodeIndex,
@@ -3777,35 +3805,126 @@ export default class Sigma<
 
   /**
    * Re-evaluate a single node's style and rewrite its GPU data.
+   * Lean path: patches cache in place, skips unchanged bookkeeping.
    */
   private refreshNodeState(node: string): void {
-    const oldDepth = this.nodeDataCache[node]?.depth;
-    const oldAttachment = this.nodeDataCache[node]?.labelAttachment;
-    this.updateNode(node);
     const data = this.nodeDataCache[node];
 
-    // Invalidate attachment cache when state changes
-    if (this.attachmentManager) {
-      if (data.labelAttachment || oldAttachment) {
+    // If node not yet cached or a reducer exists, fall back to full path
+    if (!data || this.nodeReducer) {
+      const oldDepth = this.nodeDataCache[node]?.depth;
+      const oldAttachment = this.nodeDataCache[node]?.labelAttachment;
+      this.updateNode(node);
+      const newData = this.nodeDataCache[node];
+      if (this.attachmentManager && (newData.labelAttachment || oldAttachment)) {
         this.attachmentManager.invalidateNode(node);
+      }
+      let shapeId: number;
+      if (this.nodeShapeMap && this.nodeGlobalShapeIds && newData.shape && newData.shape in this.nodeShapeMap) {
+        shapeId = this.nodeGlobalShapeIds[this.nodeShapeMap[newData.shape]];
+      } else {
+        shapeId = getShapeId(newData.shape || "circle");
+      }
+      this.nodeDataTexture!.updateNode(node, newData.x, newData.y, newData.size, shapeId);
+      if (oldDepth && newData.depth !== oldDepth) {
+        this.updateNodeDepthRanges(node, oldDepth, newData.depth);
+      }
+      const programIndex = this.nodeProgramIndex[node];
+      if (programIndex !== undefined) {
+        this.addNodeToProgram(node, this.nodeIndices[node], programIndex);
+      }
+      return;
+    }
+
+    // Re-evaluate style
+    const attrs = this.graph.getNodeAttributes(node);
+    const nodeState = this.getNodeState(node);
+    const resolvedStyle = evaluateNodeStyle(
+      this.stylesDeclaration!.nodes as Record<string, unknown>,
+      attrs,
+      nodeState,
+      this.graphState,
+      this.graph,
+    );
+
+    // Save old values before patching
+    const oldSize = data.size;
+    const oldShape = data.shape;
+    const oldDepth = data.depth;
+    const oldZIndex = data.zIndex;
+    const oldAttachment = data.labelAttachment;
+    const oldHidden = data.hidden;
+    const oldForceLabel = data.forceLabel;
+    const oldBackdropVisibility = data.backdropVisibility;
+
+    // Patch display data in place
+    this.applyResolvedNodeStyle(data, resolvedStyle, attrs, nodeState);
+
+    // Update raw graph coords and normalize
+    const graphCoords = this.nodeGraphCoords[node];
+    const rawPositionChanged = data.x !== graphCoords.x || data.y !== graphCoords.y;
+    if (rawPositionChanged) {
+      graphCoords.x = data.x;
+      graphCoords.y = data.y;
+    }
+    // Always re-normalize (data.x/y are raw at this point)
+    this.normalizationFunction.applyTo(data);
+
+    // Set shape
+    if (this.nodeShapeMap) {
+      if (!data.shape || !(data.shape in this.nodeShapeMap)) {
+        data.shape = Object.keys(this.nodeShapeMap)[0];
+      }
+    } else if (this.nodeShapeSlug) {
+      data.shape = this.nodeShapeSlug;
+    }
+
+    // Attachment invalidation
+    if (this.attachmentManager && (data.labelAttachment || oldAttachment)) {
+      this.attachmentManager.invalidateNode(node);
+    }
+
+    // Update forced label tracking only if changed
+    if (data.forceLabel !== oldForceLabel || data.hidden !== oldHidden) {
+      this.nodesWithForcedLabels.delete(node);
+      if (data.forceLabel && !data.hidden) this.nodesWithForcedLabels.add(node);
+    }
+
+    // Backdrop tracking only if changed
+    if (data.backdropVisibility !== oldBackdropVisibility || data.hidden !== oldHidden) {
+      this.nodesWithBackdrop.delete(node);
+      if (!data.hidden && data.backdropVisibility === "visible") {
+        this.nodesWithBackdrop.add(node);
       }
     }
 
-    // Update node data texture (size may change on hover)
-    let shapeId: number;
-    if (this.nodeShapeMap && this.nodeGlobalShapeIds && data.shape && data.shape in this.nodeShapeMap) {
-      shapeId = this.nodeGlobalShapeIds[this.nodeShapeMap[data.shape]];
-    } else {
-      shapeId = getShapeId(data.shape || "circle");
+    // Node data texture only if position/size/shape changed
+    if (rawPositionChanged || data.size !== oldSize || data.shape !== oldShape) {
+      let shapeId: number;
+      if (this.nodeShapeMap && this.nodeGlobalShapeIds && data.shape && data.shape in this.nodeShapeMap) {
+        shapeId = this.nodeGlobalShapeIds[this.nodeShapeMap[data.shape]];
+      } else {
+        shapeId = getShapeId(data.shape || "circle");
+      }
+      this.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
     }
-    this.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
 
-    // Update fragmented depth ranges if depth changed
-    if (oldDepth && data.depth !== oldDepth) {
+    // Bucket management if depth or zIndex changed
+    const newZIndex =
+      this.getDepthOffset(data.depth) +
+      Math.max(0, Math.min(this.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
+    const cachedZIndex = this.zIndexCache.nodes[node];
+    if (cachedZIndex !== undefined && cachedZIndex !== newZIndex) {
+      this.itemBuckets.nodes.moveItem(cachedZIndex, newZIndex, node);
+      this.zIndexCache.nodes[node] = newZIndex;
+    } else if (cachedZIndex !== undefined && (data.depth !== oldDepth || data.zIndex !== oldZIndex)) {
+      this.itemBuckets.nodes.updateItem(cachedZIndex, node);
+    }
+    if (data.depth !== oldDepth) {
       this.updateNodeDepthRanges(node, oldDepth, data.depth);
     }
 
-    // Rewrite data at existing position
+    // GPU program update
     const programIndex = this.nodeProgramIndex[node];
     if (programIndex !== undefined) {
       this.addNodeToProgram(node, this.nodeIndices[node], programIndex);
@@ -3814,21 +3933,100 @@ export default class Sigma<
 
   /**
    * Re-evaluate a single edge's style and rewrite its GPU data.
+   * Lean path: re-evaluates style but patches cache in place, skips
+   * unchanged bookkeeping, and avoids full addEdgeToProgram overhead.
    */
   private refreshEdgeState(edge: string): void {
-    const oldDepth = this.edgeDataCache[edge]?.depth;
-    this.updateEdge(edge);
-    const newDepth = this.edgeDataCache[edge].depth;
+    const data = this.edgeDataCache[edge];
 
-    // Update fragmented depth ranges if depth changed
-    if (oldDepth && newDepth !== oldDepth) {
-      this.updateEdgeDepthRanges(edge, oldDepth, newDepth);
+    // If edge not yet cached or a reducer exists, fall back to full path
+    if (!data || this.edgeReducer) {
+      const oldDepth = data?.depth;
+      this.updateEdge(edge);
+      const newData = this.edgeDataCache[edge];
+      if (oldDepth && newData.depth !== oldDepth) {
+        this.updateEdgeDepthRanges(edge, oldDepth, newData.depth);
+      }
+      const programIndex = this.edgeProgramIndex[edge];
+      if (programIndex !== undefined) {
+        this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
+      }
+      return;
     }
 
-    // Rewrite data at existing position
+    // Re-evaluate style (still needed to get new values from state-dependent rules)
+    const attrs = this.graph.getEdgeAttributes(edge);
+    const edgeState = this.getEdgeState(edge);
+    const resolvedStyle = evaluateEdgeStyle(
+      this.stylesDeclaration!.edges as Record<string, unknown>,
+      attrs,
+      edgeState,
+      this.graphState,
+      this.graph,
+    );
+
+    // Save old values before patching (for skip checks below)
+    const oldDepth = data.depth;
+    const oldZIndex = data.zIndex;
+    const oldSize = data.size;
+    const oldPath = data.path;
+    const oldSelfLoopPath = data.selfLoopPath;
+    const oldParallelPath = data.parallelPath;
+    const oldHead = data.head;
+    const oldTail = data.tail;
+    const oldHidden = data.hidden;
+    const oldForceLabel = data.forceLabel;
+
+    // Patch display data in place
+    this.applyResolvedEdgeStyle(data, resolvedStyle, attrs);
+
+    // Update forced label tracking only if changed
+    if (data.forceLabel !== oldForceLabel || data.hidden !== oldHidden) {
+      this.edgesWithForcedLabels.delete(edge);
+      if (data.forceLabel && !data.hidden) this.edgesWithForcedLabels.add(edge);
+    }
+
+    // Bucket management if depth or zIndex changed
+    const newZIndex =
+      this.getDepthOffset(data.depth) +
+      Math.max(0, Math.min(this.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
+    const cachedZIndex = this.zIndexCache.edges[edge];
+    if (cachedZIndex !== undefined && cachedZIndex !== newZIndex) {
+      this.itemBuckets.edges.moveItem(cachedZIndex, newZIndex, edge);
+      this.zIndexCache.edges[edge] = newZIndex;
+    } else if (cachedZIndex !== undefined && (data.depth !== oldDepth || data.zIndex !== oldZIndex)) {
+      this.itemBuckets.edges.updateItem(cachedZIndex, edge);
+    }
+    if (data.depth !== oldDepth) {
+      this.updateEdgeDepthRanges(edge, oldDepth, data.depth);
+    }
+
+    // GPU update
     const programIndex = this.edgeProgramIndex[edge];
     if (programIndex !== undefined) {
-      this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
+      const structuralDataChanged =
+        data.size !== oldSize ||
+        data.path !== oldPath ||
+        data.selfLoopPath !== oldSelfLoopPath ||
+        data.parallelPath !== oldParallelPath ||
+        data.head !== oldHead ||
+        data.tail !== oldTail;
+
+      if (structuralDataChanged) {
+        // Full path: need to recompute edge data texture
+        this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
+      } else {
+        // Fast path: skip edge data texture, path resolution.
+        // Only update vertex buffer + layer attribute texture via process().
+        const source = this.graph.source(edge);
+        const target = this.graph.target(edge);
+        const sourceData = this.nodeDataCache[source];
+        const targetData = this.nodeDataCache[target];
+        const edgeTextureIndex = this.edgeTextureIndexCache[edge];
+
+        this.edgeProgram!.process(this.edgeIndices[edge], programIndex, sourceData, targetData, data, edgeTextureIndex);
+        this.edgeProgram!.invalidateBuffers();
+      }
     }
   }
 

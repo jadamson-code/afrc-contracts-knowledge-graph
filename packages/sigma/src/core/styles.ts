@@ -589,12 +589,12 @@ function applyNodeStyleRule<NA extends Attributes, NS extends BaseNodeState, GS 
   graphState: GS,
   graph: AbstractGraph,
 ): void {
-  for (const [key, value] of Object.entries(rule)) {
+  for (const key in rule) {
     if (key === "when" || key === "then" || key === "else") continue;
 
     const defaultValue = result[key] ?? DEFAULT_RESOLVED_NODE_STYLE[key as keyof ResolvedNodeStyle];
     result[key] = resolveGraphicValue(
-      value as GraphicValue<NA, NS, GS, unknown>,
+      rule[key] as GraphicValue<NA, NS, GS, unknown>,
       attributes,
       state,
       graphState,
@@ -671,12 +671,12 @@ function applyEdgeStyleRule<EA extends Attributes, ES extends BaseEdgeState, GS 
   graphState: GS,
   graph: AbstractGraph,
 ): void {
-  for (const [key, value] of Object.entries(rule)) {
+  for (const key in rule) {
     if (key === "when" || key === "then" || key === "else") continue;
 
     const defaultValue = result[key] ?? DEFAULT_RESOLVED_EDGE_STYLE[key as keyof ResolvedEdgeStyle];
     result[key] = resolveGraphicValue(
-      value as GraphicValue<EA, ES, GS, unknown>,
+      rule[key] as GraphicValue<EA, ES, GS, unknown>,
       attributes,
       state,
       graphState,

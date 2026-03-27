@@ -28,7 +28,7 @@ fetch("./my-graph.gexf")
   });
 ```
 
-The GEXF parser reads node positions, colors, sizes, labels, and any other attributes stored in the file. If your GEXF file does not contain positions, you will need to apply a [layout algorithm](/examples/layouts/) before rendering.
+The GEXF parser reads node positions, colors, sizes, labels, and any other attributes stored in the file. If your GEXF file does not contain positions, you will need to apply a [layout algorithm](https://graphology.github.io/standard-library/layout-forceatlas2.html) before rendering.
 
 ## Loading from JSON
 
@@ -96,8 +96,6 @@ for (const edge of edges) {
 
 new Sigma(graph, document.getElementById("container"));
 ```
-
-See the [layouts example](/examples/layouts/) for a complete walkthrough of loading CSV data and applying a force-directed layout.
 
 ## Building graphs programmatically
 

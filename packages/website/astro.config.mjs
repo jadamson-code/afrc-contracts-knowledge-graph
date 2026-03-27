@@ -100,6 +100,7 @@ export default defineConfig({
                 },
                 typeDoc: {
                   entryFileName: "index",
+                  skipErrorChecking: true,
                 },
               }),
             ]),

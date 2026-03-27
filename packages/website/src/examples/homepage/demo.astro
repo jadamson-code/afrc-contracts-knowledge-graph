@@ -91,6 +91,21 @@
     coauthored: "#e22653",
   };
 
+  const measureCtx = document.createElement("canvas").getContext("2d")!;
+
+  function drawAuthorInfo({ attributes }: LabelAttachmentContext): LabelAttachmentContent {
+    const fontSize = 11;
+    const author = attributes.author as string;
+    measureCtx.font = `${fontSize}px ${FONT_FAMILY}`;
+    const width = Math.ceil(measureCtx.measureText(author).width) + 8;
+    return {
+      type: "svg",
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="19">
+        <text x="4" y="13" font-family='${FONT_FAMILY}' font-size="${fontSize}" fill="#333">${author}</text>
+      </svg>`,
+    };
+  }
+
   const graph = await loadDataset();
   const [minScore, maxScore] = nodeExtent(graph, "score");
 
@@ -137,11 +152,7 @@
           }),
         ],
         labelAttachments: {
-          authorInfo: (ctx: LabelAttachmentContext): LabelAttachmentContent => ({
-            type: "html",
-            css: `.author { font: 11px ${FONT_FAMILY}; color: #333; }`,
-            html: `<div class="author">${ctx.attributes.author as string}</div>`,
-          }),
+          authorInfo: drawAuthorInfo,
         },
       },
       edges: {

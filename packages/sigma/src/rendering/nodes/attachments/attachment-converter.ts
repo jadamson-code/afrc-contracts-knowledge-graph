@@ -12,6 +12,9 @@ import { LabelAttachmentContent } from "../../../primitives";
 // Module-level cache: URL → Promise<data URI>. Prevents duplicate fetches across nodes.
 const fetchCache = new Map<string, Promise<string | null>>();
 
+// Suppress duplicate warnings when SVG foreignObject taints the canvas.
+let taintWarned = false;
+
 /**
  * Converts a fetch response blob to a base64 data URI via FileReader.
  */
@@ -111,6 +114,28 @@ export async function svgToCanvas(svg: string | SVGElement, pixelRatio = 1): Pro
       // drawImage with explicit destination size so SVG (vector) rasterises sharply
       canvas.getContext("2d")!.drawImage(img, 0, 0, physW, physH);
       URL.revokeObjectURL(url);
+
+      // Chromium and Safari taint canvases drawn from SVG with <foreignObject>.
+      // Detect it here so tainted canvases never reach the atlas pack canvas.
+      try {
+        canvas.getContext("2d")!.getImageData(0, 0, 1, 1);
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "SecurityError") {
+          if (!taintWarned) {
+            taintWarned = true;
+            // eslint-disable-next-line no-console
+            console.warn(
+              'Sigma: A label attachment was skipped because the rendered canvas is tainted. ' +
+                'SVG with <foreignObject> (used by the "html" attachment type) is blocked in Chromium and Safari. ' +
+                'Use type: "canvas" with Canvas 2D rendering instead.',
+            );
+          }
+          resolve(null);
+          return;
+        }
+        throw e;
+      }
+
       resolve(canvas);
     };
     img.onerror = () => {

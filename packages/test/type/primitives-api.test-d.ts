@@ -158,7 +158,7 @@ describe("defineSigmaOptions - With shapes and variables", () => {
         nodes: {
           shape: { attribute: "type", dict: { person: "circle", company: "square" } },
           color: { attribute: "color", defaultValue: "#666" },
-          borderSize: { when: "isHovered", then: 3 },
+          borderSize: { whenState: "isHovered", then: 3 },
           borderColor: "#fff",
           nodeCornerRadius: { attribute: "roundness", defaultValue: 0.1 },
         },
@@ -344,33 +344,33 @@ describe("new Sigma() - Variable inference from primitives to styles", () => {
 // TYPE TESTS: match/cases style rules
 // =============================================================================
 
-describe("match/cases style rules", () => {
+describe("matchData/cases style rules", () => {
   const graph = new Graph();
   const container = document.createElement("div");
 
-  test("match/cases rule with node styles compiles", () => {
+  test("matchData/cases rule with node styles compiles", () => {
     new Sigma(graph, container, {
       styles: {
         nodes: [
           { color: "#666" },
-          { match: "type", cases: { person: { color: "#f00", size: 20 }, company: { color: "#0f0" } } },
+          { matchData: "type", cases: { person: { color: "#f00", size: 20 }, company: { color: "#0f0" } } },
         ],
       },
     });
   });
 
-  test("match/cases rule with edge styles compiles", () => {
+  test("matchData/cases rule with edge styles compiles", () => {
     new Sigma(graph, container, {
       styles: {
         edges: [
           { color: "#ccc" },
-          { match: "type", cases: { cites: { color: "#0f0" }, coauthored: { color: "#f00", size: 3 } } },
+          { matchData: "type", cases: { cites: { color: "#0f0" }, coauthored: { color: "#f00", size: 3 } } },
         ],
       },
     });
   });
 
-  test("match/cases with declared edge variables compiles", () => {
+  test("matchData/cases with declared edge variables compiles", () => {
     new Sigma(graph, container, {
       primitives: {
         edges: {
@@ -382,27 +382,27 @@ describe("match/cases style rules", () => {
       },
       styles: {
         edges: [
-          { match: "type", cases: { dashed: { dashSize: 5, dashColor: "#f00" } } },
+          { matchData: "type", cases: { dashed: { dashSize: 5, dashColor: "#f00" } } },
         ],
       },
     });
   });
 
-  test("match/cases with attribute binding in case values compiles", () => {
+  test("matchData/cases with attribute binding in case values compiles", () => {
     new Sigma(graph, container, {
       styles: {
         nodes: [
-          { match: "type", cases: { person: { size: { attribute: "score", min: 5, max: 50 } } } },
+          { matchData: "type", cases: { person: { size: { attribute: "score", min: 5, max: 50 } } } },
         ],
       },
     });
   });
 
-  test("match/cases rejects wrong value type in case", () => {
+  test("matchData/cases rejects wrong value type in case", () => {
     new Sigma(graph, container, {
       styles: {
         // @ts-expect-error - size should be a number, not a string
-        nodes: [{ match: "type", cases: { person: { size: "big" } } }],
+        nodes: [{ matchData: "type", cases: { person: { size: "big" } } }],
       },
     });
   });

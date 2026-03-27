@@ -377,9 +377,14 @@ export type {
   ForbidBaseKeys,
   NodeBackdropBuiltInVariables,
   StylesDeclaration,
+  StatePredicate,
+  DataPredicate,
   DirectAttributeBinding,
   NumericalAttributeBinding,
   GraphicValue,
+  InlineFunctionConditional,
+  InlineStateConditional,
+  InlineDataConditional,
   StageStyleValue,
   StageStyles,
 } from "./types/styles";
@@ -387,10 +392,12 @@ export { DEFAULT_STYLES } from "./types/styles";
 export {
   resolveGraphicValue,
   evaluateStatePredicate,
+  evaluateDataPredicate,
   evaluateNodeStyle,
   evaluateEdgeStyle,
   analyzeStyleDeclaration,
 } from "./core/styles";
+export { isInlineFunctionConditional, isInlineStateConditional, isInlineDataConditional } from "./types/styles";
 export type {
   ResolvedNodeStyle,
   ResolvedEdgeStyle,

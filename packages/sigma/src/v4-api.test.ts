@@ -118,8 +118,8 @@ describe("Sigma v4 API", () => {
         styles: {
           nodes: [
             { color: "#666", size: 10 },
-            { when: "isHighlighted", then: { color: "#ff0000", size: 15 } },
-            { when: "isHovered", then: { color: "#00ff00" } },
+            { whenState: "isHighlighted", then: { color: "#ff0000", size: 15 } },
+            { whenState: "isHovered", then: { color: "#00ff00" } },
           ],
         },
       });
@@ -142,7 +142,7 @@ describe("Sigma v4 API", () => {
 
       const sigma = new Sigma(graph, container, {
         styles: {
-          nodes: [{ visibility: "visible" }, { when: "isHidden", then: { visibility: "hidden" } }],
+          nodes: [{ visibility: "visible" }, { whenState: "isHidden", then: { visibility: "hidden" } }],
         },
       });
 

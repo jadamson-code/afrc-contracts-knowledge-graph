@@ -101,18 +101,18 @@ A concise conditional within a single property.
 ```typescript
 {
   size: {
-    when: "isHovered",
+    whenState: "isHovered",
     then: 15,
     else: { attribute: "size", defaultValue: 10 },
   },
 }
 ```
 
-| Field  | Type              | Required | Description                                                                    |
-| ------ | ----------------- | -------- | ------------------------------------------------------------------------------ |
-| `when` | `StatePredicate`  | Yes      | Condition to test (see below)                                                  |
-| `then` | `GraphicValue<T>` | Yes      | Value when condition is true (can be any value type except inline conditional) |
-| `else` | `GraphicValue<T>` | No       | Value when condition is false                                                  |
+| Field                             | Type              | Required | Description                                                                    |
+| --------------------------------- | ----------------- | -------- | ------------------------------------------------------------------------------ |
+| `whenState` / `whenData` / `when` | predicate         | Yes      | Condition to test (see Predicates below)                                       |
+| `then`                            | `GraphicValue<T>` | Yes      | Value when condition is true (can be any value type except inline conditional) |
+| `else`                            | `GraphicValue<T>` | No       | Value when condition is false                                                  |
 
 ## Rule-level conditionals
 
@@ -123,7 +123,7 @@ styles: {
   nodes: [
     { color: { attribute: "color" }, size: { attribute: "size" } },
     {
-      when: "isHovered",
+      whenState: "isHovered",
       then: { size: 15, labelVisibility: "visible" },
     },
   ],
@@ -134,14 +134,14 @@ Rules are evaluated in order. Later rules override earlier ones for any properti
 
 ## Rule-level match
 
-When you need to apply different styles based on a categorical attribute (e.g. node type, edge kind), use a `match`/`cases` rule. It selects a style block based on the value of a graph attribute:
+When you need to apply different styles based on a categorical attribute (e.g. node type, edge kind), use a `matchData`/`cases` rule. It selects a style block based on the value of a graph attribute:
 
 ```typescript
 styles: {
   edges: [
     { color: "#ccc", size: 1 },
     {
-      match: "type",
+      matchData: "type",
       cases: {
         citation: { color: "#0f0", head: "arrow" },
         coauthorship: { color: "#f00", size: 3 },
@@ -151,22 +151,33 @@ styles: {
 }
 ```
 
-| Field   | Type                              | Required | Description                                   |
-| ------- | --------------------------------- | -------- | --------------------------------------------- |
-| `match` | `string`                          | Yes      | Attribute name to read from the element       |
-| `cases` | `Record<string, StyleProperties>` | Yes      | Mapping from attribute values to style blocks |
+| Field       | Type                              | Required | Description                                   |
+| ----------- | --------------------------------- | -------- | --------------------------------------------- |
+| `matchData` | `string`                          | Yes      | Attribute name to read from the element       |
+| `cases`     | `Record<string, StyleProperties>` | Yes      | Mapping from attribute values to style blocks |
 
 If the attribute value doesn't match any case, the rule is skipped. Attribute values are coerced to strings for lookup (so a numeric attribute `2` matches the key `"2"`).
 
-Unlike function-based `when` predicates, `match`/`cases` only reads graph attributes, so sigma can skip re-evaluation when only the interaction state changes (e.g. hovering). This makes it the preferred approach for attribute-based branching on large graphs.
+Unlike function-based `when` predicates, `matchData`/`cases` only reads graph attributes, so sigma can skip re-evaluation when only the interaction state changes (e.g. hovering). This makes it the preferred approach for attribute-based branching on large graphs.
 
-## State predicates
+There is also `matchState` for branching on a state key value (e.g. `matchState: "status"`).
 
-The `when` clause in both inline and rule-level conditionals supports several forms:
+## Predicates
 
-| Form     | Example                                    | Matches when                     |
-| -------- | ------------------------------------------ | -------------------------------- |
-| String   | `"isHovered"`                              | The named state flag is `true`   |
-| Array    | `["isHovered", "isActive"]`                | ALL named flags are `true` (AND) |
-| Object   | `{ isHovered: true, isActive: false }`     | All specified values match       |
-| Function | `(attrs, state, graphState, graph) => ...` | The function returns `true`      |
+There are three kinds of predicates used in `whenState`/`whenData`/`when` and the `match*` variants.
+
+**`whenState`** matches against element state flags:
+
+| Form   | Example                                | Matches when                     |
+| ------ | -------------------------------------- | -------------------------------- |
+| String | `"isHovered"`                          | The named state flag is `true`   |
+| Array  | `["isHovered", "isActive"]`            | ALL named flags are `true` (AND) |
+| Object | `{ isHovered: true, isActive: false }` | All specified values match       |
+
+**`whenData`** matches against graph attributes (same forms, but for attribute names/values). Re-evaluated only when graph data changes, not on interaction state changes.
+
+**`when`** takes a function for full control:
+
+| Form     | Example                                    | Matches when                |
+| -------- | ------------------------------------------ | --------------------------- |
+| Function | `(attrs, state, graphState, graph) => ...` | The function returns `true` |

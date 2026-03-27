@@ -33,7 +33,7 @@ describe("Render lifecycle", () => {
             when: (_attrs, state, graphState) => !!graphState.selectionSize && !state.isSelected,
             then: { color: "#ccc" },
           },
-          { when: "isSelected", then: { color: "#ff0000" } },
+          { whenState: "isSelected", then: { color: "#ff0000" } },
         ],
       },
     });

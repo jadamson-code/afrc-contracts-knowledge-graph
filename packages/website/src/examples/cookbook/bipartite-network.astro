@@ -34,7 +34,7 @@
       nodes: [
         DEFAULT_STYLES.nodes,
         {
-          when: "isHovered",
+          whenState: "isHovered",
           then: {
             backdropVisibility: "visible",
             backdropColor: "#ffffff",
@@ -44,7 +44,7 @@
           },
         },
         {
-          match: "type",
+          matchData: "type",
           cases: {
             disease: {
               shape: "circle",

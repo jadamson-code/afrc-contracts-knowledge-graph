@@ -33,7 +33,9 @@ import {
   FullGraphState,
   FullNodeState,
   GraphicValue,
-  InlineConditional,
+  InlineDataConditional,
+  InlineFunctionConditional,
+  InlineStateConditional,
   NodeStyleProperties,
 } from "./styles";
 
@@ -170,7 +172,9 @@ type InferredNodeStyleRule<
   Shape extends string = N["shapes"] extends readonly NodeShapeSpec[] ? ExtractShapeNames<N["shapes"]> : string,
 > =
   | InferredNodeStyleProperties<N, NA, NS, GS, NPV, Shape>
-  | InlineConditional<NA, NS, GS, InferredNodeStyleProperties<N, NA, NS, GS, NPV, Shape>>;
+  | InlineFunctionConditional<NA, NS, GS, InferredNodeStyleProperties<N, NA, NS, GS, NPV, Shape>>
+  | InlineStateConditional<NA, NS, GS, InferredNodeStyleProperties<N, NA, NS, GS, NPV, Shape>>
+  | InlineDataConditional<NA, NS, GS, InferredNodeStyleProperties<N, NA, NS, GS, NPV, Shape>>;
 
 /**
  * Computes edge styles type from primitives.
@@ -221,7 +225,9 @@ type InferredEdgeStyleRule<
     : string,
 > =
   | InferredEdgeStyleProperties<E, EA, ES, GS, EPV, Path, Extremity>
-  | InlineConditional<EA, ES, GS, InferredEdgeStyleProperties<E, EA, ES, GS, EPV, Path, Extremity>>;
+  | InlineFunctionConditional<EA, ES, GS, InferredEdgeStyleProperties<E, EA, ES, GS, EPV, Path, Extremity>>
+  | InlineStateConditional<EA, ES, GS, InferredEdgeStyleProperties<E, EA, ES, GS, EPV, Path, Extremity>>
+  | InlineDataConditional<EA, ES, GS, InferredEdgeStyleProperties<E, EA, ES, GS, EPV, Path, Extremity>>;
 
 // =============================================================================
 // STYLES DECLARATION TYPE

@@ -40,7 +40,7 @@ const renderer = new Sigma(graph, container, {
       // Base style: read from graph attributes
       { color: { attribute: "color" }, size: { attribute: "size" } },
       // Conditional: highlight hovered nodes
-      { when: "isHovered", then: { labelVisibility: "visible" } },
+      { whenState: "isHovered", then: { labelVisibility: "visible" } },
     ],
   },
 });
@@ -77,7 +77,7 @@ const renderer = new Sigma(graph, container, {
     depthLayers: ["edges", "nodes", "nodeLabels", "topEdges", "topNodes", "topNodeLabels"],
   },
   styles: {
-    nodes: [{ when: "isActive", then: { depth: "topNodes", labelDepth: "topNodeLabels" } }],
+    nodes: [{ whenState: "isActive", then: { depth: "topNodes", labelDepth: "topNodeLabels" } }],
   },
 });
 ```
@@ -200,7 +200,7 @@ const renderer = new Sigma(graph, container, {
         then: { color: "#f6f6f6", label: "" },
       },
       {
-        when: "isActive",
+        whenState: "isActive",
         then: { color: { attribute: "color" }, label: { attribute: "label" }, labelVisibility: "visible" },
       },
     ],
@@ -257,7 +257,7 @@ primitives: {
 styles: {
   nodes: [
     {
-      when: "isHighlighted",
+      whenState: "isHighlighted",
       then: { depth: "topNodes", labelDepth: "topNodeLabels" },
     },
   ],

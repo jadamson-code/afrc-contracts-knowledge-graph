@@ -47,7 +47,7 @@ const renderer = new Sigma(graph, container, {
       },
       // Render active nodes on top using custom depth layers
       {
-        when: "isActive",
+        whenState: "isActive",
         then: { depth: "topNodes", labelVisibility: "visible" },
       },
     ],

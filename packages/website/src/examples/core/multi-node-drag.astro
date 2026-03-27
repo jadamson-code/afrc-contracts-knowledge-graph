@@ -94,14 +94,14 @@
         },
         // Selected nodes
         {
-          when: "isSelected",
+          whenState: "isSelected",
           then: {
             backdropVisibility: "visible",
           },
         },
         // Dragged nodes appear on top
         {
-          when: "isDragged",
+          whenState: "isDragged",
           then: {
             depth: "topNodes",
             labelDepth: "topNodeLabels",
@@ -114,7 +114,7 @@
         color: (_, _state, graphState) => (graphState.selectionSize || graphState.isDragging ? "lightgrey" : "grey"),
       },
       stage: {
-        when: "isDragging",
+        whenState: "isDragging",
         then: { cursor: "grabbing" },
       },
     },

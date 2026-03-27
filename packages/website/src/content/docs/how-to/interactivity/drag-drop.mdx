@@ -43,12 +43,12 @@ const renderer = new Sigma(graph, container, {
     nodes: {
       // Dragged nodes appear on top with their label visible
       depth: {
-        when: "isDragged",
+        whenState: "isDragged",
         then: "topNodes",
         else: "nodes",
       },
       labelVisibility: {
-        when: "isDragged",
+        whenState: "isDragged",
         then: "visible",
         else: "auto",
       },

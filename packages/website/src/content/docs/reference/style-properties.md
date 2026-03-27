@@ -132,7 +132,7 @@ const renderer = new Sigma(graph, container, {
   styles: {
     nodes: { cursor: "grab" },
     stage: {
-      when: "isDragging",
+      whenState: "isDragging",
       then: { cursor: "grabbing" },
     },
   },

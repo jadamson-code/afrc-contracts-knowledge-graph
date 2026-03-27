@@ -59,7 +59,7 @@
 
   const backdropVisibility =
     backdropDisplay === "hover"
-      ? { when: "isHovered" as const, then: "visible" as const, else: "hidden" as const }
+      ? { whenState: "isHovered" as const, then: "visible" as const, else: "hidden" as const }
       : backdropDisplay === "hidden"
         ? ("hidden" as const)
         : ("visible" as const);

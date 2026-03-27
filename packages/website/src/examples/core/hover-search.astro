@@ -53,7 +53,7 @@
           label: { attribute: "label" },
         },
         {
-          when: "isHighlighted",
+          whenState: "isHighlighted",
           then: { labelVisibility: "visible" },
         },
         {
@@ -61,7 +61,7 @@
           then: { color: GREY, label: "" },
         },
         {
-          when: "isActive",
+          whenState: "isActive",
           then: { depth: "topNodes", labelDepth: "topNodeLabels", labelVisibility: "visible" },
         },
       ],
@@ -75,7 +75,7 @@
           then: { color: GREY },
         },
         {
-          when: "isActive",
+          whenState: "isActive",
           then: { depth: "topEdges" },
         },
       ],

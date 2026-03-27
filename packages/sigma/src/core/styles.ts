@@ -15,18 +15,21 @@ import {
   BaseGraphState,
   BaseNodeState,
   CategoricalAttributeBinding,
+  DataPredicate,
   DirectAttributeBinding,
   EasingFunction,
   GraphicValue,
-  InlineConditional,
   NumericalAttributeBinding,
   type StageInlineConditional,
+  type StageInlineFunctionConditional,
   type StagePredicate,
   type StageStyleValue,
   StatePredicate,
   ValueFunction,
   isAttributeBinding,
-  isInlineConditional,
+  isInlineDataConditional,
+  isInlineFunctionConditional,
+  isInlineStateConditional,
   isValueFunction,
 } from "../types/styles";
 
@@ -75,25 +78,17 @@ function isCategoricalBinding<T>(binding: AttributeBinding<T>): binding is Categ
 }
 
 /**
- * Evaluates a state predicate against the current state.
+ * Evaluates a state predicate (shorthand form) against the current state.
+ * For function predicates, use `when` in style rules or `InlineFunctionConditional` for inline values.
  *
- * @param predicate - The predicate to evaluate
- * @param attributes - The element's attributes
+ * @param predicate - The shorthand predicate to evaluate
  * @param state - The element's state (node or edge)
- * @param graphState - The graph-level state
- * @param graph - The graph instance
  * @returns Whether the predicate matches
  */
-export function evaluateStatePredicate<
-  A extends Attributes = Attributes,
-  S extends BaseNodeState | BaseEdgeState = BaseNodeState,
-  GS extends BaseGraphState = BaseGraphState,
->(predicate: StatePredicate<A, S, GS>, attributes: A, state: S, graphState: GS, graph: AbstractGraph): boolean {
-  // Function predicate: call it directly
-  if (typeof predicate === "function") {
-    return predicate(attributes, state, graphState, graph);
-  }
-
+export function evaluateStatePredicate<S extends BaseNodeState | BaseEdgeState = BaseNodeState>(
+  predicate: StatePredicate<S>,
+  state: S,
+): boolean {
   // String predicate: single flag name
   if (typeof predicate === "string") {
     return state[predicate as keyof S] === true;
@@ -206,31 +201,20 @@ function resolveAttributeBinding<T>(
 }
 
 /**
- * Resolves an inline conditional to its value.
+ * Evaluates a data predicate (shorthand form) against the item's graph attributes.
+ * For function predicates, use `when` in style rules or `InlineFunctionConditional` for inline values.
  */
-function resolveInlineConditional<
-  A extends Attributes,
-  S extends BaseNodeState | BaseEdgeState,
-  GS extends BaseGraphState,
-  T,
->(
-  conditional: InlineConditional<A, S, GS, T>,
+export function evaluateDataPredicate<A extends Attributes = Attributes>(
+  predicate: DataPredicate<A>,
   attributes: A,
-  state: S,
-  graphState: GS,
-  graph: AbstractGraph,
-  defaultValue: T,
-): T {
-  const matches = evaluateStatePredicate(conditional.when, attributes, state, graphState, graph);
-
-  const branch = matches ? conditional.then : conditional.else;
-
-  if (branch === undefined) {
-    return defaultValue;
+): boolean {
+  // Uses truthiness (not === true) since data attributes are arbitrary types, not strict booleans.
+  if (typeof predicate === "string") return !!attributes[predicate as keyof A];
+  if (Array.isArray(predicate)) return predicate.every((key) => !!attributes[key as keyof A]);
+  if (typeof predicate === "object" && predicate !== null) {
+    return Object.entries(predicate).every(([key, value]) => attributes[key as keyof A] === value);
   }
-
-  // Recursively resolve the branch value
-  return resolveGraphicValue(branch as GraphicValue<A, S, GS, T>, attributes, state, graphState, graph, defaultValue);
+  return false;
 }
 
 /**
@@ -241,14 +225,6 @@ function resolveInlineConditional<
  * - Attribute bindings (direct, numerical range, categorical dict)
  * - Function values
  * - Inline conditionals
- *
- * @param value - The GraphicValue to resolve
- * @param attributes - The element's attributes
- * @param state - The element's state (node or edge)
- * @param graphState - The graph-level state
- * @param graph - The graph instance
- * @param defaultValue - Default value if resolution fails
- * @returns The resolved value
  */
 export function resolveGraphicValue<
   A extends Attributes = Attributes,
@@ -256,29 +232,36 @@ export function resolveGraphicValue<
   GS extends BaseGraphState = BaseGraphState,
   T = unknown,
 >(value: GraphicValue<A, S, GS, T>, attributes: A, state: S, graphState: GS, graph: AbstractGraph, defaultValue: T): T {
-  // Null/undefined: return default
-  if (value === null || value === undefined) {
-    return defaultValue;
+  if (value === null || value === undefined) return defaultValue;
+
+  if (isInlineFunctionConditional<A, S, GS, T>(value)) {
+    const branch = value.when(attributes, state, graphState, graph) ? value.then : value.else;
+    if (branch === undefined) return defaultValue;
+    return resolveGraphicValue(branch as GraphicValue<A, S, GS, T>, attributes, state, graphState, graph, defaultValue);
   }
 
-  // Inline conditional: { when, then, else }
-  if (isInlineConditional<A, S, GS, T>(value)) {
-    return resolveInlineConditional(value, attributes, state, graphState, graph, defaultValue);
+  if (isInlineStateConditional<A, S, GS, T>(value)) {
+    const branch = evaluateStatePredicate(value.whenState, state) ? value.then : value.else;
+    if (branch === undefined) return defaultValue;
+    return resolveGraphicValue(branch as GraphicValue<A, S, GS, T>, attributes, state, graphState, graph, defaultValue);
   }
 
-  // Function value: call it
+  if (isInlineDataConditional<A, S, GS, T>(value)) {
+    const branch = evaluateDataPredicate(value.whenData, attributes) ? value.then : value.else;
+    if (branch === undefined) return defaultValue;
+    return resolveGraphicValue(branch as GraphicValue<A, S, GS, T>, attributes, state, graphState, graph, defaultValue);
+  }
+
   if (isValueFunction<A, S, GS, T>(value)) {
     const result = (value as ValueFunction<A, S, GS, T>)(attributes, state, graphState, graph);
     return result ?? defaultValue;
   }
 
-  // Attribute binding: resolve it
   if (isAttributeBinding<T>(value)) {
     const result = resolveAttributeBinding(value, attributes, graph);
     return result ?? defaultValue;
   }
 
-  // Literal value: pass-through
   return value as T;
 }
 
@@ -302,26 +285,24 @@ export interface StyleAnalysis {
 }
 
 /**
- * Classifies the state dependency of a predicate.
- */
-function classifyPredicate(predicate: unknown): StyleDependency {
-  if (typeof predicate === "function") return "graph-state";
-  if (typeof predicate === "string" || Array.isArray(predicate)) return "item-state";
-  if (typeof predicate === "object" && predicate !== null) return "item-state";
-  return "static";
-}
-
-/**
  * Classifies the state dependency of a single property value.
  * Uses the same type guards as resolveGraphicValue to stay in sync.
  */
 function classifyValue(value: unknown): StyleDependency {
   if (value === null || value === undefined) return "static";
-  if (isInlineConditional(value)) {
-    const predDep = classifyPredicate(value.when);
+  // when: function → always graph-state regardless of branch dependencies
+  if (isInlineFunctionConditional(value)) return "graph-state";
+  if (isInlineStateConditional(value)) {
+    // whenState shorthand predicates are always "item-state"
     const thenDep = classifyValue(value.then);
     const elseDep = value.else !== undefined ? classifyValue(value.else) : ("static" as StyleDependency);
-    return worstDependency(predDep, worstDependency(thenDep, elseDep));
+    return worstDependency("item-state", worstDependency(thenDep, elseDep));
+  }
+  // whenData conditions only depend on attributes → "static" for the predicate itself
+  if (isInlineDataConditional(value)) {
+    const thenDep = classifyValue(value.then);
+    const elseDep = value.else !== undefined ? classifyValue(value.else) : ("static" as StyleDependency);
+    return worstDependency(thenDep, elseDep);
   }
   if (isValueFunction(value)) return "graph-state";
   if (isAttributeBinding(value)) return "static";
@@ -352,8 +333,8 @@ export function analyzeStyleDeclaration(
   let yAttribute: string | null = null;
 
   for (const rule of rules) {
-    // Match/cases rule — only depends on attributes, classify branch values
-    if ("match" in rule && "cases" in rule) {
+    // matchData/cases — depends on graph attributes only: classify branch values, predicate is "static"
+    if ("matchData" in rule && "cases" in rule) {
       const cases = rule.cases as Record<string, Record<string, unknown>>;
       for (const branch of Object.values(cases)) {
         for (const value of Object.values(branch)) {
@@ -361,10 +342,38 @@ export function analyzeStyleDeclaration(
         }
       }
     }
-    // Conditional rule with `when` predicate
-    else if ("when" in rule) {
-      dependency = worstDependency(dependency, classifyPredicate(rule.when));
-      // Also check values inside `then` and `else` branches
+    // matchState/cases — depends on item state: "item-state" + classify branch values
+    else if ("matchState" in rule && "cases" in rule) {
+      dependency = worstDependency(dependency, "item-state");
+      const cases = rule.cases as Record<string, Record<string, unknown>>;
+      for (const branch of Object.values(cases)) {
+        for (const value of Object.values(branch)) {
+          dependency = worstDependency(dependency, classifyValue(value));
+        }
+      }
+    }
+    // when: function conditional — always graph-state
+    else if ("when" in rule && "then" in rule) {
+      dependency = "graph-state";
+    }
+    // whenState conditional — shorthand predicate is always "item-state", classify branch values
+    else if ("whenState" in rule) {
+      dependency = worstDependency(dependency, "item-state");
+      const thenObj = rule.then as Record<string, unknown> | undefined;
+      if (thenObj && typeof thenObj === "object") {
+        for (const value of Object.values(thenObj)) {
+          dependency = worstDependency(dependency, classifyValue(value));
+        }
+      }
+      const elseObj = rule.else as Record<string, unknown> | undefined;
+      if (elseObj && typeof elseObj === "object") {
+        for (const value of Object.values(elseObj)) {
+          dependency = worstDependency(dependency, classifyValue(value));
+        }
+      }
+    }
+    // whenData conditional — predicate is "static", classify branch values only
+    else if ("whenData" in rule) {
       const thenObj = rule.then as Record<string, unknown> | undefined;
       if (thenObj && typeof thenObj === "object") {
         for (const value of Object.values(thenObj)) {
@@ -380,7 +389,7 @@ export function analyzeStyleDeclaration(
     } else {
       // Regular rule — check each property value and extract position bindings
       for (const [key, value] of Object.entries(rule)) {
-        if (key === "when" || key === "then" || key === "else") continue;
+        if (RULE_CONTROL_KEYS.has(key)) continue;
         dependency = worstDependency(dependency, classifyValue(value));
 
         // Extract position attribute names from direct bindings
@@ -520,6 +529,9 @@ const DEFAULT_RESOLVED_EDGE_STYLE: ResolvedEdgeStyle = {
   labelDepth: "edgeLabels",
 };
 
+// Keys used as rule control flow — skipped when iterating over style properties.
+const RULE_CONTROL_KEYS = new Set(["when", "whenState", "whenData", "then", "else"]);
+
 // Initialize pre-computed key/value arrays for fast reset
 const NODE_DEFAULT_KEYS = Object.keys(DEFAULT_RESOLVED_NODE_STYLE);
 const NODE_DEFAULT_VALUES = Object.values(DEFAULT_RESOLVED_NODE_STYLE);
@@ -568,17 +580,28 @@ export function evaluateNodeStyle<
 
   // Process each rule
   for (const rule of rules) {
-    if ("match" in rule && "cases" in rule) {
-      const { match, cases } = rule as { match: string; cases: Record<string, Record<string, unknown>> };
-      const key = String(attributes[match] ?? "");
-      if (key in cases) {
-        applyNodeStyleRule(result, cases[key], attributes, state, graphState, graph);
-      }
+    if ("matchData" in rule && "cases" in rule) {
+      const { matchData, cases } = rule as { matchData: string; cases: Record<string, Record<string, unknown>> };
+      const key = String(attributes[matchData] ?? "");
+      if (key in cases) applyNodeStyleRule(result, cases[key], attributes, state, graphState, graph);
+    } else if ("matchState" in rule && "cases" in rule) {
+      const { matchState, cases } = rule as { matchState: string; cases: Record<string, Record<string, unknown>> };
+      const key = String(state[matchState as keyof NS] ?? "");
+      if (key in cases) applyNodeStyleRule(result, cases[key], attributes, state, graphState, graph);
     } else if ("when" in rule && "then" in rule) {
-      const conditional = rule as { when: StatePredicate<NA, NS, GS>; then: Record<string, unknown> };
-      if (!evaluateStatePredicate(conditional.when, attributes, state, graphState, graph)) {
-        continue;
-      }
+      const conditional = rule as {
+        when: (a: NA, s: NS, gs: GS, g: AbstractGraph) => boolean;
+        then: Record<string, unknown>;
+      };
+      if (!conditional.when(attributes, state, graphState, graph)) continue;
+      applyNodeStyleRule(result, conditional.then, attributes, state, graphState, graph);
+    } else if ("whenState" in rule && "then" in rule) {
+      const conditional = rule as { whenState: StatePredicate<NS>; then: Record<string, unknown> };
+      if (!evaluateStatePredicate(conditional.whenState, state)) continue;
+      applyNodeStyleRule(result, conditional.then, attributes, state, graphState, graph);
+    } else if ("whenData" in rule && "then" in rule) {
+      const conditional = rule as { whenData: DataPredicate<NA>; then: Record<string, unknown> };
+      if (!evaluateDataPredicate(conditional.whenData, attributes)) continue;
       applyNodeStyleRule(result, conditional.then, attributes, state, graphState, graph);
     } else {
       applyNodeStyleRule(result, rule, attributes, state, graphState, graph);
@@ -600,7 +623,7 @@ function applyNodeStyleRule<NA extends Attributes, NS extends BaseNodeState, GS 
   graph: AbstractGraph,
 ): void {
   for (const key in rule) {
-    if (key === "when" || key === "then" || key === "else") continue;
+    if (RULE_CONTROL_KEYS.has(key)) continue;
 
     const defaultValue = result[key] ?? DEFAULT_RESOLVED_NODE_STYLE[key as keyof ResolvedNodeStyle];
     result[key] = resolveGraphicValue(
@@ -653,17 +676,28 @@ export function evaluateEdgeStyle<
 
   // Process each rule
   for (const rule of rules) {
-    if ("match" in rule && "cases" in rule) {
-      const { match, cases } = rule as { match: string; cases: Record<string, Record<string, unknown>> };
-      const key = String(attributes[match] ?? "");
-      if (key in cases) {
-        applyEdgeStyleRule(result, cases[key], attributes, state, graphState, graph);
-      }
+    if ("matchData" in rule && "cases" in rule) {
+      const { matchData, cases } = rule as { matchData: string; cases: Record<string, Record<string, unknown>> };
+      const key = String(attributes[matchData] ?? "");
+      if (key in cases) applyEdgeStyleRule(result, cases[key], attributes, state, graphState, graph);
+    } else if ("matchState" in rule && "cases" in rule) {
+      const { matchState, cases } = rule as { matchState: string; cases: Record<string, Record<string, unknown>> };
+      const key = String(state[matchState as keyof ES] ?? "");
+      if (key in cases) applyEdgeStyleRule(result, cases[key], attributes, state, graphState, graph);
     } else if ("when" in rule && "then" in rule) {
-      const conditional = rule as { when: StatePredicate<EA, ES, GS>; then: Record<string, unknown> };
-      if (!evaluateStatePredicate(conditional.when, attributes, state, graphState, graph)) {
-        continue;
-      }
+      const conditional = rule as {
+        when: (a: EA, s: ES, gs: GS, g: AbstractGraph) => boolean;
+        then: Record<string, unknown>;
+      };
+      if (!conditional.when(attributes, state, graphState, graph)) continue;
+      applyEdgeStyleRule(result, conditional.then, attributes, state, graphState, graph);
+    } else if ("whenState" in rule && "then" in rule) {
+      const conditional = rule as { whenState: StatePredicate<ES>; then: Record<string, unknown> };
+      if (!evaluateStatePredicate(conditional.whenState, state)) continue;
+      applyEdgeStyleRule(result, conditional.then, attributes, state, graphState, graph);
+    } else if ("whenData" in rule && "then" in rule) {
+      const conditional = rule as { whenData: DataPredicate<EA>; then: Record<string, unknown> };
+      if (!evaluateDataPredicate(conditional.whenData, attributes)) continue;
       applyEdgeStyleRule(result, conditional.then, attributes, state, graphState, graph);
     } else {
       applyEdgeStyleRule(result, rule, attributes, state, graphState, graph);
@@ -685,7 +719,7 @@ function applyEdgeStyleRule<EA extends Attributes, ES extends BaseEdgeState, GS 
   graph: AbstractGraph,
 ): void {
   for (const key in rule) {
-    if (key === "when" || key === "then" || key === "else") continue;
+    if (RULE_CONTROL_KEYS.has(key)) continue;
 
     const defaultValue = result[key] ?? DEFAULT_RESOLVED_EDGE_STYLE[key as keyof ResolvedEdgeStyle];
     result[key] = resolveGraphicValue(
@@ -718,8 +752,16 @@ function resolveStageStyleValue<GS extends BaseGraphState, T>(
   if (value === undefined || value === null) return defaultValue;
   if (typeof value === "function") return (value as (gs: GS) => T)(graphState) ?? defaultValue;
   if (typeof value === "object" && "when" in value) {
+    const cond = value as StageInlineFunctionConditional<GS, T>;
+    const matches = cond.when(graphState);
+    const branch = matches ? cond.then : cond.else;
+    if (branch === undefined) return defaultValue;
+    if (typeof branch === "function") return (branch as (gs: GS) => T)(graphState) ?? defaultValue;
+    return branch ?? defaultValue;
+  }
+  if (typeof value === "object" && "whenState" in value) {
     const cond = value as StageInlineConditional<GS, T>;
-    const matches = evaluateStagePredicate(cond.when, graphState);
+    const matches = evaluateStagePredicate(cond.whenState, graphState);
     const branch = matches ? cond.then : cond.else;
     if (branch === undefined) return defaultValue;
     if (typeof branch === "function") return (branch as (gs: GS) => T)(graphState) ?? defaultValue;
@@ -729,10 +771,9 @@ function resolveStageStyleValue<GS extends BaseGraphState, T>(
 }
 
 /**
- * Evaluates a stage predicate against graph state.
+ * Evaluates a stage predicate (shorthand form) against graph state.
  */
 function evaluateStagePredicate<GS extends BaseGraphState>(predicate: StagePredicate<GS>, graphState: GS): boolean {
-  if (typeof predicate === "function") return predicate(graphState);
   if (typeof predicate === "string") return graphState[predicate as keyof GS] === true;
   if (Array.isArray(predicate)) return predicate.every((flag) => graphState[flag as keyof GS] === true);
   if (typeof predicate === "object" && predicate !== null) {
@@ -755,7 +796,13 @@ export function evaluateStageStyle<GS extends BaseGraphState>(
 
   for (const rule of rules) {
     if ("when" in rule && "then" in rule) {
-      const matches = evaluateStagePredicate(rule.when as StagePredicate<GS>, graphState);
+      const matches = (rule.when as (gs: GS) => boolean)(graphState);
+      const branch = matches ? rule.then : rule.else;
+      if (branch && typeof branch === "object") {
+        applyStageStyleRule(result, branch as Record<string, unknown>, graphState);
+      }
+    } else if ("whenState" in rule && "then" in rule) {
+      const matches = evaluateStagePredicate(rule.whenState as StagePredicate<GS>, graphState);
       const branch = matches ? rule.then : rule.else;
       if (branch && typeof branch === "object") {
         applyStageStyleRule(result, branch as Record<string, unknown>, graphState);
@@ -774,7 +821,7 @@ function applyStageStyleRule<GS extends BaseGraphState>(
   graphState: GS,
 ): void {
   for (const [key, value] of Object.entries(rule)) {
-    if (key === "when" || key === "then" || key === "else") continue;
+    if (RULE_CONTROL_KEYS.has(key)) continue;
     (result as Record<string, unknown>)[key] = resolveStageStyleValue(
       value as StageStyleValue<GS, unknown>,
       graphState,

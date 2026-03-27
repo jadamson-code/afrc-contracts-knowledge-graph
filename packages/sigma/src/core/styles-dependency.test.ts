@@ -42,17 +42,19 @@ describe("analyzeStyleDeclaration", () => {
 
     describe("item-state styles", () => {
       test("returns 'item-state' for string predicate in rule", () => {
-        expect(analyzeStyleDeclaration([{ when: "isHovered", then: { color: "#f00" } }]).dependency).toBe("item-state");
+        expect(analyzeStyleDeclaration([{ whenState: "isHovered", then: { color: "#f00" } }]).dependency).toBe(
+          "item-state",
+        );
       });
 
       test("returns 'item-state' for array predicate in rule", () => {
         expect(
-          analyzeStyleDeclaration([{ when: ["isHovered", "isHighlighted"], then: { color: "#f00" } }]).dependency,
+          analyzeStyleDeclaration([{ whenState: ["isHovered", "isHighlighted"], then: { color: "#f00" } }]).dependency,
         ).toBe("item-state");
       });
 
       test("returns 'item-state' for object predicate in rule", () => {
-        expect(analyzeStyleDeclaration([{ when: { isHovered: true }, then: { color: "#f00" } }]).dependency).toBe(
+        expect(analyzeStyleDeclaration([{ whenState: { isHovered: true }, then: { color: "#f00" } }]).dependency).toBe(
           "item-state",
         );
       });
@@ -60,7 +62,7 @@ describe("analyzeStyleDeclaration", () => {
       test("returns 'item-state' for inline conditional with string predicate", () => {
         expect(
           analyzeStyleDeclaration({
-            color: { when: "isHovered", then: "#f00", else: "#ccc" },
+            color: { whenState: "isHovered", then: "#f00", else: "#ccc" },
           }).dependency,
         ).toBe("item-state");
       });
@@ -68,7 +70,7 @@ describe("analyzeStyleDeclaration", () => {
       test("returns 'item-state' for inline conditional with object predicate", () => {
         expect(
           analyzeStyleDeclaration({
-            color: { when: { isHovered: true }, then: "#f00", else: "#ccc" },
+            color: { whenState: { isHovered: true }, then: "#f00", else: "#ccc" },
           }).dependency,
         ).toBe("item-state");
       });
@@ -77,7 +79,7 @@ describe("analyzeStyleDeclaration", () => {
         expect(
           analyzeStyleDeclaration([
             { size: 10, color: { attribute: "color" } },
-            { when: "isHovered", then: { size: 20 } },
+            { whenState: "isHovered", then: { size: 20 } },
           ]).dependency,
         ).toBe("item-state");
       });
@@ -103,7 +105,7 @@ describe("analyzeStyleDeclaration", () => {
       test("returns 'graph-state' for value function inside inline conditional then", () => {
         expect(
           analyzeStyleDeclaration({
-            color: { when: "isHovered", then: () => "#f00", else: "#ccc" },
+            color: { whenState: "isHovered", then: () => "#f00", else: "#ccc" },
           }).dependency,
         ).toBe("graph-state");
       });
@@ -111,20 +113,20 @@ describe("analyzeStyleDeclaration", () => {
       test("returns 'graph-state' for value function inside inline conditional else", () => {
         expect(
           analyzeStyleDeclaration({
-            color: { when: "isHovered", then: "#f00", else: () => "#ccc" },
+            color: { whenState: "isHovered", then: "#f00", else: () => "#ccc" },
           }).dependency,
         ).toBe("graph-state");
       });
 
       test("returns 'graph-state' for value function inside conditional rule then branch", () => {
-        expect(analyzeStyleDeclaration([{ when: "isHovered", then: { color: () => "#f00" } }]).dependency).toBe(
+        expect(analyzeStyleDeclaration([{ whenState: "isHovered", then: { color: () => "#f00" } }]).dependency).toBe(
           "graph-state",
         );
       });
 
       test("returns 'graph-state' even when mixed with item-state rules", () => {
         expect(
-          analyzeStyleDeclaration([{ when: "isHovered", then: { size: 20 } }, { color: () => "#f00" }]).dependency,
+          analyzeStyleDeclaration([{ whenState: "isHovered", then: { size: 20 } }, { color: () => "#f00" }]).dependency,
         ).toBe("graph-state");
       });
     });
@@ -132,35 +134,37 @@ describe("analyzeStyleDeclaration", () => {
     describe("match/cases styles", () => {
       test("returns 'static' for match/cases with literal values", () => {
         expect(
-          analyzeStyleDeclaration([{ match: "type", cases: { A: { color: "#f00" }, B: { color: "#0f0" } } }])
+          analyzeStyleDeclaration([{ matchData: "type", cases: { A: { color: "#f00" }, B: { color: "#0f0" } } }])
             .dependency,
         ).toBe("static");
       });
 
       test("returns 'static' for match/cases with attribute bindings", () => {
         expect(
-          analyzeStyleDeclaration([{ match: "type", cases: { A: { size: { attribute: "score", min: 5, max: 50 } } } }])
-            .dependency,
+          analyzeStyleDeclaration([
+            { matchData: "type", cases: { A: { size: { attribute: "score", min: 5, max: 50 } } } },
+          ]).dependency,
         ).toBe("static");
       });
 
       test("returns 'graph-state' for match/cases with function values", () => {
-        expect(analyzeStyleDeclaration([{ match: "type", cases: { A: { color: () => "#f00" } } }]).dependency).toBe(
+        expect(analyzeStyleDeclaration([{ matchData: "type", cases: { A: { color: () => "#f00" } } }]).dependency).toBe(
           "graph-state",
         );
       });
 
       test("returns 'static' when mixed with other static rules", () => {
         expect(
-          analyzeStyleDeclaration([{ color: "#666" }, { match: "type", cases: { A: { color: "#f00" } } }]).dependency,
+          analyzeStyleDeclaration([{ color: "#666" }, { matchData: "type", cases: { A: { color: "#f00" } } }])
+            .dependency,
         ).toBe("static");
       });
 
       test("returns 'item-state' when mixed with item-state rules", () => {
         expect(
           analyzeStyleDeclaration([
-            { match: "type", cases: { A: { color: "#f00" } } },
-            { when: "isHovered", then: { size: 20 } },
+            { matchData: "type", cases: { A: { color: "#f00" } } },
+            { whenState: "isHovered", then: { size: 20 } },
           ]).dependency,
         ).toBe("item-state");
       });
@@ -209,7 +213,7 @@ describe("analyzeStyleDeclaration", () => {
     });
 
     test("ignores x/y inside conditional rules", () => {
-      const { xAttribute } = analyzeStyleDeclaration([{ when: "isDragged", then: { x: { attribute: "lng" } } }]);
+      const { xAttribute } = analyzeStyleDeclaration([{ whenState: "isDragged", then: { x: { attribute: "lng" } } }]);
       expect(xAttribute).toBeNull();
     });
   });

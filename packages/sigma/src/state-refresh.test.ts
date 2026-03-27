@@ -36,7 +36,7 @@ describe("State refresh: node display data", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        nodes: [{ color: "#666" }, { when: "isHighlighted", then: { color: "#ff0000" } }],
+        nodes: [{ color: "#666" }, { whenState: "isHighlighted", then: { color: "#ff0000" } }],
       },
     });
 
@@ -59,7 +59,7 @@ describe("State refresh: node display data", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        nodes: [{ color: "#666" }, { when: "isHighlighted", then: { color: "#ff0000" } }],
+        nodes: [{ color: "#666" }, { whenState: "isHighlighted", then: { color: "#ff0000" } }],
       },
     });
 
@@ -80,7 +80,7 @@ describe("State refresh: node display data", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        nodes: [{ size: 10 }, { when: "isHovered", then: { size: 20 } }],
+        nodes: [{ size: 10 }, { whenState: "isHovered", then: { size: 20 } }],
       },
     });
 
@@ -100,7 +100,7 @@ describe("State refresh: node display data", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        nodes: [{ visibility: "visible" }, { when: "isHidden", then: { visibility: "hidden" } }],
+        nodes: [{ visibility: "visible" }, { whenState: "isHidden", then: { visibility: "hidden" } }],
       },
     });
 
@@ -126,7 +126,7 @@ describe("State refresh: node display data", () => {
       styles: {
         nodes: [
           { label: { attribute: "label", defaultValue: "default" } },
-          { when: "isHighlighted", then: { label: "highlighted!" } },
+          { whenState: "isHighlighted", then: { label: "highlighted!" } },
         ],
       },
     });
@@ -153,7 +153,7 @@ describe("State refresh: node display data", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        nodes: [{ labelVisibility: "auto" }, { when: "isHighlighted", then: { labelVisibility: "visible" } }],
+        nodes: [{ labelVisibility: "auto" }, { whenState: "isHighlighted", then: { labelVisibility: "visible" } }],
       },
     });
 
@@ -175,7 +175,7 @@ describe("State refresh: edge display data", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        edges: [{ color: "#ccc" }, { when: "isHighlighted", then: { color: "#ff0000" } }],
+        edges: [{ color: "#ccc" }, { whenState: "isHighlighted", then: { color: "#ff0000" } }],
       },
     });
 
@@ -200,7 +200,7 @@ describe("State refresh: edge display data", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        edges: [{ visibility: "visible" }, { when: "isHidden", then: { visibility: "hidden" } }],
+        edges: [{ visibility: "visible" }, { whenState: "isHidden", then: { visibility: "hidden" } }],
       },
     });
 
@@ -221,7 +221,7 @@ describe("State refresh: edge display data", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        edges: [{ size: 1 }, { when: "isHighlighted", then: { size: 5 } }],
+        edges: [{ size: 1 }, { whenState: "isHighlighted", then: { size: 5 } }],
       },
     });
 
@@ -252,7 +252,7 @@ describe("State refresh: graph state affects all items", () => {
             when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive,
             then: { color: "#e0e0e0" },
           },
-          { when: "isActive", then: { color: "#ff0000" } },
+          { whenState: "isActive", then: { color: "#ff0000" } },
         ],
       },
     });
@@ -297,7 +297,7 @@ describe("State refresh: graph state affects all items", () => {
             when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive,
             then: { color: "#e0e0e0" },
           },
-          { when: "isActive", then: { color: "#00ff00" } },
+          { whenState: "isActive", then: { color: "#00ff00" } },
         ],
       },
     });
@@ -340,7 +340,7 @@ describe("State refresh: graph state affects all items", () => {
             when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive,
             then: { color: "#e0e0e0" },
           },
-          { when: "isActive", then: { color: "#ff0000" } },
+          { whenState: "isActive", then: { color: "#ff0000" } },
         ],
       },
     });
@@ -376,7 +376,7 @@ describe("State refresh: depth and zIndex", () => {
         depthLayers: ["edges", "nodes", "nodeLabels", "topNodes", "topNodeLabels"],
       },
       styles: {
-        nodes: [{ depth: "nodes" }, { when: "isHighlighted", then: { depth: "topNodes" } }],
+        nodes: [{ depth: "nodes" }, { whenState: "isHighlighted", then: { depth: "topNodes" } }],
       },
     });
 
@@ -400,7 +400,7 @@ describe("State refresh: depth and zIndex", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        nodes: [{ zIndex: 0 }, { when: "isHighlighted", then: { zIndex: 5 } }],
+        nodes: [{ zIndex: 0 }, { whenState: "isHighlighted", then: { zIndex: 5 } }],
       },
     });
 
@@ -424,8 +424,8 @@ describe("State refresh: multiple state changes in same frame", () => {
       styles: {
         nodes: [
           { color: "#666", size: 10 },
-          { when: "isHighlighted", then: { color: "#ff0000" } },
-          { when: "isHovered", then: { size: 20 } },
+          { whenState: "isHighlighted", then: { color: "#ff0000" } },
+          { whenState: "isHovered", then: { size: 20 } },
         ],
       },
     });
@@ -447,7 +447,7 @@ describe("State refresh: multiple state changes in same frame", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        nodes: [{ color: "#666" }, { when: "isHighlighted", then: { color: "#ff0000" } }],
+        nodes: [{ color: "#666" }, { whenState: "isHighlighted", then: { color: "#ff0000" } }],
       },
     });
 
@@ -531,8 +531,8 @@ describe("State refresh: match/cases styles unaffected by state changes", () => 
       styles: {
         nodes: [
           { size: 10 },
-          { match: "type", cases: { person: { color: "#0000ff" }, company: { color: "#00ff00" } } },
-          { when: "isHighlighted", then: { size: 20 } },
+          { matchData: "type", cases: { person: { color: "#0000ff" }, company: { color: "#00ff00" } } },
+          { whenState: "isHighlighted", then: { size: 20 } },
         ],
       },
     });
@@ -562,7 +562,7 @@ describe("State refresh: opacity", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        nodes: [{ opacity: 1 }, { when: "isHighlighted", then: { opacity: 0.3 } }],
+        nodes: [{ opacity: 1 }, { whenState: "isHighlighted", then: { opacity: 0.3 } }],
       },
     });
 
@@ -586,7 +586,7 @@ describe("State refresh: opacity", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        edges: [{ opacity: 1 }, { when: "isHighlighted", then: { opacity: 0.2 } }],
+        edges: [{ opacity: 1 }, { whenState: "isHighlighted", then: { opacity: 0.2 } }],
       },
     });
 
@@ -609,7 +609,7 @@ describe("State refresh: setNodesState and setEdgesState batch updates", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        nodes: [{ color: "#666" }, { when: "isHighlighted", then: { color: "#ff0000" } }],
+        nodes: [{ color: "#666" }, { whenState: "isHighlighted", then: { color: "#ff0000" } }],
       },
     });
 
@@ -629,7 +629,7 @@ describe("State refresh: setNodesState and setEdgesState batch updates", () => {
     const container = createContainer();
     const sigma = new Sigma(graph, container, {
       styles: {
-        edges: [{ color: "#ccc" }, { when: "isHighlighted", then: { color: "#ff0000" } }],
+        edges: [{ color: "#ccc" }, { whenState: "isHighlighted", then: { color: "#ff0000" } }],
       },
     });
 

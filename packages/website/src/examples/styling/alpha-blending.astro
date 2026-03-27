@@ -117,7 +117,7 @@
         {
           opacity: useColorAlpha ? 1 : nodeOpacity,
           size: { attribute: "score", min: 25, max: 100, minValue: 0, maxValue: 0.1 },
-          ...(isDarkBg ? { labelColor: { when: "isHovered", then: "#000", else: "#fff" } } : {}),
+          ...(isDarkBg ? { labelColor: { whenState: "isHovered", then: "#000", else: "#fff" } } : {}),
         },
       ],
       edges: [DEFAULT_STYLES.edges, { opacity: useColorAlpha ? 1 : edgeOpacity, size: edgeSize }],

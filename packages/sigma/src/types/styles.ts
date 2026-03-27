@@ -73,19 +73,24 @@ export type FullGraphState<GS = {}> = GS & BaseGraphState;
 export type ForbidBaseKeys<Base, T> = { [K in keyof T]: K extends keyof Base ? never : T[K] };
 
 /**
- * State predicate for conditional styling.
- * Used in both inline conditionals and array-form rules.
+ * State predicate for conditional styling (whenState / matchState).
+ * Shorthand forms only — use `when` for function predicates.
  *
  * - string: Single state flag name (e.g., "isHovered") - true if flag is true
  * - string[]: Array of state flags - true if ALL flags are true (AND logic)
  * - object: Map of state flags to expected values (AND logic)
- * - function: Full control predicate function
  */
-export type StatePredicate<A extends Attributes = Attributes, S = BaseNodeState | BaseEdgeState, GS = BaseGraphState> =
-  | keyof S
-  | readonly (keyof S)[]
-  | Partial<S>
-  | ((attributes: A, state: S, graphState: GS, graph: AbstractGraph) => boolean);
+export type StatePredicate<S = BaseNodeState | BaseEdgeState> = keyof S | readonly (keyof S)[] | Partial<S>;
+
+/**
+ * Data predicate for conditional styling based on graph attributes (whenData).
+ * Shorthand forms only — use `when` for function predicates.
+ *
+ * - string: Single attribute name - true if the attribute is truthy
+ * - string[]: Array of attribute names - true if ALL are truthy (AND logic)
+ * - object: Map of attribute names to expected values (AND logic)
+ */
+export type DataPredicate<A extends Attributes = Attributes> = keyof A | readonly (keyof A)[] | Partial<A>;
 
 /**
  * Direct attribute binding - reads value directly from an attribute.
@@ -155,13 +160,37 @@ export type ValueFunction<A extends Attributes, S, GS, T> = (
 ) => T;
 
 /**
- * Inline conditional value.
- * Chooses between `then` and `else` based on the predicate.
+ * Inline function conditional value.
+ * Chooses between `then` and `else` based on a function predicate.
+ * The function receives attributes, state, graph state, and the graph instance.
+ * Use this when neither `whenState` nor `whenData` shorthand forms are expressive enough.
+ */
+export interface InlineFunctionConditional<A extends Attributes, S, GS, T> {
+  when: (attributes: A, state: S, graphState: GS, graph: AbstractGraph) => boolean;
+  then: GraphicValue<A, S, GS, T>;
+  else?: GraphicValue<A, S, GS, T>;
+}
+
+/**
+ * Inline state conditional value.
+ * Chooses between `then` and `else` based on a state shorthand predicate.
  * - `then` and `else` can be direct values, attribute bindings, or functions
  * - `else` is optional; if omitted, falls back to the graphic variable's default
  */
-export interface InlineConditional<A extends Attributes, S, GS, T> {
-  when: StatePredicate<A, S, GS>;
+export interface InlineStateConditional<A extends Attributes, S, GS, T> {
+  whenState: StatePredicate<S>;
+  then: GraphicValue<A, S, GS, T>;
+  else?: GraphicValue<A, S, GS, T>;
+}
+
+/**
+ * Inline data conditional value.
+ * Chooses between `then` and `else` based on a graph attribute shorthand predicate.
+ * - `then` and `else` can be direct values, attribute bindings, or functions
+ * - `else` is optional; if omitted, falls back to the graphic variable's default
+ */
+export interface InlineDataConditional<A extends Attributes, S, GS, T> {
+  whenData: DataPredicate<A>;
   then: GraphicValue<A, S, GS, T>;
   else?: GraphicValue<A, S, GS, T>;
 }
@@ -174,7 +203,9 @@ export type GraphicValue<A extends Attributes, S, GS, T> =
   | T
   | AttributeBinding<T>
   | ValueFunction<A, S, GS, T>
-  | InlineConditional<A, S, GS, T>;
+  | InlineFunctionConditional<A, S, GS, T>
+  | InlineStateConditional<A, S, GS, T>
+  | InlineDataConditional<A, S, GS, T>;
 
 /**
  * Type guard: checks if a value is an attribute binding.
@@ -191,12 +222,36 @@ export function isValueFunction<A extends Attributes, S, GS, T>(value: unknown):
 }
 
 /**
- * Type guard: checks if a value is an inline conditional.
+ * Type guard: checks if a value is an inline function conditional.
  */
-export function isInlineConditional<A extends Attributes, S, GS, T>(
+export function isInlineFunctionConditional<A extends Attributes, S, GS, T>(
   value: unknown,
-): value is InlineConditional<A, S, GS, T> {
-  return typeof value === "object" && value !== null && "when" in value && "then" in value;
+): value is InlineFunctionConditional<A, S, GS, T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "when" in value &&
+    typeof (value as Record<string, unknown>).when === "function" &&
+    "then" in value
+  );
+}
+
+/**
+ * Type guard: checks if a value is an inline state conditional.
+ */
+export function isInlineStateConditional<A extends Attributes, S, GS, T>(
+  value: unknown,
+): value is InlineStateConditional<A, S, GS, T> {
+  return typeof value === "object" && value !== null && "whenState" in value && "then" in value;
+}
+
+/**
+ * Type guard: checks if a value is an inline data conditional.
+ */
+export function isInlineDataConditional<A extends Attributes, S, GS, T>(
+  value: unknown,
+): value is InlineDataConditional<A, S, GS, T> {
+  return typeof value === "object" && value !== null && "whenData" in value && "then" in value;
 }
 
 /**
@@ -438,66 +493,6 @@ export type EdgeStylePropertiesLeaf<
 };
 
 /**
- * Rule-level conditional for nodes.
- * The then/else contain property objects WITHOUT nested conditionals.
- */
-export interface NodeStyleRuleConditional<
-  NA extends Attributes = Attributes,
-  NS extends BaseNodeState = BaseNodeState,
-  GS extends BaseGraphState = BaseGraphState,
-  ProgramVariables = EmptyVariables,
-> {
-  when: StatePredicate<NA, NS, GS>;
-  then: NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>;
-  else?: NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>;
-}
-
-/**
- * Rule-level conditional for edges.
- * The then/else contain property objects WITHOUT nested conditionals.
- */
-export interface EdgeStyleRuleConditional<
-  EA extends Attributes = Attributes,
-  ES extends BaseEdgeState = BaseEdgeState,
-  GS extends BaseGraphState = BaseGraphState,
-  ProgramVariables = EmptyVariables,
-> {
-  when: StatePredicate<EA, ES, GS>;
-  then: EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>;
-  else?: EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>;
-}
-
-/**
- * Rule-level categorical match for nodes.
- * Selects a style block based on an attribute value.
- * Classified as "static" — only depends on graph attributes.
- */
-export interface NodeStyleRuleMatch<
-  NA extends Attributes = Attributes,
-  NS extends BaseNodeState = BaseNodeState,
-  GS extends BaseGraphState = BaseGraphState,
-  ProgramVariables = EmptyVariables,
-> {
-  match: string;
-  cases: Record<string, NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>>;
-}
-
-/**
- * Rule-level categorical match for edges.
- * Selects a style block based on an attribute value.
- * Classified as "static" — only depends on graph attributes.
- */
-export interface EdgeStyleRuleMatch<
-  EA extends Attributes = Attributes,
-  ES extends BaseEdgeState = BaseEdgeState,
-  GS extends BaseGraphState = BaseGraphState,
-  ProgramVariables = EmptyVariables,
-> {
-  match: string;
-  cases: Record<string, EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>>;
-}
-
-/**
  * Node style properties object where each property CAN have conditionals.
  */
 export type NodeStylePropertiesWithConditionals<
@@ -532,10 +527,13 @@ export type EdgeStylePropertiesWithConditionals<
 };
 
 /**
- * A style rule for nodes.
- * Either:
- * - A rule-level conditional (then/else have NO nested conditionals)
- * - A properties object (each property CAN have conditionals)
+ * A style rule for nodes. One of:
+ * - when: function conditional (graph-state dependency)
+ * - whenState: shorthand state conditional (item-state dependency)
+ * - whenData: shorthand attribute conditional (static dependency)
+ * - matchData: categorical branch on a graph attribute (static)
+ * - matchState: categorical branch on a state value (item-state)
+ * - properties object: each property can have its own inline conditional
  */
 export type NodeStyleRule<
   NA extends Attributes = Attributes,
@@ -543,16 +541,33 @@ export type NodeStyleRule<
   GS extends BaseGraphState = BaseGraphState,
   ProgramVariables = EmptyVariables,
 > =
-  | NodeStyleRuleConditional<NA, NS, GS, ProgramVariables>
-  | NodeStyleRuleMatch<NA, NS, GS, ProgramVariables>
+  | {
+      when: (attributes: NA, state: NS, graphState: GS, graph: AbstractGraph) => boolean;
+      then: NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>;
+      else?: NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>;
+    }
+  | {
+      whenState: StatePredicate<NS>;
+      then: NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>;
+      else?: NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>;
+    }
+  | {
+      whenData: DataPredicate<NA>;
+      then: NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>;
+      else?: NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>;
+    }
+  | { matchData: string; cases: Record<string, NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>> }
+  | { matchState: keyof NS; cases: Record<string, NodeStylePropertiesLeaf<NA, NS, GS, ProgramVariables>> }
   | NodeStylePropertiesWithConditionals<NA, NS, GS, ProgramVariables>;
 
 /**
- * A style rule for edges.
- * Either:
- * - A rule-level conditional (then/else have NO nested conditionals)
- * - A rule-level match (categorical branching on an attribute)
- * - A properties object (each property CAN have conditionals)
+ * A style rule for edges. One of:
+ * - when: function conditional (graph-state dependency)
+ * - whenState: shorthand state conditional (item-state dependency)
+ * - whenData: shorthand attribute conditional (static dependency)
+ * - matchData: categorical branch on a graph attribute (static)
+ * - matchState: categorical branch on a state value (item-state)
+ * - properties object: each property can have its own inline conditional
  */
 export type EdgeStyleRule<
   EA extends Attributes = Attributes,
@@ -560,8 +575,23 @@ export type EdgeStyleRule<
   GS extends BaseGraphState = BaseGraphState,
   ProgramVariables = EmptyVariables,
 > =
-  | EdgeStyleRuleConditional<EA, ES, GS, ProgramVariables>
-  | EdgeStyleRuleMatch<EA, ES, GS, ProgramVariables>
+  | {
+      when: (attributes: EA, state: ES, graphState: GS, graph: AbstractGraph) => boolean;
+      then: EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>;
+      else?: EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>;
+    }
+  | {
+      whenState: StatePredicate<ES>;
+      then: EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>;
+      else?: EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>;
+    }
+  | {
+      whenData: DataPredicate<EA>;
+      then: EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>;
+      else?: EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>;
+    }
+  | { matchData: string; cases: Record<string, EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>> }
+  | { matchState: keyof ES; cases: Record<string, EdgeStylePropertiesLeaf<EA, ES, GS, ProgramVariables>> }
   | EdgeStylePropertiesWithConditionals<EA, ES, GS, ProgramVariables>;
 
 /**
@@ -604,18 +634,24 @@ export type EdgeStyles<
  */
 /**
  * Stage style predicate: matches against graph state flags.
+ * Shorthand forms only — use `when` for function predicates.
  */
-export type StagePredicate<GS extends BaseGraphState = BaseGraphState> =
-  | keyof GS
-  | readonly (keyof GS)[]
-  | Partial<GS>
-  | ((graphState: GS) => boolean);
+export type StagePredicate<GS extends BaseGraphState = BaseGraphState> = keyof GS | readonly (keyof GS)[] | Partial<GS>;
 
 /**
- * Stage style inline conditional.
+ * Stage style inline conditional with a shorthand state predicate.
  */
 export interface StageInlineConditional<GS extends BaseGraphState, T> {
-  when: StagePredicate<GS>;
+  whenState: StagePredicate<GS>;
+  then: T | ((graphState: GS) => T);
+  else?: T | ((graphState: GS) => T);
+}
+
+/**
+ * Stage style inline conditional with a function predicate.
+ */
+export interface StageInlineFunctionConditional<GS extends BaseGraphState, T> {
+  when: (graphState: GS) => boolean;
   then: T | ((graphState: GS) => T);
   else?: T | ((graphState: GS) => T);
 }
@@ -624,7 +660,11 @@ export interface StageInlineConditional<GS extends BaseGraphState, T> {
  * Value type for stage style properties.
  * Supports direct values, graph-state functions, and inline conditionals.
  */
-export type StageStyleValue<GS extends BaseGraphState, T> = T | ((graphState: GS) => T) | StageInlineConditional<GS, T>;
+export type StageStyleValue<GS extends BaseGraphState, T> =
+  | T
+  | ((graphState: GS) => T)
+  | StageInlineFunctionConditional<GS, T>
+  | StageInlineConditional<GS, T>;
 
 /**
  * Built-in stage style properties.
@@ -640,7 +680,8 @@ export interface StageStyleProperties<GS extends BaseGraphState = BaseGraphState
  * A stage style rule: either a conditional block or a direct properties object.
  */
 export type StageStyleRule<GS extends BaseGraphState = BaseGraphState> =
-  | { when: StagePredicate<GS>; then: StageStyleProperties<GS>; else?: StageStyleProperties<GS> }
+  | { when: (graphState: GS) => boolean; then: StageStyleProperties<GS>; else?: StageStyleProperties<GS> }
+  | { whenState: StagePredicate<GS>; then: StageStyleProperties<GS>; else?: StageStyleProperties<GS> }
   | StageStyleProperties<GS>;
 
 /**
@@ -737,39 +778,39 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
     x: { attribute: "x" },
     y: { attribute: "y" },
     size: {
-      when: "isHovered",
+      whenState: "isHovered",
       then: { attribute: "size", defaultValue: 12 },
       else: { attribute: "size", defaultValue: 10 },
     },
     color: { attribute: "color", defaultValue: "#666" },
     label: { attribute: "label" },
     visibility: {
-      when: "isHidden",
+      whenState: "isHidden",
       then: "hidden",
       else: "visible",
     },
     depth: {
-      when: "isHovered",
+      whenState: "isHovered",
       then: "topNodes",
       else: "nodes",
     },
     labelDepth: {
-      when: "isHovered",
+      whenState: "isHovered",
       then: "topNodeLabels",
       else: "nodeLabels",
     },
     labelVisibility: {
-      when: "isHovered",
+      whenState: "isHovered",
       then: "visible",
       else: "auto",
     },
     zIndex: {
-      when: "isHovered",
+      whenState: "isHovered",
       then: 1,
       else: 0,
     },
     backdropVisibility: {
-      when: "isHovered",
+      whenState: "isHovered",
       then: "visible",
       else: "hidden",
     },
@@ -783,22 +824,22 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
     color: { attribute: "color", defaultValue: "#ccc" },
     label: { attribute: "label" },
     visibility: {
-      when: "isHidden",
+      whenState: "isHidden",
       then: "hidden",
       else: "visible",
     },
     depth: {
-      when: ["isHighlighted", "isHovered"],
+      whenState: ["isHighlighted", "isHovered"],
       then: "topEdges",
       else: "edges",
     },
     labelDepth: {
-      when: ["isHighlighted", "isHovered"],
+      whenState: ["isHighlighted", "isHovered"],
       then: "topNodeLabels",
       else: "nodeLabels",
     },
     zIndex: {
-      when: "isHovered",
+      whenState: "isHovered",
       then: 1,
       else: 0,
     },

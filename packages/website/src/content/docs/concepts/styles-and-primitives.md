@@ -130,7 +130,7 @@ styles: {
   nodes: {
     borderSize: { attribute: "borderSize", defaultValue: 0 },
     borderColor: {
-      when: "isHovered",
+      whenState: "isHovered",
       then: "#e22653",
       else: { attribute: "borderColor", defaultValue: "transparent" },
     },
@@ -199,7 +199,7 @@ A style property can be set using several value types:
 ```typescript
 {
   size: {
-    when: "isHovered",
+    whenState: "isHovered",
     then: 15,
     else: { attribute: "size", defaultValue: 10 },
   },
@@ -208,7 +208,7 @@ A style property can be set using several value types:
 
 ### Rule-level conditionals
 
-When you need to change multiple properties based on the same condition, use a rule-level conditional. The `when` clause gates the entire rule:
+When you need to change multiple properties based on the same condition, use a rule-level conditional. The `whenState` clause gates the entire rule:
 
 ```typescript
 styles: {
@@ -217,7 +217,7 @@ styles: {
     { color: { attribute: "color" }, size: { attribute: "size" } },
     // Conditional rule: only applied when hovered
     {
-      when: "isHovered",
+      whenState: "isHovered",
       then: { size: 15, labelVisibility: "visible" },
     },
   ],
@@ -228,14 +228,14 @@ Rules are evaluated in order. Later rules override earlier ones for any properti
 
 ### Rule-level match
 
-When you need to branch styles on a categorical attribute (e.g. node type), use `match`/`cases` instead of function predicates:
+When you need to branch styles on a categorical attribute (e.g. node type), use `matchData`/`cases` instead of function predicates:
 
 ```typescript
 styles: {
   nodes: [
     { color: "#666", size: 10 },
     {
-      match: "type",
+      matchData: "type",
       cases: {
         person: { shape: "circle", color: "#e22653" },
         company: { shape: "square", color: "#277da1" },
@@ -247,22 +247,40 @@ styles: {
 
 This is more efficient than function-based `when` predicates because sigma knows the rule only depends on graph attributes, not interaction state. See the [Style value types](/reference/style-value-types/#rule-level-match) reference for details.
 
-### State predicates
+### Predicates
 
-The `when` clause supports several forms:
+There are three forms of shorthand predicates, plus a function escape hatch:
+
+**`whenState` / `matchState`** — match against element state flags:
 
 ```typescript
 // String: true if the state flag is true
-when: "isHovered"
+whenState: "isHovered"
 
 // Array: true if ALL flags are true (AND)
-when: ["isHovered", "isActive"]
+whenState: ["isHovered", "isActive"]
 
 // Object: true if all specified values match
-when: { isHovered: true, isActive: false }
+whenState: { isHovered: true, isActive: false }
 
-// Function: full control
-when: (attributes, state, graphState, graph) => graphState.hasActiveSubgraph && state.isActive
+// Categorical branch on a state key
+matchState: "status"
+```
+
+**`whenData` / `matchData`** — match against graph attributes (static, re-evaluated only when data changes):
+
+```typescript
+// String: true if the attribute is truthy
+whenData: "important";
+
+// Categorical branch on an attribute value
+matchData: "type";
+```
+
+**`when`** — full function predicate (re-evaluated on every state change):
+
+```typescript
+when: (attributes, state, graphState, graph) => graphState.hasActiveSubgraph && state.isActive;
 ```
 
 For the complete list of state flags, see the [State flags](/reference/state-flags/) reference. For all available style properties, see the [Style properties](/reference/style-properties/) reference.
@@ -310,7 +328,7 @@ const renderer = new Sigma(graph, document.getElementById("container"), {
         label: { attribute: "label" },
       },
       {
-        when: "isHovered",
+        whenState: "isHovered",
         then: {
           size: 20,
           depth: "topNodes",

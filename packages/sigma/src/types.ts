@@ -71,6 +71,7 @@ export interface DisplayData {
   labelColor: string;
   hidden: boolean;
   forceLabel: boolean;
+  hideLabel: boolean;
   zIndex: number;
   depth: string;
   labelDepth: string;

@@ -1150,7 +1150,7 @@ export default class Sigma<
       this.normalizationFunction.applyTo(data);
 
       // labelgrid
-      if (typeof data.label === "string" && !data.hidden)
+      if (typeof data.label === "string" && !data.hidden && !data.hideLabel)
         this.labelGrid.add(node, data.size, this.framedGraphToViewport(data, { matrix: nullCameraMatrix }));
 
       totalNodes++;
@@ -1543,7 +1543,7 @@ export default class Sigma<
       const data = this.nodeDataCache[node];
 
       if (this.displayedNodeLabels.has(node)) continue;
-      if (data.hidden) continue;
+      if (data.hidden || data.hideLabel) continue;
       if (!data.label) continue;
 
       // Cheap early rejection in framed graph space (no matrix multiply)
@@ -1917,7 +1917,7 @@ export default class Sigma<
         targetData = this.nodeDataCache[extremities[1]],
         edgeData = this.edgeDataCache[edge];
 
-      if (edgeData.hidden || sourceData.hidden || targetData.hidden) {
+      if (edgeData.hidden || edgeData.hideLabel || sourceData.hidden || targetData.hidden) {
         continue;
       }
 
@@ -2206,6 +2206,7 @@ export default class Sigma<
     data.label = resolvedStyle.label ?? null;
     data.hidden = resolvedStyle.visibility === "hidden";
     data.forceLabel = resolvedStyle.labelVisibility === "visible";
+    data.hideLabel = resolvedStyle.labelVisibility === "hidden";
     data.highlighted = nodeState.isHighlighted;
     data.zIndex = resolvedStyle.zIndex ?? 0;
     data.depth = resolvedStyle.depth ?? "nodes";
@@ -2583,6 +2584,7 @@ export default class Sigma<
     data.label = resolvedStyle.label ?? "";
     data.hidden = resolvedStyle.visibility === "hidden";
     data.forceLabel = resolvedStyle.labelVisibility === "visible";
+    data.hideLabel = resolvedStyle.labelVisibility === "hidden";
     data.zIndex = resolvedStyle.zIndex ?? 0;
     data.depth = resolvedStyle.depth ?? "edges";
     data.labelDepth = resolvedStyle.labelDepth ?? "edgeLabels";

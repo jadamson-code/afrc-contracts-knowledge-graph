@@ -1,0 +1,346 @@
+<div id="sigma-container"></div>
+<aside id="legend" class="example-panel">
+  <section>
+    <h4>About this graph</h4>
+    <p>
+      Top cited AI papers from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a>, clustered
+      with <a href="https://en.wikipedia.org/wiki/Louvain_method" target="_blank" rel="noopener">Louvain</a>
+      in <a href="https://gephi.org/gephi-lite" target="_blank" rel="noopener">Gephi Lite</a>.
+    </p>
+  </section>
+  <section>
+    <h4>Nodes</h4>
+    <div class="legend-item">
+      <svg viewBox="0 0 16 16" class="legend-node-icon">
+        <polygon points="8,1 15,8 8,15 1,8" fill="none" stroke="currentColor" stroke-width="1.5"></polygon>
+      </svg>
+      <span>Scientific paper</span>
+    </div>
+    <div class="legend-subitems">
+      <p>Colors: research community</p>
+      <p>Sizes: citation count</p>
+    </div>
+  </section>
+  <section>
+    <h4>Edges</h4>
+    <div class="legend-item">
+      <svg width="32" height="12" viewBox="0 0 32 12">
+        <line x1="2" y1="6" x2="24" y2="6" stroke="#e3a95b" stroke-width="2"></line>
+        <polygon points="24,3 32,6 24,9" fill="#e3a95b"></polygon>
+      </svg>
+      <span>A cites B</span>
+    </div>
+    <div class="legend-item">
+      <svg width="32" height="12" viewBox="0 0 32 12">
+        <line x1="2" y1="6" x2="30" y2="6" stroke="#e22653" stroke-width="2"></line>
+      </svg>
+      <span>A and B share authors</span>
+    </div>
+  </section>
+  <div class="legend-search">
+    <input type="search" id="search-input" list="suggestions" placeholder="Search a paper…" />
+    <datalist id="suggestions"></datalist>
+  </div>
+</aside>
+
+<style>
+  @import "../../styles/base.css";
+  @import "../../styles/example-panel.css";
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+  #legend {
+    top: 1em;
+    right: 1em;
+    max-width: 210px;
+  }
+  .legend-node-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+</style>
+
+<script>
+  import Sigma from "sigma";
+  import { extremityArrow, layerFill, layerPlain, pathCurved, pathLine, pathLoop, sdfDiamond } from "sigma/rendering";
+  import { layerBorder } from "@sigma/node-border";
+  import type { Coordinates, LabelAttachmentContent, LabelAttachmentContext } from "sigma/types";
+  import { DEFAULT_STYLES } from "sigma/types";
+  import { nodeExtent } from "graphology-metrics/graph/extent";
+  import { bindWebGLLayer, createColorLayerProgram } from "@sigma/layer-webgl";
+  import { loadDataset } from "./load-dataset";
+
+  type NodeStatus = "normal" | "active";
+  type EdgeStatus = "normal" | "direct" | "indirect";
+
+  const FONT_FAMILY = '"Public Sans", Lato, Arial, sans-serif';
+
+  const BACKGROUND = "#f0f0f0";
+  const NODES_PALETTE = {
+    0: "#756cff",
+    1: "#ef368b",
+    2: "#011acc",
+    3: "#b900af",
+    4: "#201887",
+    5: "#c904ff",
+  };
+  const EDGE_PALETTE = {
+    cites: "#e3a95b",
+    coauthored: "#e22653",
+  };
+
+  const graph = await loadDataset();
+  const [minScore, maxScore] = nodeExtent(graph, "score");
+
+  const renderer = new Sigma(graph, document.getElementById("sigma-container") as HTMLElement, {
+    customNodeState: {
+      // "normal": no active subgraph, or node covered by overlay
+      // "active": in the active subgraph
+      status: "normal" as NodeStatus,
+    },
+    customEdgeState: {
+      // "normal": no active subgraph, or edge covered by overlay
+      // "direct": connects the active node to its neighbor
+      // "indirect": connects two neighbors of the active node
+      status: "normal" as EdgeStatus,
+    },
+    customGraphState: {
+      hasActiveSubgraph: false,
+    },
+    primitives: {
+      depthLayers: [
+        // for "normal" items:
+        "edges",
+        "nodes",
+        "nodeLabels",
+        // an overlay to grey out hidden items (when there is an active graph):
+        "overlay",
+        // for the active subgraph:
+        "activeEdges",
+        "activeNodes",
+        "activeNodeLabels",
+        // for the active node itself:
+        "focusedNodes",
+        "focusedNodeLabels",
+      ],
+      nodes: {
+        shapes: [sdfDiamond()],
+        layers: [
+          layerFill(),
+          layerBorder({
+            borders: [
+              { size: 0.1, color: "white", mode: "relative" },
+              { fill: true, color: { attribute: "color" } },
+            ],
+          }),
+        ],
+        labelAttachments: {
+          authorInfo: (ctx: LabelAttachmentContext): LabelAttachmentContent => ({
+            type: "html",
+            css: `.author { font: 11px ${FONT_FAMILY}; color: #333; }`,
+            html: `<div class="author">${ctx.attributes.author as string}</div>`,
+          }),
+        },
+      },
+      edges: {
+        paths: [pathLine(), pathCurved(), pathLoop()],
+        extremities: [extremityArrow({ lengthRatio: 6, widthRatio: 4 })],
+        layers: [layerPlain()],
+      },
+    },
+    styles: {
+      stage: {
+        background: BACKGROUND,
+      },
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          color: {
+            attribute: "modularityClass",
+            dict: NODES_PALETTE,
+          },
+          labelFont: FONT_FAMILY,
+          backdropShadowColor: "transparent",
+          backdropLabelPadding: 10,
+          size: {
+            attribute: "score",
+            min: 50,
+            max: 200,
+            minValue: minScore,
+            maxValue: maxScore,
+          },
+        },
+        {
+          matchState: "status",
+          cases: {
+            normal: { depth: "nodes" },
+            active: { depth: "activeNodes", labelDepth: "activeNodeLabels" },
+          },
+        },
+        {
+          when: (_attributes, { isHovered, isHighlighted }) => isHovered || isHighlighted,
+          then: {
+            depth: "focusedNodes",
+            labelDepth: "focusedNodeLabels",
+            labelVisibility: "visible",
+            labelAttachment: "authorInfo",
+            backdropVisibility: "visible",
+          },
+        },
+        {
+          when: (_attributes, { status }, { hasActiveSubgraph }) => hasActiveSubgraph && status === "normal",
+          then: {
+            labelVisibility: "hidden",
+          },
+        },
+      ],
+      edges: [
+        DEFAULT_STYLES.edges,
+        {
+          depth: "edges",
+          path: "straight",
+          parallelPath: "curved",
+          selfLoopPath: "loop",
+          opacity: 0.2,
+          size: 25,
+          color: { attribute: "type", dict: EDGE_PALETTE },
+        },
+        {
+          matchData: "type",
+          cases: {
+            cites: { head: "arrow" },
+          },
+        },
+        {
+          matchState: "status",
+          cases: {
+            direct: { depth: "activeEdges", opacity: 1, size: 50 },
+            indirect: { depth: "activeEdges", opacity: 0.5, size: 50 },
+          },
+        },
+      ],
+    },
+    settings: {
+      itemSizesReference: "positions",
+      labelDensity: 0.5,
+      labelRenderedSizeThreshold: 6,
+    },
+  });
+
+  const Overlay = createColorLayerProgram({ color: `${BACKGROUND}00` });
+  bindWebGLLayer("overlay", renderer, Overlay);
+
+  // Build title-to-node index for search
+  const titleToNode = new Map<string, string>();
+  graph.forEachNode((node, attrs) => {
+    titleToNode.set(attrs.label as string, node);
+  });
+
+  // Interaction state
+  let hoveredNode: string | null = null;
+  let selectedNode: string | null = null;
+  let previouslyHighlightedNode: string | null = null;
+
+  const searchInput = document.getElementById("search-input") as HTMLInputElement;
+  const searchSuggestions = document.getElementById("suggestions") as HTMLDataListElement;
+
+  function focusNode(node: string | null) {
+    if (node) {
+      const neighbors = new Set(graph.neighbors(node));
+
+      graph.forEachNode((n) => {
+        const isActive = n === node || neighbors.has(n);
+        renderer.setNodeState(n, { status: isActive ? "active" : "normal" });
+      });
+
+      graph.forEachEdge((edge) => {
+        const [source, target] = graph.extremities(edge);
+        const sourceIsFocus = source === node;
+        const targetIsFocus = target === node;
+        let status: EdgeStatus = "normal";
+
+        if (sourceIsFocus || targetIsFocus) {
+          status = "direct";
+        } else if (neighbors.has(source) && neighbors.has(target)) {
+          status = "indirect";
+        }
+
+        renderer.setEdgeState(edge, { status });
+      });
+    } else {
+      graph.forEachNode((n) => renderer.setNodeState(n, { status: "normal" }));
+      graph.forEachEdge((e) => renderer.setEdgeState(e, { status: "normal" }));
+    }
+
+    Overlay.setColor(node ? `${BACKGROUND}cc` : `${BACKGROUND}00`);
+    renderer.setGraphState({ hasActiveSubgraph: !!node });
+  }
+
+  function updateSuggestions(query: string) {
+    if (!query) {
+      searchSuggestions.innerHTML = "";
+      return;
+    }
+    const lcQuery = query.toLowerCase();
+    const matches = graph
+      .nodes()
+      .filter((n) => (graph.getNodeAttribute(n, "label") as string).toLowerCase().includes(lcQuery))
+      .slice(0, 50);
+    searchSuggestions.innerHTML = matches
+      .map((n) => `<option value="${graph.getNodeAttribute(n, "label")}"></option>`)
+      .join("\n");
+  }
+
+  function selectNode(node: string | null) {
+    selectedNode = node;
+
+    // Reset previous highlighted node, set new one
+    if (previouslyHighlightedNode) renderer.setNodeState(previouslyHighlightedNode, { isHighlighted: false });
+    previouslyHighlightedNode = node;
+    if (node) renderer.setNodeState(node, { isHighlighted: true });
+
+    focusNode(hoveredNode || selectedNode);
+
+    if (node) {
+      const nodePosition = renderer.getNodeDisplayData(node) as Coordinates;
+      renderer.getCamera().animate(nodePosition, { duration: 500 });
+    }
+  }
+
+  let suggestionsTimeout: ReturnType<typeof setTimeout> | null = null;
+  searchInput.addEventListener("input", () => {
+    const query = searchInput.value || "";
+
+    // Check if the user selected an exact match from suggestions
+    const exactNode = titleToNode.get(query);
+    if (exactNode) {
+      selectNode(exactNode);
+      return;
+    }
+
+    // Clear previous selection
+    if (selectedNode) selectNode(null);
+
+    // Debounce suggestions update
+    if (suggestionsTimeout) clearTimeout(suggestionsTimeout);
+    suggestionsTimeout = setTimeout(() => updateSuggestions(query), 200);
+  });
+
+  searchInput.addEventListener("blur", () => {
+    if (selectedNode) selectNode(null);
+    searchInput.value = "";
+    searchSuggestions.innerHTML = "";
+  });
+
+  // Hover (takes priority over search selection)
+  renderer.on("enterNode", ({ node }) => {
+    hoveredNode = node;
+    focusNode(hoveredNode);
+  });
+  renderer.on("leaveNode", () => {
+    hoveredNode = null;
+    focusNode(selectedNode);
+  });
+</script>

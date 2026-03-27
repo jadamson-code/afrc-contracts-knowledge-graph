@@ -1,0 +1,64 @@
+/* Floating legend/info panel for use inside example iframes.
+   Requires base.css (for --ruby, --dark-grey, --border variables and fonts). */
+
+.example-panel {
+  position: absolute;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.92);
+  border: var(--border);
+  padding: 0.75em 1em;
+  font-size: 12px;
+  font-family: "Public Sans", Lato, Arial, sans-serif;
+  line-height: 1.5;
+}
+.example-panel a {
+  color: var(--ruby);
+  text-decoration: none;
+}
+.example-panel a:hover {
+  text-decoration: underline;
+}
+.example-panel section + section,
+.example-panel .legend-search {
+  margin-top: 0.5em;
+  padding-top: 0.5em;
+  border-top: var(--border);
+}
+.example-panel h4 {
+  margin: 0 0 0.3em;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dark-grey);
+}
+.example-panel p {
+  margin: 0;
+  color: var(--dark-grey);
+  line-height: 1.4;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+.legend-item + .legend-item {
+  margin-top: 0.15em;
+}
+.legend-subitems {
+  display: flex;
+  flex-direction: column;
+  color: var(--dark-grey);
+  font-size: 0.9em;
+}
+.legend-item > svg {
+  flex-shrink: 0;
+}
+.legend-search input[type="search"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.35em 0.6em;
+  font-size: inherit;
+  font-family: inherit;
+  border: var(--border);
+  border-radius: 2px;
+}

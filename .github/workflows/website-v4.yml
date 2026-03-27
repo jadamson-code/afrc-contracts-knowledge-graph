@@ -1,0 +1,32 @@
+name: Website (v4)
+
+on:
+  push:
+    branches:
+      - v4
+
+jobs:
+  publish:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build website
+        run: npm run website:build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: sigma-v4
+          directory: packages/website/dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

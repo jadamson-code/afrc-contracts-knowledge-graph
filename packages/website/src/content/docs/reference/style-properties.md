@@ -153,7 +153,10 @@ const renderer = new Sigma(graph, container, {
         borderSize: { type: "number", default: 2 },
         borderColor: { type: "color", default: "#ffffff" },
       },
-      layers: [layerFill(), layerBorder({ borders: [{ size: "borderSize", color: "borderColor" }] })],
+      layers: [
+        layerFill(),
+        layerBorder({ borders: [{ size: { attribute: "borderSize" }, color: { attribute: "borderColor" } }] }),
+      ],
     },
   },
   styles: {

@@ -76,8 +76,8 @@ These lifecycle events do not come with any payload.
 - **nodeDrag** — a node is being dragged
 - **nodeDragEnd** — a node drag ends
 
-Payload for `nodeDragStart` and `nodeDragEnd`: `{ node: string, event }`.
-Payload for `nodeDrag`: `{ node: string, event, newPosition: { x, y } }`.
+Payload for `nodeDragStart` and `nodeDragEnd`: `{ node: string, allDraggedNodes: string[], event, preventSigmaDefault() }`.
+Payload for `nodeDrag`: `{ node: string, allDraggedNodes: string[], event }`.
 
 ## Other events
 

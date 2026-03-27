@@ -20,13 +20,16 @@ new Sigma(graph, container, options?)
 
 ### Options
 
-| Property      | Type                    | Description                                                                                                              |
-| ------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `primitives`  | `PrimitivesDeclaration` | Shapes, layers, paths, extremities, depth layers. See [Primitives schema](/reference/primitives-schema/)                 |
-| `styles`      | `StylesDeclaration`     | Style rules for nodes and edges. See [Styles and primitives](/concepts/styles-and-primitives/)                           |
-| `settings`    | `Partial<Settings>`     | Behavior and performance settings. See [Settings](/reference/settings/)                                                  |
-| `nodeReducer` | `function`              | Escape hatch for complex node styling. `(key, displayData, attrs, state, graphState, graph) => Partial<NodeDisplayData>` |
-| `edgeReducer` | `function`              | Same for edges                                                                                                           |
+| Property           | Type                    | Description                                                                                                              |
+| ------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `primitives`       | `PrimitivesDeclaration` | Shapes, layers, paths, extremities, depth layers. See [Primitives schema](/reference/primitives-schema/)                 |
+| `styles`           | `StylesDeclaration`     | Style rules for nodes and edges. See [Styles and primitives](/concepts/styles-and-primitives/)                           |
+| `settings`         | `Partial<Settings>`     | Behavior and performance settings. See [Settings](/reference/settings/)                                                  |
+| `nodeReducer`      | `function`              | Escape hatch for complex node styling. `(key, displayData, attrs, state, graphState, graph) => Partial<NodeDisplayData>` |
+| `edgeReducer`      | `function`              | Same for edges                                                                                                           |
+| `customNodeState`  | `object`                | Runtime default values for custom node state fields (required when extending `BaseNodeState` with non-optional fields)   |
+| `customEdgeState`  | `object`                | Runtime default values for custom edge state fields                                                                      |
+| `customGraphState` | `object`                | Runtime default values for custom graph state fields                                                                     |
 
 ### Generic type parameters
 

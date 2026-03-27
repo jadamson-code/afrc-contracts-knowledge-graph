@@ -21,17 +21,9 @@
   const response = await fetch("/data/wikipedia.json");
   const dataset: Dataset = await response.json();
 
-  const clusterColors = Object.fromEntries(dataset.clusters.map((c) => [c.key, c.color]));
-
   const graph = new Graph();
-  const scoreExtents = {
-    min: Infinity,
-    max: -Infinity,
-  };
 
   for (const node of dataset.nodes) {
-    scoreExtents.min = Math.min(scoreExtents.min, node.score);
-    scoreExtents.max = Math.max(scoreExtents.max, node.score);
     graph.addNode(node.key, {
       label: node.label,
       x: node.x,
@@ -47,6 +39,15 @@
     }
   }
 
+  const clusterColors = Object.fromEntries(dataset.clusters.map((c) => [c.key, c.color]));
+  const { minScore, maxScore } = dataset.nodes.reduce(
+    ({ minScore, maxScore }, { score }) => ({
+      minScore: Math.min(minScore, score),
+      maxScore: Math.max(maxScore, score),
+    }),
+    { minScore: Infinity, maxScore: -Infinity },
+  );
+
   const renderer = new Sigma(graph, document.getElementById("sigma-container") as HTMLElement, {
     styles: {
       nodes: [
@@ -57,17 +58,11 @@
             dict: clusterColors,
             defaultValue: "#999",
           },
-          size: { attribute: "score", min: 50, max: 250, minValue: scoreExtents.min, maxValue: scoreExtents.max },
+          size: { attribute: "score", min: 10, max: 50, minValue: minScore, maxValue: maxScore },
           label: { attribute: "label" },
         },
-        {
-          when: "isHovered",
-          then: {
-            labelVisibility: "visible",
-          },
-        },
       ],
-      edges: [{ color: "#ccc", size: 5 }],
+      edges: [DEFAULT_STYLES.edges, { color: "#ccc", size: 5 }],
     },
   });
 </script>

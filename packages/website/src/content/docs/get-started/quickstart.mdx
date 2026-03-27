@@ -7,17 +7,65 @@ import SigmaExample from "../../../components/SigmaExample.astro";
 
 ## Installation
 
+## Using CDN
+
+To quickly integrate sigma.js and graphology into your project, you can use CDN links. Add the following lines to the
+head section of your HTML:
+
+```html
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/[VERSION]/sigma.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/graphology/[VERSION]/graphology.umd.min.js"></script>
+```
+
+Replace [VERSION] with the desired version number.
+
+## Using a package manager
+
 Sigma.js requires [graphology](https://graphology.github.io/) as its graph data structure. Install both packages:
 
 ```bash
-npm install graphology sigma
+npm install sigma graphology
+# or using another package manager
+yarn add sigma graphology
 ```
 
 ## Minimal example
 
-### HTML
+### All included HTML file
 
-Create an HTML file with a container element for the graph. The container must have a defined width and height:
+With the CDN links, it's possible to write a single HTML document, with minimal JavaScript code, to render some graph:
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Quick Sigma.js Example</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sigma.js/4.0.0/sigma.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/graphology/0.25.4/graphology.umd.min.js"></script>
+  </head>
+  <body style="background: lightgrey">
+    <div id="container" style="width: 800px; height: 600px; background: white"></div>
+    <script>
+      // Create a graphology graph
+      const graph = new graphology.Graph();
+      graph.addNode("1", { label: "Node 1", x: 0, y: 0, size: 10, color: "blue" });
+      graph.addNode("2", { label: "Node 2", x: 1, y: 1, size: 20, color: "red" });
+      graph.addEdge("1", "2", { size: 5, color: "purple" });
+
+      // Instantiate sigma.js and render the graph
+      const renderer = new Sigma(graph, document.getElementById("container"));
+    </script>
+  </body>
+</html>
+```
+
+Since sigma targets more _web applications_ than _web documents_, the rest of this documentation will be assuming it is
+used in a TypeScript environment, with modules support.
+
+### In a TypeScript application
+
+You need some container DOM element for the graph. It must have a defined width and height:
 
 ```html
 <!doctype html>
@@ -37,9 +85,7 @@ Create an HTML file with a container element for the graph. The container must h
 </html>
 ```
 
-### TypeScript
-
-Create a `index.ts` file that builds a graph and renders it with sigma:
+Then, in your TypeScript code, you can build a graph and render it with sigma like this:
 
 ```typescript
 import Graph from "graphology";
@@ -54,21 +100,21 @@ graph.addNode("1", {
   x: 0,
   y: 0,
   size: 1,
-  color: "#e22653",
+  color: "blue",
 });
 graph.addNode("2", {
   label: "Node 2",
   x: 5,
   y: 10,
   size: 1,
-  color: "#666",
+  color: "red",
 });
 graph.addNode("3", {
   label: "Node 3",
   x: 10,
   y: 0,
   size: 1,
-  color: "#277da1",
+  color: "green",
 });
 
 // Add edges between nodes
@@ -80,7 +126,8 @@ graph.addEdge("3", "1", { size: 1 });
 const renderer = new Sigma(graph, document.getElementById("container"));
 ```
 
-This creates a graph with three nodes and three edges. Each node has `x` and `y` attributes that set its position in graph space, and sigma automatically adjusts the viewport to fit all nodes.
+This creates a graph with three nodes and three edges. Each node has `x` and `y` attributes that set its position in
+graph space, and sigma automatically adjusts the viewport to fit all nodes.
 
 ## How it works
 
@@ -89,7 +136,8 @@ Sigma reads node and edge attributes from the graphology graph instance. By defa
 - **Nodes**: `x`, `y` (position), `size`, `color`, `label`
 - **Edges**: `size`, `color`, `label`
 
-These defaults come from sigma's built-in **styles** declaration, which maps graph attributes to visual properties. You can customize this mapping entirely through the [styles and primitives](/concepts/styles-and-primitives/) system.
+These defaults come from sigma's built-in **styles** declaration, which maps graph attributes to visual properties. You
+can customize this mapping entirely through the [styles and primitives](/concepts/styles-and-primitives/) system.
 
 ## Live result
 
@@ -97,7 +145,8 @@ These defaults come from sigma's built-in **styles** declaration, which maps gra
 
 ## Cleaning up
 
-When you no longer need the renderer (for example, when unmounting a component), call `kill()` to release WebGL resources:
+When you no longer need the renderer (for example, when unmounting a component), call `kill()` to release WebGL
+resources:
 
 ```typescript
 renderer.kill();

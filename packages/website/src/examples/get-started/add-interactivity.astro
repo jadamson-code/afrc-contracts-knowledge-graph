@@ -1,37 +1,16 @@
 <div id="sigma-container"></div>
-<div id="search">
-  <input type="search" id="search-input" list="suggestions" placeholder="Search for a node..." />
-  <datalist id="suggestions"></datalist>
-</div>
 
 <style>
   #sigma-container {
     width: 100%;
     height: 100%;
   }
-  #search {
-    position: absolute;
-    right: 1em;
-    top: 1em;
-  }
 </style>
 
 <script>
   import Graph from "graphology";
   import Sigma from "sigma";
-  import type { BaseEdgeState, BaseGraphState, BaseNodeState } from "sigma/types";
-
-  interface NodeState extends BaseNodeState {
-    isActive: boolean;
-  }
-
-  interface EdgeState extends BaseEdgeState {
-    isActive: boolean;
-  }
-
-  interface GraphState extends BaseGraphState {
-    hasActiveSubgraph: boolean;
-  }
+  import { DEFAULT_STYLES } from "sigma/types";
 
   interface Dataset {
     nodes: { key: string; label: string; tag: string; cluster: string; x: number; y: number; score: number }[];
@@ -65,66 +44,84 @@
     }
   }
 
-  const renderer = new Sigma<object, object, object, NodeState, EdgeState, GraphState>(
-    graph,
-    document.getElementById("sigma-container") as HTMLElement,
-    {
-      styles: {
-        nodes: [
-          {
-            color: {
-              attribute: "cluster",
-              dict: clusterColors,
-              defaultValue: "#999",
-            },
-            size: { attribute: "score", min: 50, max: 250, minValue: scoreExtents.min, maxValue: scoreExtents.max },
-            label: { attribute: "label" },
-          },
-          {
-            when: "isHovered",
-            then: { size: 100, labelVisibility: "visible" },
-          },
-          {
-            when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive && !state.isHovered,
-            then: { color: "#f6f6f6", label: "" },
-          },
-          {
-            when: "isActive",
-            then: { labelVisibility: "visible" },
-          },
-        ],
-        edges: [
-          { color: "#ccc", size: 5 },
-          {
-            when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive,
-            then: { color: "#f6f6f6" },
-          },
-        ],
-      },
+  const renderer = new Sigma(graph, document.getElementById("sigma-container") as HTMLElement, {
+    customNodeState: {
+      isActive: false,
     },
-  );
-
-  // --- Hover highlighting ---
+    customEdgeState: {
+      isActive: false,
+    },
+    customGraphState: {
+      hasActiveSubgraph: false,
+    },
+    primitives: {
+      depthLayers: [
+        // Base graph
+        "edges",
+        "nodes",
+        "nodeLabels",
+        // Active subgraph
+        "activeEdges",
+        "activeNodes",
+        "activeNodeLabels",
+        // Hovered node
+        "topNodes",
+        "topNodeLabels",
+      ],
+    },
+    styles: {
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        {
+          color: {
+            attribute: "cluster",
+            dict: clusterColors,
+            defaultValue: "#999",
+          },
+          size: { attribute: "score", min: 10, max: 50, minValue: scoreExtents.min, maxValue: scoreExtents.max },
+          label: { attribute: "label" },
+        },
+        {
+          when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive && !state.isHovered,
+          then: { color: "#eee", label: "" },
+        },
+        {
+          whenState: "isActive",
+          then: { depth: "activeNodes", labelDepth: "activeNodeLabels" },
+        },
+        {
+          whenState: "isHovered",
+          then: { depth: "topNodes", labelDepth: "topNodeLabels" },
+        },
+      ],
+      edges: [
+        DEFAULT_STYLES.edges,
+        { color: "#ccc", size: 5 },
+        {
+          when: (_attrs, state, graphState) => graphState.hasActiveSubgraph && !state.isActive,
+          then: { color: "#eee" },
+        },
+        {
+          whenState: "isActive",
+          then: { depth: "activeEdges" },
+        },
+      ],
+    },
+  });
 
   function setActiveSubgraph(activeNodes: Set<string> | null) {
-    const active: string[] = [];
-    const inactive: string[] = [];
     graph.forEachNode((node) => {
-      (activeNodes && activeNodes.has(node) ? active : inactive).push(node);
+      renderer.setNodeState(node, { isActive: activeNodes?.has(node) });
     });
-    renderer.setNodesState(active, { isActive: true });
-    renderer.setNodesState(inactive, { isActive: false });
 
-    const activeEdges: string[] = [];
-    const inactiveEdges: string[] = [];
     graph.forEachEdge((edge) => {
       const [source, target] = graph.extremities(edge);
-      (activeNodes && activeNodes.has(source) && activeNodes.has(target) ? activeEdges : inactiveEdges).push(edge);
+      renderer.setEdgeState(edge, { isActive: activeNodes?.has(source) && activeNodes?.has(target) });
     });
-    renderer.setEdgesState(activeEdges, { isActive: true });
-    renderer.setEdgesState(inactiveEdges, { isActive: false });
 
-    renderer.setGraphState({ hasActiveSubgraph: !!activeNodes && activeNodes.size > 0 });
+    renderer.setGraphState({ hasActiveSubgraph: !!activeNodes });
+
+    // Trigger a renderer update:
     renderer.refresh({ skipIndexation: true });
   }
 
@@ -136,44 +133,5 @@
 
   renderer.on("leaveNode", () => {
     setActiveSubgraph(null);
-  });
-
-  // --- Search ---
-
-  const searchInput = document.getElementById("search-input") as HTMLInputElement;
-  const suggestionsEl = document.getElementById("suggestions") as HTMLDataListElement;
-
-  suggestionsEl.innerHTML = graph
-    .nodes()
-    .map((node) => `<option value="${graph.getNodeAttribute(node, "label")}"></option>`)
-    .join("\n");
-
-  searchInput.addEventListener("input", () => {
-    const query = searchInput.value.toLowerCase();
-
-    if (!query) {
-      setActiveSubgraph(null);
-      return;
-    }
-
-    const matches = graph
-      .nodes()
-      .filter((n) => (graph.getNodeAttribute(n, "label") as string).toLowerCase().includes(query));
-
-    if (matches.length === 1) {
-      const match = matches[0];
-      const neighbors = new Set(graph.neighbors(match));
-      neighbors.add(match);
-      setActiveSubgraph(neighbors);
-
-      const position = renderer.getNodeDisplayData(match);
-      if (position) {
-        renderer.getCamera().animate(position, { duration: 500 });
-      }
-    } else if (matches.length > 0) {
-      setActiveSubgraph(new Set(matches));
-    } else {
-      setActiveSubgraph(null);
-    }
   });
 </script>

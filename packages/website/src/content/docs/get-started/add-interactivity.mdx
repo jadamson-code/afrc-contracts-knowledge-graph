@@ -5,44 +5,38 @@ description: Highlight neighbors on hover and add a search bar with camera anima
 
 import SigmaExample from "../../../components/SigmaExample.astro";
 
-In [Part 3](/get-started/style-the-graph/), you styled the graph declaratively and added a hover effect. In this final step, you will highlight a node's neighbors on hover and add a search bar that focuses the camera on results.
+In [Part 3](/get-started/style-the-graph/), you styled the graph declaratively and added a hover effect. In this final step, you will highlight a
+node's neighbors on hover and add a search bar that focuses the camera on results.
 
 ## The goal
 
-When the user hovers a node, its neighbors stay colored while everything else fades to grey. A search bar lets the user type a node name, highlights matches, and animates the camera to the selected node.
+When the user hovers a node, its neighbors stay colored while everything else fades to grey. A search bar lets the user
+type a node name, highlights matches, and animates the camera to the selected node.
 
-This requires **custom state** — sigma's built-in `isHovered` flag only applies to the single hovered node. To grey out everything else, you need a way to mark which nodes and edges are "active" (part of the hovered neighborhood).
+This requires **custom state**: sigma's built-in `isHovered` flag only applies to the single hovered node. To grey out
+everything else, you need a way to mark which nodes and edges are "active" (part of the hovered neighborhood).
 
-## Define custom state types
+## Define custom state
 
-Add custom state interfaces that extend sigma's built-in state. Place these above your `main()` function:
-
-```typescript
-import type { BaseEdgeState, BaseGraphState, BaseNodeState } from "sigma/types";
-
-interface NodeState extends BaseNodeState {
-  isActive: boolean;
-}
-
-interface EdgeState extends BaseEdgeState {
-  isActive: boolean;
-}
-
-interface GraphState extends BaseGraphState {
-  hasActiveSubgraph: boolean;
-}
-```
-
-Then pass them as generic parameters to Sigma:
+Custom states for nodes, edges and the graph itself, are typed with generics given to the `Sigma` constructor. The
+easiest way to actually specify them is actually to simply give the initial custom state values we want to Sigma. This
+will allow Sigma to infer its types:
 
 ```typescript
-const renderer = new Sigma<object, object, object, NodeState, EdgeState, GraphState>(
-  graph,
-  document.getElementById("container")!,
-  {
-    /* ... styles ... */
+const renderer = new Sigma(graph, document.getElementById("container")!, {
+  customNodeState: {
+    isActive: false,
   },
-);
+  customEdgeState: {
+    isActive: false,
+  },
+  customGraphState: {
+    hasActiveSubgraph: false,
+  },
+  styles: {
+    // ...
+  },
+});
 ```
 
 ## Add conditional styles for the active subgraph
@@ -52,66 +46,44 @@ Update the styles to grey out nodes and edges that are not active when a subgrap
 ```typescript
 styles: {
   nodes: [
+    // ...
     {
-      color: {
-        attribute: "cluster",
-        dict: clusterColors,
-        defaultValue: "#999",
-      },
-      size: { attribute: "score", min: 50, max: 250, minValue: scoreExtents.min, maxValue: scoreExtents.max },
-      label: { attribute: "label" },
-    },
-    {
-      when: "isHovered",
-      then: { labelVisibility: "visible" },
-    },
-    {
+      // When there is an active subgraph but the node is not active or hovered, it should be grey, without label:
       when: (_attrs, state, graphState) =>
         graphState.hasActiveSubgraph && !state.isActive && !state.isHovered,
-      then: { color: "#f6f6f6", label: "" },
-    },
-    {
-      when: "isActive",
-      then: { labelVisibility: "visible" },
+      then: { color: "#eee", label: "" },
     },
   ],
   edges: [
-    { color: "#ccc", size: 5 },
+    // ...
     {
+      // When there is an active subgraph but edge doesn't connect two active nodes, it should be grey:
       when: (_attrs, state, graphState) =>
         graphState.hasActiveSubgraph && !state.isActive,
-      then: { color: "#f6f6f6" },
+      then: { color: "#eee" },
     },
   ],
 },
 ```
 
-The third node rule uses a function predicate: it checks the `graphState.hasActiveSubgraph` flag and the node's own `isActive` state. When a subgraph is active and the node is not part of it, it fades to grey and hides its label.
-
-## Wire up hover highlighting
+## Wire up the custom states
 
 After creating the renderer, add event listeners that set the active subgraph on hover:
 
 ```typescript
 function setActiveSubgraph(activeNodes: Set<string> | null) {
-  const active: string[] = [];
-  const inactive: string[] = [];
   graph.forEachNode((node) => {
-    (activeNodes && activeNodes.has(node) ? active : inactive).push(node);
+    renderer.setNodeState(node, { isActive: activeNodes?.has(node) });
   });
-  renderer.setNodesState(active, { isActive: true });
-  renderer.setNodesState(inactive, { isActive: false });
 
-  const activeEdges: string[] = [];
-  const inactiveEdges: string[] = [];
   graph.forEachEdge((edge) => {
     const [source, target] = graph.extremities(edge);
-    (activeNodes && activeNodes.has(source) && activeNodes.has(target) ? activeEdges : inactiveEdges).push(edge);
+    renderer.setEdgeState(edge, { isActive: activeNodes?.has(source) && activeNodes?.has(target) });
   });
-  renderer.setEdgesState(activeEdges, { isActive: true });
-  renderer.setEdgesState(inactiveEdges, { isActive: false });
 
-  renderer.setGraphState({ hasActiveSubgraph: !!activeNodes && activeNodes.size > 0 });
+  renderer.setGraphState({ hasActiveSubgraph: !!activeNodes });
+
+  // Trigger a renderer update:
   renderer.refresh({ skipIndexation: true });
 }
 
@@ -126,68 +98,79 @@ renderer.on("leaveNode", () => {
 });
 ```
 
-`setNodesState` and `setEdgesState` batch-update state flags efficiently. The `refresh({ skipIndexation: true })` call tells sigma to re-evaluate styles without re-computing the spatial index (since no positions changed).
+`setNodesState` and `setEdgesState` batch-update state flags efficiently. The `refresh({ skipIndexation: true })` call
+tells sigma to re-evaluate styles, without re-computing the spatial index (since no positions changed).
 
-Try hovering a node — its neighbors should stay colored while the rest fades out.
+Try hovering a node: its neighbors should stay colored while the rest fades out.
 
-## Add a search bar
+## Put the active subgraph on top
 
-Add a search input to your HTML, above the container:
+Now, the highlighted subgraph is not always easy to see, as its edges can sometimes be hidden behind unfocused nodes. In
+sigma v4, all items are rendered in the same single WebGL context, and it's now possible to render the active subgraph
+on top of the rest of the graph.
 
-```html
-<div id="search">
-  <input type="search" id="search-input" list="suggestions" placeholder="Search for a node..." />
-  <datalist id="suggestions"></datalist>
-</div>
-<div id="container"></div>
-```
+We want three different layers:
 
-Style it however you like (absolute positioning works well). Then wire it up in `index.ts`, after creating the renderer:
+- On the very top, the highlighted node and its label
+- Then, the active subgraph
+- Then, the rest of the greyed out items
+
+To do this, we first need to specify the `depthLayers` **primitives**. Primitives are the link between sigma engine and
+the styles. Styles basically express how to bind data to the primitives, while the primitives express what exactly sigma
+should render. Here, for instance, `depthLayers` declares the exhaustive ordered list of all the different depths we
+need to render the graph as we want:
 
 ```typescript
-const searchInput = document.getElementById("search-input") as HTMLInputElement;
-const suggestions = document.getElementById("suggestions") as HTMLDataListElement;
-
-// Populate the autocomplete list
-suggestions.innerHTML = graph
-  .nodes()
-  .map((node) => `<option value="${graph.getNodeAttribute(node, "label")}"></option>`)
-  .join("\n");
-
-searchInput.addEventListener("input", () => {
-  const query = searchInput.value.toLowerCase();
-
-  if (!query) {
-    setActiveSubgraph(null);
-    return;
-  }
-
-  // Find nodes whose label matches the query
-  const matches = graph
-    .nodes()
-    .filter((n) => (graph.getNodeAttribute(n, "label") as string).toLowerCase().includes(query));
-
-  if (matches.length === 1) {
-    // Exact match: highlight the node and animate the camera to it
-    const match = matches[0];
-    const neighbors = new Set(graph.neighbors(match));
-    neighbors.add(match);
-    setActiveSubgraph(neighbors);
-
-    const position = renderer.getNodeDisplayData(match);
-    if (position) {
-      renderer.getCamera().animate(position, { duration: 500 });
-    }
-  } else if (matches.length > 0) {
-    // Partial matches: highlight all of them
-    setActiveSubgraph(new Set(matches));
-  } else {
-    setActiveSubgraph(null);
-  }
+const renderer = new Sigma(graph, document.getElementById("container")!, {
+  // ...
+  primitives: {
+    // Declare depth layers, from deepest to topest:
+    depthLayers: [
+      // Base graph
+      "edges",
+      "nodes",
+      "nodeLabels",
+      // Active subgraph
+      "activeEdges",
+      "activeNodes",
+      "activeNodeLabels",
+      // Hovered node
+      "topNodes",
+      "topNodeLabels",
+    ],
+  },
+  styles: {
+    // ...
+  },
 });
 ```
 
-Type a name like "Gephi" or "Graph" in the search bar. Matching nodes highlight, and when there is a single match, the camera animates to it.
+From there, the `depth` and `labelDepth` can refer to those values, directly in the styles:
+
+```typescript
+styles: {
+  nodes: [
+    // ...
+    {
+      whenState: "isActive",
+      then: { depth: "activeNodes", labelDepth: "activeNodeLabels" },
+    },
+    {
+      whenState: "isHovered",
+      then: { depth: "topNodes", labelDepth: "topNodeLabels" },
+    },
+  ],
+  edges: [
+    // ...
+    {
+      whenState: "isActive",
+      then: { depth: "activeEdges" },
+    },
+  ],
+},
+```
+
+Et voilà, we now have the active subgraph properly highlighted.
 
 ## Full code and result
 
@@ -200,13 +183,13 @@ Starting from an empty page, you now have:
 - A graph of 2,000+ Wikipedia articles rendered with WebGL
 - Nodes colored by cluster and sized by relevance
 - Hover highlighting that shows a node's neighborhood
-- A search bar with autocomplete and camera animation
 
 ## Where to go from here
 
-Now that you understand the core concepts (graphology data, styles, state, events), explore the rest of the documentation:
+Now that you understand the core concepts (graphology data, styles, state, events), explore the rest of the
+documentation:
 
-- **[How-to guides](/how-to/nodes/colors-sizes/)** — specific recipes for nodes, edges, labels, interactivity, and more
-- **[Concepts](/concepts/styles-and-primitives/)** — deeper understanding of styles, primitives, rendering, and coordinate systems
-- **[Reference](/reference/settings/)** — complete settings, events, and API reference
-- **[Examples](/examples/)** — interactive examples with source code
+- **[How-to guides](/how-to/nodes/colors-sizes/)**: specific recipes for nodes, edges, labels, interactivity, and more
+- **[Concepts](/concepts/styles-and-primitives/)**: deeper understanding of styles, primitives, rendering, and coordinate systems
+- **[Reference](/reference/settings/)**: complete settings, events, and API reference
+- **[Examples](/examples/)**: interactive examples with source code

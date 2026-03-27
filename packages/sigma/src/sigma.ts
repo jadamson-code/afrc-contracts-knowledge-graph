@@ -2605,6 +2605,41 @@ export default class Sigma<
   }
 
   /**
+   * Computes and injects the spread variable for parallel edges.
+   *
+   * NOTE: applyResolvedEdgeStyle resets all variables to defaults, which
+   * overwrites computed values like spread. This method must be called after
+   * applyResolvedEdgeStyle whenever parallel edges need their spread value.
+   * If other computed (non-styled) variables appear in the future, a more
+   * structural solution may be needed.
+   */
+  private applyEdgeSpread(
+    edge: string,
+    data: EdgeDisplayData,
+    edgeState: FullEdgeState<ES>,
+    resolvedStyle: ResolvedEdgeStyle & Record<string, unknown>,
+  ): void {
+    if (edgeState.parallelCount <= 1 || this.graph.source(edge) === this.graph.target(edge)) return;
+
+    const pathName = resolvedStyle.parallelPath || resolvedStyle.path;
+    const path = this.edgePathsByName.get(pathName);
+    if (!path?.spread) return;
+
+    const spreadFactor = resolvedStyle.parallelSpread ?? 0.25;
+    let spreadValue = path.spread.compute(edgeState.parallelIndex, edgeState.parallelCount, spreadFactor);
+
+    // Correct for reverse-direction edges: swapping source/target flips the
+    // perpendicular direction, so we negate to keep visual consistency
+    const source = this.graph.source(edge);
+    const target = this.graph.target(edge);
+    if (this.graph.isDirected(edge) && source > target) {
+      spreadValue = -spreadValue;
+    }
+
+    (data as unknown as Record<string, unknown>)[path.spread.variable] = spreadValue;
+  }
+
+  /**
    * Add an edge into the internal data structures.
    * @private
    * @param key The edge's graphology ID
@@ -2632,24 +2667,7 @@ export default class Sigma<
     }
 
     // Auto-compute spread variable for parallel edges
-    if (edgeState.parallelCount > 1 && this.graph.source(key) !== this.graph.target(key)) {
-      const pathName = resolvedStyle.parallelPath || resolvedStyle.path;
-      const path = this.edgePathsByName.get(pathName);
-      if (path?.spread) {
-        const spreadFactor = resolvedStyle.parallelSpread ?? 0.25;
-        let spreadValue = path.spread.compute(edgeState.parallelIndex, edgeState.parallelCount, spreadFactor);
-
-        // Correct for reverse-direction edges: swapping source/target flips the
-        // perpendicular direction, so we negate to keep visual consistency
-        const source = this.graph.source(key);
-        const target = this.graph.target(key);
-        if (this.graph.isDirected(key) && source > target) {
-          spreadValue = -spreadValue;
-        }
-
-        (data as unknown as Record<string, unknown>)[path.spread.variable] = spreadValue;
-      }
-    }
+    this.applyEdgeSpread(key, data, edgeState, resolvedStyle);
 
     this.edgeDataCache[key] = data;
 
@@ -3985,6 +4003,9 @@ export default class Sigma<
 
     // Patch display data in place
     this.applyResolvedEdgeStyle(data, resolvedStyle, attrs);
+
+    // Recompute spread variable for parallel edges
+    this.applyEdgeSpread(edge, data, edgeState, resolvedStyle);
 
     // Update forced label tracking only if changed
     if (data.forceLabel !== oldForceLabel || data.hidden !== oldHidden) {

@@ -238,6 +238,7 @@ uniform sampler2D u_nodeDataTexture;
 uniform int u_nodeDataTextureWidth;
 uniform float u_zoomLabelSizeRatio;
 uniform float u_labelPixelSnapping;
+uniform float u_pixelRatio;
 ${shapeUniformDeclarations}
 
 // ============================================================================
@@ -286,15 +287,20 @@ void main() {
   ${shapes.length > 1 ? "g_shapeId = int(nodeData.w);  // Set global shape ID for multi-shape mode" : "// Single-shape mode - shapeId not used"}
 
   // Apply zoom-dependent label size scaling
+  // Positional values are in CSS pixels; multiply by u_pixelRatio to convert to
+  // physical pixels, which is what the NDC conversion (/ u_resolution) expects.
   float zoomScale = u_zoomLabelSizeRatio;
-  float margin = a_margin * zoomScale;
-  vec2 charOffset = a_charOffset * zoomScale;
-  vec2 charSize = a_charSize * zoomScale;
-  float labelWidth = a_labelWidth * zoomScale;
+  float margin = a_margin * zoomScale * u_pixelRatio;
+  vec2 charOffset = a_charOffset * zoomScale * u_pixelRatio;
+  vec2 charSize = a_charSize * zoomScale * u_pixelRatio;
+  float labelWidth = a_labelWidth * zoomScale * u_pixelRatio;
   float labelHeight = a_labelHeight * zoomScale;
 
-  // Font scale: ratio of rendered size to atlas size (for SDF anti-aliasing)
-  v_fontScale = a_labelHeight * zoomScale / ATLAS_FONT_SIZE;
+  // Font scale: ratio of CSS label size to the base atlas font size.
+  // Divided by u_pixelRatio because the atlas is generated at ATLAS_FONT_SIZE * pixelRatio,
+  // which cancels out the u_pixelRatio in the fragment shader's gamma formula and keeps
+  // the anti-aliasing band width consistent across pixel densities.
+  v_fontScale = a_labelHeight * zoomScale / (ATLAS_FONT_SIZE * u_pixelRatio);
 
   // -------------------------------------------------------------------------
   // Step 1: Transform node position to clip space
@@ -318,8 +324,8 @@ ${step3Code}
   vec2 charPixelPos = positionOffset + charOffset + cornerOffset * charSize;
 
   // Apply text alignment based on position mode
-  float verticalCenter = a_verticalCenter * zoomScale;
-  float textHeight = a_textHeight * zoomScale;
+  float verticalCenter = a_verticalCenter * zoomScale * u_pixelRatio;
+  float textHeight = a_textHeight * zoomScale * u_pixelRatio;
   float baselineToDescent = textHeight / 2.0 - verticalCenter;
   float baselineToAscent = textHeight / 2.0 + verticalCenter;
 

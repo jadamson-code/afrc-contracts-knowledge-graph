@@ -197,12 +197,14 @@ ${GLSL_GET_LABEL_DIRECTION}
 void main() {
   ${shapes.length > 1 ? "g_shapeId = int(a_shapeId);  // Set global shape ID for multi-shape mode" : "// Single-shape mode"}
   ${GLSL_NODE_SIZE_TO_PIXELS}
-  float padding = a_backdropPadding;
-  float shadowBlur = a_backdropShadowBlur;
+  // CSS pixel attributes are multiplied by u_pixelRatio to match nodeRadiusPixels,
+  // which is already in physical pixels (nodeRadiusNDC * u_resolution.x / 2.0).
+  float padding = a_backdropPadding * u_pixelRatio;
+  float shadowBlur = a_backdropShadowBlur * u_pixelRatio;
   // Unpack a_backdropExtra: [borderWidth, cornerRadius, labelPadding, area]
-  float borderWidth = a_backdropExtra.x;
-  float cornerRadius = a_backdropExtra.y;
-  float labelPad = a_backdropExtra.z;
+  float borderWidth = a_backdropExtra.x * u_pixelRatio;
+  float cornerRadius = a_backdropExtra.y * u_pixelRatio;
+  float labelPad = a_backdropExtra.z * u_pixelRatio;
   float backdropArea = a_backdropExtra.w;
   // Use 2x shadowBlur so the Gaussian fully decays before the quad edge
   float totalExpansion = shadowBlur * 2.0 + borderWidth;
@@ -210,9 +212,9 @@ void main() {
 
   // Apply zoom-dependent label size scaling
   float zoomScale = u_zoomLabelSizeRatio;
-  float labelW = a_labelWidth * zoomScale;
-  float labelH = a_labelHeight * zoomScale;
-  float labelMargin = u_labelMargin * zoomScale;
+  float labelW = a_labelWidth * zoomScale * u_pixelRatio;
+  float labelH = a_labelHeight * zoomScale * u_pixelRatio;
+  float labelMargin = u_labelMargin * zoomScale * u_pixelRatio;
 
   // Only apply labelPad when a label is actually present
   float effectiveLabelPad = labelW > 0.0 ? labelPad : 0.0;
@@ -264,7 +266,7 @@ void main() {
     labelOffset = labelRotMat * labelOffset;
 
     // Shift the label box center to cover attachments (e.g., below the label)
-    labelOffset += a_labelBoxOffset * zoomScale;
+    labelOffset += a_labelBoxOffset * zoomScale * u_pixelRatio;
   }
 
   // For node-only mode, zero out label dimensions

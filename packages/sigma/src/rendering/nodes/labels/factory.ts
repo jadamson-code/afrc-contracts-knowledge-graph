@@ -158,6 +158,9 @@ export function createLabelProgram<
     /** Manages SDF glyph generation and atlas packing */
     private atlasManager: SDFAtlasManager;
 
+    /** Actual atlas font size (= DEFAULT × pixelRatio), used for scale calculations */
+    private atlasFontSize: number;
+
     /** WebGL texture containing the glyph atlas */
     private atlasTexture: WebGLTexture | null = null;
 
@@ -183,8 +186,11 @@ export function createLabelProgram<
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {
       super(gl, pickingBuffer, renderer);
 
-      // Initialize SDF atlas manager for glyph generation
-      this.atlasManager = new SDFAtlasManager();
+      // Scale the atlas font size by pixelRatio so SDF glyphs have enough detail
+      // at the device's native resolution. The shader's v_fontScale is also divided
+      // by pixelRatio so the gamma (AA band width) stays desktop-equivalent.
+      this.atlasFontSize = DEFAULT_SDF_ATLAS_OPTIONS.fontSize * renderer.pixelRatio;
+      this.atlasManager = new SDFAtlasManager({ fontSize: this.atlasFontSize });
       // Base gamma for SDF anti-aliasing, scaled by fontScale in the shader.
       // At a typical 14px label (fontScale ≈ 0.22), effective gamma ≈ 0.11.
       this.gamma = 0.025;
@@ -365,8 +371,8 @@ export function createLabelProgram<
       const glyph = cache.glyphs[charIndex]!;
       const xOffset = cache.xOffsets[charIndex];
 
-      // Scale factor: atlas glyphs are rendered at a fixed size, scale to requested size
-      const scale = labelData.size / DEFAULT_SDF_ATLAS_OPTIONS.fontSize;
+      // Scale factor: atlas glyphs are rendered at atlasFontSize, scale to requested size
+      const scale = labelData.size / this.atlasFontSize;
 
       // -----------------------------------------------------------------------
       // Write vertex attributes to buffer
@@ -588,7 +594,7 @@ export function createLabelProgram<
         }
       }
 
-      const scale = fontSize / DEFAULT_SDF_ATLAS_OPTIONS.fontSize;
+      const scale = fontSize / this.atlasFontSize;
       return { width: totalWidth * scale, height: fontSize };
     }
 

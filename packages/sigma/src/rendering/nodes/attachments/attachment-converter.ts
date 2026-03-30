@@ -125,7 +125,7 @@ export async function svgToCanvas(svg: string | SVGElement, pixelRatio = 1): Pro
             taintWarned = true;
             // eslint-disable-next-line no-console
             console.warn(
-              'Sigma: A label attachment was skipped because the rendered canvas is tainted. ' +
+              "Sigma: A label attachment was skipped because the rendered canvas is tainted. " +
                 'SVG with <foreignObject> (used by the "html" attachment type) is blocked in Chromium and Safari. ' +
                 'Use type: "canvas" with Canvas 2D rendering instead.',
             );

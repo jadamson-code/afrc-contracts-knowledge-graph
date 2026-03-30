@@ -56,3 +56,9 @@
 .example-toolbar-links a:hover {
   text-decoration: underline;
 }
+.toolbar-link-icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.1em;
+  margin-right: 0.25em;
+}

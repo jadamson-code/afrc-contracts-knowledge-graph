@@ -379,6 +379,9 @@ footer ul {
   .hero .tagline {
     font-size: 1.3em;
   }
+  .showcase {
+    padding: 0 0 2em;
+  }
   .showcase .overlay {
     font-size: 1em;
   }

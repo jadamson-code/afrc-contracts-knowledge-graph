@@ -12,6 +12,7 @@
  *   defaultTab — which tab to show first: "result" (default) or "source"
  */
 import { Code } from "astro-expressive-code/components";
+import { Icon } from "astro-icon/components";
 
 interface Props {
   id: string;
@@ -51,10 +52,12 @@ const sourceFirst = defaultTab === "source";
       <a
         href={`https://github.com/jacomyal/sigma.js/blob/v4/packages/website/src/examples/${id}.astro`}
         target="_blank"
-        rel="noopener">View full source on GitHub</a
+        rel="noopener"><Icon name="ph:github-logo-bold" class="toolbar-link-icon" />View source</a
       >
       <span class="example-toolbar-sep"></span>
-      <a href={`/embed/${id}/`} target="_blank" rel="noopener">Open in new tab</a>
+      <a href={`/embed/${id}/`} target="_blank" rel="noopener"
+        ><Icon name="ph:arrow-square-in-bold" class="toolbar-link-icon" />Open</a
+      >
     </div>
   </div>
 </div>

@@ -36,6 +36,39 @@ const { hasSidebar } = Astro.locals.starlightRoute;
 </div>
 
 <style>
+  /* ------------------------------------------------------------------
+   * v4-notice banner
+   * All positioning adjustments caused by the notice live here,
+   * co-located with the component that introduces it.
+   * ------------------------------------------------------------------ */
+
+  :global(:root) {
+    --sl-v4-notice-height: 2em;
+  }
+
+  .v4-notice {
+    background: var(--cream);
+    color: black;
+    text-align: center;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 11;
+    border-bottom: 1px solid var(--sl-color-hairline-shade);
+  }
+
+  .v4-notice a {
+    color: var(--ruby);
+    white-space: nowrap;
+  }
+
+  /* ------------------------------------------------------------------
+   * Page layout
+   * ------------------------------------------------------------------ */
+
   .page {
     flex-direction: column;
     min-height: 100vh;
@@ -103,5 +136,26 @@ const { hasSidebar } = Astro.locals.starlightRoute;
       background-color: var(--sl-color-bg-sidebar);
       border-inline-end: 1px solid var(--sl-color-hairline-shade);
     }
+  }
+
+  /* ------------------------------------------------------------------
+   * Starlight mobile component overrides
+   * These components use --sl-nav-height as their top anchor without
+   * knowing about our notice banner, so we shift them down here.
+   * ------------------------------------------------------------------ */
+
+  /* Burger button: vertically centered within the navbar, below the notice */
+  :global(starlight-menu-button button) {
+    top: calc(var(--sl-v4-notice-height) + (var(--sl-nav-height) - var(--sl-menu-button-size)) / 2);
+  }
+
+  /* Mobile TOC bar: sits just below the navbar */
+  :global(mobile-starlight-toc nav) {
+    top: calc(var(--sl-v4-notice-height) + var(--sl-nav-height) - 1px);
+  }
+
+  /* Mobile TOC dropdown: reduce max-height to avoid overflow off-screen */
+  :global(mobile-starlight-toc .dropdown) {
+    max-height: calc(85vh - var(--sl-v4-notice-height) - var(--sl-nav-height) - var(--sl-mobile-toc-height));
   }
 </style>

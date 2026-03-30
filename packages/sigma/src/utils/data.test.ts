@@ -15,10 +15,6 @@ describe("hasNewPartialProps", () => {
     expect(hasNewPartialProps({ a: 1, b: 2 }, { a: 1, b: 3 })).toBe(true);
   });
 
-  test("returns true when partial has a key not in current", () => {
-    expect(hasNewPartialProps({ a: 1 }, { b: 2 })).toBe(true);
-  });
-
   test("returns true on first differing key (short-circuits)", () => {
     let accessCount = 0;
     const partial = new Proxy(

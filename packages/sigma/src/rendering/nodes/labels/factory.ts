@@ -21,7 +21,7 @@ import { Attributes } from "graphology-types";
 import { DEFAULT_SDF_ATLAS_OPTIONS, GlyphMetrics, SDFAtlasManager } from "../../../core/sdf-atlas";
 import type Sigma from "../../../sigma";
 import type { LabelDisplayData, RenderParams } from "../../../types";
-import { floatColor } from "../../../utils";
+import { floatColor, getPixelRatio } from "../../../utils";
 // ============================================================================
 // Constants
 // ============================================================================
@@ -189,7 +189,7 @@ export function createLabelProgram<
       // Scale the atlas font size by pixelRatio so SDF glyphs have enough detail
       // at the device's native resolution. The shader's v_fontScale is also divided
       // by pixelRatio so the gamma (AA band width) stays desktop-equivalent.
-      this.atlasFontSize = DEFAULT_SDF_ATLAS_OPTIONS.fontSize * renderer.pixelRatio;
+      this.atlasFontSize = DEFAULT_SDF_ATLAS_OPTIONS.fontSize * getPixelRatio();
       this.atlasManager = new SDFAtlasManager({ fontSize: this.atlasFontSize });
       // Base gamma for SDF anti-aliasing, scaled by fontScale in the shader.
       // At a typical 14px label (fontScale ≈ 0.22), effective gamma ≈ 0.11.

@@ -9,8 +9,10 @@ import Camera from "./core/camera";
 import { cleanMouseCoords } from "./core/captors/captor";
 import MouseCaptor from "./core/captors/mouse";
 import TouchCaptor from "./core/captors/touch";
+import { EdgeGroupIndex } from "./core/edge-groups";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
+import { StateManager } from "./core/state-manager";
 import {
   ResolvedEdgeStyle,
   ResolvedNodeStyle,
@@ -90,9 +92,6 @@ import {
   FullGraphState,
   FullNodeState,
   StylesDeclaration,
-  createEdgeState,
-  createGraphState,
-  createNodeState,
 } from "./types/styles";
 import {
   DepthRanges,
@@ -106,7 +105,6 @@ import {
   getMatrixImpact,
   getPixelColor,
   getPixelRatio,
-  hasNewPartialProps,
   identity,
   matrixFromCamera,
   multiplyVec2,
@@ -203,10 +201,7 @@ export default class Sigma<
   private edgeVariableEntries: [string, { type: string; default: unknown }][] = [];
   private edgePathsByName: Map<string, EdgePath> = new Map();
 
-  // Parallel edge index: groups edges by sorted endpoint pair
-  private parallelEdgeGroups: Map<string, string[]> = new Map();
-  // Reverse lookup: edge key → group key (needed for edge drop when edge is already removed from graph)
-  private edgeToParallelGroupKey: Map<string, string> = new Map();
+  private edgeGroups!: EdgeGroupIndex;
 
   // Indices to keep track of the index of the item inside programs
   private nodeProgramIndex: Record<string, number> = {};
@@ -243,17 +238,7 @@ export default class Sigma<
   private renderedNodeLabels: Set<string> = new Set();
   private displayedEdgeLabels: Set<string> = new Set();
 
-  // State management (new API)
-  private nodeStates: Map<string, FullNodeState<NS>> = new Map();
-  private edgeStates: Map<string, FullEdgeState<ES>> = new Map();
-  private graphState = createGraphState<GS>();
-  private customNodeStateDefaults: NS | undefined;
-  private customEdgeStateDefaults: ES | undefined;
-  private customGraphStateDefaults: GS | undefined;
-
-  // Tracking for event system (which node/edge is currently hovered for enter/leave events)
-  private hoveredNode: string | null = null;
-  private hoveredEdge: string | null = null;
+  private stateManager: StateManager<NS, ES, GS>;
 
   // Node drag state
   private pendingDragNode: string | null = null;
@@ -283,12 +268,6 @@ export default class Sigma<
   // Pre-computed style metadata (dependency level, position attribute names)
   private nodeStyleAnalysis: StyleAnalysis = { dependency: "static", xAttribute: null, yAttribute: null };
   private edgeStyleAnalysis: StyleAnalysis = { dependency: "static", xAttribute: null, yAttribute: null };
-
-  // Dirty tracking for selective refreshState
-  private dirtyNodes: Set<string> = new Set();
-  private dirtyEdges: Set<string> = new Set();
-  private graphStateChanged = false;
-  private graphStateFlagsDirty = false;
 
   // Programs (single program per item kind)
   private nodeProgram: NodeProgram<string, N, E, G> | null = null;
@@ -386,13 +365,13 @@ export default class Sigma<
       customGraphState,
     } = options;
 
-    // Store custom state defaults for lazy initialization
-    this.customNodeStateDefaults = customNodeState as NS | undefined;
-    this.customEdgeStateDefaults = customEdgeState as ES | undefined;
-    this.customGraphStateDefaults = customGraphState as GS | undefined;
-    if (customGraphState) {
-      this.graphState = createGraphState<GS>(customGraphState);
-    }
+    // Initialize state manager (owns all per-item and graph-level state)
+    this.stateManager = new StateManager<NS, ES, GS>(
+      () => this.scheduleStateRefresh(),
+      customNodeState,
+      customEdgeState,
+      customGraphState,
+    );
 
     // Store primitives and styles declarations for v4 API
     // Use DEFAULT_STYLES when styles not provided, merging at nodes/edges level
@@ -420,7 +399,7 @@ export default class Sigma<
     if (this.stylesDeclaration!.stage) {
       this.resolvedStageStyle = evaluateStageStyle(
         this.stylesDeclaration!.stage as Record<string, unknown> | Record<string, unknown>[],
-        this.graphState,
+        this.stateManager.graphState,
       );
     }
 
@@ -445,6 +424,15 @@ export default class Sigma<
     // Properties
     this.graph = graph;
     this.container = container;
+
+    // Initialize edge group index (tracks parallel edges for spread rendering)
+    this.edgeGroups = new EdgeGroupIndex(graph, (edges, count) => {
+      for (let i = 0; i < edges.length; i++) {
+        const state = this.stateManager.getEdgeState(edges[i]);
+        state.parallelIndex = i;
+        state.parallelCount = count;
+      }
+    });
 
     // Initialize bucket collections with numDepthLayers * maxDepthLevels
     const numDepthLayers = (this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS]).length;
@@ -701,15 +689,15 @@ export default class Sigma<
       };
 
       const nodeToHover = this.getNodeAtPosition(event);
-      if (nodeToHover && this.hoveredNode !== nodeToHover && !this.nodeDataCache[nodeToHover].hidden) {
+      if (nodeToHover && this.stateManager.hoveredNode !== nodeToHover && !this.nodeDataCache[nodeToHover].hidden) {
         // Handling passing from one node to the other directly
-        if (this.hoveredNode) {
-          const previousNode = this.hoveredNode;
-          this.hoveredNode = nodeToHover;
+        if (this.stateManager.hoveredNode) {
+          const previousNode = this.stateManager.hoveredNode;
+          this.stateManager.setHoveredNode(nodeToHover);
           this.setNodeState(previousNode, { isHovered: false });
           this.emit("leaveNode", { ...baseEvent, node: previousNode });
         } else {
-          this.hoveredNode = nodeToHover;
+          this.stateManager.setHoveredNode(nodeToHover);
         }
 
         this.setNodeState(nodeToHover, { isHovered: true });
@@ -719,10 +707,10 @@ export default class Sigma<
       }
 
       // Checking if the hovered node is still hovered
-      if (this.hoveredNode) {
-        if (this.getNodeAtPosition(event) !== this.hoveredNode) {
-          const node = this.hoveredNode;
-          this.hoveredNode = null;
+      if (this.stateManager.hoveredNode) {
+        if (this.getNodeAtPosition(event) !== this.stateManager.hoveredNode) {
+          const node = this.stateManager.hoveredNode;
+          this.stateManager.setHoveredNode(null);
           this.setNodeState(node, { isHovered: false });
           this.emit("leaveNode", { ...baseEvent, node });
           this.updateContainerCursor();
@@ -731,14 +719,16 @@ export default class Sigma<
       }
 
       if (this.settings.enableEdgeEvents) {
-        const edgeToHover = this.hoveredNode ? null : this.getEdgeAtPoint(baseEvent.event.x, baseEvent.event.y);
+        const edgeToHover = this.stateManager.hoveredNode
+          ? null
+          : this.getEdgeAtPoint(baseEvent.event.x, baseEvent.event.y);
 
-        if (edgeToHover !== this.hoveredEdge) {
-          if (this.hoveredEdge) {
-            this.setEdgeState(this.hoveredEdge, { isHovered: false });
-            this.emit("leaveEdge", { ...baseEvent, edge: this.hoveredEdge });
+        if (edgeToHover !== this.stateManager.hoveredEdge) {
+          if (this.stateManager.hoveredEdge) {
+            this.setEdgeState(this.stateManager.hoveredEdge, { isHovered: false });
+            this.emit("leaveEdge", { ...baseEvent, edge: this.stateManager.hoveredEdge });
           }
-          this.hoveredEdge = edgeToHover;
+          this.stateManager.setHoveredEdge(edgeToHover);
           if (edgeToHover) {
             this.setEdgeState(edgeToHover, { isHovered: true });
             this.emit("enterEdge", { ...baseEvent, edge: edgeToHover });
@@ -797,16 +787,16 @@ export default class Sigma<
         },
       };
 
-      if (this.hoveredNode) {
-        const node = this.hoveredNode;
-        this.hoveredNode = null;
+      if (this.stateManager.hoveredNode) {
+        const node = this.stateManager.hoveredNode;
+        this.stateManager.setHoveredNode(null);
         this.setNodeState(node, { isHovered: false });
         this.emit("leaveNode", { ...baseEvent, node });
       }
 
-      if (this.settings.enableEdgeEvents && this.hoveredEdge) {
-        const edge = this.hoveredEdge;
-        this.hoveredEdge = null;
+      if (this.settings.enableEdgeEvents && this.stateManager.hoveredEdge) {
+        const edge = this.stateManager.hoveredEdge;
+        this.stateManager.setHoveredEdge(null);
         this.setEdgeState(edge, { isHovered: false });
         this.emit("leaveEdge", { ...baseEvent, edge });
       }
@@ -968,10 +958,10 @@ export default class Sigma<
     // On add edge, register in parallel index, process edge and siblings
     this.activeListeners.addEdgeGraphUpdate = (payload: { key: string }): void => {
       const edge = payload.key;
-      this.registerParallelEdge(edge);
+      this.edgeGroups.register(edge);
       this.addEdge(edge);
       // Re-process siblings whose parallel state changed
-      const siblings = this.getParallelSiblings(edge);
+      const siblings = this.edgeGroups.getSiblings(edge);
       for (const sib of siblings) this.addEdge(sib);
       this.refresh({ partialGraph: { edges: [edge, ...siblings] }, schedule: true });
     };
@@ -986,8 +976,8 @@ export default class Sigma<
     // On drop edge, unregister from parallel index, remove, and update siblings
     this.activeListeners.dropEdgeGraphUpdate = (payload: { key: string }): void => {
       const edge = payload.key;
-      const siblings = this.getParallelSiblings(edge);
-      this.unregisterParallelEdge(edge);
+      const siblings = this.edgeGroups.getSiblings(edge);
+      this.edgeGroups.unregister(edge);
       this.removeEdge(edge);
       // Re-process remaining siblings whose parallel state changed
       for (const sib of siblings) this.addEdge(sib);
@@ -1880,14 +1870,13 @@ export default class Sigma<
     if (!this.settings.renderEdgeLabels) return;
 
     // Build highlighted nodes set from state
-    const highlightedNodes = new Set<string>();
-    for (const [key, state] of this.nodeStates) {
-      if (state.isHighlighted) highlightedNodes.add(key);
-    }
+    const highlightedNodes = new Set<string>(
+      this.graph.filterNodes((node) => this.stateManager.getNodeState(node).isHighlighted),
+    );
 
     const edgeLabelsToDisplay = edgeLabelsToDisplayFromNodes({
       graph: this.graph,
-      hoveredNode: this.hoveredNode,
+      hoveredNode: this.stateManager.hoveredNode,
       displayedNodeLabels: this.displayedNodeLabels,
       highlightedNodes,
     });
@@ -2029,9 +2018,7 @@ export default class Sigma<
     // Do we need to refresh state (styles in-place, no reprocess)?
     if (this.needToRefreshState) this.refreshState();
     this.needToRefreshState = false;
-    this.dirtyNodes.clear();
-    this.dirtyEdges.clear();
-    this.graphStateChanged = false;
+    this.stateManager.clearDirtyTracking();
 
     // Clearing the canvases
     this.clear();
@@ -2246,14 +2233,14 @@ export default class Sigma<
    */
   private addNode(key: string): void {
     const attrs = this.graph.getNodeAttributes(key);
-    const nodeState = this.getNodeState(key);
+    const nodeState = this.stateManager.getNodeState(key);
 
     // Compute display data from styles (always defined, defaults to DEFAULT_STYLES)
     const resolvedStyle = evaluateNodeStyle(
       this.stylesDeclaration!.nodes as Record<string, unknown>,
       attrs,
       nodeState,
-      this.graphState,
+      this.stateManager.graphState,
       this.graph,
     );
 
@@ -2262,7 +2249,7 @@ export default class Sigma<
 
     // Apply reducer if provided
     if (this.nodeReducer) {
-      const reduced = this.nodeReducer(key, data, attrs, nodeState, this.graphState, this.graph);
+      const reduced = this.nodeReducer(key, data, attrs, nodeState, this.stateManager.graphState, this.graph);
       data = { ...data, ...reduced };
     }
 
@@ -2430,10 +2417,6 @@ export default class Sigma<
     delete this.nodeGraphCoords[key];
     // Remove from node program index
     delete this.nodeProgramIndex[key];
-    // Remove from node state
-    this.nodeStates.delete(key);
-    // Remove from dirty tracking
-    this.dirtyNodes.delete(key);
     // Clean up drag state if this node is involved
     if (key === this.pendingDragNode || (this.dragSession && key === this.dragSession.node)) {
       this.endDrag();
@@ -2441,131 +2424,12 @@ export default class Sigma<
       this.dragSession.allNodes = this.dragSession.allNodes.filter((n) => n !== key);
       this.dragSession.startNodePositions.delete(key);
     }
-    // Remove from hovered
-    if (this.hoveredNode === key) this.hoveredNode = null;
+    // Remove from state
+    this.stateManager.removeNode(key);
     // Remove from forced label
     this.nodesWithForcedLabels.delete(key);
     // Remove from backdrop tracking
     this.nodesWithBackdrop.delete(key);
-  }
-
-  /**
-   * Returns the parallel group key for an edge, or null for self-loops.
-   * The key uses sorted endpoint IDs so A→B and B→A share the same group.
-   */
-  private getParallelGroupKey(edge: string): string | null {
-    const source = this.graph.source(edge);
-    const target = this.graph.target(edge);
-    if (source === target) return null;
-    return source < target ? `${source}\0${target}` : `${target}\0${source}`;
-  }
-
-  /**
-   * Registers an edge in the parallel edge index and updates states for the group.
-   */
-  private registerParallelEdge(edge: string): void {
-    const groupKey = this.getParallelGroupKey(edge);
-    if (!groupKey) return;
-
-    let group = this.parallelEdgeGroups.get(groupKey);
-    if (!group) {
-      group = [];
-      this.parallelEdgeGroups.set(groupKey, group);
-    }
-    if (!group.includes(edge)) group.push(edge);
-
-    this.edgeToParallelGroupKey.set(edge, groupKey);
-    this.sortParallelGroup(group, groupKey);
-    this.updateParallelStates(groupKey);
-  }
-
-  /**
-   * Removes an edge from the parallel edge index and updates sibling states.
-   * Uses the reverse lookup so the edge doesn't need to exist in the graph.
-   */
-  private unregisterParallelEdge(edge: string): void {
-    const groupKey = this.edgeToParallelGroupKey.get(edge);
-    if (!groupKey) return;
-
-    this.edgeToParallelGroupKey.delete(edge);
-
-    const group = this.parallelEdgeGroups.get(groupKey);
-    if (!group) return;
-
-    const idx = group.indexOf(edge);
-    if (idx !== -1) group.splice(idx, 1);
-
-    if (group.length === 0) {
-      this.parallelEdgeGroups.delete(groupKey);
-    } else {
-      this.updateParallelStates(groupKey);
-    }
-  }
-
-  /**
-   * Sorts a parallel group by direction: canonical-direction edges first, then reverse.
-   */
-  private sortParallelGroup(group: string[], groupKey: string): void {
-    const canonicalSource = groupKey.split("\0")[0];
-    group.sort((a, b) => {
-      const aForward = this.graph.source(a) === canonicalSource || !this.graph.isDirected(a) ? 0 : 1;
-      const bForward = this.graph.source(b) === canonicalSource || !this.graph.isDirected(b) ? 0 : 1;
-      return aForward - bForward;
-    });
-  }
-
-  /**
-   * Updates parallel state fields on all edges in a group.
-   */
-  private updateParallelStates(groupKey: string): void {
-    const group = this.parallelEdgeGroups.get(groupKey);
-    if (!group) return;
-
-    const count = group.length;
-    for (let i = 0; i < count; i++) {
-      const state = this.getEdgeState(group[i]);
-      state.parallelIndex = i;
-      state.parallelCount = count;
-    }
-  }
-
-  /**
-   * Returns sibling edges in the same parallel group (excluding the given edge).
-   * Uses the reverse lookup so the edge doesn't need to exist in the graph.
-   */
-  private getParallelSiblings(edge: string): string[] {
-    const groupKey = this.edgeToParallelGroupKey.get(edge);
-    if (!groupKey) return [];
-    const group = this.parallelEdgeGroups.get(groupKey);
-    if (!group) return [];
-    return group.filter((e) => e !== edge);
-  }
-
-  /**
-   * Rebuilds the entire parallel edge index from scratch.
-   */
-  private rebuildParallelEdgeIndex(): void {
-    this.parallelEdgeGroups.clear();
-    this.edgeToParallelGroupKey.clear();
-
-    this.graph.forEachEdge((edge) => {
-      const groupKey = this.getParallelGroupKey(edge);
-      if (!groupKey) return;
-
-      let group = this.parallelEdgeGroups.get(groupKey);
-      if (!group) {
-        group = [];
-        this.parallelEdgeGroups.set(groupKey, group);
-      }
-      group.push(edge);
-      this.edgeToParallelGroupKey.set(edge, groupKey);
-    });
-
-    // Sort each group and update states
-    for (const [groupKey, group] of this.parallelEdgeGroups) {
-      this.sortParallelGroup(group, groupKey);
-      this.updateParallelStates(groupKey);
-    }
   }
 
   /**
@@ -2621,20 +2485,24 @@ export default class Sigma<
     edgeState: FullEdgeState<ES>,
     resolvedStyle: ResolvedEdgeStyle & Record<string, unknown>,
   ): void {
-    if (edgeState.parallelCount <= 1 || this.graph.source(edge) === this.graph.target(edge)) return;
+    if (edgeState.parallelCount <= 1) return;
 
-    const pathName = resolvedStyle.parallelPath || resolvedStyle.path;
+    const source = this.graph.source(edge);
+    const target = this.graph.target(edge);
+    const isSelfLoop = source === target;
+
+    const pathName = isSelfLoop
+      ? resolvedStyle.selfLoopPath || resolvedStyle.path
+      : resolvedStyle.parallelPath || resolvedStyle.path;
     const path = this.edgePathsByName.get(pathName);
     if (!path?.spread) return;
 
     const spreadFactor = resolvedStyle.parallelSpread ?? 0.25;
     let spreadValue = path.spread.compute(edgeState.parallelIndex, edgeState.parallelCount, spreadFactor);
 
-    // Correct for reverse-direction edges: swapping source/target flips the
-    // perpendicular direction, so we negate to keep visual consistency
-    const source = this.graph.source(edge);
-    const target = this.graph.target(edge);
-    if (this.graph.isDirected(edge) && source > target) {
+    // Correct for reverse-direction non-self-loop edges: swapping source/target
+    // flips the perpendicular direction, so we negate to keep visual consistency.
+    if (!isSelfLoop && this.graph.isDirected(edge) && source > target) {
       spreadValue = -spreadValue;
     }
 
@@ -2648,14 +2516,14 @@ export default class Sigma<
    */
   private addEdge(key: string): void {
     const attrs = this.graph.getEdgeAttributes(key);
-    const edgeState = this.getEdgeState(key);
+    const edgeState = this.stateManager.getEdgeState(key);
 
     // Compute display data from styles (always defined, defaults to DEFAULT_STYLES)
     const resolvedStyle = evaluateEdgeStyle(
       this.stylesDeclaration!.edges as Record<string, unknown>,
       attrs,
       edgeState,
-      this.graphState,
+      this.stateManager.graphState,
       this.graph,
     );
 
@@ -2664,7 +2532,7 @@ export default class Sigma<
 
     // Apply reducer if provided
     if (this.edgeReducer) {
-      const reduced = this.edgeReducer(key, data, attrs, edgeState, this.graphState, this.graph);
+      const reduced = this.edgeReducer(key, data, attrs, edgeState, this.stateManager.graphState, this.graph);
       data = { ...data, ...reduced };
     }
 
@@ -2726,12 +2594,8 @@ export default class Sigma<
     delete this.edgeTextureIndexCache[key];
     // Free edge from edge data texture
     this.edgeDataTexture!.free(key);
-    // Remove from edge state
-    this.edgeStates.delete(key);
-    // Remove from dirty tracking
-    this.dirtyEdges.delete(key);
-    // Remove from hovered
-    if (this.hoveredEdge === key) this.hoveredEdge = null;
+    // Remove from state
+    this.stateManager.removeEdge(key);
     // Remove from forced label
     this.edgesWithForcedLabels.delete(key);
   }
@@ -2770,8 +2634,7 @@ export default class Sigma<
     this.zIndexCache.edges = {};
     this.depthRanges.edges = {};
     this.edgeBaseDepth = {};
-    this.parallelEdgeGroups.clear();
-    this.edgeToParallelGroupKey.clear();
+    this.edgeGroups.clear();
   }
 
   /**
@@ -2790,13 +2653,12 @@ export default class Sigma<
   private clearNodeState(): void {
     this.displayedNodeLabels = new Set();
     this.renderedNodeLabels = new Set();
-    this.nodeStates.clear();
-    this.hoveredNode = null;
     this.nodesWithBackdrop.clear();
-    // Reset drag and rescale state (skip setNodesState since nodeStates was just cleared)
+    // Reset drag and rescale state
     this.pendingDragNode = null;
     this.dragSession = null;
     this.autoRescaleFrozen = false;
+    this.stateManager.clearNodes();
   }
 
   /**
@@ -2805,8 +2667,7 @@ export default class Sigma<
    */
   private clearEdgeState(): void {
     this.displayedEdgeLabels = new Set();
-    this.edgeStates.clear();
-    this.hoveredEdge = null;
+    this.stateManager.clearEdges();
   }
 
   /**
@@ -2816,7 +2677,7 @@ export default class Sigma<
   private clearState(): void {
     this.clearEdgeState();
     this.clearNodeState();
-    this.graphState = createGraphState<GS>(this.customGraphStateDefaults);
+    this.stateManager.resetGraphState();
   }
 
   /**
@@ -2887,7 +2748,7 @@ export default class Sigma<
 
     // Select path: self-loops use selfLoopPath, parallel edges use parallelPath, others use path
     const isSelfLoop = source === target;
-    const isParallel = !isSelfLoop && (this.getEdgeState(edge)?.parallelCount ?? 1) > 1;
+    const isParallel = !isSelfLoop && (this.stateManager.getEdgeState(edge)?.parallelCount ?? 1) > 1;
     const pathName = isSelfLoop
       ? edgeData.selfLoopPath
       : isParallel && edgeData.parallelPath
@@ -3233,8 +3094,10 @@ export default class Sigma<
     if (graph === this.graph) return;
 
     // Check hoveredNode and hoveredEdge
-    if (this.hoveredNode && !graph.hasNode(this.hoveredNode)) this.hoveredNode = null;
-    if (this.hoveredEdge && !graph.hasEdge(this.hoveredEdge)) this.hoveredEdge = null;
+    if (this.stateManager.hoveredNode && !graph.hasNode(this.stateManager.hoveredNode))
+      this.stateManager.setHoveredNode(null);
+    if (this.stateManager.hoveredEdge && !graph.hasEdge(this.stateManager.hoveredEdge))
+      this.stateManager.setHoveredEdge(null);
 
     // Unbinding handlers on the current graph
     this.unbindGraphHandlers();
@@ -3333,12 +3196,7 @@ export default class Sigma<
    * @return {FullNodeState<NS>} The node's state.
    */
   getNodeState(key: string): FullNodeState<NS> {
-    let state = this.nodeStates.get(key);
-    if (!state) {
-      state = createNodeState<NS>(this.customNodeStateDefaults);
-      this.nodeStates.set(key, state);
-    }
-    return state;
+    return this.stateManager.getNodeState(key);
   }
 
   /**
@@ -3348,12 +3206,7 @@ export default class Sigma<
    * @return {FullEdgeState<ES>} The edge's state.
    */
   getEdgeState(key: string): FullEdgeState<ES> {
-    let state = this.edgeStates.get(key);
-    if (!state) {
-      state = createEdgeState<ES>(this.customEdgeStateDefaults);
-      this.edgeStates.set(key, state);
-    }
-    return state;
+    return this.stateManager.getEdgeState(key);
   }
 
   /**
@@ -3362,12 +3215,7 @@ export default class Sigma<
    * @return {FullGraphState<GS>} The graph's state.
    */
   getGraphState(): FullGraphState<GS> {
-    if (this.graphStateFlagsDirty) {
-      this.updateGraphStateFromNodes();
-      this.updateGraphStateFromEdges();
-      this.graphStateFlagsDirty = false;
-    }
-    return this.graphState;
+    return this.stateManager.getGraphState();
   }
 
   /**
@@ -3378,21 +3226,7 @@ export default class Sigma<
    * @return {this}
    */
   setNodeState(key: string, state: Partial<BaseNodeState> | Partial<FullNodeState<NS>>): this {
-    const currentState = this.getNodeState(key);
-    if (!hasNewPartialProps(currentState as Record<string, unknown>, state as Record<string, unknown>)) return this;
-
-    const newState = { ...currentState, ...state };
-    this.nodeStates.set(key, newState);
-
-    // Track dirty node for selective refresh
-    this.dirtyNodes.add(key);
-
-    // Update hovered node tracking for event system
-    this.updateHoveredNodeTracking(key, currentState, newState);
-
-    this.graphStateFlagsDirty = true;
-    this.scheduleStateRefresh();
-
+    this.stateManager.setNodeState(key, state);
     return this;
   }
 
@@ -3404,21 +3238,7 @@ export default class Sigma<
    * @return {this}
    */
   setEdgeState(key: string, state: Partial<BaseEdgeState> | Partial<FullEdgeState<ES>>): this {
-    const currentState = this.getEdgeState(key);
-    if (!hasNewPartialProps(currentState as Record<string, unknown>, state as Record<string, unknown>)) return this;
-
-    const newState = { ...currentState, ...state };
-    this.edgeStates.set(key, newState);
-
-    // Track dirty edge for selective refresh
-    this.dirtyEdges.add(key);
-
-    // Update hovered edge tracking for event system
-    this.updateHoveredEdgeTracking(key, currentState, newState);
-
-    this.graphStateFlagsDirty = true;
-    this.scheduleStateRefresh();
-
+    this.stateManager.setEdgeState(key, state);
     return this;
   }
 
@@ -3429,13 +3249,7 @@ export default class Sigma<
    * @return {this}
    */
   setGraphState(state: Partial<BaseGraphState> | Partial<FullGraphState<GS>>): this {
-    if (!hasNewPartialProps(this.graphState as Record<string, unknown>, state as Record<string, unknown>)) return this;
-
-    this.graphState = { ...this.graphState, ...state };
-    this.graphStateChanged = true;
-
-    this.scheduleStateRefresh();
-
+    this.stateManager.setGraphState(state);
     return this;
   }
 
@@ -3447,22 +3261,7 @@ export default class Sigma<
    * @return {this}
    */
   setNodesState(keys: string[], state: Partial<BaseNodeState> | Partial<FullNodeState<NS>>): this {
-    let changed = false;
-    for (const key of keys) {
-      const currentState = this.getNodeState(key);
-      if (!hasNewPartialProps(currentState as Record<string, unknown>, state as Record<string, unknown>)) continue;
-      const newState = { ...currentState, ...state };
-      this.nodeStates.set(key, newState);
-      this.dirtyNodes.add(key);
-      this.updateHoveredNodeTracking(key, currentState, newState);
-      changed = true;
-    }
-
-    if (changed) {
-      this.graphStateFlagsDirty = true;
-      this.scheduleStateRefresh();
-    }
-
+    this.stateManager.setNodesState(keys, state);
     return this;
   }
 
@@ -3474,22 +3273,7 @@ export default class Sigma<
    * @return {this}
    */
   setEdgesState(keys: string[], state: Partial<BaseEdgeState> | Partial<FullEdgeState<ES>>): this {
-    let changed = false;
-    for (const key of keys) {
-      const currentState = this.getEdgeState(key);
-      if (!hasNewPartialProps(currentState as Record<string, unknown>, state as Record<string, unknown>)) continue;
-      const newState = { ...currentState, ...state };
-      this.edgeStates.set(key, newState);
-      this.dirtyEdges.add(key);
-      this.updateHoveredEdgeTracking(key, currentState, newState);
-      changed = true;
-    }
-
-    if (changed) {
-      this.graphStateFlagsDirty = true;
-      this.scheduleStateRefresh();
-    }
-
+    this.stateManager.setEdgesState(keys, state);
     return this;
   }
 
@@ -3498,12 +3282,12 @@ export default class Sigma<
    * falling back to the stage cursor style.
    */
   private updateContainerCursor(): void {
-    if (this.hoveredNode) {
+    if (this.stateManager.hoveredNode) {
       this.container.style.cursor =
-        this.nodeDataCache[this.hoveredNode]?.cursor || this.resolvedStageStyle.cursor || "";
-    } else if (this.hoveredEdge) {
+        this.nodeDataCache[this.stateManager.hoveredNode]?.cursor || this.resolvedStageStyle.cursor || "";
+    } else if (this.stateManager.hoveredEdge) {
       this.container.style.cursor =
-        this.edgeDataCache[this.hoveredEdge]?.cursor || this.resolvedStageStyle.cursor || "";
+        this.edgeDataCache[this.stateManager.hoveredEdge]?.cursor || this.resolvedStageStyle.cursor || "";
     } else {
       this.container.style.cursor = this.resolvedStageStyle.cursor || "";
     }
@@ -3515,7 +3299,7 @@ export default class Sigma<
   private refreshStageStyle(): void {
     this.resolvedStageStyle = evaluateStageStyle(
       this.stylesDeclaration!.stage as Record<string, unknown> | Record<string, unknown>[],
-      this.graphState,
+      this.stateManager.graphState,
     );
 
     // Apply background
@@ -3525,103 +3309,6 @@ export default class Sigma<
 
     // Apply cursor (respecting hovered item override)
     this.updateContainerCursor();
-  }
-
-  /**
-   * Update hovered node tracking for event system (enter/leave events).
-   */
-  private updateHoveredNodeTracking(key: string, oldState: FullNodeState<NS>, newState: FullNodeState<NS>): void {
-    if (oldState.isHovered !== newState.isHovered) {
-      if (newState.isHovered) {
-        // Clear previous hovered node if any
-        if (this.hoveredNode && this.hoveredNode !== key) {
-          const prevState = this.getNodeState(this.hoveredNode);
-          this.nodeStates.set(this.hoveredNode, { ...prevState, isHovered: false });
-          this.dirtyNodes.add(this.hoveredNode);
-        }
-        this.hoveredNode = key;
-      } else if (this.hoveredNode === key) {
-        this.hoveredNode = null;
-      }
-    }
-  }
-
-  /**
-   * Update hovered edge tracking for event system (enter/leave events).
-   */
-  private updateHoveredEdgeTracking(key: string, oldState: FullEdgeState<ES>, newState: FullEdgeState<ES>): void {
-    if (oldState.isHovered !== newState.isHovered) {
-      if (newState.isHovered) {
-        // Clear previous hovered edge if any
-        if (this.hoveredEdge && this.hoveredEdge !== key) {
-          const prevState = this.getEdgeState(this.hoveredEdge);
-          this.edgeStates.set(this.hoveredEdge, { ...prevState, isHovered: false });
-          this.dirtyEdges.add(this.hoveredEdge);
-        }
-        this.hoveredEdge = key;
-      } else if (this.hoveredEdge === key) {
-        this.hoveredEdge = null;
-      }
-    }
-  }
-
-  /**
-   * Update graph state flags based on node states.
-   */
-  private updateGraphStateFromNodes(): void {
-    let hasHovered = false;
-    let hasHighlighted = false;
-    let isDragging = false;
-
-    for (const [, state] of this.nodeStates) {
-      if (state.isHovered) hasHovered = true;
-      if (state.isHighlighted) hasHighlighted = true;
-      if (state.isDragged) isDragging = true;
-      if (hasHovered && hasHighlighted && isDragging) break;
-    }
-
-    // Also check edges for hover
-    if (!hasHovered && this.hoveredEdge) hasHovered = true;
-
-    if (
-      this.graphState.hasHovered !== hasHovered ||
-      this.graphState.hasHighlighted !== hasHighlighted ||
-      this.graphState.isDragging !== isDragging
-    ) {
-      this.graphStateChanged = true;
-    }
-
-    this.graphState = {
-      ...this.graphState,
-      hasHovered,
-      hasHighlighted,
-      isDragging,
-    };
-  }
-
-  /**
-   * Update graph state flags based on edge states.
-   */
-  private updateGraphStateFromEdges(): void {
-    let hasHovered = this.hoveredNode !== null;
-
-    if (!hasHovered) {
-      for (const [, state] of this.edgeStates) {
-        if (state.isHovered) {
-          hasHovered = true;
-          break;
-        }
-      }
-    }
-
-    if (this.graphState.hasHovered !== hasHovered) {
-      this.graphStateChanged = true;
-    }
-
-    this.graphState = {
-      ...this.graphState,
-      hasHovered,
-    };
   }
 
   /**
@@ -3789,21 +3476,19 @@ export default class Sigma<
    * items whose styles can't have changed.
    */
   private refreshState(): void {
-    // Recompute graph-level flags from node/edge states (deferred from setState calls)
-    if (this.graphStateFlagsDirty) {
-      this.updateGraphStateFromNodes();
-      this.updateGraphStateFromEdges();
-      this.graphStateFlagsDirty = false;
-    }
+    // Recompute graph-level flags from node/edge states if needed (deferred from setState calls)
+    this.stateManager.flushGraphStateFlags();
 
-    const needFullNodeRefresh = this.graphStateChanged && this.nodeStyleAnalysis.dependency === "graph-state";
-    const needFullEdgeRefresh = this.graphStateChanged && this.edgeStyleAnalysis.dependency === "graph-state";
+    const needFullNodeRefresh =
+      this.stateManager.graphStateChanged && this.nodeStyleAnalysis.dependency === "graph-state";
+    const needFullEdgeRefresh =
+      this.stateManager.graphStateChanged && this.edgeStyleAnalysis.dependency === "graph-state";
 
     // Nodes
     if (needFullNodeRefresh) {
       this.graph.forEachNode((node) => this.refreshNodeState(node));
     } else if (this.nodeStyleAnalysis.dependency !== "static") {
-      for (const node of this.dirtyNodes) {
+      for (const node of this.stateManager.dirtyNodes) {
         this.refreshNodeState(node);
       }
     }
@@ -3812,19 +3497,17 @@ export default class Sigma<
     if (needFullEdgeRefresh) {
       this.graph.forEachEdge((edge) => this.refreshEdgeState(edge));
     } else if (this.edgeStyleAnalysis.dependency !== "static") {
-      for (const edge of this.dirtyEdges) {
+      for (const edge of this.stateManager.dirtyEdges) {
         this.refreshEdgeState(edge);
       }
     }
 
     // Stage styles
-    if (this.graphStateChanged && this.stylesDeclaration?.stage) {
+    if (this.stateManager.graphStateChanged && this.stylesDeclaration?.stage) {
       this.refreshStageStyle();
     }
 
-    this.dirtyNodes.clear();
-    this.dirtyEdges.clear();
-    this.graphStateChanged = false;
+    this.stateManager.clearDirtyTracking();
   }
 
   /**
@@ -3862,12 +3545,12 @@ export default class Sigma<
 
     // Re-evaluate style (reuses scratch object to avoid allocation)
     const attrs = this.graph.getNodeAttributes(node);
-    const nodeState = this.getNodeState(node);
+    const nodeState = this.stateManager.getNodeState(node);
     const resolvedStyle = evaluateNodeStyle(
       this.stylesDeclaration!.nodes as Record<string, unknown>,
       attrs,
       nodeState,
-      this.graphState,
+      this.stateManager.graphState,
       this.graph,
       this._scratchNodeStyle,
     );
@@ -3981,12 +3664,12 @@ export default class Sigma<
 
     // Re-evaluate style (reuses scratch object to avoid allocation)
     const attrs = this.graph.getEdgeAttributes(edge);
-    const edgeState = this.getEdgeState(edge);
+    const edgeState = this.stateManager.getEdgeState(edge);
     const resolvedStyle = evaluateEdgeStyle(
       this.stylesDeclaration!.edges as Record<string, unknown>,
       attrs,
       edgeState,
-      this.graphState,
+      this.stateManager.graphState,
       this.graph,
       this._scratchEdgeStyle,
     );
@@ -4080,7 +3763,7 @@ export default class Sigma<
       this.clearEdgeIndices();
       this.clearNodeIndices();
       this.graph.forEachNode((node) => this.addNode(node));
-      this.rebuildParallelEdgeIndex();
+      this.edgeGroups.rebuild();
       this.graph.forEachEdge((edge) => this.addEdge(edge));
     } else {
       const nodes = opts.partialGraph?.nodes || [];

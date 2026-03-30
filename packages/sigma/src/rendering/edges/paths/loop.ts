@@ -105,5 +105,10 @@ float path_loop_length(vec2 source, vec2 target) {
       loopSpread: { type: "number", default: (80 * Math.PI) / 180 },
       loopFixedOrientation: { type: "number", default: 0 },
     },
+    // Stack parallel self-loops concentrically: each gets a larger radius
+    spread: {
+      variable: "loopRadius",
+      compute: (index) => index + 4,
+    },
   };
 }

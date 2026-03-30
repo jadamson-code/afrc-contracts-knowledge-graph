@@ -20,11 +20,16 @@
 
   // Add self-loops showcasing various features:
   graph.addEdge("a", "a", { size: 3, color: "#E8684A", head: "arrow" });
-  graph.addEdge("b", "b", { size: 3, color: "#61DDAA", head: "arrow", tail: "arrow" });
-  graph.addEdge("c", "c", { size: 3, color: "#F6903D", head: "arrow", loopAngle: PI });
   graph.addEdge("d", "d", { size: 2, color: "#9270CA", head: "arrow", loopAngle: (3 * PI) / 2, dashSize: 6 });
   graph.addEdge("e", "e", { size: 6, color: "#5B8FF9", loopAngle: PI, loopSpread: (110 * PI) / 180 });
   graph.addEdge("f", "f", { size: 2, color: "#9270CA", head: "arrow", loopAngle: 0, loopSpread: (70 * PI) / 180 });
+
+  // Add parallel self-loops on a few nodes to showcase automatic angle distribution:
+  graph.addEdge("b", "b", { size: 3, color: "#61DDAA", head: "arrow", tail: "arrow" });
+  graph.addEdge("b", "b", { size: 2, color: "#F6903D", head: "arrow", tail: "arrow" });
+  graph.addEdge("c", "c", { size: 3, color: "#A33DF6", head: "arrow" });
+  graph.addEdge("c", "c", { size: 2, color: "#61ADDD", head: "arrow" });
+  graph.addEdge("c", "c", { size: 2, color: "#9270CA", head: "arrow" });
 
   new Sigma(graph, container, {
     primitives: {

@@ -6,10 +6,11 @@
 import Graph, { Attributes } from "graphology-types";
 
 import Camera from "./core/camera";
-import { cleanMouseCoords } from "./core/captors/captor";
 import MouseCaptor from "./core/captors/mouse";
 import TouchCaptor from "./core/captors/touch";
+import { DragManager } from "./core/drag-manager";
 import { EdgeGroupIndex } from "./core/edge-groups";
+import { bindGraphHandlers, bindInteractionHandlers, unbindGraphHandlers } from "./core/event-handlers";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
 import { SDFAtlasManager } from "./core/sdf-atlas";
 import { StateManager } from "./core/state-manager";
@@ -66,19 +67,17 @@ import {
   Dimensions,
   EdgeDisplayData,
   EdgeLabelPosition,
+  EdgeReducer,
   Extent,
   LabelDisplayData,
   Listener,
   MemoryStats,
-  MouseCoords,
-  MouseInteraction,
   NodeDisplayData,
+  NodeReducer,
   PlainObject,
   RenderParams,
-  SigmaEventPayload,
   SigmaEvents,
   TextureStats,
-  TouchCoords,
   TypedEventEmitter,
   WriteStats,
 } from "./types";
@@ -124,39 +123,6 @@ const NODE_DATA_TEXTURE_UNIT = 3;
 const EDGE_DATA_TEXTURE_UNIT = 4;
 
 const BACKDROP_AREA_MAP: Record<string, number> = { both: 0, node: 1, label: 2 };
-
-/**
- * Reducer types for the new API.
- */
-export type NodeReducer<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-  NS = {}, // additional custom node state fields
-  GS = {}, // additional custom graph state fields
-> = (
-  key: string,
-  data: NodeDisplayData,
-  attrs: N,
-  state: FullNodeState<NS>,
-  graphState: FullGraphState<GS>,
-  graph: Graph<N, E, G>,
-) => Partial<NodeDisplayData>;
-
-export type EdgeReducer<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-  ES = {}, // additional custom edge state fields
-  GS = {}, // additional custom graph state fields
-> = (
-  key: string,
-  data: EdgeDisplayData,
-  attrs: E,
-  state: FullEdgeState<ES>,
-  graphState: FullGraphState<GS>,
-  graph: Graph<N, E, G>,
-) => Partial<EdgeDisplayData>;
 
 /**
  * Main class.
@@ -239,19 +205,8 @@ export default class Sigma<
   private displayedEdgeLabels: Set<string> = new Set();
 
   private stateManager: StateManager<NS, ES, GS>;
-
-  // Node drag state
-  private pendingDragNode: string | null = null;
-  private dragSession: {
-    node: string;
-    allNodes: string[];
-    startPosition: Coordinates;
-    startNodePositions: Map<string, Coordinates>;
-    xAttr: string;
-    yAttr: string;
-  } | null = null;
-
-  // Tracks whether autoRescale:"once" has already captured the extent
+  private dragManager: DragManager;
+  // Frozen when autoRescale:"once" has already captured the initial extent.
   private autoRescaleFrozen = false;
 
   // New v4 API: primitives and styles declarations
@@ -433,6 +388,13 @@ export default class Sigma<
         state.parallelCount = count;
       }
     });
+
+    this.dragManager = new DragManager(
+      graph,
+      this.viewportToGraph.bind(this),
+      this.setNodesState.bind(this),
+      (event, payload) => (this.emit as (event: string, payload: unknown) => void)(event, payload),
+    );
 
     // Initialize bucket collections with numDepthLayers * maxDepthLevels
     const numDepthLayers = (this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS]).length;
@@ -663,241 +625,27 @@ export default class Sigma<
     return itemAt && itemAt.type === "node" ? itemAt.id : null;
   }
 
-  /**
-   * Method binding event handlers.
-   *
-   * @return {Sigma}
-   */
   private bindEventHandlers(): this {
-    // Handling window resize
-    this.activeListeners.handleResize = () => {
-      // need to call a refresh to rebuild the labelgrid
-      this.scheduleRefresh();
-    };
-
-    window.addEventListener("resize", this.activeListeners.handleResize);
-
-    // Handling mouse move
-    this.activeListeners.handleMove = (e: MouseCoords | TouchCoords): void => {
-      const event = cleanMouseCoords(e);
-
-      const baseEvent = {
-        event,
-        preventSigmaDefault(): void {
-          event.preventSigmaDefault();
-        },
-      };
-
-      const nodeToHover = this.getNodeAtPosition(event);
-      if (nodeToHover && this.stateManager.hoveredNode !== nodeToHover && !this.nodeDataCache[nodeToHover].hidden) {
-        // Handling passing from one node to the other directly
-        if (this.stateManager.hoveredNode) {
-          const previousNode = this.stateManager.hoveredNode;
-          this.stateManager.setHoveredNode(nodeToHover);
-          this.setNodeState(previousNode, { isHovered: false });
-          this.emit("leaveNode", { ...baseEvent, node: previousNode });
-        } else {
-          this.stateManager.setHoveredNode(nodeToHover);
-        }
-
-        this.setNodeState(nodeToHover, { isHovered: true });
-        this.emit("enterNode", { ...baseEvent, node: nodeToHover });
-        this.updateContainerCursor();
-        return;
-      }
-
-      // Checking if the hovered node is still hovered
-      if (this.stateManager.hoveredNode) {
-        if (this.getNodeAtPosition(event) !== this.stateManager.hoveredNode) {
-          const node = this.stateManager.hoveredNode;
-          this.stateManager.setHoveredNode(null);
-          this.setNodeState(node, { isHovered: false });
-          this.emit("leaveNode", { ...baseEvent, node });
-          this.updateContainerCursor();
-          return;
-        }
-      }
-
-      if (this.settings.enableEdgeEvents) {
-        const edgeToHover = this.stateManager.hoveredNode
-          ? null
-          : this.getEdgeAtPoint(baseEvent.event.x, baseEvent.event.y);
-
-        if (edgeToHover !== this.stateManager.hoveredEdge) {
-          if (this.stateManager.hoveredEdge) {
-            this.setEdgeState(this.stateManager.hoveredEdge, { isHovered: false });
-            this.emit("leaveEdge", { ...baseEvent, edge: this.stateManager.hoveredEdge });
-          }
-          this.stateManager.setHoveredEdge(edgeToHover);
-          if (edgeToHover) {
-            this.setEdgeState(edgeToHover, { isHovered: true });
-            this.emit("enterEdge", { ...baseEvent, edge: edgeToHover });
-          }
-          this.updateContainerCursor();
-        }
-      }
-    };
-
-    // Handling mouse move over body (only to dispatch the proper event):
-    this.activeListeners.handleMoveBody = (e: MouseCoords | TouchCoords): void => {
-      const event = cleanMouseCoords(e);
-
-      // Initiate drag on first movement after downNode
-      if (this.pendingDragNode && !this.dragSession) {
-        this.startNodeDrag(this.pendingDragNode, event);
-        this.pendingDragNode = null;
-      }
-
-      // Handle node drag movement
-      if (this.dragSession) {
-        const currentPosition = this.viewportToGraph(event);
-        const totalDelta = {
-          x: currentPosition.x - this.dragSession.startPosition.x,
-          y: currentPosition.y - this.dragSession.startPosition.y,
-        };
-
-        this.applyNodeDrag(totalDelta);
-
-        this.emit("nodeDrag", {
-          node: this.dragSession.node,
-          allDraggedNodes: this.dragSession.allNodes,
-          event,
-        });
-
-        // Prevent camera panning during node drag
-        event.preventSigmaDefault();
-      }
-
-      this.emit("moveBody", {
-        event,
-        preventSigmaDefault(): void {
-          event.preventSigmaDefault();
-        },
-      });
-    };
-
-    // Handling mouse leave stage:
-    this.activeListeners.handleLeave = (e: MouseCoords | TouchCoords): void => {
-      const event = cleanMouseCoords(e);
-
-      const baseEvent = {
-        event,
-        preventSigmaDefault(): void {
-          event.preventSigmaDefault();
-        },
-      };
-
-      if (this.stateManager.hoveredNode) {
-        const node = this.stateManager.hoveredNode;
-        this.stateManager.setHoveredNode(null);
-        this.setNodeState(node, { isHovered: false });
-        this.emit("leaveNode", { ...baseEvent, node });
-      }
-
-      if (this.settings.enableEdgeEvents && this.stateManager.hoveredEdge) {
-        const edge = this.stateManager.hoveredEdge;
-        this.stateManager.setHoveredEdge(null);
-        this.setEdgeState(edge, { isHovered: false });
-        this.emit("leaveEdge", { ...baseEvent, edge });
-      }
-
-      this.emit("leaveStage", { ...baseEvent });
-    };
-
-    // Handling mouse enter stage:
-    this.activeListeners.handleEnter = (e: MouseCoords | TouchCoords): void => {
-      const event = cleanMouseCoords(e);
-
-      const baseEvent = {
-        event,
-        preventSigmaDefault(): void {
-          event.preventSigmaDefault();
-        },
-      };
-
-      this.emit("enterStage", { ...baseEvent });
-    };
-
-    // Handling click
-    const createInteractionListener = (eventType: MouseInteraction): ((e: MouseCoords | TouchCoords) => void) => {
-      return (e) => {
-        const event = cleanMouseCoords(e);
-
-        const baseEvent = {
-          event,
-          preventSigmaDefault: () => {
-            event.preventSigmaDefault();
-          },
-        };
-
-        const nodeAtPosition = this.getNodeAtPosition(event);
-
-        if (nodeAtPosition)
-          return this.emit(`${eventType}Node`, {
-            ...baseEvent,
-            node: nodeAtPosition,
-          });
-
-        if (this.settings.enableEdgeEvents) {
-          const edge = this.getEdgeAtPoint(event.x, event.y);
-          if (edge) return this.emit(`${eventType}Edge`, { ...baseEvent, edge });
-        }
-
-        return this.emit(`${eventType}Stage`, baseEvent);
-      };
-    };
-
-    this.activeListeners.handleClick = createInteractionListener("click");
-    this.activeListeners.handleRightClick = createInteractionListener("rightClick");
-    this.activeListeners.handleDoubleClick = createInteractionListener("doubleClick");
-    this.activeListeners.handleWheel = createInteractionListener("wheel");
-    this.activeListeners.handleDown = createInteractionListener("down");
-    this.activeListeners.handleUp = createInteractionListener("up");
-
-    this.mouseCaptor.on("mousemove", this.activeListeners.handleMove);
-    this.mouseCaptor.on("mousemovebody", this.activeListeners.handleMoveBody);
-    this.mouseCaptor.on("click", this.activeListeners.handleClick);
-    this.mouseCaptor.on("rightClick", this.activeListeners.handleRightClick);
-    this.mouseCaptor.on("doubleClick", this.activeListeners.handleDoubleClick);
-    this.mouseCaptor.on("wheel", this.activeListeners.handleWheel);
-    this.mouseCaptor.on("mousedown", this.activeListeners.handleDown);
-    this.mouseCaptor.on("mouseup", this.activeListeners.handleUp);
-    this.mouseCaptor.on("mouseleave", this.activeListeners.handleLeave);
-    this.mouseCaptor.on("mouseenter", this.activeListeners.handleEnter);
-
-    this.touchCaptor.on("touchdown", this.activeListeners.handleDown);
-    this.touchCaptor.on("touchdown", this.activeListeners.handleMove);
-    this.touchCaptor.on("touchup", this.activeListeners.handleUp);
-    this.touchCaptor.on("touchmove", this.activeListeners.handleMove);
-    this.touchCaptor.on("tap", this.activeListeners.handleClick);
-    this.touchCaptor.on("doubletap", this.activeListeners.handleDoubleClick);
-    this.touchCaptor.on("touchmove", this.activeListeners.handleMoveBody);
-
-    // Node drag: prepare on downNode, actual start deferred to first moveBody
-    this.on("downNode", ({ node }) => {
-      if (!this.settings.enableNodeDrag) return;
-      this.pendingDragNode = node;
-    });
-
-    // Node drag: end on upNode or upStage
-    const handleDragEnd = ({ event, preventSigmaDefault }: SigmaEventPayload) => {
-      // Clear pending drag if pointer was released before movement
-      this.pendingDragNode = null;
-
-      if (!this.dragSession) return;
-
-      const { node, allNodes } = this.dragSession;
-      this.endDrag();
-
-      this.emit("nodeDragEnd", {
-        node,
-        allDraggedNodes: allNodes,
-        event,
-        preventSigmaDefault,
-      });
-    };
-    this.on("upNode", handleDragEnd);
-    this.on("upStage", handleDragEnd);
+    bindInteractionHandlers(
+      {
+        stateManager: this.stateManager,
+        getNodeDataCache: () => this.nodeDataCache,
+        dragManager: this.dragManager,
+        getSettings: () => this.settings,
+        getNodeStyleAnalysis: () => this.nodeStyleAnalysis,
+        getNodeAtPosition: this.getNodeAtPosition.bind(this),
+        getEdgeAtPoint: this.getEdgeAtPoint.bind(this),
+        setNodeState: this.setNodeState.bind(this),
+        setEdgeState: this.setEdgeState.bind(this),
+        updateContainerCursor: this.updateContainerCursor.bind(this),
+        scheduleRefresh: this.scheduleRefresh.bind(this),
+        viewportToGraph: this.viewportToGraph.bind(this),
+        emit: (event, payload) => (this.emit as (event: string, payload: unknown) => void)(event, payload),
+      },
+      this.mouseCaptor,
+      this.touchCaptor,
+      this.activeListeners,
+    );
 
     return this;
   }
@@ -908,116 +656,24 @@ export default class Sigma<
    * @return {Sigma}
    */
   private bindGraphHandlers(): this {
-    const graph = this.graph;
-
-    const LAYOUT_IMPACTING_FIELDS = new Set(["x", "y", "zIndex", "type"]);
-    this.activeListeners.eachNodeAttributesUpdatedGraphUpdate = (e: { hints?: { attributes?: string[] } }) => {
-      const updatedFields = e.hints?.attributes;
-      // we process all nodes
-      this.graph.forEachNode((node) => this.updateNode(node));
-
-      // if coord, type or zIndex have changed, we need to schedule a render
-      // (zIndex for the programIndex)
-      const layoutChanged = !updatedFields || updatedFields.some((f) => LAYOUT_IMPACTING_FIELDS.has(f));
-      this.refresh({ partialGraph: { nodes: graph.nodes() }, skipIndexation: !layoutChanged, schedule: true });
-    };
-
-    this.activeListeners.eachEdgeAttributesUpdatedGraphUpdate = (e: { hints?: { attributes?: string[] } }) => {
-      const updatedFields = e.hints?.attributes;
-      // we process all edges
-      this.graph.forEachEdge((edge) => this.updateEdge(edge));
-      const layoutChanged = updatedFields && ["zIndex", "type"].some((f) => updatedFields?.includes(f));
-      this.refresh({ partialGraph: { edges: graph.edges() }, skipIndexation: !layoutChanged, schedule: true });
-    };
-
-    // On add node, we add the node in indices and then call for a render
-    this.activeListeners.addNodeGraphUpdate = (payload: { key: string }): void => {
-      const node = payload.key;
-      // we process the node
-      this.addNode(node);
-      // schedule a render for the node
-      this.refresh({ partialGraph: { nodes: [node] }, skipIndexation: false, schedule: true });
-    };
-
-    // On update node, we update indices and then call for a render
-    this.activeListeners.updateNodeGraphUpdate = (payload: { key: string }): void => {
-      const node = payload.key;
-      // schedule a render for the node
-      this.refresh({ partialGraph: { nodes: [node] }, skipIndexation: false, schedule: true });
-    };
-
-    // On drop node, we remove the node from indices and then call for a refresh
-    this.activeListeners.dropNodeGraphUpdate = (payload: { key: string }): void => {
-      const node = payload.key;
-      // we process the node
-      this.removeNode(node);
-      // schedule a render for everything
-      this.refresh({ schedule: true });
-    };
-
-    // On add edge, register in parallel index, process edge and siblings
-    this.activeListeners.addEdgeGraphUpdate = (payload: { key: string }): void => {
-      const edge = payload.key;
-      this.edgeGroups.register(edge);
-      this.addEdge(edge);
-      // Re-process siblings whose parallel state changed
-      const siblings = this.edgeGroups.getSiblings(edge);
-      for (const sib of siblings) this.addEdge(sib);
-      this.refresh({ partialGraph: { edges: [edge, ...siblings] }, schedule: true });
-    };
-
-    // On update edge, we update indices and then call for a refresh
-    this.activeListeners.updateEdgeGraphUpdate = (payload: { key: string }): void => {
-      const edge = payload.key;
-      // schedule a repaint for the edge
-      this.refresh({ partialGraph: { edges: [edge] }, skipIndexation: false, schedule: true });
-    };
-
-    // On drop edge, unregister from parallel index, remove, and update siblings
-    this.activeListeners.dropEdgeGraphUpdate = (payload: { key: string }): void => {
-      const edge = payload.key;
-      const siblings = this.edgeGroups.getSiblings(edge);
-      this.edgeGroups.unregister(edge);
-      this.removeEdge(edge);
-      // Re-process remaining siblings whose parallel state changed
-      for (const sib of siblings) this.addEdge(sib);
-      this.refresh({ schedule: true });
-    };
-
-    // On clear edges, we clear the edge indices and then call for a refresh
-    this.activeListeners.clearEdgesGraphUpdate = (): void => {
-      // we clear the edge data structures
-      this.clearEdgeState();
-      this.clearEdgeIndices();
-      // schedule a render for all edges
-      this.refresh({ schedule: true });
-    };
-
-    // On graph clear, we clear indices and then call for a refresh
-    this.activeListeners.clearGraphUpdate = (): void => {
-      // clear graph state
-      this.clearEdgeState();
-      this.clearNodeState();
-
-      // clear graph indices
-      this.clearEdgeIndices();
-      this.clearNodeIndices();
-
-      // schedule a render for all
-      this.refresh({ schedule: true });
-    };
-
-    graph.on("nodeAdded", this.activeListeners.addNodeGraphUpdate);
-    graph.on("nodeDropped", this.activeListeners.dropNodeGraphUpdate);
-    graph.on("nodeAttributesUpdated", this.activeListeners.updateNodeGraphUpdate);
-    graph.on("eachNodeAttributesUpdated", this.activeListeners.eachNodeAttributesUpdatedGraphUpdate);
-    graph.on("edgeAdded", this.activeListeners.addEdgeGraphUpdate);
-    graph.on("edgeDropped", this.activeListeners.dropEdgeGraphUpdate);
-    graph.on("edgeAttributesUpdated", this.activeListeners.updateEdgeGraphUpdate);
-    graph.on("eachEdgeAttributesUpdated", this.activeListeners.eachEdgeAttributesUpdatedGraphUpdate);
-    graph.on("edgesCleared", this.activeListeners.clearEdgesGraphUpdate);
-    graph.on("cleared", this.activeListeners.clearGraphUpdate);
-
+    bindGraphHandlers(
+      {
+        graph: this.graph,
+        edgeGroups: this.edgeGroups,
+        addNode: this.addNode.bind(this),
+        updateNode: this.updateNode.bind(this),
+        removeNode: this.removeNode.bind(this),
+        addEdge: this.addEdge.bind(this),
+        updateEdge: this.updateEdge.bind(this),
+        removeEdge: this.removeEdge.bind(this),
+        clearEdgeState: this.clearEdgeState.bind(this),
+        clearNodeState: this.clearNodeState.bind(this),
+        clearEdgeIndices: this.clearEdgeIndices.bind(this),
+        clearNodeIndices: this.clearNodeIndices.bind(this),
+        refresh: this.refresh.bind(this),
+      },
+      this.activeListeners,
+    );
     return this;
   }
 
@@ -1027,18 +683,7 @@ export default class Sigma<
    * @return {undefined}
    */
   private unbindGraphHandlers() {
-    const graph = this.graph;
-
-    graph.removeListener("nodeAdded", this.activeListeners.addNodeGraphUpdate);
-    graph.removeListener("nodeDropped", this.activeListeners.dropNodeGraphUpdate);
-    graph.removeListener("nodeAttributesUpdated", this.activeListeners.updateNodeGraphUpdate);
-    graph.removeListener("eachNodeAttributesUpdated", this.activeListeners.eachNodeAttributesUpdatedGraphUpdate);
-    graph.removeListener("edgeAdded", this.activeListeners.addEdgeGraphUpdate);
-    graph.removeListener("edgeDropped", this.activeListeners.dropEdgeGraphUpdate);
-    graph.removeListener("edgeAttributesUpdated", this.activeListeners.updateEdgeGraphUpdate);
-    graph.removeListener("eachEdgeAttributesUpdated", this.activeListeners.eachEdgeAttributesUpdatedGraphUpdate);
-    graph.removeListener("edgesCleared", this.activeListeners.clearEdgesGraphUpdate);
-    graph.removeListener("cleared", this.activeListeners.clearGraphUpdate);
+    unbindGraphHandlers(this.graph, this.activeListeners);
   }
 
   /**
@@ -2317,87 +1962,6 @@ export default class Sigma<
   }
 
   /**
-   * Initialize a node drag session. Called on first pointer movement after downNode.
-   * @private
-   */
-  private startNodeDrag(node: string, moveEvent: MouseCoords): void {
-    const allNodes = this.settings.getDraggedNodes(node);
-
-    // Allow cancellation via preventSigmaDefault
-    let cancelled = false;
-    this.emit("nodeDragStart", {
-      node,
-      allDraggedNodes: allNodes,
-      event: moveEvent,
-      preventSigmaDefault() {
-        cancelled = true;
-      },
-    });
-
-    if (cancelled) return;
-
-    // Resolve position attribute names (validated at construction time)
-    const { xAttribute, yAttribute } = this.nodeStyleAnalysis;
-    const xAttr = xAttribute || "x";
-    const yAttr = yAttribute || "y";
-
-    // Snapshot initial positions for absolute-based computation
-    const startNodePositions = new Map<string, Coordinates>();
-    for (const n of allNodes) {
-      startNodePositions.set(n, {
-        x: this.graph.getNodeAttribute(n, xAttr) as number,
-        y: this.graph.getNodeAttribute(n, yAttr) as number,
-      });
-    }
-
-    this.dragSession = {
-      node,
-      allNodes,
-      startPosition: this.viewportToGraph(moveEvent),
-      startNodePositions,
-      xAttr,
-      yAttr,
-    };
-
-    this.setNodesState(allNodes, { isDragged: true });
-  }
-
-  /**
-   * End an in-progress drag session. Safe to call when no drag is active.
-   * @private
-   */
-  private endDrag(): void {
-    if (this.dragSession) {
-      this.setNodesState(this.dragSession.allNodes, { isDragged: false });
-    }
-    this.pendingDragNode = null;
-    this.dragSession = null;
-  }
-
-  /**
-   * Apply drag displacement to all currently dragged nodes.
-   * @private
-   */
-  private applyNodeDrag(totalDelta: Coordinates): void {
-    const { allNodes, startNodePositions, xAttr, yAttr } = this.dragSession!;
-    const { dragPositionToAttributes } = this.settings;
-
-    for (const node of allNodes) {
-      const startPos = startNodePositions.get(node);
-      if (!startPos || !this.graph.hasNode(node)) continue;
-
-      const newPosition = { x: startPos.x + totalDelta.x, y: startPos.y + totalDelta.y };
-
-      if (dragPositionToAttributes) {
-        this.graph.mergeNodeAttributes(node, dragPositionToAttributes(newPosition, node) as Partial<N>);
-      } else {
-        this.graph.setNodeAttribute(node, xAttr, newPosition.x as N[string]);
-        this.graph.setNodeAttribute(node, yAttr, newPosition.y as N[string]);
-      }
-    }
-  }
-
-  /**
    * Remove a node from the internal data structures.
    * @private
    * @param key The node's graphology ID
@@ -2417,13 +1981,7 @@ export default class Sigma<
     delete this.nodeGraphCoords[key];
     // Remove from node program index
     delete this.nodeProgramIndex[key];
-    // Clean up drag state if this node is involved
-    if (key === this.pendingDragNode || (this.dragSession && key === this.dragSession.node)) {
-      this.endDrag();
-    } else if (this.dragSession?.allNodes.includes(key)) {
-      this.dragSession.allNodes = this.dragSession.allNodes.filter((n) => n !== key);
-      this.dragSession.startNodePositions.delete(key);
-    }
+    this.dragManager.removeNode(key);
     // Remove from state
     this.stateManager.removeNode(key);
     // Remove from forced label
@@ -2654,9 +2212,7 @@ export default class Sigma<
     this.displayedNodeLabels = new Set();
     this.renderedNodeLabels = new Set();
     this.nodesWithBackdrop.clear();
-    // Reset drag and rescale state
-    this.pendingDragNode = null;
-    this.dragSession = null;
+    this.dragManager.clear();
     this.autoRescaleFrozen = false;
     this.stateManager.clearNodes();
   }

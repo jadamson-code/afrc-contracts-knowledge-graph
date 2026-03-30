@@ -6,6 +6,9 @@
  * @module
  */
 import { EventEmitter } from "events";
+import Graph from "graphology-types";
+
+import { Attributes, FullEdgeState, FullGraphState, FullNodeState } from "./types/styles";
 
 /**
  * Util type to represent maps of typed elements, but implemented with
@@ -106,6 +109,36 @@ export interface EdgeDisplayData extends DisplayData {
   tail?: string; // Tail extremity type (e.g., "arrow")
   labelPosition?: EdgeLabelPosition; // Label position relative to edge path
 }
+
+export type NodeReducer<
+  N extends Attributes = Attributes,
+  E extends Attributes = Attributes,
+  G extends Attributes = Attributes,
+  NS = {}, // additional custom node state fields
+  GS = {}, // additional custom graph state fields
+> = (
+  key: string,
+  data: NodeDisplayData,
+  attrs: N,
+  state: FullNodeState<NS>,
+  graphState: FullGraphState<GS>,
+  graph: Graph<N, E, G>,
+) => Partial<NodeDisplayData>;
+
+export type EdgeReducer<
+  N extends Attributes = Attributes,
+  E extends Attributes = Attributes,
+  G extends Attributes = Attributes,
+  ES = {}, // additional custom edge state fields
+  GS = {}, // additional custom graph state fields
+> = (
+  key: string,
+  data: EdgeDisplayData,
+  attrs: E,
+  state: FullEdgeState<ES>,
+  graphState: FullGraphState<GS>,
+  graph: Graph<N, E, G>,
+) => Partial<EdgeDisplayData>;
 
 export type CoordinateConversionOverride = {
   cameraState?: CameraState;

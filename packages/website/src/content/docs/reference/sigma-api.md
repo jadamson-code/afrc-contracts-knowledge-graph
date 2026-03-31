@@ -165,6 +165,3 @@ All coordinate methods accept an optional `override` parameter to use custom cam
 | `scaleSize(size?, cameraRatio?)` | `number`       | Convert a size to viewport scale based on zoom and `itemSizesReference` |
 | `getStagePadding()`              | `number`       | Get padding applied when `autoRescale` is enabled                       |
 | `getRenderParams()`              | `RenderParams` | Get current render parameters (matrix, dimensions, ratios)              |
-| `getMemoryStats()`               | `MemoryStats`  | Get WebGL resource memory usage                                         |
-| `getWriteStats()`                | `WriteStats`   | Get GPU write statistics since last reset                               |
-| `resetWriteStats()`              | `void`         | Reset GPU write counters                                                |

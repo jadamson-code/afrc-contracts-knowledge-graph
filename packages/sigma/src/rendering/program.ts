@@ -71,9 +71,6 @@ export abstract class Program<
   constantArray: Float32Array = new Float32Array();
   capacity = 0;
   verticesCount = 0;
-  writeCount = 0;
-  bytesWritten = 0;
-
   // Generation counter for buffer invalidation: incremented when array data
   // changes, tracked per GL buffer to know which ones need re-upload.
   private bufferGeneration = 0;
@@ -221,8 +218,6 @@ export abstract class Program<
       if (this.uploadedGeneration.get(buffer) !== this.bufferGeneration) {
         gl.bufferData(gl.ARRAY_BUFFER, this.array, gl.DYNAMIC_DRAW);
         this.uploadedGeneration.set(buffer, this.bufferGeneration);
-        this.writeCount++;
-        this.bytesWritten += this.array.byteLength;
       }
     } else {
       // Handle constant data (things that remain unchanged for all items):
@@ -233,8 +228,6 @@ export abstract class Program<
       if (this.uploadedConstantGeneration.get(program.constantBuffer) !== this.constantBufferGeneration) {
         gl.bufferData(gl.ARRAY_BUFFER, this.constantArray, gl.STATIC_DRAW);
         this.uploadedConstantGeneration.set(program.constantBuffer, this.constantBufferGeneration);
-        this.writeCount++;
-        this.bytesWritten += this.constantArray.byteLength;
       }
 
       // Handle "instance specific" data (things that vary for each item):
@@ -245,8 +238,6 @@ export abstract class Program<
       if (this.uploadedGeneration.get(buffer) !== this.bufferGeneration) {
         gl.bufferData(gl.ARRAY_BUFFER, this.array, gl.DYNAMIC_DRAW);
         this.uploadedGeneration.set(buffer, this.bufferGeneration);
-        this.writeCount++;
-        this.bytesWritten += this.array.byteLength;
       }
     }
 
@@ -332,31 +323,6 @@ export abstract class Program<
 
   hasNothingToRender(): boolean {
     return this.verticesCount === 0;
-  }
-
-  getMemoryStats(): {
-    type: "vertex" | "constant";
-    itemCount: number;
-    capacity: number;
-    stride: number;
-    totalBytes: number;
-  } {
-    return {
-      type: "vertex",
-      itemCount: this.capacity,
-      capacity: this.capacity,
-      stride: this.STRIDE,
-      totalBytes: this.array.byteLength + this.constantArray.byteLength,
-    };
-  }
-
-  getWriteStats(): { writes: number; bytesWritten: number } {
-    return { writes: this.writeCount, bytesWritten: this.bytesWritten };
-  }
-
-  resetWriteStats(): void {
-    this.writeCount = 0;
-    this.bytesWritten = 0;
   }
 
   protected setTypedUniform(uniform: UniformSpecification, programInfo: ProgramInfo): void {

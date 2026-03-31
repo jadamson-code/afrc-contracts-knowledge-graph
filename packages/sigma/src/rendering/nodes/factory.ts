@@ -407,18 +407,6 @@ export function createNodeProgram<
       super.renderProgram(params, programInfo);
     }
 
-    getLayerTextureStats() {
-      return this.layerAttributeTexture.getMemoryStats();
-    }
-
-    getLayerTextureWriteStats() {
-      return this.layerAttributeTexture.getWriteStats();
-    }
-
-    resetLayerTextureWriteStats() {
-      this.layerAttributeTexture.resetWriteStats();
-    }
-
     kill(): void {
       // Call kill hooks for cleanup
       this.layerLifecycles.forEach((hooks) => {

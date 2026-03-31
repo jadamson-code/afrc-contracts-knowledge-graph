@@ -51,8 +51,6 @@ import {
 } from "./rendering";
 import { Settings, resolveSettings, validateSettings } from "./settings";
 import {
-  BucketStats,
-  BufferStats,
   CameraState,
   CoordinateConversionOverride,
   Coordinates,
@@ -63,15 +61,12 @@ import {
   EdgeReducer,
   Extent,
   Listener,
-  MemoryStats,
   NodeDisplayData,
   NodeReducer,
   PlainObject,
   RenderParams,
   SigmaEvents,
-  TextureStats,
   TypedEventEmitter,
-  WriteStats,
 } from "./types";
 import { DEFAULT_STYLES } from "./types/styles";
 import {
@@ -3120,179 +3115,5 @@ export default class Sigma<
    */
   getMouseLayer(): HTMLElement {
     return this.elements.mouse;
-  }
-
-  /**
-   * Returns memory usage statistics for all WebGL resources.
-   */
-  getMemoryStats(): MemoryStats {
-    const textures: TextureStats[] = [];
-    const buffers: BufferStats[] = [];
-    const buckets: BucketStats[] = [];
-
-    // Shared data textures
-    if (this.internals.nodeDataTexture) {
-      textures.push({ name: "nodeData", ...this.internals.nodeDataTexture.getMemoryStats() });
-    }
-    if (this.internals.edgeDataTexture) {
-      textures.push({ name: "edgeData", ...this.internals.edgeDataTexture.getMemoryStats() });
-    }
-
-    // Node program
-    if (this.nodeProgram) {
-      buffers.push({ program: "nodes", ...this.nodeProgram.getMemoryStats() });
-      const layerStats = (
-        this.nodeProgram as { getLayerTextureStats?: () => Omit<TextureStats, "name"> }
-      ).getLayerTextureStats?.();
-      if (layerStats) {
-        textures.push({ name: "nodes:layerAttributes", ...layerStats });
-      }
-    }
-    // Edge program
-    if (this.edgeProgram) {
-      buffers.push({ program: "edges", ...this.edgeProgram.getMemoryStats() });
-      const attrStats = (
-        this.edgeProgram as { getAttributeTextureStats?: () => Omit<TextureStats, "name"> | null }
-      ).getAttributeTextureStats?.();
-      if (attrStats) {
-        textures.push({ name: "edges:pathAttributes", ...attrStats });
-      }
-    }
-
-    // Label programs
-    if (this.internals.labelProgram) {
-      buffers.push({ program: "labels", ...this.internals.labelProgram.getMemoryStats() });
-    }
-    if (this.internals.edgeLabelProgram) {
-      buffers.push({ program: "edgeLabels", ...this.internals.edgeLabelProgram.getMemoryStats() });
-    }
-
-    // Backdrop program
-    if (this.internals.backdropProgram) {
-      buffers.push({ program: "backdrop", ...this.internals.backdropProgram.getMemoryStats() });
-    }
-
-    // Buckets
-    for (const stats of this.itemBuckets.nodes.getMemoryStats()) {
-      buckets.push({ type: "nodes", ...stats });
-    }
-    for (const stats of this.itemBuckets.edges.getMemoryStats()) {
-      buckets.push({ type: "edges", ...stats });
-    }
-
-    // Picking resources
-    const pickingWidth = Math.ceil(
-      (this.width * this.internals.pixelRatio) / this.internals.settings.pickingDownSizingRatio,
-    );
-    const pickingHeight = Math.ceil(
-      (this.height * this.internals.pixelRatio) / this.internals.settings.pickingDownSizingRatio,
-    );
-    const picking = {
-      width: pickingWidth,
-      height: pickingHeight,
-      textureBytes: pickingWidth * pickingHeight * 4,
-      depthBufferBytes: pickingWidth * pickingHeight * 2,
-    };
-
-    // Summary
-    const texturesBytes = textures.reduce((sum, t) => sum + t.totalBytes, 0);
-    const buffersBytes = buffers.reduce((sum, b) => sum + b.totalBytes, 0);
-    const bucketsBytes = buckets.reduce((sum, b) => sum + b.totalBytes, 0);
-    const pickingBytes = picking.textureBytes + picking.depthBufferBytes;
-
-    return {
-      textures,
-      buffers,
-      buckets,
-      picking,
-      summary: {
-        texturesBytes,
-        buffersBytes,
-        bucketsBytes,
-        pickingBytes,
-        totalBytes: texturesBytes + buffersBytes + bucketsBytes + pickingBytes,
-      },
-    };
-  }
-
-  /**
-   * Returns write statistics for all WebGL resources since last reset.
-   */
-  getWriteStats(): WriteStats {
-    const textures: { name: string; writes: number; bytesWritten: number }[] = [];
-    const buffers: { program: string; writes: number; bytesWritten: number }[] = [];
-
-    // Data textures
-    if (this.internals.nodeDataTexture) {
-      textures.push({ name: "nodeData", ...this.internals.nodeDataTexture.getWriteStats() });
-    }
-    if (this.internals.edgeDataTexture) {
-      textures.push({ name: "edgeData", ...this.internals.edgeDataTexture.getWriteStats() });
-    }
-
-    // Node program
-    if (this.nodeProgram) {
-      buffers.push({ program: "nodes", ...this.nodeProgram.getWriteStats() });
-      const layerStats = (
-        this.nodeProgram as { getLayerTextureWriteStats?: () => { writes: number; bytesWritten: number } }
-      ).getLayerTextureWriteStats?.();
-      if (layerStats) {
-        textures.push({ name: "nodes:layerAttributes", ...layerStats });
-      }
-    }
-    // Edge program
-    if (this.edgeProgram) {
-      buffers.push({ program: "edges", ...this.edgeProgram.getWriteStats() });
-      const attrStats = (
-        this.edgeProgram as { getAttributeTextureWriteStats?: () => { writes: number; bytesWritten: number } | null }
-      ).getAttributeTextureWriteStats?.();
-      if (attrStats) {
-        textures.push({ name: "edges:pathAttributes", ...attrStats });
-      }
-    }
-
-    // Label programs
-    if (this.internals.labelProgram) {
-      buffers.push({ program: "labels", ...this.internals.labelProgram.getWriteStats() });
-    }
-    if (this.internals.edgeLabelProgram) {
-      buffers.push({ program: "edgeLabels", ...this.internals.edgeLabelProgram.getWriteStats() });
-    }
-
-    // Backdrop program
-    if (this.internals.backdropProgram) {
-      buffers.push({ program: "backdrop", ...this.internals.backdropProgram.getWriteStats() });
-    }
-
-    const textureWrites = textures.reduce((sum, t) => sum + t.writes, 0);
-    const bufferWrites = buffers.reduce((sum, b) => sum + b.writes, 0);
-    const totalBytesWritten =
-      textures.reduce((sum, t) => sum + t.bytesWritten, 0) + buffers.reduce((sum, b) => sum + b.bytesWritten, 0);
-
-    return {
-      textures,
-      buffers,
-      summary: { textureWrites, bufferWrites, totalBytesWritten },
-    };
-  }
-
-  /**
-   * Resets write statistics counters for all WebGL resources.
-   */
-  resetWriteStats(): void {
-    this.internals.nodeDataTexture?.resetWriteStats();
-    this.internals.edgeDataTexture?.resetWriteStats();
-
-    if (this.nodeProgram) {
-      this.nodeProgram.resetWriteStats();
-      (this.nodeProgram as { resetLayerTextureWriteStats?: () => void }).resetLayerTextureWriteStats?.();
-    }
-    if (this.edgeProgram) {
-      this.edgeProgram.resetWriteStats();
-      (this.edgeProgram as { resetAttributeTextureWriteStats?: () => void }).resetAttributeTextureWriteStats?.();
-    }
-    this.internals.labelProgram?.resetWriteStats();
-    this.internals.edgeLabelProgram?.resetWriteStats();
-    this.internals.backdropProgram?.resetWriteStats();
   }
 }

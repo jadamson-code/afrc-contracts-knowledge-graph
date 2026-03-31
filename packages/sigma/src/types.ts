@@ -72,9 +72,8 @@ export interface DisplayData {
   color: string;
   opacity: number;
   labelColor: string;
-  hidden: boolean;
-  forceLabel: boolean;
-  hideLabel: boolean;
+  visibility: "visible" | "hidden";
+  labelVisibility: "auto" | "visible" | "hidden";
   zIndex: number;
   depth: string;
   labelDepth: string;
@@ -105,6 +104,7 @@ export interface EdgeDisplayData extends DisplayData {
   path?: string; // Path type for regular edges (e.g., "straight", "curved")
   selfLoopPath?: string; // Path type for self-loop edges (e.g., "loop")
   parallelPath?: string; // Path type for parallel edges (e.g., "curved")
+  parallelSpread?: number; // Perpendicular spread factor for parallel edges
   head?: string; // Head extremity type (e.g., "arrow")
   tail?: string; // Tail extremity type (e.g., "arrow")
   labelPosition?: EdgeLabelPosition; // Label position relative to edge path
@@ -432,13 +432,7 @@ export {
   analyzeStyleDeclaration,
 } from "./core/styles";
 export { isInlineFunctionConditional, isInlineStateConditional, isInlineDataConditional } from "./types/styles";
-export type {
-  ResolvedNodeStyle,
-  ResolvedEdgeStyle,
-  ResolvedStageStyle,
-  StyleDependency,
-  StyleAnalysis,
-} from "./core/styles";
+export type { ResolvedStageStyle, StyleDependency, StyleAnalysis } from "./core/styles";
 
 /**
  * Primitives API:

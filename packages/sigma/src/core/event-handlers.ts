@@ -53,7 +53,11 @@ export function bindInteractionHandlers<
 
     const { stateManager } = internals;
     const nodeToHover = internals.getNodeAtPosition(event);
-    if (nodeToHover && stateManager.hoveredNode !== nodeToHover && !internals.nodeDataCache[nodeToHover]?.hidden) {
+    if (
+      nodeToHover &&
+      stateManager.hoveredNode !== nodeToHover &&
+      internals.nodeDataCache[nodeToHover]?.visibility !== "hidden"
+    ) {
       if (stateManager.hoveredNode) {
         const previousNode = stateManager.hoveredNode;
         stateManager.setHoveredNode(nodeToHover);

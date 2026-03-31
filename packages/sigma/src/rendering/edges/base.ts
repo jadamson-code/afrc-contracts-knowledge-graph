@@ -34,7 +34,7 @@ export abstract class EdgeProgram<
   ): void {
     let i = offset * this.STRIDE;
     // NOTE: dealing with hidden items automatically
-    if (data.hidden || sourceData.hidden || targetData.hidden) {
+    if (data.visibility === "hidden" || sourceData.visibility === "hidden" || targetData.visibility === "hidden") {
       for (let l = i + this.STRIDE; i < l; i++) {
         this.array[i] = 0;
       }

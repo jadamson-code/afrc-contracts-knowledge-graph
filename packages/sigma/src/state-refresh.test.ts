@@ -105,15 +105,15 @@ describe("State refresh: node display data", () => {
     });
 
     await nextFrame();
-    expect(sigma.getNodeDisplayData("n1")?.hidden).toBe(false);
+    expect(sigma.getNodeDisplayData("n1")?.visibility).toBe("visible");
 
     sigma.setNodeState("n1", { isHidden: true });
     await nextFrame();
-    expect(sigma.getNodeDisplayData("n1")?.hidden).toBe(true);
+    expect(sigma.getNodeDisplayData("n1")?.visibility).toBe("hidden");
 
     sigma.setNodeState("n1", { isHidden: false });
     await nextFrame();
-    expect(sigma.getNodeDisplayData("n1")?.hidden).toBe(false);
+    expect(sigma.getNodeDisplayData("n1")?.visibility).toBe("visible");
 
     sigma.kill();
     container.remove();
@@ -158,11 +158,11 @@ describe("State refresh: node display data", () => {
     });
 
     await nextFrame();
-    expect(sigma.getNodeDisplayData("n1")?.forceLabel).toBe(false);
+    expect(sigma.getNodeDisplayData("n1")?.labelVisibility).toBe("auto");
 
     sigma.setNodeState("n1", { isHighlighted: true });
     await nextFrame();
-    expect(sigma.getNodeDisplayData("n1")?.forceLabel).toBe(true);
+    expect(sigma.getNodeDisplayData("n1")?.labelVisibility).toBe("visible");
 
     sigma.kill();
     container.remove();
@@ -206,11 +206,11 @@ describe("State refresh: edge display data", () => {
 
     const edge = graph.edges()[0];
     await nextFrame();
-    expect(sigma.getEdgeDisplayData(edge)?.hidden).toBe(false);
+    expect(sigma.getEdgeDisplayData(edge)?.visibility).toBe("visible");
 
     sigma.setEdgeState(edge, { isHidden: true });
     await nextFrame();
-    expect(sigma.getEdgeDisplayData(edge)?.hidden).toBe(true);
+    expect(sigma.getEdgeDisplayData(edge)?.visibility).toBe("hidden");
 
     sigma.kill();
     container.remove();

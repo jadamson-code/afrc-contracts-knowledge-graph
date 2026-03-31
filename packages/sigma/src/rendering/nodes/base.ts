@@ -40,7 +40,7 @@ export abstract class NodeProgram<
   process(nodeIndex: number, offset: number, data: NodeDisplayData, textureIndex: number, nodeKey: string): void {
     let i = offset * this.STRIDE;
     // NOTE: dealing with hidden items automatically
-    if (data.hidden) {
+    if (data.visibility === "hidden") {
       for (let l = i + this.STRIDE; i < l; i++) {
         this.array[i] = 0;
       }

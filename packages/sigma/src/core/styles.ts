@@ -8,6 +8,7 @@
  */
 import { AbstractGraph } from "graphology-types";
 
+import { EdgeDisplayData, NodeDisplayData } from "../types";
 import {
   AttributeBinding,
   Attributes,
@@ -22,7 +23,6 @@ import {
   NumericalAttributeBinding,
   type StageInlineConditional,
   type StageInlineFunctionConditional,
-  type StagePredicate,
   type StageStyleValue,
   StatePredicate,
   ValueFunction,
@@ -85,7 +85,7 @@ function isCategoricalBinding<T>(binding: AttributeBinding<T>): binding is Categ
  * @param state - The element's state (node or edge)
  * @returns Whether the predicate matches
  */
-export function evaluateStatePredicate<S extends BaseNodeState | BaseEdgeState = BaseNodeState>(
+export function evaluateStatePredicate<S extends object = BaseNodeState>(
   predicate: StatePredicate<S>,
   state: S,
 ): boolean {
@@ -233,6 +233,9 @@ export function resolveGraphicValue<
   T = unknown,
 >(value: GraphicValue<A, S, GS, T>, attributes: A, state: S, graphState: GS, graph: AbstractGraph, defaultValue: T): T {
   if (value === null || value === undefined) return defaultValue;
+
+  // Literal primitives are the most common case — skip all type guard checks.
+  if (typeof value !== "object" && typeof value !== "function") return value as T;
 
   if (isInlineFunctionConditional<A, S, GS, T>(value)) {
     const branch = value.when(attributes, state, graphState, graph) ? value.then : value.else;
@@ -406,75 +409,10 @@ export function analyzeStyleDeclaration(
 }
 
 /**
- * Resolved node style values (all properties resolved to concrete values).
+ * Default field values for NodeDisplayData, applied at the start of each style evaluation.
+ * Does not include x, y (from graph attributes) or highlighted (from node state).
  */
-export interface ResolvedNodeStyle {
-  x?: number;
-  y?: number;
-  size: number;
-  color: string;
-  opacity: number;
-  shape: string;
-  visibility: "visible" | "hidden";
-  depth: string;
-  zIndex: number;
-  label: string;
-  labelColor: string;
-  labelSize: number;
-  labelFont: string;
-  labelVisibility: "auto" | "visible" | "hidden";
-  labelPosition: "right" | "left" | "above" | "below" | "over";
-  labelAngle: number;
-  labelDepth: string;
-  backdropVisibility: "visible" | "hidden";
-  backdropColor: string;
-  backdropShadowColor: string;
-  backdropShadowBlur: number;
-  backdropPadding: number;
-  backdropBorderColor: string;
-  backdropBorderWidth: number;
-  backdropCornerRadius: number;
-  backdropLabelPadding: number;
-  backdropArea: "both" | "node" | "label";
-  labelAttachment: string | null;
-  labelAttachmentPlacement: "below" | "above" | "left" | "right";
-  cursor?: string;
-  // Additional program-declared variables stored here
-  [key: string]: unknown;
-}
-
-/**
- * Resolved edge style values (all properties resolved to concrete values).
- */
-export interface ResolvedEdgeStyle {
-  size: number;
-  color: string;
-  opacity: number;
-  path: string;
-  selfLoopPath: string;
-  parallelPath: string | undefined;
-  parallelSpread: number;
-  tail: string;
-  head: string;
-  visibility: "visible" | "hidden";
-  depth: string;
-  zIndex: number;
-  label: string;
-  labelColor: string;
-  labelSize: number;
-  labelFont: string;
-  labelVisibility: "auto" | "visible" | "hidden";
-  labelPosition: number | "over" | "above" | "below" | "auto";
-  labelDepth: string;
-  cursor?: string;
-  // Additional program-declared variables stored here
-  [key: string]: unknown;
-}
-
-/**
- * Default values for resolved node styles.
- */
-const DEFAULT_RESOLVED_NODE_STYLE: ResolvedNodeStyle = {
+const DEFAULT_NODE_DISPLAY_DATA: Partial<NodeDisplayData> = {
   size: 10,
   color: "#666",
   opacity: 1,
@@ -505,9 +443,9 @@ const DEFAULT_RESOLVED_NODE_STYLE: ResolvedNodeStyle = {
 };
 
 /**
- * Default values for resolved edge styles.
+ * Default field values for EdgeDisplayData, applied at the start of each style evaluation.
  */
-const DEFAULT_RESOLVED_EDGE_STYLE: ResolvedEdgeStyle = {
+const DEFAULT_EDGE_DISPLAY_DATA: Partial<EdgeDisplayData> = {
   size: 1,
   color: "#ccc",
   opacity: 1,
@@ -522,10 +460,8 @@ const DEFAULT_RESOLVED_EDGE_STYLE: ResolvedEdgeStyle = {
   zIndex: 0,
   label: "",
   labelColor: "#666",
-  labelSize: 10,
-  labelFont: "Arial, sans-serif",
   labelVisibility: "auto",
-  labelPosition: 0.5,
+  labelPosition: undefined,
   labelDepth: "edgeLabels",
 };
 
@@ -533,20 +469,115 @@ const DEFAULT_RESOLVED_EDGE_STYLE: ResolvedEdgeStyle = {
 const RULE_CONTROL_KEYS = new Set(["when", "whenState", "whenData", "then", "else"]);
 
 // Initialize pre-computed key/value arrays for fast reset
-const NODE_DEFAULT_KEYS = Object.keys(DEFAULT_RESOLVED_NODE_STYLE);
-const NODE_DEFAULT_VALUES = Object.values(DEFAULT_RESOLVED_NODE_STYLE);
-const EDGE_DEFAULT_KEYS = Object.keys(DEFAULT_RESOLVED_EDGE_STYLE);
-const EDGE_DEFAULT_VALUES = Object.values(DEFAULT_RESOLVED_EDGE_STYLE);
+const NODE_DEFAULT_KEYS = Object.keys(DEFAULT_NODE_DISPLAY_DATA);
+const NODE_DEFAULT_VALUES = Object.values(DEFAULT_NODE_DISPLAY_DATA);
+const EDGE_DEFAULT_KEYS = Object.keys(DEFAULT_EDGE_DISPLAY_DATA);
+const EDGE_DEFAULT_VALUES = Object.values(DEFAULT_EDGE_DISPLAY_DATA);
+
+/**
+ * Applies a single style rule's properties to the result object.
+ */
+function applyStyleRule(
+  result: Record<string, unknown>,
+  rule: Record<string, unknown>,
+  attributes: Attributes,
+  state: Record<string, unknown>,
+  graphState: Record<string, unknown>,
+  graph: AbstractGraph,
+  staticDefaults: Record<string, unknown>,
+): void {
+  for (const key in rule) {
+    if (RULE_CONTROL_KEYS.has(key)) continue;
+    const defaultValue = result[key] ?? staticDefaults[key];
+    result[key] = resolveGraphicValue(
+      rule[key] as GraphicValue<Attributes, BaseNodeState, BaseGraphState, unknown>,
+      attributes,
+      state as unknown as BaseNodeState,
+      graphState as unknown as BaseGraphState,
+      graph,
+      defaultValue,
+    );
+  }
+}
+
+/**
+ * Processes an array of style rules in order, applying matching ones to result.
+ */
+function applyStyleRules(
+  result: Record<string, unknown>,
+  rules: Record<string, unknown>[],
+  attributes: Attributes,
+  state: Record<string, unknown>,
+  graphState: Record<string, unknown>,
+  graph: AbstractGraph,
+  staticDefaults: Record<string, unknown>,
+): void {
+  for (const rule of rules) {
+    if ("matchData" in rule && "cases" in rule) {
+      const key = String(attributes[rule.matchData as string] ?? "");
+      const cases = rule.cases as Record<string, Record<string, unknown>>;
+      if (key in cases) applyStyleRule(result, cases[key], attributes, state, graphState, graph, staticDefaults);
+    } else if ("matchState" in rule && "cases" in rule) {
+      const key = String(state[rule.matchState as string] ?? "");
+      const cases = rule.cases as Record<string, Record<string, unknown>>;
+      if (key in cases) applyStyleRule(result, cases[key], attributes, state, graphState, graph, staticDefaults);
+    } else if ("when" in rule && "then" in rule) {
+      const whenFn = rule.when as (
+        a: Attributes,
+        s: Record<string, unknown>,
+        gs: Record<string, unknown>,
+        g: AbstractGraph,
+      ) => boolean;
+      if (!whenFn(attributes, state, graphState, graph)) continue;
+      applyStyleRule(
+        result,
+        rule.then as Record<string, unknown>,
+        attributes,
+        state,
+        graphState,
+        graph,
+        staticDefaults,
+      );
+    } else if ("whenState" in rule && "then" in rule) {
+      if (!evaluateStatePredicate(rule.whenState as StatePredicate<Record<string, unknown>>, state)) continue;
+      applyStyleRule(
+        result,
+        rule.then as Record<string, unknown>,
+        attributes,
+        state,
+        graphState,
+        graph,
+        staticDefaults,
+      );
+    } else if ("whenData" in rule && "then" in rule) {
+      if (!evaluateDataPredicate(rule.whenData as DataPredicate, attributes)) continue;
+      applyStyleRule(
+        result,
+        rule.then as Record<string, unknown>,
+        attributes,
+        state,
+        graphState,
+        graph,
+        staticDefaults,
+      );
+    } else {
+      applyStyleRule(result, rule, attributes, state, graphState, graph, staticDefaults);
+    }
+  }
+}
 
 /**
  * Evaluates a complete node style declaration for a specific node.
+ * Writes results directly into the target NodeDisplayData (or a fresh object if not provided).
+ * Does not set `highlighted` — that must be assigned by the caller from node state.
  *
  * @param styleDeclaration - The style declaration (object or array of rules)
  * @param attributes - The node's attributes
  * @param state - The node's state
  * @param graphState - The graph-level state
  * @param graph - The graph instance
- * @returns Fully resolved node style values
+ * @param target - Optional existing NodeDisplayData to write into (avoids allocation)
+ * @returns The populated NodeDisplayData
  */
 export function evaluateNodeStyle<
   NA extends Attributes = Attributes,
@@ -558,94 +589,52 @@ export function evaluateNodeStyle<
   state: NS,
   graphState: GS,
   graph: AbstractGraph,
-  target?: ResolvedNodeStyle,
-): ResolvedNodeStyle {
-  const result: ResolvedNodeStyle = target || ({} as ResolvedNodeStyle);
+  target?: NodeDisplayData,
+): NodeDisplayData {
+  const result = (target || {}) as NodeDisplayData;
+  const r = result as unknown as Record<string, unknown>;
   for (let i = 0, l = NODE_DEFAULT_KEYS.length; i < l; i++) {
-    (result as Record<string, unknown>)[NODE_DEFAULT_KEYS[i]] = NODE_DEFAULT_VALUES[i];
+    r[NODE_DEFAULT_KEYS[i]] = NODE_DEFAULT_VALUES[i];
   }
+  // x/y have no fixed default, they must come from style rules or graph attributes.
+  // Reset them so stale values from a previous render cycle don't survive into this evaluation.
+  r.x = undefined;
+  r.y = undefined;
 
   if (!styleDeclaration) {
     // No styles, resolve from attributes with defaults
-    result.x = (attributes.x as number) ?? 0;
-    result.y = (attributes.y as number) ?? 0;
+    r.x = (attributes.x as number) ?? 0;
+    r.y = (attributes.y as number) ?? 0;
     result.size = (attributes.size as number) ?? 10;
     result.color = (attributes.color as string) ?? "#666";
     result.label = (attributes.label as string) ?? "";
     return result;
   }
 
-  // Normalize to array form
   const rules = Array.isArray(styleDeclaration) ? styleDeclaration : [styleDeclaration];
-
-  // Process each rule
-  for (const rule of rules) {
-    if ("matchData" in rule && "cases" in rule) {
-      const { matchData, cases } = rule as { matchData: string; cases: Record<string, Record<string, unknown>> };
-      const key = String(attributes[matchData] ?? "");
-      if (key in cases) applyNodeStyleRule(result, cases[key], attributes, state, graphState, graph);
-    } else if ("matchState" in rule && "cases" in rule) {
-      const { matchState, cases } = rule as { matchState: string; cases: Record<string, Record<string, unknown>> };
-      const key = String(state[matchState as keyof NS] ?? "");
-      if (key in cases) applyNodeStyleRule(result, cases[key], attributes, state, graphState, graph);
-    } else if ("when" in rule && "then" in rule) {
-      const conditional = rule as {
-        when: (a: NA, s: NS, gs: GS, g: AbstractGraph) => boolean;
-        then: Record<string, unknown>;
-      };
-      if (!conditional.when(attributes, state, graphState, graph)) continue;
-      applyNodeStyleRule(result, conditional.then, attributes, state, graphState, graph);
-    } else if ("whenState" in rule && "then" in rule) {
-      const conditional = rule as { whenState: StatePredicate<NS>; then: Record<string, unknown> };
-      if (!evaluateStatePredicate(conditional.whenState, state)) continue;
-      applyNodeStyleRule(result, conditional.then, attributes, state, graphState, graph);
-    } else if ("whenData" in rule && "then" in rule) {
-      const conditional = rule as { whenData: DataPredicate<NA>; then: Record<string, unknown> };
-      if (!evaluateDataPredicate(conditional.whenData, attributes)) continue;
-      applyNodeStyleRule(result, conditional.then, attributes, state, graphState, graph);
-    } else {
-      applyNodeStyleRule(result, rule, attributes, state, graphState, graph);
-    }
-  }
-
+  applyStyleRules(
+    r,
+    rules,
+    attributes,
+    state as unknown as Record<string, unknown>,
+    graphState as unknown as Record<string, unknown>,
+    graph,
+    DEFAULT_NODE_DISPLAY_DATA as Record<string, unknown>,
+  );
   return result;
 }
 
 /**
- * Applies a single style rule to the result object.
- */
-function applyNodeStyleRule<NA extends Attributes, NS extends BaseNodeState, GS extends BaseGraphState>(
-  result: ResolvedNodeStyle,
-  rule: Record<string, unknown>,
-  attributes: NA,
-  state: NS,
-  graphState: GS,
-  graph: AbstractGraph,
-): void {
-  for (const key in rule) {
-    if (RULE_CONTROL_KEYS.has(key)) continue;
-
-    const defaultValue = result[key] ?? DEFAULT_RESOLVED_NODE_STYLE[key as keyof ResolvedNodeStyle];
-    result[key] = resolveGraphicValue(
-      rule[key] as GraphicValue<NA, NS, GS, unknown>,
-      attributes,
-      state,
-      graphState,
-      graph,
-      defaultValue,
-    );
-  }
-}
-
-/**
  * Evaluates a complete edge style declaration for a specific edge.
+ * Writes results directly into the target EdgeDisplayData (or a fresh object if not provided).
  *
  * @param styleDeclaration - The style declaration (object or array of rules)
  * @param attributes - The edge's attributes
  * @param state - The edge's state
  * @param graphState - The graph-level state
  * @param graph - The graph instance
- * @returns Fully resolved edge style values
+ * @param target - Optional existing EdgeDisplayData to write into (avoids allocation)
+ * @returns The populated EdgeDisplayData
  */
 export function evaluateEdgeStyle<
   EA extends Attributes = Attributes,
@@ -657,11 +646,12 @@ export function evaluateEdgeStyle<
   state: ES,
   graphState: GS,
   graph: AbstractGraph,
-  target?: ResolvedEdgeStyle,
-): ResolvedEdgeStyle {
-  const result: ResolvedEdgeStyle = target || ({} as ResolvedEdgeStyle);
+  target?: EdgeDisplayData,
+): EdgeDisplayData {
+  const result = (target || {}) as EdgeDisplayData;
+  const r = result as unknown as Record<string, unknown>;
   for (let i = 0, l = EDGE_DEFAULT_KEYS.length; i < l; i++) {
-    (result as Record<string, unknown>)[EDGE_DEFAULT_KEYS[i]] = EDGE_DEFAULT_VALUES[i];
+    r[EDGE_DEFAULT_KEYS[i]] = EDGE_DEFAULT_VALUES[i];
   }
 
   if (!styleDeclaration) {
@@ -671,66 +661,21 @@ export function evaluateEdgeStyle<
     return result;
   }
 
-  // Normalize to array form
   const rules = Array.isArray(styleDeclaration) ? styleDeclaration : [styleDeclaration];
+  applyStyleRules(
+    r,
+    rules,
+    attributes,
+    state as unknown as Record<string, unknown>,
+    graphState as unknown as Record<string, unknown>,
+    graph,
+    DEFAULT_EDGE_DISPLAY_DATA as Record<string, unknown>,
+  );
 
-  // Process each rule
-  for (const rule of rules) {
-    if ("matchData" in rule && "cases" in rule) {
-      const { matchData, cases } = rule as { matchData: string; cases: Record<string, Record<string, unknown>> };
-      const key = String(attributes[matchData] ?? "");
-      if (key in cases) applyEdgeStyleRule(result, cases[key], attributes, state, graphState, graph);
-    } else if ("matchState" in rule && "cases" in rule) {
-      const { matchState, cases } = rule as { matchState: string; cases: Record<string, Record<string, unknown>> };
-      const key = String(state[matchState as keyof ES] ?? "");
-      if (key in cases) applyEdgeStyleRule(result, cases[key], attributes, state, graphState, graph);
-    } else if ("when" in rule && "then" in rule) {
-      const conditional = rule as {
-        when: (a: EA, s: ES, gs: GS, g: AbstractGraph) => boolean;
-        then: Record<string, unknown>;
-      };
-      if (!conditional.when(attributes, state, graphState, graph)) continue;
-      applyEdgeStyleRule(result, conditional.then, attributes, state, graphState, graph);
-    } else if ("whenState" in rule && "then" in rule) {
-      const conditional = rule as { whenState: StatePredicate<ES>; then: Record<string, unknown> };
-      if (!evaluateStatePredicate(conditional.whenState, state)) continue;
-      applyEdgeStyleRule(result, conditional.then, attributes, state, graphState, graph);
-    } else if ("whenData" in rule && "then" in rule) {
-      const conditional = rule as { whenData: DataPredicate<EA>; then: Record<string, unknown> };
-      if (!evaluateDataPredicate(conditional.whenData, attributes)) continue;
-      applyEdgeStyleRule(result, conditional.then, attributes, state, graphState, graph);
-    } else {
-      applyEdgeStyleRule(result, rule, attributes, state, graphState, graph);
-    }
-  }
+  // Normalize: numeric labelPosition is not rendered (treat as default/undefined)
+  if (typeof r.labelPosition === "number") r.labelPosition = undefined;
 
   return result;
-}
-
-/**
- * Applies a single style rule to the result object.
- */
-function applyEdgeStyleRule<EA extends Attributes, ES extends BaseEdgeState, GS extends BaseGraphState>(
-  result: ResolvedEdgeStyle,
-  rule: Record<string, unknown>,
-  attributes: EA,
-  state: ES,
-  graphState: GS,
-  graph: AbstractGraph,
-): void {
-  for (const key in rule) {
-    if (RULE_CONTROL_KEYS.has(key)) continue;
-
-    const defaultValue = result[key] ?? DEFAULT_RESOLVED_EDGE_STYLE[key as keyof ResolvedEdgeStyle];
-    result[key] = resolveGraphicValue(
-      rule[key] as GraphicValue<EA, ES, GS, unknown>,
-      attributes,
-      state,
-      graphState,
-      graph,
-      defaultValue,
-    );
-  }
 }
 
 /**
@@ -761,25 +706,13 @@ function resolveStageStyleValue<GS extends BaseGraphState, T>(
   }
   if (typeof value === "object" && "whenState" in value) {
     const cond = value as StageInlineConditional<GS, T>;
-    const matches = evaluateStagePredicate(cond.whenState, graphState);
+    const matches = evaluateStatePredicate(cond.whenState as StatePredicate<GS>, graphState);
     const branch = matches ? cond.then : cond.else;
     if (branch === undefined) return defaultValue;
     if (typeof branch === "function") return (branch as (gs: GS) => T)(graphState) ?? defaultValue;
     return branch ?? defaultValue;
   }
   return (value as T) ?? defaultValue;
-}
-
-/**
- * Evaluates a stage predicate (shorthand form) against graph state.
- */
-function evaluateStagePredicate<GS extends BaseGraphState>(predicate: StagePredicate<GS>, graphState: GS): boolean {
-  if (typeof predicate === "string") return graphState[predicate as keyof GS] === true;
-  if (Array.isArray(predicate)) return predicate.every((flag) => graphState[flag as keyof GS] === true);
-  if (typeof predicate === "object" && predicate !== null) {
-    return Object.entries(predicate).every(([key, value]) => graphState[key as keyof GS] === value);
-  }
-  return false;
 }
 
 /**
@@ -802,7 +735,7 @@ export function evaluateStageStyle<GS extends BaseGraphState>(
         applyStageStyleRule(result, branch as Record<string, unknown>, graphState);
       }
     } else if ("whenState" in rule && "then" in rule) {
-      const matches = evaluateStagePredicate(rule.whenState as StagePredicate<GS>, graphState);
+      const matches = evaluateStatePredicate(rule.whenState as StatePredicate<GS>, graphState);
       const branch = matches ? rule.then : rule.else;
       if (branch && typeof branch === "object") {
         applyStageStyleRule(result, branch as Record<string, unknown>, graphState);

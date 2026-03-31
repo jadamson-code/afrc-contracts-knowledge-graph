@@ -75,7 +75,7 @@ export class LabelRenderer<
       const node = nodes[i];
       const data = nodeDataCache[node];
 
-      if (data.hidden || !data.label) continue;
+      if (data.visibility === "hidden" || !data.label) continue;
 
       const fontString = data.labelFont || defaultLabelFont;
       const existing = textsByFont.get(fontString);
@@ -176,7 +176,7 @@ export class LabelRenderer<
       const data = nodeDataCache[node];
 
       if (this.displayedNodeLabels.has(node)) continue;
-      if (data.hidden || data.hideLabel) continue;
+      if (data.visibility === "hidden" || data.labelVisibility === "hidden") continue;
       if (!data.label) continue;
 
       if (data.x < graphMinX || data.x > graphMaxX || data.y < graphMinY || data.y > graphMaxY) continue;
@@ -184,7 +184,7 @@ export class LabelRenderer<
       const { x, y } = this.internals.framedGraphToViewport(data);
       const size = this.internals.scaleSize(data.size);
 
-      if (!data.forceLabel && size < settings.labelRenderedSizeThreshold) continue;
+      if (data.labelVisibility !== "visible" && size < settings.labelRenderedSizeThreshold) continue;
 
       if (
         x < -X_LABEL_MARGIN - size ||
@@ -251,7 +251,7 @@ export class LabelRenderer<
         margin: defaultLabelMargin,
         position: data.labelPosition ?? defaultLabelPosition,
         hidden: false,
-        forceLabel: data.forceLabel ?? false,
+        forceLabel: data.labelVisibility === "visible",
         type: "default",
         zIndex: data.zIndex ?? 0,
         parentType: "node",
@@ -285,7 +285,7 @@ export class LabelRenderer<
     const nodes: string[] = [];
     for (const key of nodesWithBackdrop) {
       const data = nodeDataCache[key];
-      if (!data || data.hidden) continue;
+      if (!data || data.visibility === "hidden") continue;
       if (depth && data.depth !== depth) continue;
       nodes.push(key);
     }
@@ -388,7 +388,7 @@ export class LabelRenderer<
     for (const key of nodesWithBackdrop) {
       if (!this.displayedNodeLabels.has(key)) continue;
       const data = nodeDataCache[key];
-      if (!data || data.hidden) continue;
+      if (!data || data.visibility === "hidden") continue;
       if (depth && data.depth !== depth) continue;
       if (!data.labelAttachment) continue;
 
@@ -421,7 +421,7 @@ export class LabelRenderer<
     for (const key of nodesWithBackdrop) {
       if (!this.displayedNodeLabels.has(key)) continue;
       const data = nodeDataCache[key];
-      if (!data || data.hidden) continue;
+      if (!data || data.visibility === "hidden") continue;
       if (depth && data.labelDepth !== depth) continue;
       if (!data.labelAttachment) continue;
 
@@ -508,7 +508,12 @@ export class LabelRenderer<
         targetData = nodeDataCache[extremities[1]],
         edgeData = edgeDataCache[edge];
 
-      if (edgeData.hidden || edgeData.hideLabel || sourceData.hidden || targetData.hidden) {
+      if (
+        edgeData.visibility === "hidden" ||
+        edgeData.labelVisibility === "hidden" ||
+        sourceData.visibility === "hidden" ||
+        targetData.visibility === "hidden"
+      ) {
         continue;
       }
 
@@ -550,7 +555,7 @@ export class LabelRenderer<
         margin: defaultEdgeLabelMargin,
         position: edgeData.labelPosition ?? defaultEdgeLabelPosition,
         hidden: false,
-        forceLabel: edgeData.forceLabel ?? false,
+        forceLabel: edgeData.labelVisibility === "visible",
         type: "default",
         zIndex: edgeData.zIndex ?? 0,
         parentType: "edge",

@@ -16,8 +16,6 @@ import { SDFAtlasManager } from "./core/sdf-atlas";
 import { SigmaInternals } from "./core/sigma-internals";
 import { StateManager } from "./core/state-manager";
 import {
-  ResolvedEdgeStyle,
-  ResolvedNodeStyle,
   ResolvedStageStyle,
   StyleAnalysis,
   analyzeStyleDeclaration,
@@ -57,7 +55,6 @@ import {
   DEFAULT_PRIMITIVES,
   Dimensions,
   EdgeDisplayData,
-  EdgeLabelPosition,
   EdgeReducer,
   Extent,
   Listener,
@@ -220,10 +217,6 @@ export default class Sigma<
   private edgeBaseDepth: Record<string, string> = {};
 
   private camera: Camera;
-
-  // Reusable scratch objects for style evaluation (avoids allocation per item)
-  private _scratchNodeStyle: ResolvedNodeStyle = {} as ResolvedNodeStyle;
-  private _scratchEdgeStyle: ResolvedEdgeStyle = {} as ResolvedEdgeStyle;
 
   constructor(
     graph: Graph<N, E, G>,
@@ -751,7 +744,7 @@ export default class Sigma<
       this.normalizationFunction.applyTo(data);
 
       // labelgrid
-      if (typeof data.label === "string" && !data.hidden && !data.hideLabel)
+      if (typeof data.label === "string" && data.visibility !== "hidden" && data.labelVisibility !== "hidden")
         this.labelRenderer.labelGrid.add(
           node,
           data.size,
@@ -1192,54 +1185,24 @@ export default class Sigma<
   }
 
   /**
-   * Write resolved style properties into a NodeDisplayData object (mutates in place).
-   * Shared by addNode and refreshNodeState to avoid property-list duplication.
+   * Applies position fallback and state fields after evaluateNodeStyle.
+   * evaluateNodeStyle writes style properties directly into `data`; this patches
+   * the remaining fields that come from attributes or state, not from style rules.
    */
-  private applyResolvedNodeStyle(
-    data: NodeDisplayData,
-    resolvedStyle: ResolvedNodeStyle & Record<string, unknown>,
-    attrs: Attributes,
-    nodeState: BaseNodeState,
-  ): void {
-    data.x = resolvedStyle.x ?? (attrs.x as number);
-    data.y = resolvedStyle.y ?? (attrs.y as number);
-    data.size = resolvedStyle.size ?? 2;
-    data.color = resolvedStyle.color ?? "#666";
-    data.opacity = resolvedStyle.opacity ?? 1;
-    data.labelColor = resolvedStyle.labelColor ?? "#000";
-    data.label = resolvedStyle.label ?? null;
-    data.hidden = resolvedStyle.visibility === "hidden";
-    data.forceLabel = resolvedStyle.labelVisibility === "visible";
-    data.hideLabel = resolvedStyle.labelVisibility === "hidden";
-    data.highlighted = nodeState.isHighlighted;
-    data.zIndex = resolvedStyle.zIndex ?? 0;
-    data.depth = resolvedStyle.depth ?? "nodes";
-    data.labelDepth = resolvedStyle.labelDepth ?? "nodeLabels";
-    data.shape = resolvedStyle.shape;
-    data.labelPosition = resolvedStyle.labelPosition;
-    data.labelSize = resolvedStyle.labelSize;
-    data.labelFont = resolvedStyle.labelFont;
-    data.labelAngle = resolvedStyle.labelAngle;
-    data.backdropVisibility = resolvedStyle.backdropVisibility;
-    data.backdropColor = resolvedStyle.backdropColor;
-    data.backdropShadowColor = resolvedStyle.backdropShadowColor;
-    data.backdropShadowBlur = resolvedStyle.backdropShadowBlur;
-    data.backdropPadding = resolvedStyle.backdropPadding;
-    data.backdropBorderColor = resolvedStyle.backdropBorderColor;
-    data.backdropBorderWidth = resolvedStyle.backdropBorderWidth;
-    data.backdropCornerRadius = resolvedStyle.backdropCornerRadius;
-    data.backdropLabelPadding = resolvedStyle.backdropLabelPadding;
-    data.backdropArea = resolvedStyle.backdropArea;
-    data.labelAttachment = resolvedStyle.labelAttachment ?? null;
-    data.labelAttachmentPlacement = resolvedStyle.labelAttachmentPlacement ?? "below";
-    data.cursor = resolvedStyle.cursor;
+  private postEvaluateNode(data: NodeDisplayData, attrs: Attributes, nodeState: BaseNodeState): void {
+    // x/y fallback: style rules should provide these (DEFAULT_STYLES binds them to attributes),
+    // but fall back to raw attributes in case no style rule covered position.
+    const d = data as unknown as Record<string, unknown>;
+    if (d.x === undefined) d.x = attrs.x;
+    if (d.y === undefined) d.y = attrs.y;
 
-    // Inject declared variables from primitives into display data
-    // Variables can come from: styles > graph attributes > default value
-    const mutableData = data as unknown as Record<string, unknown>;
+    // highlighted comes from node state, not from style rules
+    data.highlighted = nodeState.isHighlighted;
+
+    // Inject declared variables: style > graph attributes > declared default
     for (let i = 0, l = this.nodeVariableEntries.length; i < l; i++) {
       const [varName, varDef] = this.nodeVariableEntries[i];
-      mutableData[varName] = resolvedStyle[varName] ?? attrs[varName] ?? varDef.default;
+      d[varName] = d[varName] ?? attrs[varName] ?? varDef.default;
     }
   }
 
@@ -1252,17 +1215,17 @@ export default class Sigma<
     const attrs = this.internals.graph.getNodeAttributes(key);
     const nodeState = this.stateManager.getNodeState(key);
 
-    // Compute display data from styles (always defined, defaults to DEFAULT_STYLES)
-    const resolvedStyle = evaluateNodeStyle(
+    // Evaluate styles directly into a fresh display data object
+    let data: NodeDisplayData = {} as NodeDisplayData;
+    evaluateNodeStyle(
       this.stylesDeclaration!.nodes as Record<string, unknown>,
       attrs,
       nodeState,
       this.stateManager.graphState,
       this.internals.graph,
+      data,
     );
-
-    let data: NodeDisplayData = {} as NodeDisplayData;
-    this.applyResolvedNodeStyle(data, resolvedStyle, attrs, nodeState);
+    this.postEvaluateNode(data, attrs, nodeState);
 
     // Apply reducer if provided
     if (this.nodeReducer) {
@@ -1296,11 +1259,12 @@ export default class Sigma<
     // We delete and add if needed because this function is also used from
     // update
     this.internals.nodesWithForcedLabels.delete(key);
-    if (data.forceLabel && !data.hidden) this.internals.nodesWithForcedLabels.add(key);
+    if (data.labelVisibility === "visible" && data.visibility !== "hidden")
+      this.internals.nodesWithForcedLabels.add(key);
 
     // Backdrop visibility tracking
     this.internals.nodesWithBackdrop.delete(key);
-    if (!data.hidden && data.backdropVisibility === "visible") {
+    if (data.visibility !== "hidden" && data.backdropVisibility === "visible") {
       this.internals.nodesWithBackdrop.add(key);
     }
 
@@ -1363,71 +1327,34 @@ export default class Sigma<
   }
 
   /**
-   * Write resolved style properties into an EdgeDisplayData object (mutates in place).
-   * Shared by addEdge and refreshEdgeState to avoid property-list duplication.
+   * Applies variable fallbacks after evaluateEdgeStyle.
+   * evaluateEdgeStyle writes style properties directly into `data`; this patches
+   * declared primitive variables with attribute or default fallbacks.
    */
-  private applyResolvedEdgeStyle(
-    data: EdgeDisplayData,
-    resolvedStyle: ResolvedEdgeStyle & Record<string, unknown>,
-    attrs: Attributes,
-  ): void {
-    data.size = resolvedStyle.size ?? 0.5;
-    data.color = resolvedStyle.color ?? "#ccc";
-    data.opacity = resolvedStyle.opacity ?? 1;
-    data.labelColor = resolvedStyle.labelColor ?? "#666";
-    data.label = resolvedStyle.label ?? "";
-    data.hidden = resolvedStyle.visibility === "hidden";
-    data.forceLabel = resolvedStyle.labelVisibility === "visible";
-    data.hideLabel = resolvedStyle.labelVisibility === "hidden";
-    data.zIndex = resolvedStyle.zIndex ?? 0;
-    data.depth = resolvedStyle.depth ?? "edges";
-    data.labelDepth = resolvedStyle.labelDepth ?? "edgeLabels";
-    data.path = resolvedStyle.path;
-    data.selfLoopPath = resolvedStyle.selfLoopPath;
-    data.parallelPath = resolvedStyle.parallelPath;
-    data.head = resolvedStyle.head;
-    data.tail = resolvedStyle.tail;
-    data.labelPosition =
-      typeof resolvedStyle.labelPosition === "string" ? (resolvedStyle.labelPosition as EdgeLabelPosition) : undefined;
-    data.cursor = resolvedStyle.cursor;
-
-    // Inject declared variables from primitives into display data
-    // Variables can come from: styles > graph attributes > default value
-    const mutableData = data as unknown as Record<string, unknown>;
+  private postEvaluateEdge(data: EdgeDisplayData, attrs: Attributes): void {
+    const d = data as unknown as Record<string, unknown>;
     for (let i = 0, l = this.edgeVariableEntries.length; i < l; i++) {
       const [varName, varDef] = this.edgeVariableEntries[i];
-      mutableData[varName] = resolvedStyle[varName] ?? attrs[varName] ?? varDef.default;
+      d[varName] = d[varName] ?? attrs[varName] ?? varDef.default;
     }
   }
 
   /**
    * Computes and injects the spread variable for parallel edges.
-   *
-   * NOTE: applyResolvedEdgeStyle resets all variables to defaults, which
-   * overwrites computed values like spread. This method must be called after
-   * applyResolvedEdgeStyle whenever parallel edges need their spread value.
-   * If other computed (non-styled) variables appear in the future, a more
-   * structural solution may be needed.
+   * Must be called after evaluateEdgeStyle since spread is geometry-derived, not styled.
    */
-  private applyEdgeSpread(
-    edge: string,
-    data: EdgeDisplayData,
-    edgeState: FullEdgeState<ES>,
-    resolvedStyle: ResolvedEdgeStyle & Record<string, unknown>,
-  ): void {
+  private applyEdgeSpread(edge: string, data: EdgeDisplayData, edgeState: FullEdgeState<ES>): void {
     if (edgeState.parallelCount <= 1) return;
 
     const source = this.internals.graph.source(edge);
     const target = this.internals.graph.target(edge);
     const isSelfLoop = source === target;
 
-    const pathName = isSelfLoop
-      ? resolvedStyle.selfLoopPath || resolvedStyle.path
-      : resolvedStyle.parallelPath || resolvedStyle.path;
-    const path = this.edgePathsByName.get(pathName);
+    const pathName = isSelfLoop ? data.selfLoopPath || data.path : data.parallelPath || data.path;
+    const path = pathName ? this.edgePathsByName.get(pathName) : undefined;
     if (!path?.spread) return;
 
-    const spreadFactor = resolvedStyle.parallelSpread ?? 0.25;
+    const spreadFactor = data.parallelSpread ?? 0.25;
     let spreadValue = path.spread.compute(edgeState.parallelIndex, edgeState.parallelCount, spreadFactor);
 
     // Correct for reverse-direction non-self-loop edges: swapping source/target
@@ -1448,17 +1375,17 @@ export default class Sigma<
     const attrs = this.internals.graph.getEdgeAttributes(key);
     const edgeState = this.stateManager.getEdgeState(key);
 
-    // Compute display data from styles (always defined, defaults to DEFAULT_STYLES)
-    const resolvedStyle = evaluateEdgeStyle(
+    // Evaluate styles directly into a fresh display data object
+    let data: EdgeDisplayData = {} as EdgeDisplayData;
+    evaluateEdgeStyle(
       this.stylesDeclaration!.edges as Record<string, unknown>,
       attrs,
       edgeState,
       this.stateManager.graphState,
       this.internals.graph,
+      data,
     );
-
-    let data: EdgeDisplayData = {} as EdgeDisplayData;
-    this.applyResolvedEdgeStyle(data, resolvedStyle, attrs);
+    this.postEvaluateEdge(data, attrs);
 
     // Apply reducer if provided
     if (this.edgeReducer) {
@@ -1467,7 +1394,7 @@ export default class Sigma<
     }
 
     // Auto-compute spread variable for parallel edges
-    this.applyEdgeSpread(key, data, edgeState, resolvedStyle);
+    this.applyEdgeSpread(key, data, edgeState);
 
     this.internals.edgeDataCache[key] = data;
 
@@ -1475,7 +1402,8 @@ export default class Sigma<
     // we filter and re push if needed because this function is also used from
     // update
     this.internals.edgesWithForcedLabels.delete(key);
-    if (data.forceLabel && !data.hidden) this.internals.edgesWithForcedLabels.add(key);
+    if (data.labelVisibility === "visible" && data.visibility !== "hidden")
+      this.internals.edgesWithForcedLabels.add(key);
 
     // Bucket management for depth ordering (depth encoded into zIndex range)
     const newZIndex =
@@ -2475,17 +2403,9 @@ export default class Sigma<
       return;
     }
 
-    // Re-evaluate style (reuses scratch object to avoid allocation)
+    // Re-evaluate style directly into the cached display data object
     const attrs = this.internals.graph.getNodeAttributes(node);
     const nodeState = this.stateManager.getNodeState(node);
-    const resolvedStyle = evaluateNodeStyle(
-      this.stylesDeclaration!.nodes as Record<string, unknown>,
-      attrs,
-      nodeState,
-      this.stateManager.graphState,
-      this.internals.graph,
-      this._scratchNodeStyle,
-    );
 
     // Save old values before patching
     const oldSize = data.size;
@@ -2493,12 +2413,19 @@ export default class Sigma<
     const oldDepth = data.depth;
     const oldZIndex = data.zIndex;
     const oldAttachment = data.labelAttachment;
-    const oldHidden = data.hidden;
-    const oldForceLabel = data.forceLabel;
+    const oldVisibility = data.visibility;
+    const oldLabelVisibility = data.labelVisibility;
     const oldBackdropVisibility = data.backdropVisibility;
 
-    // Patch display data in place
-    this.applyResolvedNodeStyle(data, resolvedStyle, attrs, nodeState);
+    evaluateNodeStyle(
+      this.stylesDeclaration!.nodes as Record<string, unknown>,
+      attrs,
+      nodeState,
+      this.stateManager.graphState,
+      this.internals.graph,
+      data,
+    );
+    this.postEvaluateNode(data, attrs, nodeState);
 
     // Update raw graph coords and normalize
     const graphCoords = this.nodeGraphCoords[node];
@@ -2525,15 +2452,16 @@ export default class Sigma<
     }
 
     // Update forced label tracking only if changed
-    if (data.forceLabel !== oldForceLabel || data.hidden !== oldHidden) {
+    if (data.labelVisibility !== oldLabelVisibility || data.visibility !== oldVisibility) {
       this.internals.nodesWithForcedLabels.delete(node);
-      if (data.forceLabel && !data.hidden) this.internals.nodesWithForcedLabels.add(node);
+      if (data.labelVisibility === "visible" && data.visibility !== "hidden")
+        this.internals.nodesWithForcedLabels.add(node);
     }
 
     // Backdrop tracking only if changed
-    if (data.backdropVisibility !== oldBackdropVisibility || data.hidden !== oldHidden) {
+    if (data.backdropVisibility !== oldBackdropVisibility || data.visibility !== oldVisibility) {
       this.internals.nodesWithBackdrop.delete(node);
-      if (!data.hidden && data.backdropVisibility === "visible") {
+      if (data.visibility !== "hidden" && data.backdropVisibility === "visible") {
         this.internals.nodesWithBackdrop.add(node);
       }
     }
@@ -2599,17 +2527,9 @@ export default class Sigma<
       return;
     }
 
-    // Re-evaluate style (reuses scratch object to avoid allocation)
+    // Re-evaluate style directly into the cached display data object
     const attrs = this.internals.graph.getEdgeAttributes(edge);
     const edgeState = this.stateManager.getEdgeState(edge);
-    const resolvedStyle = evaluateEdgeStyle(
-      this.stylesDeclaration!.edges as Record<string, unknown>,
-      attrs,
-      edgeState,
-      this.stateManager.graphState,
-      this.internals.graph,
-      this._scratchEdgeStyle,
-    );
 
     // Save old values before patching (for skip checks below)
     const oldDepth = data.depth;
@@ -2620,19 +2540,27 @@ export default class Sigma<
     const oldParallelPath = data.parallelPath;
     const oldHead = data.head;
     const oldTail = data.tail;
-    const oldHidden = data.hidden;
-    const oldForceLabel = data.forceLabel;
+    const oldVisibility = data.visibility;
+    const oldLabelVisibility = data.labelVisibility;
 
-    // Patch display data in place
-    this.applyResolvedEdgeStyle(data, resolvedStyle, attrs);
+    evaluateEdgeStyle(
+      this.stylesDeclaration!.edges as Record<string, unknown>,
+      attrs,
+      edgeState,
+      this.stateManager.graphState,
+      this.internals.graph,
+      data,
+    );
+    this.postEvaluateEdge(data, attrs);
 
     // Recompute spread variable for parallel edges
-    this.applyEdgeSpread(edge, data, edgeState, resolvedStyle);
+    this.applyEdgeSpread(edge, data, edgeState);
 
     // Update forced label tracking only if changed
-    if (data.forceLabel !== oldForceLabel || data.hidden !== oldHidden) {
+    if (data.labelVisibility !== oldLabelVisibility || data.visibility !== oldVisibility) {
       this.internals.edgesWithForcedLabels.delete(edge);
-      if (data.forceLabel && !data.hidden) this.internals.edgesWithForcedLabels.add(edge);
+      if (data.labelVisibility === "visible" && data.visibility !== "hidden")
+        this.internals.edgesWithForcedLabels.add(edge);
     }
 
     // Bucket management if depth or zIndex changed

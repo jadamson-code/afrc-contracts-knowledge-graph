@@ -10,16 +10,12 @@
  */
 import Graph, { Attributes } from "graphology-types";
 
-import { Settings } from "../settings";
-import { Coordinates, Listener, MouseCoords, MouseInteraction, PlainObject, TouchCoords } from "../types";
-import { BaseEdgeState, BaseNodeState } from "../types/styles";
+import { Listener, MouseCoords, MouseInteraction, PlainObject, TouchCoords } from "../types";
 import { cleanMouseCoords } from "./captors/captor";
 import MouseCaptor from "./captors/mouse";
 import TouchCaptor from "./captors/touch";
-import { DragManager } from "./drag-manager";
 import { EdgeGroupIndex } from "./edge-groups";
-import { StateManager } from "./state-manager";
-import { StyleAnalysis } from "./styles";
+import { SigmaInternals } from "./sigma-internals";
 
 // Partial refresh options (mirrors sigma's refresh() opts)
 type RefreshOpts = {
@@ -37,34 +33,12 @@ export function bindInteractionHandlers<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(
-  ctx: {
-    stateManager: Pick<
-      StateManager<unknown, unknown, unknown>,
-      "hoveredNode" | "hoveredEdge" | "setHoveredNode" | "setHoveredEdge"
-    >;
-    getNodeDataCache(): Record<string, { hidden: boolean }>;
-    dragManager: DragManager;
-    // Getters so handlers always see the latest value after a settings update.
-    getSettings(): Pick<
-      Settings,
-      "enableEdgeEvents" | "enableNodeDrag" | "getDraggedNodes" | "dragPositionToAttributes"
-    >;
-    getNodeStyleAnalysis(): Pick<StyleAnalysis, "xAttribute" | "yAttribute">;
-    // Sigma internals
-    getNodeAtPosition(pos: Coordinates): string | null;
-    getEdgeAtPoint(x: number, y: number): string | null;
-    setNodeState(key: string, state: Partial<BaseNodeState>): void;
-    setEdgeState(key: string, state: Partial<BaseEdgeState>): void;
-    updateContainerCursor(): void;
-    scheduleRefresh(): void;
-    viewportToGraph(coords: Coordinates): Coordinates;
-    emit(event: string, payload: unknown): void;
-  },
-  mouseCaptor: MouseCaptor<N, G, E>,
-  touchCaptor: TouchCaptor<N, G, E>,
+  internals: SigmaInternals<N, E, G>,
+  mouseCaptor: MouseCaptor<N, E, G>,
+  touchCaptor: TouchCaptor<N, E, G>,
   activeListeners: PlainObject<Listener>,
 ): void {
-  activeListeners.handleResize = () => ctx.scheduleRefresh();
+  activeListeners.handleResize = () => internals.scheduleRefresh();
   window.addEventListener("resize", activeListeners.handleResize);
 
   // Hover detection
@@ -77,47 +51,48 @@ export function bindInteractionHandlers<
       },
     };
 
-    const nodeToHover = ctx.getNodeAtPosition(event);
-    if (nodeToHover && ctx.stateManager.hoveredNode !== nodeToHover && !ctx.getNodeDataCache()[nodeToHover]?.hidden) {
-      if (ctx.stateManager.hoveredNode) {
-        const previousNode = ctx.stateManager.hoveredNode;
-        ctx.stateManager.setHoveredNode(nodeToHover);
-        ctx.setNodeState(previousNode, { isHovered: false });
-        ctx.emit("leaveNode", { ...baseEvent, node: previousNode });
+    const { stateManager } = internals;
+    const nodeToHover = internals.getNodeAtPosition(event);
+    if (nodeToHover && stateManager.hoveredNode !== nodeToHover && !internals.nodeDataCache[nodeToHover]?.hidden) {
+      if (stateManager.hoveredNode) {
+        const previousNode = stateManager.hoveredNode;
+        stateManager.setHoveredNode(nodeToHover);
+        internals.setNodeState(previousNode, { isHovered: false });
+        internals.emit("leaveNode", { ...baseEvent, node: previousNode });
       } else {
-        ctx.stateManager.setHoveredNode(nodeToHover);
+        stateManager.setHoveredNode(nodeToHover);
       }
-      ctx.setNodeState(nodeToHover, { isHovered: true });
-      ctx.emit("enterNode", { ...baseEvent, node: nodeToHover });
-      ctx.updateContainerCursor();
+      internals.setNodeState(nodeToHover, { isHovered: true });
+      internals.emit("enterNode", { ...baseEvent, node: nodeToHover });
+      internals.updateContainerCursor();
       return;
     }
 
-    if (ctx.stateManager.hoveredNode) {
-      if (ctx.getNodeAtPosition(event) !== ctx.stateManager.hoveredNode) {
-        const node = ctx.stateManager.hoveredNode;
-        ctx.stateManager.setHoveredNode(null);
-        ctx.setNodeState(node, { isHovered: false });
-        ctx.emit("leaveNode", { ...baseEvent, node });
-        ctx.updateContainerCursor();
+    if (stateManager.hoveredNode) {
+      if (internals.getNodeAtPosition(event) !== stateManager.hoveredNode) {
+        const node = stateManager.hoveredNode;
+        stateManager.setHoveredNode(null);
+        internals.setNodeState(node, { isHovered: false });
+        internals.emit("leaveNode", { ...baseEvent, node });
+        internals.updateContainerCursor();
         return;
       }
     }
 
-    if (ctx.getSettings().enableEdgeEvents) {
-      const edgeToHover = ctx.stateManager.hoveredNode ? null : ctx.getEdgeAtPoint(event.x, event.y);
+    if (internals.settings.enableEdgeEvents) {
+      const edgeToHover = stateManager.hoveredNode ? null : internals.getEdgeAtPoint(event.x, event.y);
 
-      if (edgeToHover !== ctx.stateManager.hoveredEdge) {
-        if (ctx.stateManager.hoveredEdge) {
-          ctx.setEdgeState(ctx.stateManager.hoveredEdge, { isHovered: false });
-          ctx.emit("leaveEdge", { ...baseEvent, edge: ctx.stateManager.hoveredEdge });
+      if (edgeToHover !== stateManager.hoveredEdge) {
+        if (stateManager.hoveredEdge) {
+          internals.setEdgeState(stateManager.hoveredEdge, { isHovered: false });
+          internals.emit("leaveEdge", { ...baseEvent, edge: stateManager.hoveredEdge });
         }
-        ctx.stateManager.setHoveredEdge(edgeToHover);
+        stateManager.setHoveredEdge(edgeToHover);
         if (edgeToHover) {
-          ctx.setEdgeState(edgeToHover, { isHovered: true });
-          ctx.emit("enterEdge", { ...baseEvent, edge: edgeToHover });
+          internals.setEdgeState(edgeToHover, { isHovered: true });
+          internals.emit("enterEdge", { ...baseEvent, edge: edgeToHover });
         }
-        ctx.updateContainerCursor();
+        internals.updateContainerCursor();
       }
     }
   };
@@ -125,18 +100,18 @@ export function bindInteractionHandlers<
   // Drag movement (body-level, fires even outside the canvas)
   activeListeners.handleMoveBody = (e: MouseCoords | TouchCoords): void => {
     const event = cleanMouseCoords(e);
-    const { dragManager } = ctx;
+    const { dragManager } = internals;
 
     if (dragManager.pendingNode && !dragManager.session) {
-      const { xAttribute, yAttribute } = ctx.getNodeStyleAnalysis();
-      const settings = ctx.getSettings();
+      const { xAttribute, yAttribute } = internals.nodeStyleAnalysis;
+      const { settings } = internals;
       dragManager.start(dragManager.pendingNode, event, settings.getDraggedNodes, xAttribute || "x", yAttribute || "y");
       dragManager.pendingNode = null;
     }
 
     if (dragManager.session) {
-      dragManager.applyMove(event, ctx.getSettings().dragPositionToAttributes);
-      ctx.emit("nodeDrag", {
+      dragManager.applyMove(event, internals.settings.dragPositionToAttributes);
+      internals.emit("nodeDrag", {
         node: dragManager.session.node,
         allDraggedNodes: dragManager.session.allNodes,
         event,
@@ -144,7 +119,7 @@ export function bindInteractionHandlers<
       event.preventSigmaDefault();
     }
 
-    ctx.emit("moveBody", {
+    internals.emit("moveBody", {
       event,
       preventSigmaDefault(): void {
         event.preventSigmaDefault();
@@ -161,26 +136,27 @@ export function bindInteractionHandlers<
       },
     };
 
-    if (ctx.stateManager.hoveredNode) {
-      const node = ctx.stateManager.hoveredNode;
-      ctx.stateManager.setHoveredNode(null);
-      ctx.setNodeState(node, { isHovered: false });
-      ctx.emit("leaveNode", { ...baseEvent, node });
+    const { stateManager } = internals;
+    if (stateManager.hoveredNode) {
+      const node = stateManager.hoveredNode;
+      stateManager.setHoveredNode(null);
+      internals.setNodeState(node, { isHovered: false });
+      internals.emit("leaveNode", { ...baseEvent, node });
     }
 
-    if (ctx.getSettings().enableEdgeEvents && ctx.stateManager.hoveredEdge) {
-      const edge = ctx.stateManager.hoveredEdge;
-      ctx.stateManager.setHoveredEdge(null);
-      ctx.setEdgeState(edge, { isHovered: false });
-      ctx.emit("leaveEdge", { ...baseEvent, edge });
+    if (internals.settings.enableEdgeEvents && stateManager.hoveredEdge) {
+      const edge = stateManager.hoveredEdge;
+      stateManager.setHoveredEdge(null);
+      internals.setEdgeState(edge, { isHovered: false });
+      internals.emit("leaveEdge", { ...baseEvent, edge });
     }
 
-    ctx.emit("leaveStage", baseEvent);
+    internals.emit("leaveStage", baseEvent);
   };
 
   activeListeners.handleEnter = (e: MouseCoords | TouchCoords): void => {
     const event = cleanMouseCoords(e);
-    ctx.emit("enterStage", {
+    internals.emit("enterStage", {
       event,
       preventSigmaDefault(): void {
         event.preventSigmaDefault();
@@ -199,15 +175,15 @@ export function bindInteractionHandlers<
         },
       };
 
-      const nodeAtPosition = ctx.getNodeAtPosition(event);
-      if (nodeAtPosition) return ctx.emit(`${eventType}Node`, { ...baseEvent, node: nodeAtPosition });
+      const nodeAtPosition = internals.getNodeAtPosition(event);
+      if (nodeAtPosition) return internals.emit(`${eventType}Node`, { ...baseEvent, node: nodeAtPosition });
 
-      if (ctx.getSettings().enableEdgeEvents) {
-        const edge = ctx.getEdgeAtPoint(event.x, event.y);
-        if (edge) return ctx.emit(`${eventType}Edge`, { ...baseEvent, edge });
+      if (internals.settings.enableEdgeEvents) {
+        const edge = internals.getEdgeAtPoint(event.x, event.y);
+        if (edge) return internals.emit(`${eventType}Edge`, { ...baseEvent, edge });
       }
 
-      return ctx.emit(`${eventType}Stage`, baseEvent);
+      return internals.emit(`${eventType}Stage`, baseEvent);
     };
   };
 
@@ -221,18 +197,18 @@ export function bindInteractionHandlers<
     const event = cleanMouseCoords(e);
     const baseEvent = { event, preventSigmaDefault: () => event.preventSigmaDefault() };
 
-    const nodeAtPosition = ctx.getNodeAtPosition(event);
+    const nodeAtPosition = internals.getNodeAtPosition(event);
     if (nodeAtPosition) {
-      if (ctx.getSettings().enableNodeDrag) ctx.dragManager.pendingNode = nodeAtPosition;
-      return ctx.emit("downNode", { ...baseEvent, node: nodeAtPosition });
+      if (internals.settings.enableNodeDrag) internals.dragManager.pendingNode = nodeAtPosition;
+      return internals.emit("downNode", { ...baseEvent, node: nodeAtPosition });
     }
 
-    if (ctx.getSettings().enableEdgeEvents) {
-      const edge = ctx.getEdgeAtPoint(event.x, event.y);
-      if (edge) return ctx.emit("downEdge", { ...baseEvent, edge });
+    if (internals.settings.enableEdgeEvents) {
+      const edge = internals.getEdgeAtPoint(event.x, event.y);
+      if (edge) return internals.emit("downEdge", { ...baseEvent, edge });
     }
 
-    return ctx.emit("downStage", baseEvent);
+    return internals.emit("downStage", baseEvent);
   };
 
   // up: like the generic listener, but also ends any active drag session
@@ -240,20 +216,20 @@ export function bindInteractionHandlers<
     const event = cleanMouseCoords(e);
     const baseEvent = { event, preventSigmaDefault: () => event.preventSigmaDefault() };
 
-    const dragResult = ctx.dragManager.end();
+    const dragResult = internals.dragManager.end();
     if (dragResult) {
-      ctx.emit("nodeDragEnd", { node: dragResult.node, allDraggedNodes: dragResult.allNodes, ...baseEvent });
+      internals.emit("nodeDragEnd", { node: dragResult.node, allDraggedNodes: dragResult.allNodes, ...baseEvent });
     }
 
-    const nodeAtPosition = ctx.getNodeAtPosition(event);
-    if (nodeAtPosition) return ctx.emit("upNode", { ...baseEvent, node: nodeAtPosition });
+    const nodeAtPosition = internals.getNodeAtPosition(event);
+    if (nodeAtPosition) return internals.emit("upNode", { ...baseEvent, node: nodeAtPosition });
 
-    if (ctx.getSettings().enableEdgeEvents) {
-      const edge = ctx.getEdgeAtPoint(event.x, event.y);
-      if (edge) return ctx.emit("upEdge", { ...baseEvent, edge });
+    if (internals.settings.enableEdgeEvents) {
+      const edge = internals.getEdgeAtPoint(event.x, event.y);
+      if (edge) return internals.emit("upEdge", { ...baseEvent, edge });
     }
 
-    return ctx.emit("upStage", baseEvent);
+    return internals.emit("upStage", baseEvent);
   };
 
   mouseCaptor.on("mousemove", activeListeners.handleMove);

@@ -11,8 +11,9 @@ import TouchCaptor from "./core/captors/touch";
 import { DragManager } from "./core/drag-manager";
 import { EdgeGroupIndex } from "./core/edge-groups";
 import { bindGraphHandlers, bindInteractionHandlers, unbindGraphHandlers } from "./core/event-handlers";
-import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./core/labels";
+import { LabelRenderer } from "./core/label-renderer";
 import { SDFAtlasManager } from "./core/sdf-atlas";
+import { SigmaInternals } from "./core/sigma-internals";
 import { StateManager } from "./core/state-manager";
 import {
   ResolvedEdgeStyle,
@@ -28,14 +29,13 @@ import {
   DEFAULT_DEPTH_LAYERS,
   ExtractEdgeVarsFromPrimitives,
   ExtractNodeVarsFromPrimitives,
-  LabelAttachmentContext,
   PrimitivesDeclaration,
   generateEdgeProgram,
   generateNodeProgram,
 } from "./primitives";
 import {
   AttachmentManager,
-  BackdropDisplayData,
+  AttachmentProgram,
   BackdropProgram,
   BackdropProgramType,
   BucketCollection,
@@ -47,15 +47,8 @@ import {
   LabelProgramType,
   NodeDataTexture,
   NodeProgram,
-  POSITION_MODE_MAP,
   getShapeId,
 } from "./rendering";
-import {
-  ATTACHMENT_GAP,
-  ATTACHMENT_PLACEMENT_MAP,
-  ATTACHMENT_TEXTURE_UNIT,
-  AttachmentProgram,
-} from "./rendering/nodes/attachments";
 import { Settings, resolveSettings, validateSettings } from "./settings";
 import {
   BucketStats,
@@ -69,7 +62,6 @@ import {
   EdgeLabelPosition,
   EdgeReducer,
   Extent,
-  LabelDisplayData,
   Listener,
   MemoryStats,
   NodeDisplayData,
@@ -96,18 +88,15 @@ import {
   DepthRanges,
   NormalizationFunction,
   addPositionToDepthRanges,
-  colorToArray,
   colorToIndex,
   createElement,
   createNormalizationFunction,
-  extend,
   getMatrixImpact,
   getPixelColor,
   getPixelRatio,
   identity,
   matrixFromCamera,
   multiplyVec2,
-  parseFontString,
   removePositionFromDepthRanges,
   validateGraph,
 } from "./utils";
@@ -115,14 +104,10 @@ import {
 /**
  * Constants.
  */
-const X_LABEL_MARGIN = 150;
-const Y_LABEL_MARGIN = 50;
 // Texture unit for the shared node data texture (position, size, shapeId)
 const NODE_DATA_TEXTURE_UNIT = 3;
 // Texture unit for the shared edge data texture (source/target indices, thickness, curvature, etc.)
 const EDGE_DATA_TEXTURE_UNIT = 4;
-
-const BACKDROP_AREA_MAP: Record<string, number> = { both: 0, node: 1, label: 2 };
 
 /**
  * Main class.
@@ -141,9 +126,6 @@ export default class Sigma<
   GS = {}, // additional custom graph state fields
   P extends PrimitivesDeclaration = PrimitivesDeclaration,
 > extends TypedEventEmitter<SigmaEvents> {
-  private settings: Settings;
-  private graph: Graph<N, E, G>;
-
   // Reducers (optional escape hatches for complex styling logic)
   private nodeReducer: NodeReducer<N, E, G, NS, GS> | null = null;
   private edgeReducer: EdgeReducer<N, E, G, ES, GS> | null = null;
@@ -152,30 +134,24 @@ export default class Sigma<
   private container: HTMLElement;
   private elements: PlainObject<HTMLElement> = {};
   private webGLContext: WebGL2RenderingContext | null = null;
-  // Offscreen canvas for text measurement fallback (not added to DOM)
-  private measureContext: CanvasRenderingContext2D | null = null;
   private pickingFrameBuffer: WebGLFramebuffer | null = null;
   private pickingTexture: WebGLTexture | null = null;
   private pickingDepthBuffer: WebGLRenderbuffer | null = null;
   private activeListeners: PlainObject<Listener> = {};
-  private labelGrid: LabelGrid = new LabelGrid();
-  private nodeDataCache: Record<string, NodeDisplayData> = {};
-  private edgeDataCache: Record<string, EdgeDisplayData> = {};
+  private internals: SigmaInternals<N, E, G>;
+  private labelRenderer: LabelRenderer<N, E, G>;
 
   // Variables declared in primitives (for custom layer attributes), pre-cached as entries
   private nodeVariableEntries: [string, { type: string; default: unknown }][] = [];
   private edgeVariableEntries: [string, { type: string; default: unknown }][] = [];
   private edgePathsByName: Map<string, EdgePath> = new Map();
 
-  private edgeGroups!: EdgeGroupIndex;
+  private edgeGroups: EdgeGroupIndex;
 
   // Indices to keep track of the index of the item inside programs
   private nodeProgramIndex: Record<string, number> = {};
   private edgeProgramIndex: Record<string, number> = {};
   private edgeTextureIndexCache: Record<string, number> = {};
-  private nodesWithForcedLabels: Set<string> = new Set<string>();
-  private edgesWithForcedLabels: Set<string> = new Set<string>();
-  private nodesWithBackdrop: Set<string> = new Set<string>();
   private nodeGraphCoords: Record<string, Coordinates> = {};
   private nodeExtent: { x: Extent; y: Extent } = { x: [0, 1], y: [0, 1] };
 
@@ -191,26 +167,17 @@ export default class Sigma<
   // Cache:
   private graphToViewportRatio = 1;
   private itemIDsIndex: Record<number, { type: "node" | "edge"; id: string }> = {};
-  private nodeIndices: Record<string, number> = {};
   private edgeIndices: Record<string, number> = {};
 
-  // Starting dimensions and pixel ratio
+  // Starting dimensions
   private width = 0;
   private height = 0;
-  private pixelRatio = getPixelRatio();
-
-  // Graph State
-  private displayedNodeLabels: Set<string> = new Set();
-  private renderedNodeLabels: Set<string> = new Set();
-  private displayedEdgeLabels: Set<string> = new Set();
 
   private stateManager: StateManager<NS, ES, GS>;
-  private dragManager: DragManager;
   // Frozen when autoRescale:"once" has already captured the initial extent.
   private autoRescaleFrozen = false;
 
   // New v4 API: primitives and styles declarations
-  private primitives: PrimitivesDeclaration | null = null;
   private stylesDeclaration: StylesDeclaration<N, E, NS, ES, GS> | null = null;
   private resolvedStageStyle: ResolvedStageStyle = {};
 
@@ -221,15 +188,11 @@ export default class Sigma<
   private checkEdgesEventsFrame: number | null = null;
 
   // Pre-computed style metadata (dependency level, position attribute names)
-  private nodeStyleAnalysis: StyleAnalysis = { dependency: "static", xAttribute: null, yAttribute: null };
   private edgeStyleAnalysis: StyleAnalysis = { dependency: "static", xAttribute: null, yAttribute: null };
 
   // Programs (single program per item kind)
   private nodeProgram: NodeProgram<string, N, E, G> | null = null;
-  private backdropProgram: BackdropProgram<string, N, E, G> | null = null;
   private edgeProgram: EdgeProgram<string, N, E, G> | null = null;
-  private labelProgram: LabelProgram<string, N, E, G> | null = null;
-  private edgeLabelProgram: EdgeLabelProgram<string, N, E, G> | null = null;
 
   // Custom layer programs (fullscreen quad effects rendered at specific depth positions)
   private customLayerPrograms = new Map<
@@ -242,28 +205,11 @@ export default class Sigma<
     }
   >();
 
-  // Label attachment rendering
-  private attachmentManager: AttachmentManager | null = null;
-  private attachmentProgram: AttachmentProgram<N, E, G> | null = null;
-  // Per-render-frame cache cleared at render start to avoid redundant measureText calls
-  private labelSizeCache = new Map<string, { width: number; height: number }>();
-
   // Shape slug for edge clamping (encodes shape name, params, rotateWithCamera)
   private nodeShapeSlug: string | null = null;
 
-  // For multi-shape programs: { shapeName -> localIndex }
-  private nodeShapeMap: Record<string, number> | null = null;
-
-  // For multi-shape programs: array of global shape IDs (local index -> global ID)
-  private nodeGlobalShapeIds: number[] | null = null;
-
   // WebGL Labels (SDF-based rendering)
   private sdfAtlas: SDFAtlasManager | null = null;
-
-  // Shared texture storing node position, size, and shapeId for GPU programs
-  private nodeDataTexture: NodeDataTexture | null = null;
-  // Shared texture storing edge data (source/target indices, thickness, curvature, etc.)
-  private edgeDataTexture: EdgeDataTexture | null = null;
 
   // Bucket collections for depth management (supports future item types like labels)
   private itemBuckets: Record<"nodes" | "edges", BucketCollection>;
@@ -330,7 +276,7 @@ export default class Sigma<
 
     // Store primitives and styles declarations for v4 API
     // Use DEFAULT_STYLES when styles not provided, merging at nodes/edges level
-    this.primitives = primitives ?? DEFAULT_PRIMITIVES;
+    const resolvedPrimitives = primitives ?? DEFAULT_PRIMITIVES;
     this.stylesDeclaration = styles
       ? ({
           nodes: styles.nodes ?? DEFAULT_STYLES.nodes,
@@ -345,8 +291,8 @@ export default class Sigma<
 
     // Analyze style declarations for dependency level and position attribute names.
     // Reducers are opaque functions that receive state, so force "graph-state".
-    this.nodeStyleAnalysis = analyzeStyleDeclaration(this.stylesDeclaration!.nodes as Record<string, unknown>);
-    if (this.nodeReducer) this.nodeStyleAnalysis.dependency = "graph-state";
+    const nodeStyleAnalysis = analyzeStyleDeclaration(this.stylesDeclaration!.nodes as Record<string, unknown>);
+    if (this.nodeReducer) nodeStyleAnalysis.dependency = "graph-state";
     this.edgeStyleAnalysis = analyzeStyleDeclaration(this.stylesDeclaration!.edges as Record<string, unknown>);
     if (this.edgeReducer) this.edgeStyleAnalysis.dependency = "graph-state";
 
@@ -359,13 +305,13 @@ export default class Sigma<
     }
 
     // Resolving settings
-    this.settings = resolveSettings(settings);
+    const resolvedSettings = resolveSettings(settings);
 
     // Validating
-    validateSettings(this.settings);
-    if (this.settings.enableNodeDrag) {
-      const { xAttribute, yAttribute } = this.nodeStyleAnalysis;
-      if ((!xAttribute || !yAttribute) && !this.settings.dragPositionToAttributes) {
+    validateSettings(resolvedSettings);
+    if (resolvedSettings.enableNodeDrag) {
+      const { xAttribute, yAttribute } = nodeStyleAnalysis;
+      if ((!xAttribute || !yAttribute) && !resolvedSettings.dragPositionToAttributes) {
         throw new Error(
           "Sigma: `enableNodeDrag` is true but position attribute names could not be inferred from styles. " +
             'Either use attribute bindings for x/y in your node styles (e.g. `x: { attribute: "x" }`), ' +
@@ -377,7 +323,6 @@ export default class Sigma<
     if (!(container instanceof HTMLElement)) throw new Error("Sigma: container should be an html element.");
 
     // Properties
-    this.graph = graph;
     this.container = container;
 
     // Initialize edge group index (tracks parallel edges for spread rendering)
@@ -389,7 +334,7 @@ export default class Sigma<
       }
     });
 
-    this.dragManager = new DragManager(
+    const dragManager = new DragManager(
       graph,
       this.viewportToGraph.bind(this),
       this.setNodesState.bind(this),
@@ -397,18 +342,15 @@ export default class Sigma<
     );
 
     // Initialize bucket collections with numDepthLayers * maxDepthLevels
-    const numDepthLayers = (this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS]).length;
+    const numDepthLayers = (resolvedPrimitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS]).length;
     this.itemBuckets = {
-      nodes: new BucketCollection(numDepthLayers * this.settings.maxDepthLevels),
-      edges: new BucketCollection(numDepthLayers * this.settings.maxDepthLevels),
+      nodes: new BucketCollection(numDepthLayers * resolvedSettings.maxDepthLevels),
+      edges: new BucketCollection(numDepthLayers * resolvedSettings.maxDepthLevels),
     };
 
     // Initializing contexts
     this.createWebGLContext("stage", { picking: true });
     this.createLayer("mouse", "div", { style: { touchAction: "none", userSelect: "none" } });
-
-    // Initial resize
-    this.resize();
 
     // Apply initial stage styles
     if (this.resolvedStageStyle.background) {
@@ -419,17 +361,17 @@ export default class Sigma<
     }
 
     // Initialize node data texture for sharing position/size/shape data between node and edge programs
-    this.nodeDataTexture = new NodeDataTexture(this.webGLContext!);
+    const nodeDataTexture = new NodeDataTexture(this.webGLContext!);
 
     // Initialize edge data texture for sharing edge data between edge and edge label programs
-    this.edgeDataTexture = new EdgeDataTexture(this.webGLContext!);
+    const edgeDataTexture = new EdgeDataTexture(this.webGLContext!);
 
     // Generate programs from primitives (uses defaults when not provided)
     const sigma = this as unknown as Sigma<N, E, G>;
     const gl = this.webGLContext!;
 
     const { program: NodeProgramClass, variables: nodeVariables } = generateNodeProgram<N, E, G>(
-      this.primitives?.nodes,
+      resolvedPrimitives?.nodes,
     );
     this.nodeVariableEntries = Object.entries(nodeVariables) as [string, { type: string; default: unknown }][];
     this.nodeProgram = new NodeProgramClass(gl, null, sigma);
@@ -440,37 +382,35 @@ export default class Sigma<
     if (nodeProgramOptions?.shapeSlug) {
       this.nodeShapeSlug = nodeProgramOptions.shapeSlug;
     }
-    if (nodeProgramOptions?.shapeNameToIndex) {
-      this.nodeShapeMap = nodeProgramOptions.shapeNameToIndex;
-    }
-    if (nodeProgramOptions?.shapeGlobalIds) {
-      this.nodeGlobalShapeIds = nodeProgramOptions.shapeGlobalIds;
-    }
+    const nodeShapeMap: Record<string, number> | null = nodeProgramOptions?.shapeNameToIndex ?? null;
+    const nodeGlobalShapeIds: number[] | null = nodeProgramOptions?.shapeGlobalIds ?? null;
 
     // Create label program if the node program has one
     const LabelProgramClass = NodeProgramClass.LabelProgram as LabelProgramType<N, E, G> | undefined;
-    if (LabelProgramClass) {
-      this.labelProgram = new LabelProgramClass(gl, null, sigma);
-    }
+    const labelProgram: LabelProgram<string, N, E, G> | null = LabelProgramClass
+      ? new LabelProgramClass(gl, null, sigma)
+      : null;
 
     // Create backdrop program if the node program has one
     const BackdropProgramClass = NodeProgramClass.BackdropProgram as BackdropProgramType<N, E, G> | undefined;
-    if (BackdropProgramClass) {
-      this.backdropProgram = new BackdropProgramClass(gl, null, sigma);
-    }
+    const backdropProgram: BackdropProgram<string, N, E, G> | null = BackdropProgramClass
+      ? new BackdropProgramClass(gl, null, sigma)
+      : null;
 
     // Create label attachment system if attachments are declared
-    const labelAttachments = this.primitives?.nodes?.labelAttachments;
+    const labelAttachments = resolvedPrimitives?.nodes?.labelAttachments;
+    let attachmentManager: AttachmentManager | null = null;
+    let attachmentProgram: AttachmentProgram<N, E, G> | null = null;
     if (labelAttachments && Object.keys(labelAttachments).length > 0) {
-      this.attachmentManager = new AttachmentManager(gl, labelAttachments, () => this.scheduleRender());
-      this.attachmentProgram = new AttachmentProgram(gl, null, sigma);
+      attachmentManager = new AttachmentManager(gl, labelAttachments, () => this.scheduleRender());
+      attachmentProgram = new AttachmentProgram(gl, null, sigma);
     }
 
     const {
       program: EdgeProgramClass,
       variables: edgeVariables,
       paths: edgePaths,
-    } = generateEdgeProgram<N, E, G>(this.primitives?.edges);
+    } = generateEdgeProgram<N, E, G>(resolvedPrimitives?.edges);
     this.edgeVariableEntries = Object.entries(edgeVariables) as [string, { type: string; default: unknown }][];
     this.edgePathsByName = new Map(edgePaths.map((p) => [p.name, p]));
     this.edgeProgram = new EdgeProgramClass(gl, null, sigma);
@@ -478,9 +418,55 @@ export default class Sigma<
     // Create edge label program if the edge program has one
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const EdgeLabelProgramClass = (EdgeProgramClass as any).LabelProgram;
-    if (EdgeLabelProgramClass) {
-      this.edgeLabelProgram = new EdgeLabelProgramClass(gl, null, sigma);
-    }
+    const edgeLabelProgram: EdgeLabelProgram<string, N, E, G> | null = EdgeLabelProgramClass
+      ? new EdgeLabelProgramClass(gl, null, sigma)
+      : null;
+
+    // Create the shared internals object. All reassignable fields are plain properties;
+    // satellites hold a reference to this object and see updates via direct assignment.
+    this.internals = {
+      nodeDataCache: {},
+      edgeDataCache: {},
+      nodesWithForcedLabels: new Set<string>(),
+      nodesWithBackdrop: new Set<string>(),
+      edgesWithForcedLabels: new Set<string>(),
+      nodeIndices: {},
+      settings: resolvedSettings,
+      primitives: resolvedPrimitives,
+      pixelRatio: getPixelRatio(),
+      graph,
+      stateManager: this.stateManager,
+      dragManager,
+      nodeStyleAnalysis,
+      labelProgram,
+      edgeLabelProgram,
+      backdropProgram,
+      attachmentManager,
+      attachmentProgram,
+      nodeDataTexture,
+      edgeDataTexture,
+      nodeShapeMap,
+      nodeGlobalShapeIds,
+      getDimensions: () => this.getDimensions(),
+      getGraphDimensions: () => this.getGraphDimensions(),
+      getStagePadding: () => this.getStagePadding(),
+      getCameraState: () => this.camera.getState(),
+      getNodeAtPosition: (pos) => this.getNodeAtPosition(pos),
+      getEdgeAtPoint: (x, y) => this.getEdgeAtPoint(x, y),
+      setNodeState: (key, state) => this.setNodeState(key, state),
+      setEdgeState: (key, state) => this.setEdgeState(key, state),
+      updateContainerCursor: () => this.updateContainerCursor(),
+      scheduleRefresh: () => this.scheduleRefresh(),
+      viewportToFramedGraph: (coords) => this.viewportToFramedGraph(coords),
+      viewportToGraph: (coords) => this.viewportToGraph(coords),
+      framedGraphToViewport: (coords) => this.framedGraphToViewport(coords),
+      scaleSize: (size) => this.scaleSize(size),
+      emit: (event, payload) => (this.emit as (event: string, payload: unknown) => void)(event, payload),
+    };
+    this.labelRenderer = new LabelRenderer(this.internals);
+
+    // Initial resize
+    this.resize();
 
     // Initialize WebGL labels
     this.initializeWebGLLabels();
@@ -494,9 +480,9 @@ export default class Sigma<
     // Initializing captors
     // Cast to Sigma<N, E, G> since captors don't use state generics
     this.mouseCaptor = new MouseCaptor(this.elements.mouse, this as unknown as Sigma<N, E, G>);
-    this.mouseCaptor.setSettings(this.settings);
+    this.mouseCaptor.setSettings(this.internals.settings);
     this.touchCaptor = new TouchCaptor(this.elements.mouse, this as unknown as Sigma<N, E, G>);
-    this.touchCaptor.setSettings(this.settings);
+    this.touchCaptor.setSettings(this.internals.settings);
 
     // Binding event handlers
     this.bindEventHandlers();
@@ -544,8 +530,12 @@ export default class Sigma<
     if (!this.pickingFrameBuffer) return this;
 
     // Calculate picking texture size (can be reduced for performance)
-    const pickingWidth = Math.ceil((this.width * this.pixelRatio) / this.settings.pickingDownSizingRatio);
-    const pickingHeight = Math.ceil((this.height * this.pixelRatio) / this.settings.pickingDownSizingRatio);
+    const pickingWidth = Math.ceil(
+      (this.width * this.internals.pixelRatio) / this.internals.settings.pickingDownSizingRatio,
+    );
+    const pickingHeight = Math.ceil(
+      (this.height * this.internals.pixelRatio) / this.internals.settings.pickingDownSizingRatio,
+    );
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.pickingFrameBuffer);
 
@@ -616,8 +606,8 @@ export default class Sigma<
       this.pickingFrameBuffer,
       x,
       y,
-      this.pixelRatio,
-      this.settings.pickingDownSizingRatio,
+      this.internals.pixelRatio,
+      this.internals.settings.pickingDownSizingRatio,
     );
     const index = colorToIndex(...color);
     const itemAt = this.itemIDsIndex[index];
@@ -626,26 +616,7 @@ export default class Sigma<
   }
 
   private bindEventHandlers(): this {
-    bindInteractionHandlers(
-      {
-        stateManager: this.stateManager,
-        getNodeDataCache: () => this.nodeDataCache,
-        dragManager: this.dragManager,
-        getSettings: () => this.settings,
-        getNodeStyleAnalysis: () => this.nodeStyleAnalysis,
-        getNodeAtPosition: this.getNodeAtPosition.bind(this),
-        getEdgeAtPoint: this.getEdgeAtPoint.bind(this),
-        setNodeState: this.setNodeState.bind(this),
-        setEdgeState: this.setEdgeState.bind(this),
-        updateContainerCursor: this.updateContainerCursor.bind(this),
-        scheduleRefresh: this.scheduleRefresh.bind(this),
-        viewportToGraph: this.viewportToGraph.bind(this),
-        emit: (event, payload) => (this.emit as (event: string, payload: unknown) => void)(event, payload),
-      },
-      this.mouseCaptor,
-      this.touchCaptor,
-      this.activeListeners,
-    );
+    bindInteractionHandlers(this.internals, this.mouseCaptor, this.touchCaptor, this.activeListeners);
 
     return this;
   }
@@ -658,7 +629,7 @@ export default class Sigma<
   private bindGraphHandlers(): this {
     bindGraphHandlers(
       {
-        graph: this.graph,
+        graph: this.internals.graph,
         edgeGroups: this.edgeGroups,
         addNode: this.addNode.bind(this),
         updateNode: this.updateNode.bind(this),
@@ -683,7 +654,7 @@ export default class Sigma<
    * @return {undefined}
    */
   private unbindGraphHandlers() {
-    unbindGraphHandlers(this.graph, this.activeListeners);
+    unbindGraphHandlers(this.internals.graph, this.activeListeners);
   }
 
   /**
@@ -701,8 +672,8 @@ export default class Sigma<
       this.pickingFrameBuffer,
       x,
       y,
-      this.pixelRatio,
-      this.settings.pickingDownSizingRatio,
+      this.internals.pixelRatio,
+      this.internals.settings.pickingDownSizingRatio,
     );
     const index = colorToIndex(...color);
     const itemAt = this.itemIDsIndex[index];
@@ -723,23 +694,23 @@ export default class Sigma<
     this.emit("beforeProcess");
 
     // Clear attachment cache since all nodes are reprocessed
-    this.attachmentManager?.clear();
+    this.internals.attachmentManager?.clear();
 
-    const graph = this.graph;
-    const settings = this.settings;
+    const graph = this.internals.graph;
+    const settings = this.internals.settings;
     const dimensions = this.getDimensions();
 
     //
     // NODES
     //
     // Skip extent recomputation when autoRescale is "once" and already frozen
-    if (this.settings.autoRescale !== "once" || !this.autoRescaleFrozen) {
+    if (this.internals.settings.autoRescale !== "once" || !this.autoRescaleFrozen) {
       this.nodeExtent = this.computeNodeExtent();
-      if (this.settings.autoRescale === "once") {
+      if (this.internals.settings.autoRescale === "once") {
         this.autoRescaleFrozen = true;
       }
     }
-    if (this.settings.autoRescale === false) {
+    if (this.internals.settings.autoRescale === false) {
       const { width, height } = dimensions;
       const { x, y } = this.nodeExtent;
 
@@ -762,9 +733,9 @@ export default class Sigma<
     );
     // Resetting the label grid
     // TODO: it's probably better to do this explicitly or on resizes for layout and anims
-    this.labelGrid.resizeAndClear(dimensions, settings.labelGridCellSize);
+    this.labelRenderer.labelGrid.resizeAndClear(dimensions, settings.labelGridCellSize);
 
-    const nodeIndices: typeof this.nodeIndices = {};
+    const nodeIndices: typeof this.internals.nodeIndices = {};
     const edgeIndices: typeof this.edgeIndices = {};
     const itemIDsIndex: typeof this.itemIDsIndex = {};
     let incrID = 1;
@@ -775,7 +746,7 @@ export default class Sigma<
     // Do some indexation on the whole graph
     for (let i = 0, l = nodes.length; i < l; i++) {
       const node = nodes[i];
-      const data = this.nodeDataCache[node];
+      const data = this.internals.nodeDataCache[node];
 
       // Restore un-normalized graph coords before normalizing
       // (nodeDataCache may hold stale normalized values from a previous process cycle)
@@ -786,11 +757,15 @@ export default class Sigma<
 
       // labelgrid
       if (typeof data.label === "string" && !data.hidden && !data.hideLabel)
-        this.labelGrid.add(node, data.size, this.framedGraphToViewport(data, { matrix: nullCameraMatrix }));
+        this.labelRenderer.labelGrid.add(
+          node,
+          data.size,
+          this.framedGraphToViewport(data, { matrix: nullCameraMatrix }),
+        );
 
       totalNodes++;
     }
-    this.labelGrid.organize();
+    this.labelRenderer.labelGrid.organize();
 
     // Allocate memory to node program
     this.nodeProgram!.reallocate(totalNodes);
@@ -800,30 +775,35 @@ export default class Sigma<
     // This must happen before addNodeToProgram so texture indices are available
     for (let i = 0, l = nodes.length; i < l; i++) {
       const node = nodes[i];
-      const data = this.nodeDataCache[node];
+      const data = this.internals.nodeDataCache[node];
       // Allocate texture index for this node (or get existing)
-      this.nodeDataTexture!.allocate(node);
+      this.internals.nodeDataTexture!.allocate(node);
 
       // Get shape ID:
       // - For multi-shape programs: convert local index to global ID for edge clamping
       // - For single-shape programs: use global registry ID from slug
       let shapeId: number;
-      if (this.nodeShapeMap && this.nodeGlobalShapeIds && data.shape && data.shape in this.nodeShapeMap) {
+      if (
+        this.internals.nodeShapeMap &&
+        this.internals.nodeGlobalShapeIds &&
+        data.shape &&
+        data.shape in this.internals.nodeShapeMap
+      ) {
         // Multi-shape program: convert local index to global ID
-        const localIndex = this.nodeShapeMap[data.shape];
-        shapeId = this.nodeGlobalShapeIds[localIndex];
+        const localIndex = this.internals.nodeShapeMap[data.shape];
+        shapeId = this.internals.nodeGlobalShapeIds[localIndex];
       } else {
         // Single-shape program or fallback: use global registry
         shapeId = getShapeId(data.shape || "circle");
       }
 
       // Update texture data (x, y, size, shapeId)
-      this.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
+      this.internals.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
     }
 
     // Add data to programs using buckets (preserves zIndex ordering)
-    const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
-    const maxDepthLevels = this.settings.maxDepthLevels;
+    const depthLayers = this.internals.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
+    const maxDepthLevels = this.internals.settings.maxDepthLevels;
     this.depthRanges.nodes = {};
     this.nodeBaseDepth = {};
     this.itemBuckets.nodes.forEachBucketByZIndex((zIndex, bucket) => {
@@ -877,13 +857,13 @@ export default class Sigma<
     });
 
     this.itemIDsIndex = itemIDsIndex;
-    this.nodeIndices = nodeIndices;
+    this.internals.nodeIndices = nodeIndices;
     this.edgeIndices = edgeIndices;
 
     //
     // WEBGL LABELS
     //
-    this.processWebGLLabels(nodes);
+    this.labelRenderer.processWebGLLabels(nodes);
 
     // Cache data uniforms for custom layer programs
     for (const program of this.customLayerPrograms.values()) {
@@ -894,83 +874,10 @@ export default class Sigma<
     return this;
   }
 
-  /**
-   * Pre-generate glyphs for all labels.
-   * Actual label processing happens per-frame in renderWebGLLabels.
-   * @private
-   */
-  private processWebGLLabels(nodes: string[]): void {
-    if (!this.labelProgram?.ensureGlyphsReady) return;
-
-    // Group label texts by font string so glyphs are pre-generated for every
-    // font family that nodes actually use, not just the program's default font.
-    const defaultLabelFont = this.primitives?.nodes?.label?.font?.family || "sans-serif";
-    const textsByFont = new Map<string, string[]>();
-
-    for (let i = 0, l = nodes.length; i < l; i++) {
-      const node = nodes[i];
-      const data = this.nodeDataCache[node];
-
-      if (data.hidden || !data.label) continue;
-
-      const fontString = data.labelFont || defaultLabelFont;
-      const existing = textsByFont.get(fontString);
-      if (existing) {
-        existing.push(data.label);
-      } else {
-        textsByFont.set(fontString, [data.label]);
-      }
-    }
-
-    // Ensure all glyphs are generated (this is the expensive part we want to do once)
-    for (const [fontString, texts] of textsByFont) {
-      const { family, weight, style } = parseFontString(fontString);
-      const fontKey = this.labelProgram.registerFont?.(family, weight, style);
-      this.labelProgram.ensureGlyphsReady(texts, fontKey);
-    }
-  }
-
-  /**
-   * Get the label color for a node.
-   * @private
-   */
-  private getLabelColor(data: NodeDisplayData): string {
-    return data.labelColor;
-  }
-
-  /**
-   * Measures a node's label dimensions in pixels. Uses the SDF label program
-   * when available, falling back to canvas 2D measurement.
-   */
-  private measureNodeLabel(data: NodeDisplayData): { width: number; height: number } {
-    if (!data.label) return { width: 0, height: 0 };
-
-    const labelSize = data.labelSize ?? 14;
-    const fontString = data.labelFont || this.primitives?.nodes?.label?.font?.family || "sans-serif";
-    const cacheKey = `${data.label}|${labelSize}|${fontString}`;
-    if (this.labelSizeCache.has(cacheKey)) return this.labelSizeCache.get(cacheKey)!;
-
-    const { family, weight, style } = parseFontString(fontString);
-    let result: { width: number; height: number };
-    if (this.labelProgram?.measureLabel) {
-      const fontKey = this.labelProgram.registerFont?.(family, weight, style) || "";
-      result = this.labelProgram.measureLabel(data.label, labelSize, fontKey);
-    } else {
-      if (!this.measureContext) {
-        this.measureContext = document.createElement("canvas").getContext("2d")!;
-      }
-      this.measureContext.font = `${style} ${weight} ${labelSize}px ${family}`;
-      result = { width: this.measureContext.measureText(data.label).width, height: labelSize };
-    }
-
-    this.labelSizeCache.set(cacheKey, result);
-    return result;
-  }
-
   private getDepthOffset(depth: string): number {
-    const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
+    const depthLayers = this.internals.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
     const idx = depthLayers.indexOf(depth);
-    return (idx >= 0 ? idx : 0) * this.settings.maxDepthLevels;
+    return (idx >= 0 ? idx : 0) * this.internals.settings.maxDepthLevels;
   }
 
   /**
@@ -1000,7 +907,7 @@ export default class Sigma<
    * @private
    */
   private handleSettingsUpdate(oldSettings?: Settings): this {
-    const settings = this.settings;
+    const settings = this.internals.settings;
 
     this.camera.minRatio = settings.minCameraRatio;
     this.camera.maxRatio = settings.maxCameraRatio;
@@ -1023,7 +930,7 @@ export default class Sigma<
     if (oldSettings) {
       // Check maxDepthLevels:
       if (oldSettings.maxDepthLevels !== settings.maxDepthLevels) {
-        const numDepthLayers = (this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS]).length;
+        const numDepthLayers = (this.internals.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS]).length;
         this.itemBuckets.nodes.setMaxDepthLevels(numDepthLayers * settings.maxDepthLevels);
         this.itemBuckets.edges.setMaxDepthLevels(numDepthLayers * settings.maxDepthLevels);
         // Mark need to reprocess since bucket structure changed
@@ -1032,8 +939,8 @@ export default class Sigma<
     }
 
     // Update captors settings:
-    this.mouseCaptor.setSettings(this.settings);
-    this.touchCaptor.setSettings(this.settings);
+    this.mouseCaptor.setSettings(this.internals.settings);
+    this.touchCaptor.setSettings(this.internals.settings);
 
     return this;
   }
@@ -1106,535 +1013,6 @@ export default class Sigma<
   }
 
   /**
-   * Method used to render labels.
-   * WebGL labels are now forced on - they are rendered before the blit in render().
-   *
-   * @return {Sigma}
-   */
-  private renderLabels(): this {
-    // WebGL labels are rendered before the blit in render(), so nothing to do here
-    return this;
-  }
-
-  /**
-   * Method used to render WebGL labels to the MRT framebuffer.
-   * Called from render() before the blit, so labels are included in the single blit.
-   *
-   * This method processes only visible labels each frame, using LabelGrid for
-   * density-based selection. Only visible labels are written to GPU buffers.
-   *
-   * @param params - Render parameters
-   */
-  private computeDisplayedNodeLabels(): void {
-    const cameraState = this.camera.getState();
-
-    // Compute viewport bounds in framed graph coordinates for early rejection
-    const topLeft = this.viewportToFramedGraph({ x: -X_LABEL_MARGIN, y: -Y_LABEL_MARGIN });
-    const topRight = this.viewportToFramedGraph({ x: this.width + X_LABEL_MARGIN, y: -Y_LABEL_MARGIN });
-    const bottomLeft = this.viewportToFramedGraph({ x: -X_LABEL_MARGIN, y: this.height + Y_LABEL_MARGIN });
-    const bottomRight = this.viewportToFramedGraph({ x: this.width + X_LABEL_MARGIN, y: this.height + Y_LABEL_MARGIN });
-
-    const graphMinX = Math.min(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x);
-    const graphMaxX = Math.max(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x);
-    const graphMinY = Math.min(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y);
-    const graphMaxY = Math.max(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y);
-
-    // LabelGrid uses null-camera viewport space
-    const nullCameraMatrix = matrixFromCamera(
-      { x: 0.5, y: 0.5, ratio: 1, angle: 0 },
-      this.getDimensions(),
-      this.getGraphDimensions(),
-      this.getStagePadding(),
-    );
-    const toNullCameraViewport = (framedGraphPos: Coordinates): Coordinates => {
-      const viewportPos = multiplyVec2(nullCameraMatrix, framedGraphPos);
-      return {
-        x: ((1 + viewportPos.x) * this.width) / 2,
-        y: ((1 - viewportPos.y) * this.height) / 2,
-      };
-    };
-
-    const nc1 = toNullCameraViewport({ x: graphMinX, y: graphMinY });
-    const nc2 = toNullCameraViewport({ x: graphMaxX, y: graphMinY });
-    const nc3 = toNullCameraViewport({ x: graphMinX, y: graphMaxY });
-    const nc4 = toNullCameraViewport({ x: graphMaxX, y: graphMaxY });
-
-    const gridViewport = {
-      x1: Math.min(nc1.x, nc2.x, nc3.x, nc4.x),
-      y1: Math.min(nc1.y, nc2.y, nc3.y, nc4.y),
-      x2: Math.max(nc1.x, nc2.x, nc3.x, nc4.x),
-      y2: Math.max(nc1.y, nc2.y, nc3.y, nc4.y),
-    };
-
-    const labelsToDisplay = this.labelGrid.getLabelsToDisplay(
-      cameraState.ratio,
-      this.settings.labelDensity,
-      gridViewport,
-    );
-    extend(labelsToDisplay, this.nodesWithForcedLabels);
-
-    for (let i = 0, l = labelsToDisplay.length; i < l; i++) {
-      const node = labelsToDisplay[i];
-      const data = this.nodeDataCache[node];
-
-      if (this.displayedNodeLabels.has(node)) continue;
-      if (data.hidden || data.hideLabel) continue;
-      if (!data.label) continue;
-
-      // Cheap early rejection in framed graph space (no matrix multiply)
-      if (data.x < graphMinX || data.x > graphMaxX || data.y < graphMinY || data.y > graphMaxY) continue;
-
-      const { x, y } = this.framedGraphToViewport(data);
-      const size = this.scaleSize(data.size);
-
-      if (!data.forceLabel && size < this.settings.labelRenderedSizeThreshold) continue;
-
-      if (
-        x < -X_LABEL_MARGIN - size ||
-        x > this.width + X_LABEL_MARGIN + size ||
-        y < -Y_LABEL_MARGIN - size ||
-        y > this.height + Y_LABEL_MARGIN + size
-      )
-        continue;
-
-      this.displayedNodeLabels.add(node);
-    }
-  }
-
-  private renderWebGLLabels(params: RenderParams, depth?: string): void {
-    // Collect visible nodes for this depth from pre-computed displayedNodeLabels
-    const visibleNodes: string[] = [];
-    for (const node of this.displayedNodeLabels) {
-      if (this.renderedNodeLabels.has(node)) continue;
-      const data = this.nodeDataCache[node];
-      if (depth && data.labelDepth !== depth) continue;
-      this.renderedNodeLabels.add(node);
-      visibleNodes.push(node);
-    }
-
-    if (!this.labelProgram) return;
-
-    // Count total characters for label program
-    let totalCharacters = 0;
-    for (let i = 0, l = visibleNodes.length; i < l; i++) {
-      const data = this.nodeDataCache[visibleNodes[i]];
-      totalCharacters += data.label!.length;
-    }
-
-    // Reallocate label program based on visible character count
-    this.labelProgram.reallocate(totalCharacters);
-
-    // Process each visible label into the program's buffer
-    // TODO: These defaults should come from the styles system
-    const defaultLabelSize = 14;
-    const defaultLabelMargin = this.primitives?.nodes?.label?.margin ?? 5;
-    const defaultLabelPosition = "right" as const;
-    const defaultLabelFont = this.primitives?.nodes?.label?.font?.family || "sans-serif";
-
-    // Font key cache: maps font family strings to registered atlas font keys
-    const fontKeyMap = new Map<string, string>();
-
-    let characterOffset = 0;
-    for (let i = 0, l = visibleNodes.length; i < l; i++) {
-      const node = visibleNodes[i];
-      const data = this.nodeDataCache[node];
-
-      // Resolve font key for this node's font family
-      const fontString = data.labelFont || defaultLabelFont;
-      let fontKey = fontKeyMap.get(fontString);
-      if (fontKey === undefined) {
-        const { family, weight, style } = parseFontString(fontString);
-        fontKey = this.labelProgram.registerFont?.(family, weight, style) || "";
-        fontKeyMap.set(fontString, fontKey);
-      }
-
-      // Build label display data
-      const labelData: LabelDisplayData = {
-        text: data.label!,
-        x: data.x,
-        y: data.y,
-        size: data.labelSize ?? defaultLabelSize,
-        color: this.getLabelColor(data),
-        nodeSize: data.size,
-        margin: defaultLabelMargin,
-        position: data.labelPosition ?? defaultLabelPosition,
-        hidden: false,
-        forceLabel: data.forceLabel ?? false,
-        type: "default",
-        zIndex: data.zIndex ?? 0,
-        parentType: "node",
-        parentKey: node,
-        fontKey,
-        labelAngle: data.labelAngle ?? 0,
-        nodeIndex: this.nodeDataTexture!.getIndex(node),
-      };
-
-      // Process label in the program
-      const charsProcessed = this.labelProgram.processLabel(node, characterOffset, labelData);
-      characterOffset += charsProcessed;
-    }
-
-    // Render WebGL labels (programs handle two-pass rendering internally)
-    this.labelProgram.invalidateBuffers();
-    this.labelProgram.render(params);
-  }
-
-  /**
-   * Method used to render backdrops (background + shadow) behind nodes with labels.
-   * Called from render() before nodes are drawn, so backdrops appear behind.
-   *
-   * @private
-   */
-  private renderBackdrops(params: RenderParams, depth?: string): void {
-    if (!this.backdropProgram) return;
-
-    // Collect visible backdrop nodes
-    const nodes: string[] = [];
-    for (const key of this.nodesWithBackdrop) {
-      const data = this.nodeDataCache[key];
-      if (!data || data.hidden) continue;
-      if (depth && data.depth !== depth) continue;
-      nodes.push(key);
-    }
-
-    if (nodes.length === 0) return;
-
-    this.backdropProgram.reallocate(nodes.length);
-
-    for (let i = 0; i < nodes.length; i++) {
-      const key = nodes[i];
-      const data = this.nodeDataCache[key];
-
-      // Only include label dimensions when the label is actually displayed
-      const labelVisible = this.displayedNodeLabels.has(key);
-      let { width: labelWidth, height: labelHeight } = labelVisible
-        ? this.measureNodeLabel(data)
-        : { width: 0, height: 0 };
-
-      // Expand label dimensions and compute box offset for attachment
-      let labelBoxOffsetX = 0;
-      let labelBoxOffsetY = 0;
-      if (labelVisible && data.labelAttachment && this.attachmentManager) {
-        const entry = this.attachmentManager.getEntry(key, data.labelAttachment);
-        if (entry) {
-          const placement = data.labelAttachmentPlacement || "below";
-          if (placement === "below" || placement === "above") {
-            const attachH = entry.height / this.pixelRatio;
-            labelHeight += attachH + ATTACHMENT_GAP;
-            labelWidth = Math.max(labelWidth, entry.width / this.pixelRatio);
-            // Shift center to keep original label at top, attachment at bottom (or vice versa)
-            labelBoxOffsetY = placement === "below" ? (attachH + ATTACHMENT_GAP) / 2 : -(attachH + ATTACHMENT_GAP) / 2;
-          } else {
-            const attachW = entry.width / this.pixelRatio;
-            labelWidth += attachW + ATTACHMENT_GAP;
-            labelHeight = Math.max(labelHeight, entry.height / this.pixelRatio);
-            labelBoxOffsetX = placement === "right" ? (attachW + ATTACHMENT_GAP) / 2 : -(attachW + ATTACHMENT_GAP) / 2;
-          }
-        }
-      }
-
-      // Get shapeId
-      let shapeId: number;
-      if (this.nodeShapeMap && this.nodeGlobalShapeIds) {
-        const localIndex = this.nodeShapeMap[data.shape || Object.keys(this.nodeShapeMap)[0]];
-        shapeId = this.nodeGlobalShapeIds[localIndex];
-      } else {
-        shapeId = getShapeId(data.shape || "circle");
-      }
-
-      const rawBgColor = data.backdropColor ? colorToArray(data.backdropColor) : [255, 255, 255, 255];
-      const rawShadowColor = data.backdropShadowColor ? colorToArray(data.backdropShadowColor) : [0, 0, 0, 128];
-      const backdropColor = rawBgColor.map((c) => c / 255) as [number, number, number, number];
-      const backdropShadowColor = rawShadowColor.map((c) => c / 255) as [number, number, number, number];
-      const backdropShadowBlur = data.backdropShadowBlur ?? 12;
-      const backdropPadding = data.backdropPadding ?? 6;
-
-      const rawBorderColor = data.backdropBorderColor ? colorToArray(data.backdropBorderColor) : [0, 0, 0, 0];
-      const backdropBorderColor = rawBorderColor.map((c) => c / 255) as [number, number, number, number];
-      const backdropBorderWidth = data.backdropBorderWidth ?? 0;
-      const backdropCornerRadius = data.backdropCornerRadius ?? 0;
-      const rawLabelPadding = data.backdropLabelPadding ?? -1;
-      const backdropLabelPadding = rawLabelPadding < 0 ? backdropPadding : rawLabelPadding;
-      const backdropArea = BACKDROP_AREA_MAP[data.backdropArea ?? "both"] ?? 0;
-
-      const backdropData: BackdropDisplayData = {
-        key,
-        x: data.x,
-        y: data.y,
-        size: data.size,
-        label: data.label,
-        labelWidth,
-        labelHeight,
-        type: "default",
-        shapeId,
-        position: data.labelPosition || "right",
-        labelAngle: data.labelAngle ?? 0,
-        backdropColor,
-        backdropShadowColor,
-        backdropShadowBlur,
-        backdropPadding,
-        backdropBorderColor,
-        backdropBorderWidth,
-        backdropCornerRadius,
-        backdropLabelPadding,
-        backdropArea,
-        labelBoxOffset: [labelBoxOffsetX, labelBoxOffsetY],
-      };
-
-      this.backdropProgram.processBackdrop(i, backdropData);
-    }
-
-    this.backdropProgram.invalidateBuffers();
-    this.backdropProgram.render(params);
-  }
-
-  /**
-   * Caches attachment textures for nodes with visible backdrops. Attachments
-   * are tied to backdrop visibility — they only render for backdrop nodes.
-   * Must be called before renderBackdrops so backdrop sizing includes them.
-   */
-  private cacheAttachments(depth?: string): void {
-    if (!this.attachmentManager) return;
-
-    const pixelRatio = this.pixelRatio;
-    for (const key of this.nodesWithBackdrop) {
-      if (!this.displayedNodeLabels.has(key)) continue;
-      const data = this.nodeDataCache[key];
-      if (!data || data.hidden) continue;
-      if (depth && data.depth !== depth) continue;
-      if (!data.labelAttachment) continue;
-
-      const attrs = this.graph.getNodeAttributes(key);
-      const { width: labelWidth, height: labelHeight } = this.measureNodeLabel(data);
-
-      const context: LabelAttachmentContext = {
-        node: key,
-        attributes: attrs as Record<string, unknown>,
-        pixelRatio,
-        labelWidth,
-        labelHeight,
-      };
-
-      this.attachmentManager.renderAttachment(key, data.labelAttachment, context);
-    }
-
-    this.attachmentManager.regenerateAtlas();
-  }
-
-  private renderAttachments(params: RenderParams, depth?: string): void {
-    if (!this.attachmentManager || !this.attachmentProgram) return;
-
-    // Attachments are only rendered for nodes with visible backdrops
-    const nodes: { key: string; attachmentName: string }[] = [];
-    for (const key of this.nodesWithBackdrop) {
-      if (!this.displayedNodeLabels.has(key)) continue;
-      const data = this.nodeDataCache[key];
-      if (!data || data.hidden) continue;
-      if (depth && data.labelDepth !== depth) continue;
-      if (!data.labelAttachment) continue;
-      nodes.push({ key, attachmentName: data.labelAttachment });
-    }
-
-    if (nodes.length === 0) return;
-
-    // Fill program buffer
-    let validCount = 0;
-    this.attachmentProgram.reallocateAttachments(nodes.length);
-
-    for (const { key, attachmentName } of nodes) {
-      const data = this.nodeDataCache[key];
-      const entry = this.attachmentManager.getEntry(key, attachmentName);
-      if (!entry) continue;
-
-      const nodeIndex = this.nodeIndices[key];
-      if (nodeIndex === undefined) continue;
-
-      const { width: labelWidth, height: labelHeight } = this.measureNodeLabel(data);
-
-      const positionMode = POSITION_MODE_MAP[data.labelPosition || "right"] ?? 0;
-      const attachmentPlacement = ATTACHMENT_PLACEMENT_MAP[data.labelAttachmentPlacement || "below"] ?? 0;
-
-      // Atlas dimensions are in physical pixels; convert to CSS pixels
-      // to match label dimensions from measureNodeLabel.
-      const pr = this.pixelRatio;
-      this.attachmentProgram.processAttachment(validCount, {
-        nodeIndex,
-        atlasX: entry.x,
-        atlasY: entry.y,
-        atlasW: entry.width,
-        atlasH: entry.height,
-        attachWidth: entry.width / pr,
-        attachHeight: entry.height / pr,
-        positionMode,
-        attachmentPlacement,
-        labelWidth,
-        labelHeight,
-        labelAngle: data.labelAngle ?? 0,
-      });
-      validCount++;
-    }
-
-    if (validCount === 0) return;
-
-    // Set atlas texture and render
-    this.attachmentProgram.reallocateAttachments(validCount);
-    this.attachmentManager.bindTexture(ATTACHMENT_TEXTURE_UNIT);
-    this.attachmentProgram.invalidateBuffers();
-    this.attachmentProgram.render(params);
-  }
-
-  /**
-   * Method used to render edge labels using WebGL.
-   * Called from render() before nodes are drawn, so edge labels appear under nodes.
-   *
-   * @private
-   */
-  private renderEdgeLabelsWebGL(params: RenderParams, depth?: string): void {
-    this.renderEdgeLabelsInternal(params, depth);
-  }
-
-  /**
-   * Method used to render edge labels using WebGL (SDF-based),
-   * based on which node labels were rendered.
-   * Now just a no-op since edge labels are rendered in renderEdgeLabelsWebGL.
-   *
-   * @return {Sigma}
-   */
-  private renderEdgeLabels(): this {
-    // Edge labels are now rendered in renderEdgeLabelsWebGL() in the render loop
-    return this;
-  }
-
-  /**
-   * Internal method that does the actual edge label rendering.
-   * Called by renderEdgeLabelsWebGL.
-   *
-   * @private
-   */
-  private renderEdgeLabelsInternal(params: RenderParams, depth?: string): void {
-    if (!this.settings.renderEdgeLabels) return;
-
-    // Build highlighted nodes set from state
-    const highlightedNodes = new Set<string>(
-      this.graph.filterNodes((node) => this.stateManager.getNodeState(node).isHighlighted),
-    );
-
-    const edgeLabelsToDisplay = edgeLabelsToDisplayFromNodes({
-      graph: this.graph,
-      hoveredNode: this.stateManager.hoveredNode,
-      displayedNodeLabels: this.displayedNodeLabels,
-      highlightedNodes,
-    });
-    extend(edgeLabelsToDisplay, this.edgesWithForcedLabels);
-
-    if (!this.edgeLabelProgram) return;
-
-    const displayedLabels = new Set<string>();
-
-    // Collect edges to process and count total characters
-    let totalCharacters = 0;
-    const edgesToProcess: Array<{
-      edge: string;
-      sourceData: NodeDisplayData;
-      targetData: NodeDisplayData;
-      edgeData: EdgeDisplayData;
-      sourceKey: string;
-      targetKey: string;
-    }> = [];
-
-    for (let i = 0, l = edgeLabelsToDisplay.length; i < l; i++) {
-      const edge = edgeLabelsToDisplay[i];
-      if (displayedLabels.has(edge)) continue;
-
-      const extremities = this.graph.extremities(edge),
-        sourceData = this.nodeDataCache[extremities[0]],
-        targetData = this.nodeDataCache[extremities[1]],
-        edgeData = this.edgeDataCache[edge];
-
-      if (edgeData.hidden || edgeData.hideLabel || sourceData.hidden || targetData.hidden) {
-        continue;
-      }
-
-      if (depth && edgeData.labelDepth !== depth) continue;
-      if (!edgeData.label) continue;
-
-      totalCharacters += edgeData.label.length;
-      edgesToProcess.push({
-        edge,
-        sourceData,
-        targetData,
-        edgeData,
-        sourceKey: extremities[0],
-        targetKey: extremities[1],
-      });
-      displayedLabels.add(edge);
-    }
-
-    // Reallocate edge label program
-    this.edgeLabelProgram.reallocate(totalCharacters);
-
-    // Process each visible edge label into the program's buffer
-    const defaultEdgeLabelSize = 12;
-    const defaultEdgeLabelMargin = this.primitives?.edges?.label?.margin ?? 5;
-    const defaultEdgeLabelPosition = "over" as const;
-
-    let characterOffset = 0;
-    for (const { edge, sourceData, targetData, edgeData, sourceKey, targetKey } of edgesToProcess) {
-      // Get node texture indices for source and target nodes
-      const sourceNodeIndex = this.nodeDataTexture!.getIndex(sourceKey);
-      const targetNodeIndex = this.nodeDataTexture!.getIndex(targetKey);
-
-      // Get edge texture index (already allocated in addEdgeToProgram)
-      const edgeIndex = this.edgeDataTexture!.getIndex(edge);
-
-      // Build edge label display data
-      const labelData: import("./types").EdgeLabelDisplayData = {
-        text: edgeData.label!,
-        x: (sourceData.x + targetData.x) / 2,
-        y: (sourceData.y + targetData.y) / 2,
-        size: defaultEdgeLabelSize,
-        color: edgeData.labelColor,
-        nodeSize: 0,
-        nodeIndex: -1,
-        margin: defaultEdgeLabelMargin,
-        position: edgeData.labelPosition ?? defaultEdgeLabelPosition,
-        hidden: false,
-        forceLabel: edgeData.forceLabel ?? false,
-        type: "default",
-        zIndex: edgeData.zIndex ?? 0,
-        parentType: "edge",
-        parentKey: edge,
-        fontKey: "",
-        labelAngle: 0,
-        sourceX: sourceData.x,
-        sourceY: sourceData.y,
-        targetX: targetData.x,
-        targetY: targetData.y,
-        sourceSize: sourceData.size,
-        targetSize: targetData.size,
-        sourceShape: sourceData.shape || "circle",
-        targetShape: targetData.shape || "circle",
-        edgeSize: edgeData.size,
-        offset: 0,
-        curvature: (edgeData as unknown as { curvature?: number }).curvature || 0,
-        sourceNodeIndex,
-        targetNodeIndex,
-        edgeIndex,
-      };
-
-      // Process label in the program
-      const charsProcessed = this.edgeLabelProgram.processEdgeLabel(edge, characterOffset, labelData);
-      characterOffset += charsProcessed;
-    }
-
-    // Render WebGL edge labels
-    this.edgeLabelProgram.invalidateBuffers();
-    this.edgeLabelProgram.render(params);
-
-    this.displayedEdgeLabels = displayedLabels;
-  }
-
-  /**
    * Method used to render.
    *
    * @return {Sigma}
@@ -1672,7 +1050,7 @@ export default class Sigma<
     this.resetWebGLTexture();
 
     // If we have no nodes we can stop right there
-    if (!this.graph.order) return exitRender();
+    if (!this.internals.graph.order) return exitRender();
 
     // TODO: improve this heuristic or move to the captor itself?
     // TODO: deal with the touch captor here as well
@@ -1704,39 +1082,41 @@ export default class Sigma<
     // console.log(this.graphToViewportRatio * this.correctionRatio * this.normalizationFunction.ratio * 2);
 
     const params: RenderParams = this.getRenderParams();
-    this.labelSizeCache.clear();
+    this.labelRenderer.resetFrame();
 
     const gl = this.webGLContext!;
 
     // Clear the picking framebuffer (two-pass rendering: programs render to picking first, then to screen)
-    const pickingWidth = Math.ceil((this.width * this.pixelRatio) / this.settings.pickingDownSizingRatio);
-    const pickingHeight = Math.ceil((this.height * this.pixelRatio) / this.settings.pickingDownSizingRatio);
+    const pickingWidth = Math.ceil(
+      (this.width * this.internals.pixelRatio) / this.internals.settings.pickingDownSizingRatio,
+    );
+    const pickingHeight = Math.ceil(
+      (this.height * this.internals.pixelRatio) / this.internals.settings.pickingDownSizingRatio,
+    );
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.pickingFrameBuffer);
     gl.viewport(0, 0, pickingWidth, pickingHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // Clear the main canvas
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, this.width * this.pixelRatio, this.height * this.pixelRatio);
+    gl.viewport(0, 0, this.width * this.internals.pixelRatio, this.height * this.internals.pixelRatio);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // Upload data textures (must upload both before binding to avoid texture unit conflicts)
-    this.nodeDataTexture!.upload();
-    this.edgeDataTexture!.upload();
+    this.internals.nodeDataTexture!.upload();
+    this.internals.edgeDataTexture!.upload();
 
     // Upload layer attribute textures
     this.nodeProgram!.uploadLayerTexture?.();
     (this.edgeProgram as unknown as { uploadAttributeTexture?: () => void })?.uploadAttributeTexture?.();
 
     // Bind data textures to their respective texture units
-    this.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
-    this.edgeDataTexture!.bind(EDGE_DATA_TEXTURE_UNIT);
+    this.internals.nodeDataTexture!.bind(NODE_DATA_TEXTURE_UNIT);
+    this.internals.edgeDataTexture!.bind(EDGE_DATA_TEXTURE_UNIT);
 
     // Pre-compute which node labels will be displayed (needed by both backdrops and labels)
-    this.displayedNodeLabels = new Set();
-    this.renderedNodeLabels = new Set();
-    if (this.settings.renderLabels) {
-      this.computeDisplayedNodeLabels();
+    if (this.internals.settings.renderLabels) {
+      this.labelRenderer.computeDisplayedNodeLabels();
     }
 
     // Pre-render pass for custom layers (offscreen work like density splatting)
@@ -1747,10 +1127,10 @@ export default class Sigma<
 
     // Restore main framebuffer state after any offscreen passes
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, this.width * this.pixelRatio, this.height * this.pixelRatio);
+    gl.viewport(0, 0, this.width * this.internals.pixelRatio, this.height * this.internals.pixelRatio);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-    const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
+    const depthLayers = this.internals.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
     for (const depth of depthLayers) {
       // Custom layer program at this depth
       const customLayer = this.customLayerPrograms.get(depth);
@@ -1758,22 +1138,22 @@ export default class Sigma<
 
       // Edges in this depth
       const edgeRanges = this.depthRanges.edges[depth];
-      if (edgeRanges && (!this.settings.hideEdgesOnMove || !moving)) {
+      if (edgeRanges && (!this.internals.settings.hideEdgesOnMove || !moving)) {
         for (const { offset, count } of edgeRanges) {
           if (count > 0) this.edgeProgram!.render(params, offset, count);
         }
       }
 
       // Edge labels for this depth
-      if (this.settings.renderEdgeLabels && (!this.settings.hideLabelsOnMove || !moving)) {
-        this.renderEdgeLabelsWebGL(params, depth);
+      if (this.internals.settings.renderEdgeLabels && (!this.internals.settings.hideLabelsOnMove || !moving)) {
+        this.labelRenderer.renderEdgeLabels(params, depth);
       }
 
       // Cache attachment textures before backdrops so backdrop sizing includes them
-      this.cacheAttachments(depth);
+      this.labelRenderer.cacheAttachments(depth);
 
       // Backdrops for nodes in this depth (before node programs so they appear behind)
-      this.renderBackdrops(params, depth);
+      this.labelRenderer.renderBackdrops(params, depth);
 
       // Nodes in this depth
       const nodeRanges = this.depthRanges.nodes[depth];
@@ -1784,16 +1164,16 @@ export default class Sigma<
       }
 
       // Label attachments for this depth (after nodes, before labels)
-      this.renderAttachments(params, depth);
+      this.labelRenderer.renderAttachments(params, depth);
 
       // Node labels for this depth
-      if (this.settings.renderLabels) {
-        this.renderWebGLLabels(params, depth);
+      if (this.internals.settings.renderLabels) {
+        this.labelRenderer.renderWebGLLabels(params, depth);
       }
     }
 
     // If DEBUG_displayPickingLayer is enabled, blit picking framebuffer to screen
-    if (this.settings.DEBUG_displayPickingLayer) {
+    if (this.internals.settings.DEBUG_displayPickingLayer) {
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.pickingFrameBuffer);
       gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
       gl.blitFramebuffer(
@@ -1803,18 +1183,15 @@ export default class Sigma<
         pickingHeight,
         0,
         0,
-        this.width * this.pixelRatio,
-        this.height * this.pixelRatio,
+        this.width * this.internals.pixelRatio,
+        this.height * this.internals.pixelRatio,
         gl.COLOR_BUFFER_BIT,
         gl.NEAREST,
       );
     }
 
     // Do not display labels on move per setting
-    if (this.settings.hideLabelsOnMove && moving) return exitRender();
-
-    this.renderLabels();
-    this.renderEdgeLabels();
+    if (this.internals.settings.hideLabelsOnMove && moving) return exitRender();
 
     return exitRender();
   }
@@ -1877,7 +1254,7 @@ export default class Sigma<
    * @param key The node's graphology ID
    */
   private addNode(key: string): void {
-    const attrs = this.graph.getNodeAttributes(key);
+    const attrs = this.internals.graph.getNodeAttributes(key);
     const nodeState = this.stateManager.getNodeState(key);
 
     // Compute display data from styles (always defined, defaults to DEFAULT_STYLES)
@@ -1886,7 +1263,7 @@ export default class Sigma<
       attrs,
       nodeState,
       this.stateManager.graphState,
-      this.graph,
+      this.internals.graph,
     );
 
     let data: NodeDisplayData = {} as NodeDisplayData;
@@ -1894,7 +1271,7 @@ export default class Sigma<
 
     // Apply reducer if provided
     if (this.nodeReducer) {
-      const reduced = this.nodeReducer(key, data, attrs, nodeState, this.stateManager.graphState, this.graph);
+      const reduced = this.nodeReducer(key, data, attrs, nodeState, this.stateManager.graphState, this.internals.graph);
       data = { ...data, ...reduced };
     }
 
@@ -1907,35 +1284,35 @@ export default class Sigma<
     }
 
     // Set shape for edge clamping and multi-shape program selection
-    if (this.nodeShapeMap) {
+    if (this.internals.nodeShapeMap) {
       // Multi-shape program: use user-specified shape if valid, otherwise use first shape
-      if (!data.shape || !(data.shape in this.nodeShapeMap)) {
-        data.shape = Object.keys(this.nodeShapeMap)[0];
+      if (!data.shape || !(data.shape in this.internals.nodeShapeMap)) {
+        data.shape = Object.keys(this.internals.nodeShapeMap)[0];
       }
     } else if (this.nodeShapeSlug) {
       // Single-shape program: use the program's shape slug
       data.shape = this.nodeShapeSlug;
     }
 
-    this.nodeDataCache[key] = data;
+    this.internals.nodeDataCache[key] = data;
     this.nodeGraphCoords[key] = { x: data.x, y: data.y };
 
     // Label:
     // We delete and add if needed because this function is also used from
     // update
-    this.nodesWithForcedLabels.delete(key);
-    if (data.forceLabel && !data.hidden) this.nodesWithForcedLabels.add(key);
+    this.internals.nodesWithForcedLabels.delete(key);
+    if (data.forceLabel && !data.hidden) this.internals.nodesWithForcedLabels.add(key);
 
     // Backdrop visibility tracking
-    this.nodesWithBackdrop.delete(key);
+    this.internals.nodesWithBackdrop.delete(key);
     if (!data.hidden && data.backdropVisibility === "visible") {
-      this.nodesWithBackdrop.add(key);
+      this.internals.nodesWithBackdrop.add(key);
     }
 
     // Bucket management for depth ordering (depth encoded into zIndex range)
     const newZIndex =
       this.getDepthOffset(data.depth) +
-      Math.max(0, Math.min(this.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
+      Math.max(0, Math.min(this.internals.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
     const oldZIndex = this.zIndexCache.nodes[key];
 
     if (oldZIndex !== undefined && oldZIndex !== newZIndex) {
@@ -1957,7 +1334,7 @@ export default class Sigma<
     this.addNode(key);
 
     // Re-apply normalization on the node
-    const data = this.nodeDataCache[key];
+    const data = this.internals.nodeDataCache[key];
     this.normalizationFunction.applyTo(data);
   }
 
@@ -1968,7 +1345,7 @@ export default class Sigma<
    */
   private removeNode(key: string): void {
     // Remove from bucket
-    const data = this.nodeDataCache[key];
+    const data = this.internals.nodeDataCache[key];
     if (data) {
       const zIndex = this.zIndexCache.nodes[key];
       if (zIndex !== undefined) {
@@ -1977,17 +1354,17 @@ export default class Sigma<
       }
     }
     // Remove from node cache
-    delete this.nodeDataCache[key];
+    delete this.internals.nodeDataCache[key];
     delete this.nodeGraphCoords[key];
     // Remove from node program index
     delete this.nodeProgramIndex[key];
-    this.dragManager.removeNode(key);
+    this.internals.dragManager.removeNode(key);
     // Remove from state
     this.stateManager.removeNode(key);
     // Remove from forced label
-    this.nodesWithForcedLabels.delete(key);
+    this.internals.nodesWithForcedLabels.delete(key);
     // Remove from backdrop tracking
-    this.nodesWithBackdrop.delete(key);
+    this.internals.nodesWithBackdrop.delete(key);
   }
 
   /**
@@ -2045,8 +1422,8 @@ export default class Sigma<
   ): void {
     if (edgeState.parallelCount <= 1) return;
 
-    const source = this.graph.source(edge);
-    const target = this.graph.target(edge);
+    const source = this.internals.graph.source(edge);
+    const target = this.internals.graph.target(edge);
     const isSelfLoop = source === target;
 
     const pathName = isSelfLoop
@@ -2060,7 +1437,7 @@ export default class Sigma<
 
     // Correct for reverse-direction non-self-loop edges: swapping source/target
     // flips the perpendicular direction, so we negate to keep visual consistency.
-    if (!isSelfLoop && this.graph.isDirected(edge) && source > target) {
+    if (!isSelfLoop && this.internals.graph.isDirected(edge) && source > target) {
       spreadValue = -spreadValue;
     }
 
@@ -2073,7 +1450,7 @@ export default class Sigma<
    * @param key The edge's graphology ID
    */
   private addEdge(key: string): void {
-    const attrs = this.graph.getEdgeAttributes(key);
+    const attrs = this.internals.graph.getEdgeAttributes(key);
     const edgeState = this.stateManager.getEdgeState(key);
 
     // Compute display data from styles (always defined, defaults to DEFAULT_STYLES)
@@ -2082,7 +1459,7 @@ export default class Sigma<
       attrs,
       edgeState,
       this.stateManager.graphState,
-      this.graph,
+      this.internals.graph,
     );
 
     let data: EdgeDisplayData = {} as EdgeDisplayData;
@@ -2090,25 +1467,25 @@ export default class Sigma<
 
     // Apply reducer if provided
     if (this.edgeReducer) {
-      const reduced = this.edgeReducer(key, data, attrs, edgeState, this.stateManager.graphState, this.graph);
+      const reduced = this.edgeReducer(key, data, attrs, edgeState, this.stateManager.graphState, this.internals.graph);
       data = { ...data, ...reduced };
     }
 
     // Auto-compute spread variable for parallel edges
     this.applyEdgeSpread(key, data, edgeState, resolvedStyle);
 
-    this.edgeDataCache[key] = data;
+    this.internals.edgeDataCache[key] = data;
 
     // Forced label
     // we filter and re push if needed because this function is also used from
     // update
-    this.edgesWithForcedLabels.delete(key);
-    if (data.forceLabel && !data.hidden) this.edgesWithForcedLabels.add(key);
+    this.internals.edgesWithForcedLabels.delete(key);
+    if (data.forceLabel && !data.hidden) this.internals.edgesWithForcedLabels.add(key);
 
     // Bucket management for depth ordering (depth encoded into zIndex range)
     const newZIndex =
       this.getDepthOffset(data.depth) +
-      Math.max(0, Math.min(this.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
+      Math.max(0, Math.min(this.internals.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
     const oldZIndex = this.zIndexCache.edges[key];
 
     if (oldZIndex !== undefined && oldZIndex !== newZIndex) {
@@ -2137,7 +1514,7 @@ export default class Sigma<
    */
   private removeEdge(key: string): void {
     // Remove from bucket
-    const data = this.edgeDataCache[key];
+    const data = this.internals.edgeDataCache[key];
     if (data) {
       const zIndex = this.zIndexCache.edges[key];
       if (zIndex !== undefined) {
@@ -2146,16 +1523,16 @@ export default class Sigma<
       }
     }
     // Remove from edge cache
-    delete this.edgeDataCache[key];
+    delete this.internals.edgeDataCache[key];
     // Remove from programId index
     delete this.edgeProgramIndex[key];
     delete this.edgeTextureIndexCache[key];
     // Free edge from edge data texture
-    this.edgeDataTexture!.free(key);
+    this.internals.edgeDataTexture!.free(key);
     // Remove from state
     this.stateManager.removeEdge(key);
     // Remove from forced label
-    this.edgesWithForcedLabels.delete(key);
+    this.internals.edgesWithForcedLabels.delete(key);
   }
 
   /**
@@ -2163,14 +1540,14 @@ export default class Sigma<
    * @private
    */
   private clearNodeIndices(): void {
-    // LabelGrid & nodeExtent are only manage/populated in the process function
-    this.labelGrid = new LabelGrid();
+    // labelGrid & nodeExtent are only managed/populated in the process function
+    this.labelRenderer.resetLabelGrid();
     this.nodeExtent = { x: [0, 1], y: [0, 1] };
-    this.nodeDataCache = {};
+    this.internals.nodeDataCache = {};
     this.nodeGraphCoords = {};
     this.edgeProgramIndex = {};
-    this.nodesWithForcedLabels = new Set<string>();
-    this.nodesWithBackdrop = new Set<string>();
+    this.internals.nodesWithForcedLabels = new Set<string>();
+    this.internals.nodesWithBackdrop = new Set<string>();
     // Clear bucket data
     this.itemBuckets.nodes.clearAll();
     this.zIndexCache.nodes = {};
@@ -2183,10 +1560,10 @@ export default class Sigma<
    * @private
    */
   private clearEdgeIndices(): void {
-    this.edgeDataCache = {};
+    this.internals.edgeDataCache = {};
     this.edgeProgramIndex = {};
     this.edgeTextureIndexCache = {};
-    this.edgesWithForcedLabels = new Set<string>();
+    this.internals.edgesWithForcedLabels = new Set<string>();
     // Clear bucket data
     this.itemBuckets.edges.clearAll();
     this.zIndexCache.edges = {};
@@ -2209,10 +1586,9 @@ export default class Sigma<
    * @private
    */
   private clearNodeState(): void {
-    this.displayedNodeLabels = new Set();
-    this.renderedNodeLabels = new Set();
-    this.nodesWithBackdrop.clear();
-    this.dragManager.clear();
+    this.labelRenderer.resetFrame();
+    this.internals.nodesWithBackdrop.clear();
+    this.internals.dragManager.clear();
     this.autoRescaleFrozen = false;
     this.stateManager.clearNodes();
   }
@@ -2222,7 +1598,7 @@ export default class Sigma<
    * @private
    */
   private clearEdgeState(): void {
-    this.displayedEdgeLabels = new Set();
+    this.labelRenderer.clearEdgeLabels();
     this.stateManager.clearEdges();
   }
 
@@ -2244,9 +1620,9 @@ export default class Sigma<
    * @param position The index where to place the node in the program
    */
   private addNodeToProgram(node: string, fingerprint: number, position: number): void {
-    const data = this.nodeDataCache[node];
+    const data = this.internals.nodeDataCache[node];
     // Get the node's texture index (already allocated during processing)
-    const textureIndex = this.nodeDataTexture!.getIndex(node);
+    const textureIndex = this.internals.nodeDataTexture!.getIndex(node);
     this.nodeProgram!.process(fingerprint, position, data, textureIndex, node);
     this.nodeProgram!.invalidateBuffers();
     // Saving program index
@@ -2261,19 +1637,19 @@ export default class Sigma<
    * @param position The index where to place the edge in the program
    */
   private addEdgeToProgram(edge: string, fingerprint: number, position: number): void {
-    const data = this.edgeDataCache[edge];
-    const source = this.graph.source(edge);
-    const target = this.graph.target(edge);
-    const sourceData = this.nodeDataCache[source];
-    const targetData = this.nodeDataCache[target];
+    const data = this.internals.edgeDataCache[edge];
+    const source = this.internals.graph.source(edge);
+    const target = this.internals.graph.target(edge);
+    const sourceData = this.internals.nodeDataCache[source];
+    const targetData = this.internals.nodeDataCache[target];
 
     // Allocate edge in edge data texture (or get existing allocation)
-    const edgeTextureIndex = this.edgeDataTexture!.allocate(edge);
+    const edgeTextureIndex = this.internals.edgeDataTexture!.allocate(edge);
     this.edgeTextureIndexCache[edge] = edgeTextureIndex;
 
     // Get node texture indices for source and target
-    const sourceNodeIndex = this.nodeDataTexture!.getIndex(source);
-    const targetNodeIndex = this.nodeDataTexture!.getIndex(target);
+    const sourceNodeIndex = this.internals.nodeDataTexture!.getIndex(source);
+    const targetNodeIndex = this.internals.nodeDataTexture!.getIndex(target);
 
     // Get program class static properties
     const programStatic = this.edgeProgram!.constructor as unknown as {
@@ -2331,7 +1707,7 @@ export default class Sigma<
     const tailLengthRatio = extremitiesPool?.[tailId]?.length ?? 0;
 
     // Update edge data texture with core edge data
-    this.edgeDataTexture!.updateEdge(
+    this.internals.edgeDataTexture!.updateEdge(
       edge,
       sourceNodeIndex,
       targetNodeIndex,
@@ -2365,20 +1741,20 @@ export default class Sigma<
       invMatrix: this.invMatrix,
       width: this.width,
       height: this.height,
-      pixelRatio: this.pixelRatio,
+      pixelRatio: this.internals.pixelRatio,
       zoomRatio: this.camera.ratio,
       cameraAngle: this.camera.angle,
       sizeRatio: 1 / this.scaleSize(),
       correctionRatio: this.correctionRatio,
-      downSizingRatio: this.settings.pickingDownSizingRatio,
-      minEdgeThickness: this.settings.minEdgeThickness,
-      antiAliasingFeather: this.settings.antiAliasingFeather,
+      downSizingRatio: this.internals.settings.pickingDownSizingRatio,
+      minEdgeThickness: this.internals.settings.minEdgeThickness,
+      antiAliasingFeather: this.internals.settings.antiAliasingFeather,
       nodeDataTextureUnit: NODE_DATA_TEXTURE_UNIT,
-      nodeDataTextureWidth: this.nodeDataTexture!.getTextureWidth(),
+      nodeDataTextureWidth: this.internals.nodeDataTexture!.getTextureWidth(),
       edgeDataTextureUnit: EDGE_DATA_TEXTURE_UNIT,
-      edgeDataTextureWidth: this.edgeDataTexture!.getTextureWidth(),
+      edgeDataTextureWidth: this.internals.edgeDataTexture!.getTextureWidth(),
       pickingFrameBuffer: this.pickingFrameBuffer,
-      labelPixelSnapping: this.settings.labelPixelSnapping ? 1.0 : 0.0,
+      labelPixelSnapping: this.internals.settings.labelPixelSnapping ? 1.0 : 0.0,
     };
   }
 
@@ -2388,7 +1764,7 @@ export default class Sigma<
    * @return {number}
    */
   getStagePadding(): number {
-    const { stagePadding, autoRescale } = this.settings;
+    const { stagePadding, autoRescale } = this.internals.settings;
     return autoRescale ? stagePadding || 0 : 0;
   }
 
@@ -2578,7 +1954,7 @@ export default class Sigma<
       cacheData?(): void;
     },
   ): this {
-    const depthLayers = this.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
+    const depthLayers = this.internals.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
     if (!depthLayers.includes(depth))
       throw new Error(
         `Sigma: cannot add custom layer program at depth "${depth}" — ` +
@@ -2638,7 +2014,7 @@ export default class Sigma<
    * @return {Graph}
    */
   getGraph(): Graph<N, E, G> {
-    return this.graph;
+    return this.internals.graph;
   }
 
   /**
@@ -2647,7 +2023,7 @@ export default class Sigma<
    * @return {Graph}
    */
   setGraph(graph: Graph<N, E, G>): void {
-    if (graph === this.graph) return;
+    if (graph === this.internals.graph) return;
 
     // Check hoveredNode and hoveredEdge
     if (this.stateManager.hoveredNode && !graph.hasNode(this.stateManager.hoveredNode))
@@ -2664,7 +2040,7 @@ export default class Sigma<
     }
 
     // Installing new graph
-    this.graph = graph;
+    this.internals.graph = graph;
 
     // Binding new handlers
     this.bindGraphHandlers();
@@ -2723,7 +2099,7 @@ export default class Sigma<
    * @return {NodeDisplayData | undefined} A copy of the desired node's attribute or undefined if not found
    */
   getNodeDisplayData(key: unknown): NodeDisplayData | undefined {
-    const node = this.nodeDataCache[key as string];
+    const node = this.internals.nodeDataCache[key as string];
     return node ? Object.assign({}, node) : undefined;
   }
 
@@ -2735,7 +2111,7 @@ export default class Sigma<
    * @return {EdgeDisplayData | undefined} A copy of the desired edge's attribute or undefined if not found
    */
   getEdgeDisplayData(key: unknown): EdgeDisplayData | undefined {
-    const edge = this.edgeDataCache[key as string];
+    const edge = this.internals.edgeDataCache[key as string];
     return edge ? Object.assign({}, edge) : undefined;
   }
 
@@ -2840,10 +2216,10 @@ export default class Sigma<
   private updateContainerCursor(): void {
     if (this.stateManager.hoveredNode) {
       this.container.style.cursor =
-        this.nodeDataCache[this.stateManager.hoveredNode]?.cursor || this.resolvedStageStyle.cursor || "";
+        this.internals.nodeDataCache[this.stateManager.hoveredNode]?.cursor || this.resolvedStageStyle.cursor || "";
     } else if (this.stateManager.hoveredEdge) {
       this.container.style.cursor =
-        this.edgeDataCache[this.stateManager.hoveredEdge]?.cursor || this.resolvedStageStyle.cursor || "";
+        this.internals.edgeDataCache[this.stateManager.hoveredEdge]?.cursor || this.resolvedStageStyle.cursor || "";
     } else {
       this.container.style.cursor = this.resolvedStageStyle.cursor || "";
     }
@@ -2873,7 +2249,7 @@ export default class Sigma<
    * @return {Set<string>} A set of node keys whose label is displayed.
    */
   getNodeDisplayedLabels(): Set<string> {
-    return new Set(this.displayedNodeLabels);
+    return new Set(this.labelRenderer.displayedNodeLabels);
   }
 
   /**
@@ -2882,7 +2258,7 @@ export default class Sigma<
    * @return {Set<string>} A set of edge keys whose label is displayed.
    */
   getEdgeDisplayedLabels(): Set<string> {
-    return new Set(this.displayedEdgeLabels);
+    return new Set(this.labelRenderer.displayedEdgeLabels);
   }
 
   /**
@@ -2891,7 +2267,7 @@ export default class Sigma<
    * @return {Settings} A copy of the settings collection.
    */
   getSettings(): Settings {
-    return { ...this.settings };
+    return { ...this.internals.settings };
   }
 
   /**
@@ -2901,7 +2277,7 @@ export default class Sigma<
    * @return {any} The value attached to this setting key or undefined if not found
    */
   getSetting<K extends keyof Settings>(key: K): Settings[K] {
-    return this.settings[key];
+    return this.internals.settings[key];
   }
 
   /**
@@ -2913,9 +2289,9 @@ export default class Sigma<
    * @return {Sigma}
    */
   setSetting<K extends keyof Settings>(key: K, value: Settings[K]): this {
-    const oldValues = { ...this.settings };
-    this.settings[key] = value;
-    validateSettings(this.settings);
+    const oldValues = { ...this.internals.settings };
+    this.internals.settings[key] = value;
+    validateSettings(this.internals.settings);
     this.handleSettingsUpdate(oldValues);
     this.scheduleRefresh();
     return this;
@@ -2930,7 +2306,7 @@ export default class Sigma<
    * @return {Sigma}
    */
   updateSetting<K extends keyof Settings>(key: K, updater: (value: Settings[K]) => Settings[K]): this {
-    this.setSetting(key, updater(this.settings[key]));
+    this.setSetting(key, updater(this.internals.settings[key]));
     return this;
   }
 
@@ -2941,9 +2317,9 @@ export default class Sigma<
    * @return {Sigma}
    */
   setSettings(settings: Partial<Settings>): this {
-    const oldValues = { ...this.settings };
-    this.settings = { ...this.settings, ...settings };
-    validateSettings(this.settings);
+    const oldValues = { ...this.internals.settings };
+    this.internals.settings = { ...this.internals.settings, ...settings };
+    validateSettings(this.internals.settings);
     this.handleSettingsUpdate(oldValues);
     this.scheduleRefresh();
     return this;
@@ -2961,10 +2337,10 @@ export default class Sigma<
 
     this.width = this.container.offsetWidth;
     this.height = this.container.offsetHeight;
-    this.pixelRatio = getPixelRatio();
+    this.internals.pixelRatio = getPixelRatio();
 
     if (this.width === 0) {
-      if (this.settings.allowInvalidContainer) this.width = 1;
+      if (this.internals.settings.allowInvalidContainer) this.width = 1;
       else
         throw new Error(
           "Sigma: Container has no width. You can set the allowInvalidContainer setting to true to stop seeing this error.",
@@ -2972,7 +2348,7 @@ export default class Sigma<
     }
 
     if (this.height === 0) {
-      if (this.settings.allowInvalidContainer) this.height = 1;
+      if (this.internals.settings.allowInvalidContainer) this.height = 1;
       else
         throw new Error(
           "Sigma: Container has no height. You can set the allowInvalidContainer setting to true to stop seeing this error.",
@@ -2992,10 +2368,10 @@ export default class Sigma<
 
     // Sizing WebGL context
     if (this.webGLContext) {
-      this.elements.stage.setAttribute("width", this.width * this.pixelRatio + "px");
-      this.elements.stage.setAttribute("height", this.height * this.pixelRatio + "px");
+      this.elements.stage.setAttribute("width", this.width * this.internals.pixelRatio + "px");
+      this.elements.stage.setAttribute("height", this.height * this.internals.pixelRatio + "px");
 
-      this.webGLContext.viewport(0, 0, this.width * this.pixelRatio, this.height * this.pixelRatio);
+      this.webGLContext.viewport(0, 0, this.width * this.internals.pixelRatio, this.height * this.internals.pixelRatio);
     }
 
     this.emit("resize");
@@ -3036,14 +2412,14 @@ export default class Sigma<
     this.stateManager.flushGraphStateFlags();
 
     const needFullNodeRefresh =
-      this.stateManager.graphStateChanged && this.nodeStyleAnalysis.dependency === "graph-state";
+      this.stateManager.graphStateChanged && this.internals.nodeStyleAnalysis.dependency === "graph-state";
     const needFullEdgeRefresh =
       this.stateManager.graphStateChanged && this.edgeStyleAnalysis.dependency === "graph-state";
 
     // Nodes
     if (needFullNodeRefresh) {
-      this.graph.forEachNode((node) => this.refreshNodeState(node));
-    } else if (this.nodeStyleAnalysis.dependency !== "static") {
+      this.internals.graph.forEachNode((node) => this.refreshNodeState(node));
+    } else if (this.internals.nodeStyleAnalysis.dependency !== "static") {
       for (const node of this.stateManager.dirtyNodes) {
         this.refreshNodeState(node);
       }
@@ -3051,7 +2427,7 @@ export default class Sigma<
 
     // Edges
     if (needFullEdgeRefresh) {
-      this.graph.forEachEdge((edge) => this.refreshEdgeState(edge));
+      this.internals.graph.forEachEdge((edge) => this.refreshEdgeState(edge));
     } else if (this.edgeStyleAnalysis.dependency !== "static") {
       for (const edge of this.stateManager.dirtyEdges) {
         this.refreshEdgeState(edge);
@@ -3071,43 +2447,48 @@ export default class Sigma<
    * Lean path: patches cache in place, skips unchanged bookkeeping.
    */
   private refreshNodeState(node: string): void {
-    const data = this.nodeDataCache[node];
+    const data = this.internals.nodeDataCache[node];
 
     // If node not yet cached or a reducer exists, fall back to full path
     if (!data || this.nodeReducer) {
-      const oldDepth = this.nodeDataCache[node]?.depth;
-      const oldAttachment = this.nodeDataCache[node]?.labelAttachment;
+      const oldDepth = this.internals.nodeDataCache[node]?.depth;
+      const oldAttachment = this.internals.nodeDataCache[node]?.labelAttachment;
       this.updateNode(node);
-      const newData = this.nodeDataCache[node];
-      if (this.attachmentManager && (newData.labelAttachment || oldAttachment)) {
-        this.attachmentManager.invalidateNode(node);
+      const newData = this.internals.nodeDataCache[node];
+      if (this.internals.attachmentManager && (newData.labelAttachment || oldAttachment)) {
+        this.internals.attachmentManager.invalidateNode(node);
       }
       let shapeId: number;
-      if (this.nodeShapeMap && this.nodeGlobalShapeIds && newData.shape && newData.shape in this.nodeShapeMap) {
-        shapeId = this.nodeGlobalShapeIds[this.nodeShapeMap[newData.shape]];
+      if (
+        this.internals.nodeShapeMap &&
+        this.internals.nodeGlobalShapeIds &&
+        newData.shape &&
+        newData.shape in this.internals.nodeShapeMap
+      ) {
+        shapeId = this.internals.nodeGlobalShapeIds[this.internals.nodeShapeMap[newData.shape]];
       } else {
         shapeId = getShapeId(newData.shape || "circle");
       }
-      this.nodeDataTexture!.updateNode(node, newData.x, newData.y, newData.size, shapeId);
+      this.internals.nodeDataTexture!.updateNode(node, newData.x, newData.y, newData.size, shapeId);
       if (oldDepth && newData.depth !== oldDepth) {
         this.updateNodeDepthRanges(node, oldDepth, newData.depth);
       }
       const programIndex = this.nodeProgramIndex[node];
       if (programIndex !== undefined) {
-        this.addNodeToProgram(node, this.nodeIndices[node], programIndex);
+        this.addNodeToProgram(node, this.internals.nodeIndices[node], programIndex);
       }
       return;
     }
 
     // Re-evaluate style (reuses scratch object to avoid allocation)
-    const attrs = this.graph.getNodeAttributes(node);
+    const attrs = this.internals.graph.getNodeAttributes(node);
     const nodeState = this.stateManager.getNodeState(node);
     const resolvedStyle = evaluateNodeStyle(
       this.stylesDeclaration!.nodes as Record<string, unknown>,
       attrs,
       nodeState,
       this.stateManager.graphState,
-      this.graph,
+      this.internals.graph,
       this._scratchNodeStyle,
     );
 
@@ -3135,48 +2516,53 @@ export default class Sigma<
     this.normalizationFunction.applyTo(data);
 
     // Set shape
-    if (this.nodeShapeMap) {
-      if (!data.shape || !(data.shape in this.nodeShapeMap)) {
-        data.shape = Object.keys(this.nodeShapeMap)[0];
+    if (this.internals.nodeShapeMap) {
+      if (!data.shape || !(data.shape in this.internals.nodeShapeMap)) {
+        data.shape = Object.keys(this.internals.nodeShapeMap)[0];
       }
     } else if (this.nodeShapeSlug) {
       data.shape = this.nodeShapeSlug;
     }
 
     // Attachment invalidation
-    if (this.attachmentManager && (data.labelAttachment || oldAttachment)) {
-      this.attachmentManager.invalidateNode(node);
+    if (this.internals.attachmentManager && (data.labelAttachment || oldAttachment)) {
+      this.internals.attachmentManager.invalidateNode(node);
     }
 
     // Update forced label tracking only if changed
     if (data.forceLabel !== oldForceLabel || data.hidden !== oldHidden) {
-      this.nodesWithForcedLabels.delete(node);
-      if (data.forceLabel && !data.hidden) this.nodesWithForcedLabels.add(node);
+      this.internals.nodesWithForcedLabels.delete(node);
+      if (data.forceLabel && !data.hidden) this.internals.nodesWithForcedLabels.add(node);
     }
 
     // Backdrop tracking only if changed
     if (data.backdropVisibility !== oldBackdropVisibility || data.hidden !== oldHidden) {
-      this.nodesWithBackdrop.delete(node);
+      this.internals.nodesWithBackdrop.delete(node);
       if (!data.hidden && data.backdropVisibility === "visible") {
-        this.nodesWithBackdrop.add(node);
+        this.internals.nodesWithBackdrop.add(node);
       }
     }
 
     // Node data texture only if position/size/shape changed
     if (rawPositionChanged || data.size !== oldSize || data.shape !== oldShape) {
       let shapeId: number;
-      if (this.nodeShapeMap && this.nodeGlobalShapeIds && data.shape && data.shape in this.nodeShapeMap) {
-        shapeId = this.nodeGlobalShapeIds[this.nodeShapeMap[data.shape]];
+      if (
+        this.internals.nodeShapeMap &&
+        this.internals.nodeGlobalShapeIds &&
+        data.shape &&
+        data.shape in this.internals.nodeShapeMap
+      ) {
+        shapeId = this.internals.nodeGlobalShapeIds[this.internals.nodeShapeMap[data.shape]];
       } else {
         shapeId = getShapeId(data.shape || "circle");
       }
-      this.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
+      this.internals.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
     }
 
     // Bucket management if depth or zIndex changed
     const newZIndex =
       this.getDepthOffset(data.depth) +
-      Math.max(0, Math.min(this.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
+      Math.max(0, Math.min(this.internals.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
     const cachedZIndex = this.zIndexCache.nodes[node];
     if (cachedZIndex !== undefined && cachedZIndex !== newZIndex) {
       this.itemBuckets.nodes.moveItem(cachedZIndex, newZIndex, node);
@@ -3191,7 +2577,7 @@ export default class Sigma<
     // GPU program update
     const programIndex = this.nodeProgramIndex[node];
     if (programIndex !== undefined) {
-      this.addNodeToProgram(node, this.nodeIndices[node], programIndex);
+      this.addNodeToProgram(node, this.internals.nodeIndices[node], programIndex);
     }
   }
 
@@ -3201,13 +2587,13 @@ export default class Sigma<
    * unchanged bookkeeping, and avoids full addEdgeToProgram overhead.
    */
   private refreshEdgeState(edge: string): void {
-    const data = this.edgeDataCache[edge];
+    const data = this.internals.edgeDataCache[edge];
 
     // If edge not yet cached or a reducer exists, fall back to full path
     if (!data || this.edgeReducer) {
       const oldDepth = data?.depth;
       this.updateEdge(edge);
-      const newData = this.edgeDataCache[edge];
+      const newData = this.internals.edgeDataCache[edge];
       if (oldDepth && newData.depth !== oldDepth) {
         this.updateEdgeDepthRanges(edge, oldDepth, newData.depth);
       }
@@ -3219,14 +2605,14 @@ export default class Sigma<
     }
 
     // Re-evaluate style (reuses scratch object to avoid allocation)
-    const attrs = this.graph.getEdgeAttributes(edge);
+    const attrs = this.internals.graph.getEdgeAttributes(edge);
     const edgeState = this.stateManager.getEdgeState(edge);
     const resolvedStyle = evaluateEdgeStyle(
       this.stylesDeclaration!.edges as Record<string, unknown>,
       attrs,
       edgeState,
       this.stateManager.graphState,
-      this.graph,
+      this.internals.graph,
       this._scratchEdgeStyle,
     );
 
@@ -3250,14 +2636,14 @@ export default class Sigma<
 
     // Update forced label tracking only if changed
     if (data.forceLabel !== oldForceLabel || data.hidden !== oldHidden) {
-      this.edgesWithForcedLabels.delete(edge);
-      if (data.forceLabel && !data.hidden) this.edgesWithForcedLabels.add(edge);
+      this.internals.edgesWithForcedLabels.delete(edge);
+      if (data.forceLabel && !data.hidden) this.internals.edgesWithForcedLabels.add(edge);
     }
 
     // Bucket management if depth or zIndex changed
     const newZIndex =
       this.getDepthOffset(data.depth) +
-      Math.max(0, Math.min(this.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
+      Math.max(0, Math.min(this.internals.settings.maxDepthLevels - 1, Math.floor(data.zIndex)));
     const cachedZIndex = this.zIndexCache.edges[edge];
     if (cachedZIndex !== undefined && cachedZIndex !== newZIndex) {
       this.itemBuckets.edges.moveItem(cachedZIndex, newZIndex, edge);
@@ -3284,10 +2670,10 @@ export default class Sigma<
         this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
       } else {
         // Fast path: skip edge data texture, only update vertex buffer + attribute texture
-        const source = this.graph.source(edge);
-        const target = this.graph.target(edge);
-        const sourceData = this.nodeDataCache[source];
-        const targetData = this.nodeDataCache[target];
+        const source = this.internals.graph.source(edge);
+        const target = this.internals.graph.target(edge);
+        const sourceData = this.internals.nodeDataCache[source];
+        const targetData = this.internals.nodeDataCache[target];
         const edgeTextureIndex = this.edgeTextureIndexCache[edge];
 
         this.edgeProgram!.process(this.edgeIndices[edge], programIndex, sourceData, targetData, data, edgeTextureIndex);
@@ -3318,26 +2704,29 @@ export default class Sigma<
       // Re-index graph data
       this.clearEdgeIndices();
       this.clearNodeIndices();
-      this.graph.forEachNode((node) => this.addNode(node));
+      this.internals.graph.forEachNode((node) => this.addNode(node));
       this.edgeGroups.rebuild();
-      this.graph.forEachEdge((edge) => this.addEdge(edge));
+      this.internals.graph.forEachEdge((edge) => this.addEdge(edge));
     } else {
       const nodes = opts.partialGraph?.nodes || [];
       for (let i = 0, l = nodes?.length || 0; i < l; i++) {
         const node = nodes[i];
-        const oldAttachment = this.nodeDataCache[node]?.labelAttachment;
+        const oldAttachment = this.internals.nodeDataCache[node]?.labelAttachment;
         // Recompute node's data (ie. apply reducer)
         this.updateNode(node);
         // Invalidate attachment cache since graph attributes may have changed
-        if (this.attachmentManager && (this.nodeDataCache[node]?.labelAttachment || oldAttachment)) {
-          this.attachmentManager.invalidateNode(node);
+        if (
+          this.internals.attachmentManager &&
+          (this.internals.nodeDataCache[node]?.labelAttachment || oldAttachment)
+        ) {
+          this.internals.attachmentManager.invalidateNode(node);
         }
         // Add node to the program if layout is unchanged.
         // otherwise it will be done in the process function
         if (skipIndexation) {
           const programIndex = this.nodeProgramIndex[node];
           if (programIndex === undefined) throw new Error(`Sigma: node "${node}" can't be repaint`);
-          this.addNodeToProgram(node, this.nodeIndices[node], programIndex);
+          this.addNodeToProgram(node, this.internals.nodeIndices[node], programIndex);
         }
       }
 
@@ -3405,7 +2794,7 @@ export default class Sigma<
   getViewportZoomedState(viewportTarget: Coordinates, newRatio: number): CameraState {
     const { ratio, angle, x, y } = this.camera.getState();
 
-    const { minCameraRatio, maxCameraRatio } = this.settings;
+    const { minCameraRatio, maxCameraRatio } = this.internals.settings;
     if (typeof maxCameraRatio === "number") newRatio = Math.min(newRatio, maxCameraRatio);
     if (typeof minCameraRatio === "number") newRatio = Math.max(newRatio, minCameraRatio);
     const ratioDiff = newRatio / ratio;
@@ -3637,8 +3026,8 @@ export default class Sigma<
     this.clearIndices();
     this.clearState();
 
-    this.nodeDataCache = {};
-    this.edgeDataCache = {};
+    this.internals.nodeDataCache = {};
+    this.internals.edgeDataCache = {};
 
     // Clearing frames
     if (this.renderFrame) {
@@ -3654,18 +3043,18 @@ export default class Sigma<
     // Kill programs:
     this.nodeProgram?.kill();
     this.edgeProgram?.kill();
-    this.labelProgram?.kill();
-    this.edgeLabelProgram?.kill();
-    this.backdropProgram?.kill();
-    this.attachmentProgram?.kill();
-    this.attachmentManager?.kill();
+    this.internals.labelProgram?.kill();
+    this.internals.edgeLabelProgram?.kill();
+    this.internals.backdropProgram?.kill();
+    this.internals.attachmentProgram?.kill();
+    this.internals.attachmentManager?.kill();
     this.nodeProgram = null;
     this.edgeProgram = null;
-    this.labelProgram = null;
-    this.edgeLabelProgram = null;
-    this.backdropProgram = null;
-    this.attachmentProgram = null;
-    this.attachmentManager = null;
+    this.internals.labelProgram = null;
+    this.internals.edgeLabelProgram = null;
+    this.internals.backdropProgram = null;
+    this.internals.attachmentProgram = null;
+    this.internals.attachmentManager = null;
 
     // Kill custom layer programs
     for (const program of this.customLayerPrograms.values()) program.kill();
@@ -3677,15 +3066,15 @@ export default class Sigma<
     }
 
     // Cleanup node data texture
-    if (this.nodeDataTexture) {
-      this.nodeDataTexture.kill();
-      this.nodeDataTexture = null;
+    if (this.internals.nodeDataTexture) {
+      this.internals.nodeDataTexture.kill();
+      this.internals.nodeDataTexture = null;
     }
 
     // Cleanup edge data texture
-    if (this.edgeDataTexture) {
-      this.edgeDataTexture.kill();
-      this.edgeDataTexture = null;
+    if (this.internals.edgeDataTexture) {
+      this.internals.edgeDataTexture.kill();
+      this.internals.edgeDataTexture = null;
     }
 
     // Kill all canvas/WebGL contexts
@@ -3695,7 +3084,7 @@ export default class Sigma<
 
     // Destroying remaining collections
     this.webGLContext = null;
-    this.measureContext = null;
+    this.labelRenderer.kill();
     this.elements = {};
   }
 
@@ -3709,7 +3098,7 @@ export default class Sigma<
    */
   scaleSize(size = 1, cameraRatio = this.camera.ratio): number {
     return (
-      (size / this.settings.zoomToSizeRatioFunction(cameraRatio)) *
+      (size / this.internals.settings.zoomToSizeRatioFunction(cameraRatio)) *
       (this.getSetting("itemSizesReference") === "positions" ? cameraRatio * this.graphToViewportRatio : 1)
     );
   }
@@ -3742,11 +3131,11 @@ export default class Sigma<
     const buckets: BucketStats[] = [];
 
     // Shared data textures
-    if (this.nodeDataTexture) {
-      textures.push({ name: "nodeData", ...this.nodeDataTexture.getMemoryStats() });
+    if (this.internals.nodeDataTexture) {
+      textures.push({ name: "nodeData", ...this.internals.nodeDataTexture.getMemoryStats() });
     }
-    if (this.edgeDataTexture) {
-      textures.push({ name: "edgeData", ...this.edgeDataTexture.getMemoryStats() });
+    if (this.internals.edgeDataTexture) {
+      textures.push({ name: "edgeData", ...this.internals.edgeDataTexture.getMemoryStats() });
     }
 
     // Node program
@@ -3771,16 +3160,16 @@ export default class Sigma<
     }
 
     // Label programs
-    if (this.labelProgram) {
-      buffers.push({ program: "labels", ...this.labelProgram.getMemoryStats() });
+    if (this.internals.labelProgram) {
+      buffers.push({ program: "labels", ...this.internals.labelProgram.getMemoryStats() });
     }
-    if (this.edgeLabelProgram) {
-      buffers.push({ program: "edgeLabels", ...this.edgeLabelProgram.getMemoryStats() });
+    if (this.internals.edgeLabelProgram) {
+      buffers.push({ program: "edgeLabels", ...this.internals.edgeLabelProgram.getMemoryStats() });
     }
 
     // Backdrop program
-    if (this.backdropProgram) {
-      buffers.push({ program: "backdrop", ...this.backdropProgram.getMemoryStats() });
+    if (this.internals.backdropProgram) {
+      buffers.push({ program: "backdrop", ...this.internals.backdropProgram.getMemoryStats() });
     }
 
     // Buckets
@@ -3792,8 +3181,12 @@ export default class Sigma<
     }
 
     // Picking resources
-    const pickingWidth = Math.ceil((this.width * this.pixelRatio) / this.settings.pickingDownSizingRatio);
-    const pickingHeight = Math.ceil((this.height * this.pixelRatio) / this.settings.pickingDownSizingRatio);
+    const pickingWidth = Math.ceil(
+      (this.width * this.internals.pixelRatio) / this.internals.settings.pickingDownSizingRatio,
+    );
+    const pickingHeight = Math.ceil(
+      (this.height * this.internals.pixelRatio) / this.internals.settings.pickingDownSizingRatio,
+    );
     const picking = {
       width: pickingWidth,
       height: pickingHeight,
@@ -3830,11 +3223,11 @@ export default class Sigma<
     const buffers: { program: string; writes: number; bytesWritten: number }[] = [];
 
     // Data textures
-    if (this.nodeDataTexture) {
-      textures.push({ name: "nodeData", ...this.nodeDataTexture.getWriteStats() });
+    if (this.internals.nodeDataTexture) {
+      textures.push({ name: "nodeData", ...this.internals.nodeDataTexture.getWriteStats() });
     }
-    if (this.edgeDataTexture) {
-      textures.push({ name: "edgeData", ...this.edgeDataTexture.getWriteStats() });
+    if (this.internals.edgeDataTexture) {
+      textures.push({ name: "edgeData", ...this.internals.edgeDataTexture.getWriteStats() });
     }
 
     // Node program
@@ -3859,16 +3252,16 @@ export default class Sigma<
     }
 
     // Label programs
-    if (this.labelProgram) {
-      buffers.push({ program: "labels", ...this.labelProgram.getWriteStats() });
+    if (this.internals.labelProgram) {
+      buffers.push({ program: "labels", ...this.internals.labelProgram.getWriteStats() });
     }
-    if (this.edgeLabelProgram) {
-      buffers.push({ program: "edgeLabels", ...this.edgeLabelProgram.getWriteStats() });
+    if (this.internals.edgeLabelProgram) {
+      buffers.push({ program: "edgeLabels", ...this.internals.edgeLabelProgram.getWriteStats() });
     }
 
     // Backdrop program
-    if (this.backdropProgram) {
-      buffers.push({ program: "backdrop", ...this.backdropProgram.getWriteStats() });
+    if (this.internals.backdropProgram) {
+      buffers.push({ program: "backdrop", ...this.internals.backdropProgram.getWriteStats() });
     }
 
     const textureWrites = textures.reduce((sum, t) => sum + t.writes, 0);
@@ -3887,8 +3280,8 @@ export default class Sigma<
    * Resets write statistics counters for all WebGL resources.
    */
   resetWriteStats(): void {
-    this.nodeDataTexture?.resetWriteStats();
-    this.edgeDataTexture?.resetWriteStats();
+    this.internals.nodeDataTexture?.resetWriteStats();
+    this.internals.edgeDataTexture?.resetWriteStats();
 
     if (this.nodeProgram) {
       this.nodeProgram.resetWriteStats();
@@ -3898,8 +3291,8 @@ export default class Sigma<
       this.edgeProgram.resetWriteStats();
       (this.edgeProgram as { resetAttributeTextureWriteStats?: () => void }).resetAttributeTextureWriteStats?.();
     }
-    this.labelProgram?.resetWriteStats();
-    this.edgeLabelProgram?.resetWriteStats();
-    this.backdropProgram?.resetWriteStats();
+    this.internals.labelProgram?.resetWriteStats();
+    this.internals.edgeLabelProgram?.resetWriteStats();
+    this.internals.backdropProgram?.resetWriteStats();
   }
 }

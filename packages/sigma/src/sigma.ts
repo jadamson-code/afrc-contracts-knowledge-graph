@@ -158,8 +158,10 @@ export default class Sigma<
 
   // Cache:
   private graphToViewportRatio = 1;
-  private itemIDsIndex: Record<number, { type: "node" | "edge"; id: string }> = {};
+  private nodeItemIDsIndex: Record<number, string> = {};
+  private edgeItemIDsIndex: Record<number, string> = {};
   private edgeIndices: Record<string, number> = {};
+  private prevNodeVisibilities: Record<string, string | undefined> = {};
 
   // Starting dimensions
   private width = 0;
@@ -175,7 +177,7 @@ export default class Sigma<
 
   // Internal states
   private renderFrame: number | null = null;
-  private needToProcess = false;
+  private pendingProcess: "none" | "nodes" | "full" = "full";
   private needToRefreshState = false;
   private checkEdgesEventsFrame: number | null = null;
 
@@ -604,9 +606,7 @@ export default class Sigma<
       this.internals.settings.pickingDownSizingRatio,
     );
     const index = colorToIndex(...color);
-    const itemAt = this.itemIDsIndex[index];
-
-    return itemAt && itemAt.type === "node" ? itemAt.id : null;
+    return this.nodeItemIDsIndex[index] ?? null;
   }
 
   private bindEventHandlers(): this {
@@ -670,50 +670,44 @@ export default class Sigma<
       this.internals.settings.pickingDownSizingRatio,
     );
     const index = colorToIndex(...color);
-    const itemAt = this.itemIDsIndex[index];
+    return this.edgeItemIDsIndex[index] ?? null;
+  }
 
-    return itemAt && itemAt.type === "edge" ? itemAt.id : null;
+  private getNodeShapeId(data: NodeDisplayData): number {
+    if (
+      this.internals.nodeShapeMap &&
+      this.internals.nodeGlobalShapeIds &&
+      data.shape &&
+      data.shape in this.internals.nodeShapeMap
+    ) {
+      return this.internals.nodeGlobalShapeIds[this.internals.nodeShapeMap[data.shape]];
+    }
+    return getShapeId(data.shape || "circle");
   }
 
   /**
-   * Method used to process the whole graph's data.
-   *  - extent
-   *  - normalizationFunction
-   *  - compute node's coordinate
-   *  - labelgrid
-   *  - program data allocation
-   * @return {Sigma}
+   * Processes all node data: normalizes coordinates, rebuilds the label grid,
+   * updates the node data texture and vertex buffer. Returns true if any
+   * node's visibility changed since the last process cycle (which means edges
+   * must also be reprocessed).
    */
-  private process(): this {
-    this.emit("beforeProcess");
-
-    // Clear attachment cache since all nodes are reprocessed
-    this.internals.attachmentManager?.clear();
-
+  private processNodes(): boolean {
     const graph = this.internals.graph;
     const settings = this.internals.settings;
     const dimensions = this.getDimensions();
 
-    //
-    // NODES
-    //
-    // Skip extent recomputation when autoRescale is "once" and already frozen
-    if (this.internals.settings.autoRescale !== "once" || !this.autoRescaleFrozen) {
+    if (settings.autoRescale !== "once" || !this.autoRescaleFrozen) {
       this.nodeExtent = this.computeNodeExtent();
-      if (this.internals.settings.autoRescale === "once") {
-        this.autoRescaleFrozen = true;
-      }
+      if (settings.autoRescale === "once") this.autoRescaleFrozen = true;
     }
-    if (this.internals.settings.autoRescale === false) {
+    if (settings.autoRescale === false) {
       const { width, height } = dimensions;
       const { x, y } = this.nodeExtent;
-
       this.nodeExtent = {
         x: [(x[0] + x[1]) / 2 - width / 2, (x[0] + x[1]) / 2 + width / 2],
         y: [(y[0] + y[1]) / 2 - height / 2, (y[0] + y[1]) / 2 + height / 2],
       };
     }
-
     this.normalizationFunction = createNormalizationFunction(this.customBBox || this.nodeExtent);
 
     // NOTE: it is important to compute this matrix after computing the node's extent
@@ -730,14 +724,12 @@ export default class Sigma<
     this.labelRenderer.labelGrid.resizeAndClear(dimensions, settings.labelGridCellSize);
 
     const nodeIndices: typeof this.internals.nodeIndices = {};
-    const edgeIndices: typeof this.edgeIndices = {};
-    const itemIDsIndex: typeof this.itemIDsIndex = {};
+    const nodeItemIDsIndex: typeof this.nodeItemIDsIndex = {};
     let incrID = 1;
+    let visibilityChanged = false;
 
     const nodes = graph.nodes();
-    let totalNodes = 0;
 
-    // Do some indexation on the whole graph
     for (let i = 0, l = nodes.length; i < l; i++) {
       const node = nodes[i];
       const data = this.internals.nodeDataCache[node];
@@ -749,54 +741,21 @@ export default class Sigma<
       data.y = graphCoords.y;
       this.normalizationFunction.applyTo(data);
 
-      // labelgrid
+      if (data.visibility !== this.prevNodeVisibilities[node]) visibilityChanged = true;
+
       if (typeof data.label === "string" && data.visibility !== "hidden" && data.labelVisibility !== "hidden")
         this.labelRenderer.labelGrid.add(
           node,
           data.size,
           this.framedGraphToViewport(data, { matrix: nullCameraMatrix }),
         );
-
-      totalNodes++;
     }
     this.labelRenderer.labelGrid.organize();
 
-    // Allocate memory to node program
-    this.nodeProgram.reallocate(totalNodes);
+    this.nodeProgram.reallocate(nodes.length);
     let nodeProcessCount = 0;
 
-    // Update node data texture with position, size, and shape data
-    // This must happen before addNodeToProgram so texture indices are available
-    for (let i = 0, l = nodes.length; i < l; i++) {
-      const node = nodes[i];
-      const data = this.internals.nodeDataCache[node];
-      // Allocate texture index for this node (or get existing)
-      this.internals.nodeDataTexture!.allocate(node);
-
-      // Get shape ID:
-      // - For multi-shape programs: convert local index to global ID for edge clamping
-      // - For single-shape programs: use global registry ID from slug
-      let shapeId: number;
-      if (
-        this.internals.nodeShapeMap &&
-        this.internals.nodeGlobalShapeIds &&
-        data.shape &&
-        data.shape in this.internals.nodeShapeMap
-      ) {
-        // Multi-shape program: convert local index to global ID
-        const localIndex = this.internals.nodeShapeMap[data.shape];
-        shapeId = this.internals.nodeGlobalShapeIds[localIndex];
-      } else {
-        // Single-shape program or fallback: use global registry
-        shapeId = getShapeId(data.shape || "circle");
-      }
-
-      // Update texture data (x, y, size, shapeId)
-      this.internals.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, shapeId);
-    }
-
-    // Add data to programs using buckets (preserves zIndex ordering)
-    const maxDepthLevels = this.internals.settings.maxDepthLevels;
+    const maxDepthLevels = settings.maxDepthLevels;
     this.depthRanges.nodes = {};
     this.nodeBaseDepth = {};
     this.itemBuckets.nodes.forEachBucketByZIndex((zIndex, bucket) => {
@@ -809,28 +768,50 @@ export default class Sigma<
       for (const node of items) {
         this.nodeBaseDepth[node] = depth;
         nodeIndices[node] = incrID;
-        itemIDsIndex[nodeIndices[node]] = { type: "node", id: node };
+        nodeItemIDsIndex[incrID] = node;
         incrID++;
-
-        // Allocate node in the program's layer attribute texture
         this.nodeProgram.allocateNode?.(node);
-
         this.addNodeToProgram(node, nodeIndices[node], nodeProcessCount++);
       }
     });
     this.nodeProgram.invalidateBuffers();
 
-    //
-    // EDGES
-    //
+    this.nodeItemIDsIndex = nodeItemIDsIndex;
+    this.internals.nodeIndices = nodeIndices;
 
+    // Track visibility so the next processNodes call can detect changes
+    for (let i = 0, l = nodes.length; i < l; i++) {
+      this.prevNodeVisibilities[nodes[i]] = this.internals.nodeDataCache[nodes[i]].visibility;
+    }
+
+    this.labelRenderer.processWebGLLabels(nodes);
+
+    for (const program of this.customLayerPrograms.values()) {
+      if (program.cacheData) program.cacheData();
+    }
+
+    return visibilityChanged;
+  }
+
+  /**
+   * Processes all edge data: updates the edge data texture and vertex buffer.
+   * Node picking IDs occupy 1..graph.order, so edge IDs start at graph.order+1.
+   * Must be called after processNodes() so node texture indices are available.
+   */
+  private processEdges(): void {
+    const graph = this.internals.graph;
+    const settings = this.internals.settings;
     const edges = graph.edges();
 
-    // Allocate memory to edge program
     this.edgeProgram.reallocate(edges.length);
-    let edgeProcessCount = 0;
 
-    // Add data to programs using buckets (preserves zIndex ordering)
+    let edgeProcessCount = 0;
+    const edgeIndices: typeof this.edgeIndices = {};
+    const edgeItemIDsIndex: typeof this.edgeItemIDsIndex = {};
+    // Node IDs occupy 1..graph.order, so edges start after
+    let incrID = graph.order + 1;
+
+    const maxDepthLevels = settings.maxDepthLevels;
     this.depthRanges.edges = {};
     this.edgeBaseDepth = {};
     this.itemBuckets.edges.forEachBucketByZIndex((zIndex, bucket) => {
@@ -843,30 +824,15 @@ export default class Sigma<
       for (const edge of items) {
         this.edgeBaseDepth[edge] = depth;
         edgeIndices[edge] = incrID;
-        itemIDsIndex[edgeIndices[edge]] = { type: "edge", id: edge };
+        edgeItemIDsIndex[incrID] = edge;
         incrID++;
-
         this.addEdgeToProgram(edge, edgeIndices[edge], edgeProcessCount++);
       }
     });
     this.edgeProgram.invalidateBuffers();
 
-    this.itemIDsIndex = itemIDsIndex;
-    this.internals.nodeIndices = nodeIndices;
+    this.edgeItemIDsIndex = edgeItemIDsIndex;
     this.edgeIndices = edgeIndices;
-
-    //
-    // WEBGL LABELS
-    //
-    this.labelRenderer.processWebGLLabels(nodes);
-
-    // Cache data uniforms for custom layer programs
-    for (const program of this.customLayerPrograms.values()) {
-      if (program.cacheData) program.cacheData();
-    }
-
-    this.emit("afterProcess");
-    return this;
   }
 
   private getDepthOffset(depth: string): number {
@@ -927,8 +893,7 @@ export default class Sigma<
         const numDepthLayers = this.depthLayers.length;
         this.itemBuckets.nodes.setMaxDepthLevels(numDepthLayers * settings.maxDepthLevels);
         this.itemBuckets.edges.setMaxDepthLevels(numDepthLayers * settings.maxDepthLevels);
-        // Mark need to reprocess since bucket structure changed
-        this.needToProcess = true;
+        this.pendingProcess = "full";
       }
     }
 
@@ -1029,8 +994,14 @@ export default class Sigma<
     this.resize();
 
     // Do we need to reprocess data?
-    if (this.needToProcess) this.process();
-    this.needToProcess = false;
+    if (this.pendingProcess !== "none") {
+      this.emit("beforeProcess");
+      this.internals.attachmentManager?.clear();
+      const visibilityChanged = this.processNodes();
+      if (this.pendingProcess === "full" || visibilityChanged) this.processEdges();
+      this.pendingProcess = "none";
+      this.emit("afterProcess");
+    }
 
     // Do we need to refresh state (styles in-place, no reprocess)?
     if (this.needToRefreshState) this.refreshState();
@@ -1076,6 +1047,10 @@ export default class Sigma<
     // console.log(this.graphToViewportRatio * this.correctionRatio * this.normalizationFunction.ratio * 2);
 
     const params: RenderParams = this.getRenderParams();
+    // When edge events are disabled, skip the edge picking pass to avoid GPU overhead
+    const edgeParams: RenderParams = this.internals.settings.enableEdgeEvents
+      ? params
+      : { ...params, pickingFrameBuffer: null };
     this.labelRenderer.resetFrame();
 
     const gl = this.webGLContext!;
@@ -1133,7 +1108,7 @@ export default class Sigma<
       const edgeRanges = this.depthRanges.edges[depth];
       if (edgeRanges && (!this.internals.settings.hideEdgesOnMove || !moving)) {
         for (const { offset, count } of edgeRanges) {
-          if (count > 0) this.edgeProgram.render(params, offset, count);
+          if (count > 0) this.edgeProgram.render(edgeParams, offset, count);
         }
       }
 
@@ -1477,6 +1452,8 @@ export default class Sigma<
     this.edgeProgramIndex = {};
     this.internals.nodesWithForcedLabels = new Set<string>();
     this.internals.nodesWithBackdrop = new Set<string>();
+    this.nodeItemIDsIndex = {};
+    this.prevNodeVisibilities = {};
     // Clear bucket data
     this.itemBuckets.nodes.clearAll();
     this.zIndexCache.nodes = {};
@@ -1493,6 +1470,8 @@ export default class Sigma<
     this.edgeProgramIndex = {};
     this.edgeTextureIndexCache = {};
     this.internals.edgesWithForcedLabels = new Set<string>();
+    this.edgeItemIDsIndex = {};
+    this.edgeIndices = {};
     // Clear bucket data
     this.itemBuckets.edges.clearAll();
     this.zIndexCache.edges = {};
@@ -1550,6 +1529,8 @@ export default class Sigma<
    */
   private addNodeToProgram(node: string, fingerprint: number, position: number): void {
     const data = this.internals.nodeDataCache[node];
+    this.internals.nodeDataTexture!.allocate(node);
+    this.internals.nodeDataTexture!.updateNode(node, data.x, data.y, data.size, this.getNodeShapeId(data));
     const textureIndex = this.internals.nodeDataTexture!.getIndex(node);
     this.nodeProgram.process(fingerprint, position, data, textureIndex, node);
     this.nodeProgramIndex[node] = position;
@@ -2586,6 +2567,7 @@ export default class Sigma<
       this.internals.graph.forEachNode((node) => this.addNode(node));
       this.edgeGroups.rebuild();
       this.internals.graph.forEachEdge((edge) => this.addEdge(edge));
+      this.pendingProcess = "full";
     } else {
       const nodes = opts.partialGraph?.nodes || [];
       for (let i = 0, l = nodes?.length || 0; i < l; i++) {
@@ -2624,10 +2606,12 @@ export default class Sigma<
         }
       }
       if (skipIndexation && edges.length > 0) this.edgeProgram.invalidateBuffers();
-    }
 
-    // Do we need to call the process function ?
-    if (fullRefresh || !skipIndexation) this.needToProcess = true;
+      // Determine how much reprocessing is needed on the next render
+      if (!skipIndexation && this.pendingProcess !== "full") {
+        this.pendingProcess = edges.length > 0 ? "full" : "nodes";
+      }
+    }
 
     if (schedule) this.scheduleRender();
     else this.render();

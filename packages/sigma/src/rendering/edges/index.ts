@@ -10,7 +10,7 @@
 
 // Base classes and types
 export { EdgeProgram } from "./base";
-export type { EdgeProgramType } from "./base";
+export type { EdgeProgramType, ResolvedEdgeIds } from "./base";
 
 // Types
 export type {

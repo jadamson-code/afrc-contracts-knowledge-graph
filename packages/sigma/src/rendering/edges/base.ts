@@ -12,6 +12,14 @@ import { indexToColor } from "../../utils";
 import { Program } from "../program";
 import { EdgeLabelProgramType } from "./labels";
 
+export interface ResolvedEdgeIds {
+  pathId: number;
+  headId: number;
+  tailId: number;
+  headLengthRatio: number;
+  tailLengthRatio: number;
+}
+
 export abstract class EdgeProgram<
   Uniform extends string = string,
   N extends Attributes = Attributes,
@@ -23,6 +31,15 @@ export abstract class EdgeProgram<
    * This is set by createEdgeProgram() for programs created via the factory.
    */
   static LabelProgram: EdgeLabelProgramType | undefined;
+
+  /**
+   * Resolves path/head/tail indices and length ratios for an edge.
+   * Factory-created programs override this with the full resolution logic.
+   * The default returns zeros (single path, no extremities).
+   */
+  resolveEdgeIds(_data: EdgeDisplayData, _isSelfLoop: boolean, _isParallel: boolean): ResolvedEdgeIds {
+    return { pathId: 0, headId: 0, tailId: 0, headLengthRatio: 0, tailLengthRatio: 0 };
+  }
 
   process(
     edgeIndex: number,

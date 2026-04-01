@@ -183,16 +183,11 @@ export default class Sigma<
   private edgeStyleAnalysis: StyleAnalysis = { dependency: "static", xAttribute: null, yAttribute: null };
 
   // Programs (single program per item kind)
-  private nodeProgram: NodeProgram<string, N, E, G> | null = null;
-  private edgeProgram: EdgeProgram<string, N, E, G> | null = null;
+  private nodeProgram: NodeProgram<string, N, E, G>;
+  private edgeProgram: EdgeProgram<string, N, E, G>;
 
-  // Cached static properties from the edge program class — read once at construction,
-  // used on every addEdgeToProgram call (100k+ times for large graphs).
-  private edgeProgramPathNameToIndex: Record<string, number> | undefined = undefined;
-  private edgeProgramExtremityNameToIndex: Record<string, number> | undefined = undefined;
-  private edgeProgramExtremitiesPool: Array<{ name: string; length: number }> | undefined = undefined;
-  private edgeProgramDefaultHeadIndex = 0;
-  private edgeProgramDefaultTailIndex = 0;
+  // Resolved depth layers (fixed at construction, cached to avoid repeated spreading)
+  private depthLayers: string[] = [...DEFAULT_DEPTH_LAYERS];
 
   // Custom layer programs (fullscreen quad effects rendered at specific depth positions)
   private customLayerPrograms = new Map<
@@ -337,8 +332,11 @@ export default class Sigma<
       (event, payload) => (this.emit as (event: string, payload: unknown) => void)(event, payload),
     );
 
+    // Cache resolved depth layers (never changes after construction)
+    this.depthLayers = resolvedPrimitives.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
+
     // Initialize bucket collections with numDepthLayers * maxDepthLevels
-    const numDepthLayers = (resolvedPrimitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS]).length;
+    const numDepthLayers = this.depthLayers.length;
     this.itemBuckets = {
       nodes: new BucketCollection(numDepthLayers * resolvedSettings.maxDepthLevels),
       edges: new BucketCollection(numDepthLayers * resolvedSettings.maxDepthLevels),
@@ -410,18 +408,6 @@ export default class Sigma<
     this.edgeVariableEntries = Object.entries(edgeVariables) as [string, { type: string; default: unknown }][];
     this.edgePathsByName = new Map(edgePaths.map((p) => [p.name, p]));
     this.edgeProgram = new EdgeProgramClass(gl, null, sigma);
-    const edgeProgramClass = EdgeProgramClass as unknown as {
-      programOptions?: { extremities?: Array<{ name: string; length: number }> };
-      pathNameToIndex?: Record<string, number>;
-      extremityNameToIndex?: Record<string, number>;
-      defaultHeadIndex?: number;
-      defaultTailIndex?: number;
-    };
-    this.edgeProgramPathNameToIndex = edgeProgramClass.pathNameToIndex;
-    this.edgeProgramExtremityNameToIndex = edgeProgramClass.extremityNameToIndex;
-    this.edgeProgramExtremitiesPool = edgeProgramClass.programOptions?.extremities;
-    this.edgeProgramDefaultHeadIndex = edgeProgramClass.defaultHeadIndex ?? 0;
-    this.edgeProgramDefaultTailIndex = edgeProgramClass.defaultTailIndex ?? 0;
 
     // Create edge label program if the edge program has one
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -776,7 +762,7 @@ export default class Sigma<
     this.labelRenderer.labelGrid.organize();
 
     // Allocate memory to node program
-    this.nodeProgram!.reallocate(totalNodes);
+    this.nodeProgram.reallocate(totalNodes);
     let nodeProcessCount = 0;
 
     // Update node data texture with position, size, and shape data
@@ -810,14 +796,13 @@ export default class Sigma<
     }
 
     // Add data to programs using buckets (preserves zIndex ordering)
-    const depthLayers = this.internals.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
     const maxDepthLevels = this.internals.settings.maxDepthLevels;
     this.depthRanges.nodes = {};
     this.nodeBaseDepth = {};
     this.itemBuckets.nodes.forEachBucketByZIndex((zIndex, bucket) => {
       const items = bucket.getItems();
       const depthIndex = Math.floor(zIndex / maxDepthLevels);
-      const depth = depthLayers[depthIndex] ?? depthLayers[0];
+      const depth = this.depthLayers[depthIndex] ?? this.depthLayers[0];
       if (!this.depthRanges.nodes[depth]) this.depthRanges.nodes[depth] = [{ offset: nodeProcessCount, count: 0 }];
       const fragments = this.depthRanges.nodes[depth];
       fragments[fragments.length - 1].count += items.size;
@@ -828,11 +813,12 @@ export default class Sigma<
         incrID++;
 
         // Allocate node in the program's layer attribute texture
-        this.nodeProgram!.allocateNode?.(node);
+        this.nodeProgram.allocateNode?.(node);
 
         this.addNodeToProgram(node, nodeIndices[node], nodeProcessCount++);
       }
     });
+    this.nodeProgram.invalidateBuffers();
 
     //
     // EDGES
@@ -841,7 +827,7 @@ export default class Sigma<
     const edges = graph.edges();
 
     // Allocate memory to edge program
-    this.edgeProgram!.reallocate(edges.length);
+    this.edgeProgram.reallocate(edges.length);
     let edgeProcessCount = 0;
 
     // Add data to programs using buckets (preserves zIndex ordering)
@@ -850,7 +836,7 @@ export default class Sigma<
     this.itemBuckets.edges.forEachBucketByZIndex((zIndex, bucket) => {
       const items = bucket.getItems();
       const depthIndex = Math.floor(zIndex / maxDepthLevels);
-      const depth = depthLayers[depthIndex] ?? depthLayers[0];
+      const depth = this.depthLayers[depthIndex] ?? this.depthLayers[0];
       if (!this.depthRanges.edges[depth]) this.depthRanges.edges[depth] = [{ offset: edgeProcessCount, count: 0 }];
       const fragments = this.depthRanges.edges[depth];
       fragments[fragments.length - 1].count += items.size;
@@ -863,6 +849,7 @@ export default class Sigma<
         this.addEdgeToProgram(edge, edgeIndices[edge], edgeProcessCount++);
       }
     });
+    this.edgeProgram.invalidateBuffers();
 
     this.itemIDsIndex = itemIDsIndex;
     this.internals.nodeIndices = nodeIndices;
@@ -883,8 +870,7 @@ export default class Sigma<
   }
 
   private getDepthOffset(depth: string): number {
-    const depthLayers = this.internals.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
-    const idx = depthLayers.indexOf(depth);
+    const idx = this.depthLayers.indexOf(depth);
     return (idx >= 0 ? idx : 0) * this.internals.settings.maxDepthLevels;
   }
 
@@ -938,7 +924,7 @@ export default class Sigma<
     if (oldSettings) {
       // Check maxDepthLevels:
       if (oldSettings.maxDepthLevels !== settings.maxDepthLevels) {
-        const numDepthLayers = (this.internals.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS]).length;
+        const numDepthLayers = this.depthLayers.length;
         this.itemBuckets.nodes.setMaxDepthLevels(numDepthLayers * settings.maxDepthLevels);
         this.itemBuckets.edges.setMaxDepthLevels(numDepthLayers * settings.maxDepthLevels);
         // Mark need to reprocess since bucket structure changed
@@ -1115,7 +1101,7 @@ export default class Sigma<
     this.internals.edgeDataTexture!.upload();
 
     // Upload layer attribute textures
-    this.nodeProgram!.uploadLayerTexture?.();
+    this.nodeProgram.uploadLayerTexture?.();
     (this.edgeProgram as unknown as { uploadAttributeTexture?: () => void })?.uploadAttributeTexture?.();
 
     // Bind data textures to their respective texture units
@@ -1138,8 +1124,7 @@ export default class Sigma<
     gl.viewport(0, 0, this.width * this.internals.pixelRatio, this.height * this.internals.pixelRatio);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-    const depthLayers = this.internals.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
-    for (const depth of depthLayers) {
+    for (const depth of this.depthLayers) {
       // Custom layer program at this depth
       const customLayer = this.customLayerPrograms.get(depth);
       if (customLayer) customLayer.render(params);
@@ -1148,7 +1133,7 @@ export default class Sigma<
       const edgeRanges = this.depthRanges.edges[depth];
       if (edgeRanges && (!this.internals.settings.hideEdgesOnMove || !moving)) {
         for (const { offset, count } of edgeRanges) {
-          if (count > 0) this.edgeProgram!.render(params, offset, count);
+          if (count > 0) this.edgeProgram.render(params, offset, count);
         }
       }
 
@@ -1167,7 +1152,7 @@ export default class Sigma<
       const nodeRanges = this.depthRanges.nodes[depth];
       if (nodeRanges) {
         for (const { offset, count } of nodeRanges) {
-          if (count > 0) this.nodeProgram!.render(params, offset, count);
+          if (count > 0) this.nodeProgram.render(params, offset, count);
         }
       }
 
@@ -1565,11 +1550,8 @@ export default class Sigma<
    */
   private addNodeToProgram(node: string, fingerprint: number, position: number): void {
     const data = this.internals.nodeDataCache[node];
-    // Get the node's texture index (already allocated during processing)
     const textureIndex = this.internals.nodeDataTexture!.getIndex(node);
-    this.nodeProgram!.process(fingerprint, position, data, textureIndex, node);
-    this.nodeProgram!.invalidateBuffers();
-    // Saving program index
+    this.nodeProgram.process(fingerprint, position, data, textureIndex, node);
     this.nodeProgramIndex[node] = position;
   }
 
@@ -1584,68 +1566,22 @@ export default class Sigma<
     const data = this.internals.edgeDataCache[edge];
     const source = this.internals.graph.source(edge);
     const target = this.internals.graph.target(edge);
-    const sourceData = this.internals.nodeDataCache[source];
-    const targetData = this.internals.nodeDataCache[target];
 
-    // Allocate edge in edge data texture (or get existing allocation)
     const edgeTextureIndex = this.internals.edgeDataTexture!.allocate(edge);
     this.edgeTextureIndexCache[edge] = edgeTextureIndex;
 
-    // Get node texture indices for source and target
-    const sourceNodeIndex = this.internals.nodeDataTexture!.getIndex(source);
-    const targetNodeIndex = this.internals.nodeDataTexture!.getIndex(target);
-
-    const pathNameToIndex = this.edgeProgramPathNameToIndex;
-    const extremityNameToIndex = this.edgeProgramExtremityNameToIndex;
-    const extremitiesPool = this.edgeProgramExtremitiesPool;
-
-    // Start with program defaults
-    let pathId = 0;
-    let headId = this.edgeProgramDefaultHeadIndex;
-    let tailId = this.edgeProgramDefaultTailIndex;
-
-    // Get edge-specified path/head/tail names
-    const edgeData = data as unknown as {
-      path?: string;
-      selfLoopPath?: string;
-      parallelPath?: string;
-      head?: string;
-      tail?: string;
-    };
-
-    // Select path: self-loops use selfLoopPath, parallel edges use parallelPath, others use path
     const isSelfLoop = source === target;
     const isParallel = !isSelfLoop && (this.stateManager.getEdgeState(edge)?.parallelCount ?? 1) > 1;
-    const pathName = isSelfLoop
-      ? edgeData.selfLoopPath
-      : isParallel && edgeData.parallelPath
-        ? edgeData.parallelPath
-        : edgeData.path;
-    if (pathName && pathNameToIndex?.[pathName] !== undefined) {
-      pathId = pathNameToIndex[pathName];
-    }
+    const { pathId, headId, tailId, headLengthRatio, tailLengthRatio } = this.edgeProgram.resolveEdgeIds(
+      data,
+      isSelfLoop,
+      isParallel,
+    );
 
-    // Override head index if edge explicitly specifies one (skip "none" — it's the
-    // implicit default from DEFAULT_RESOLVED_EDGE_STYLE and shouldn't override the
-    // program's defaultHead setting)
-    if (edgeData.head && edgeData.head !== "none" && extremityNameToIndex?.[edgeData.head] !== undefined) {
-      headId = extremityNameToIndex[edgeData.head];
-    }
-
-    // Override tail index if edge explicitly specifies one (same logic)
-    if (edgeData.tail && edgeData.tail !== "none" && extremityNameToIndex?.[edgeData.tail] !== undefined) {
-      tailId = extremityNameToIndex[edgeData.tail];
-    }
-
-    // Get length ratios from the resolved extremities
-    const headLengthRatio = extremitiesPool?.[headId]?.length ?? 0;
-    const tailLengthRatio = extremitiesPool?.[tailId]?.length ?? 0;
-
-    // Update edge data texture with core edge data
     this.internals.edgeDataTexture!.updateEdge(
       edge,
-      sourceNodeIndex,
-      targetNodeIndex,
+      this.internals.nodeDataTexture!.getIndex(source),
+      this.internals.nodeDataTexture!.getIndex(target),
       data.size,
       headLengthRatio,
       tailLengthRatio,
@@ -1654,9 +1590,14 @@ export default class Sigma<
       tailId,
     );
 
-    this.edgeProgram!.process(fingerprint, position, sourceData, targetData, data, edgeTextureIndex);
-    this.edgeProgram!.invalidateBuffers();
-    // Saving program index
+    this.edgeProgram.process(
+      fingerprint,
+      position,
+      this.internals.nodeDataCache[source],
+      this.internals.nodeDataCache[target],
+      data,
+      edgeTextureIndex,
+    );
     this.edgeProgramIndex[edge] = position;
   }
 
@@ -1889,11 +1830,10 @@ export default class Sigma<
       cacheData?(): void;
     },
   ): this {
-    const depthLayers = this.internals.primitives?.depthLayers ?? [...DEFAULT_DEPTH_LAYERS];
-    if (!depthLayers.includes(depth))
+    if (!this.depthLayers.includes(depth))
       throw new Error(
         `Sigma: cannot add custom layer program at depth "${depth}" — ` +
-          `it must be declared in primitives.depthLayers. Current layers: ${depthLayers.join(", ")}`,
+          `it must be declared in primitives.depthLayers. Current layers: ${this.depthLayers.join(", ")}`,
       );
     this.customLayerPrograms.set(depth, program);
     this.refresh();
@@ -2411,6 +2351,7 @@ export default class Sigma<
       const programIndex = this.nodeProgramIndex[node];
       if (programIndex !== undefined) {
         this.addNodeToProgram(node, this.internals.nodeIndices[node], programIndex);
+        this.nodeProgram.invalidateBuffers();
       }
       return;
     }
@@ -2513,6 +2454,7 @@ export default class Sigma<
     const programIndex = this.nodeProgramIndex[node];
     if (programIndex !== undefined) {
       this.addNodeToProgram(node, this.internals.nodeIndices[node], programIndex);
+      this.nodeProgram.invalidateBuffers();
     }
   }
 
@@ -2535,6 +2477,7 @@ export default class Sigma<
       const programIndex = this.edgeProgramIndex[edge];
       if (programIndex !== undefined) {
         this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
+        this.edgeProgram.invalidateBuffers();
       }
       return;
     }
@@ -2603,6 +2546,7 @@ export default class Sigma<
 
       if (structuralDataChanged) {
         this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
+        this.edgeProgram.invalidateBuffers();
       } else {
         // Fast path: skip edge data texture, only update vertex buffer + attribute texture
         const source = this.internals.graph.source(edge);
@@ -2611,8 +2555,8 @@ export default class Sigma<
         const targetData = this.internals.nodeDataCache[target];
         const edgeTextureIndex = this.edgeTextureIndexCache[edge];
 
-        this.edgeProgram!.process(this.edgeIndices[edge], programIndex, sourceData, targetData, data, edgeTextureIndex);
-        this.edgeProgram!.invalidateBuffers();
+        this.edgeProgram.process(this.edgeIndices[edge], programIndex, sourceData, targetData, data, edgeTextureIndex);
+        this.edgeProgram.invalidateBuffers();
       }
     }
   }
@@ -2664,6 +2608,7 @@ export default class Sigma<
           this.addNodeToProgram(node, this.internals.nodeIndices[node], programIndex);
         }
       }
+      if (skipIndexation && nodes.length > 0) this.nodeProgram.invalidateBuffers();
 
       const edges = opts?.partialGraph?.edges || [];
       for (let i = 0, l = edges.length; i < l; i++) {
@@ -2678,6 +2623,7 @@ export default class Sigma<
           this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
         }
       }
+      if (skipIndexation && edges.length > 0) this.edgeProgram.invalidateBuffers();
     }
 
     // Do we need to call the process function ?
@@ -2976,15 +2922,13 @@ export default class Sigma<
     while (container.firstChild) container.removeChild(container.firstChild);
 
     // Kill programs:
-    this.nodeProgram?.kill();
-    this.edgeProgram?.kill();
+    this.nodeProgram.kill();
+    this.edgeProgram.kill();
     this.internals.labelProgram?.kill();
     this.internals.edgeLabelProgram?.kill();
     this.internals.backdropProgram?.kill();
     this.internals.attachmentProgram?.kill();
     this.internals.attachmentManager?.kill();
-    this.nodeProgram = null;
-    this.edgeProgram = null;
     this.internals.labelProgram = null;
     this.internals.edgeLabelProgram = null;
     this.internals.backdropProgram = null;

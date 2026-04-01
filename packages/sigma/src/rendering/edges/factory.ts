@@ -22,7 +22,7 @@ import {
 } from "../data-texture";
 import { isAttributeSource } from "../nodes";
 import { ProgramInfo } from "../utils";
-import { EdgeProgram as BaseEdgeProgram, EdgeProgramType } from "./base";
+import { EdgeProgram as BaseEdgeProgram, EdgeProgramType, ResolvedEdgeIds } from "./base";
 import { generateEdgeShaders } from "./generator";
 import { type EdgeLabelProgramType, createEdgeLabelProgram } from "./labels";
 import { EDGE_ATTRIBUTE_TEXTURE_UNIT } from "./path-attribute-texture";
@@ -207,6 +207,46 @@ export function createEdgeProgram<
         }
       });
       this.attrDescriptors = buildAttrDescriptors([...paths, ...layers], this.layout, lifecycleMapForDescriptors);
+    }
+
+    resolveEdgeIds(data: EdgeDisplayData, isSelfLoop: boolean, isParallel: boolean): ResolvedEdgeIds {
+      const edgeData = data as unknown as {
+        path?: string;
+        selfLoopPath?: string;
+        parallelPath?: string;
+        head?: string;
+        tail?: string;
+      };
+
+      let pathId = 0;
+      let headId = defaultHeadIndex;
+      let tailId = defaultTailIndex;
+
+      const pathName = isSelfLoop
+        ? edgeData.selfLoopPath
+        : isParallel && edgeData.parallelPath
+          ? edgeData.parallelPath
+          : edgeData.path;
+      if (pathName && pathNameToIndex[pathName] !== undefined) {
+        pathId = pathNameToIndex[pathName];
+      }
+
+      if (edgeData.head && edgeData.head !== "none" && extremityNameToIndex[edgeData.head] !== undefined) {
+        headId = extremityNameToIndex[edgeData.head];
+      }
+      if (edgeData.tail && edgeData.tail !== "none" && extremityNameToIndex[edgeData.tail] !== undefined) {
+        tailId = extremityNameToIndex[edgeData.tail];
+      }
+
+      const headExt = extremities[headId];
+      const tailExt = extremities[tailId];
+      return {
+        pathId,
+        headId,
+        tailId,
+        headLengthRatio: !isAttributeSource(headExt.length) ? headExt.length : 0,
+        tailLengthRatio: !isAttributeSource(tailExt.length) ? tailExt.length : 0,
+      };
     }
 
     getDefinition() {

@@ -72,7 +72,7 @@ primitives: {
 }
 ```
 
-**Paths** control the geometric route an edge takes between its endpoints. Built-in paths include `pathLine()`, `pathCurved()`, `pathStepCurved()`, and `pathCurvedS()`.
+**Paths** control the geometric route an edge takes between its endpoints. Built-in paths include `pathLine()`, `pathCurved()`, `pathStep()`, `pathStepCurved()`, and `pathCurvedS()`.
 
 **Extremities** are shapes drawn at the endpoints of edges. The built-in extremity is `extremityArrow()`. Omit the array or leave it empty for no extremity.
 
@@ -100,6 +100,7 @@ Nodes and edges are assigned to depth layers through the `depth` and `labelDepth
 Variables are custom typed attributes declared in the primitives. They bridge the gap between graph data and WebGL rendering.
 
 ```typescript
+import { layerBorder } from "@sigma/node-border";
 import { layerFill } from "sigma/rendering";
 
 primitives: {

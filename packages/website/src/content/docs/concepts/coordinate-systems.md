@@ -35,7 +35,7 @@ One other thing to note is that sigma will correct for the aspect ratio of your 
 
 ## WebGL vertex shader output space: `clipspace`
 
-In the vertex shader, we translate from `frameGraph` to `clipspace` that has dimensions ranging from `-1` to `1`.
+In the vertex shader, we translate from `framedGraph` to `clipspace` that has dimensions ranging from `-1` to `1`.
 
 Doing so, we apply a correction to make sure the resulting space is a real square with both dimensions ranging from min (`-1`) to max (`1`).
 

@@ -98,7 +98,7 @@ renderer.on("leaveNode", () => {
 });
 ```
 
-`setNodesState` and `setEdgesState` batch-update state flags efficiently. The `refresh({ skipIndexation: true })` call
+`setNodeState` and `setEdgeState` update state flags one element at a time. The `refresh({ skipIndexation: true })` call
 tells sigma to re-evaluate styles, without re-computing the spatial index (since no positions changed).
 
 Try hovering a node: its neighbors should stay colored while the rest fades out.

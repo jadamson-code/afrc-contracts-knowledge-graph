@@ -66,12 +66,12 @@ The `cameraPanBoundaries` setting accepts:
 
 ## Sizing and scaling
 
-| Setting                   | Type                        | Default     | Description                                                                                                                                  |
-| ------------------------- | --------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `itemSizesReference`      | `"screen" \| "positions"`   | `"screen"`  | How node/edge sizes are interpreted. `"screen"`: sizes are in pixels regardless of zoom. `"positions"`: sizes scale with graph coordinates   |
-| `zoomToSizeRatioFunction` | `(ratio: number) => number` | `Math.sqrt` | Maps camera zoom ratio to a size scaling factor. Only relevant when `itemSizesReference` is `"screen"`                                       |
-| `autoRescale`             | `boolean \| "once"`         | `true`      | Automatically rescale the graph to fit the viewport. `"once"` captures the initial extent and freezes it, useful for drag-and-drop scenarios |
-| `autoCenter`              | `boolean`                   | `true`      | Automatically center the graph in the viewport                                                                                               |
+| Setting                   | Type                        | Default       | Description                                                                                                                                  |
+| ------------------------- | --------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `itemSizesReference`      | `"screen" \| "positions"`   | `"positions"` | How node/edge sizes are interpreted. `"screen"`: sizes are in pixels regardless of zoom. `"positions"`: sizes scale with graph coordinates   |
+| `zoomToSizeRatioFunction` | `(ratio: number) => number` | `Math.sqrt`   | Maps camera zoom ratio to a size scaling factor. Applied in both `"screen"` and `"positions"` modes                                          |
+| `autoRescale`             | `boolean \| "once"`         | `true`        | Automatically rescale the graph to fit the viewport. `"once"` captures the initial extent and freezes it, useful for drag-and-drop scenarios |
+| `autoCenter`              | `boolean`                   | `true`        | Automatically center the graph in the viewport                                                                                               |
 
 ## Label optimization
 
@@ -81,6 +81,14 @@ The `cameraPanBoundaries` setting accepts:
 | `labelDensity`               | `number`  | `1`     | Controls how many labels are shown. Higher values show more labels (must be positive) |
 | `labelGridCellSize`          | `number`  | `100`   | Size of the label grid cells used for density-based culling                           |
 | `labelPixelSnapping`         | `boolean` | `true`  | Snap label positions to whole pixels for sharper text rendering                       |
+
+## Node drag
+
+| Setting                    | Type                                               | Default  | Description                                                                                                                        |
+| -------------------------- | -------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `enableNodeDrag`           | `boolean`                                          | `false`  | Allow users to drag nodes. See the [drag and drop guide](/how-to/interactivity/drag-drop/)                                         |
+| `getDraggedNodes`          | `(node: string) => string[]`                       | `[node]` | Returns the list of nodes to move when a drag starts. Override to implement multi-node drag                                        |
+| `dragPositionToAttributes` | `((pos, node) => Record<string, unknown>) \| null` | `null`   | Transforms the drag position before writing it to the graph. Use for snapping or mapping to non-`x`/`y` attributes. `null` = no-op |
 
 ## Performance
 

@@ -135,7 +135,7 @@ export function createLabelProgram<
   // -------------------------------------------------------------------------
   // Return the LabelProgram class
   // -------------------------------------------------------------------------
-  return class NodeLabelProgram extends LabelProgram<LabelUniform, N, E, G> {
+  return class NodeLabelProgram extends LabelProgram<LabelUniform, N, E, G, LabelDisplayData> {
     /** Static reference to the options used to create this program */
     static readonly programOptions = options;
 

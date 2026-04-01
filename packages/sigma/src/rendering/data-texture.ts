@@ -19,7 +19,7 @@ const GROWTH_FACTOR = 1.5;
 const MAX_TEXTURE_WIDTH = 4096;
 
 /**
- * Abstract base class for GPU data textures.
+ * Base class for GPU data textures.
  *
  * The texture is a 2D RGBA32F texture where each item uses TEXELS_PER_ITEM texels.
  * The texture uses a 2D layout (width × height) to stay within WebGL maximum
@@ -28,12 +28,8 @@ const MAX_TEXTURE_WIDTH = 4096;
  * Item indices are allocated via a free-list strategy for efficient
  * add/remove operations without compaction.
  */
-export abstract class DataTexture {
-  /**
-   * Number of texels (RGBA floats) used per item.
-   * Override in subclasses: 1 for nodes (4 floats), 2 for edges (8 floats), etc.
-   */
-  protected abstract readonly TEXELS_PER_ITEM: number;
+export class DataTexture {
+  protected readonly TEXELS_PER_ITEM: number;
 
   protected gl: WebGL2RenderingContext;
   protected texture: WebGLTexture | null = null;
@@ -51,20 +47,11 @@ export abstract class DataTexture {
   protected freeIndices: number[] = [];
   // Next index to allocate if free list is empty
   protected nextIndex: number = 0;
-  constructor(gl: WebGL2RenderingContext, initialCapacity: number = INITIAL_CAPACITY) {
-    this.gl = gl;
-    this.capacity = this.roundUpToPowerOfTwo(initialCapacity);
-    // Note: textureWidth/Height and data are initialized in initializeTexture()
-    // which must be called by subclass after TEXELS_PER_ITEM is set
-    this.textureWidth = 0;
-    this.textureHeight = 0;
-    this.data = new Float32Array(0);
-  }
 
-  /**
-   * Must be called by subclass constructor after TEXELS_PER_ITEM is defined.
-   */
-  protected initializeTexture(): void {
+  constructor(gl: WebGL2RenderingContext, texelsPerItem: number, initialCapacity: number = INITIAL_CAPACITY) {
+    this.gl = gl;
+    this.TEXELS_PER_ITEM = texelsPerItem;
+    this.capacity = this.roundUpToPowerOfTwo(initialCapacity);
     const dims = this.computeTextureDimensions(this.capacity);
     this.textureWidth = dims.width;
     this.textureHeight = dims.height;
@@ -401,14 +388,11 @@ export function computeAttributeLayout(sources: Array<{ attributes: AttributeSpe
  * Used as base for both node layer attributes and edge path attributes.
  */
 export class ItemAttributeTexture extends DataTexture {
-  protected readonly TEXELS_PER_ITEM: number;
   protected readonly floatsPerItem: number;
 
   constructor(gl: WebGL2RenderingContext, layout: AttributeLayout, initialCapacity?: number) {
-    super(gl, initialCapacity);
+    super(gl, layout.texelsPerItem, initialCapacity);
     this.floatsPerItem = layout.floatsPerItem;
-    this.TEXELS_PER_ITEM = layout.texelsPerItem;
-    this.initializeTexture();
   }
 
   /**
@@ -431,13 +415,6 @@ export class ItemAttributeTexture extends DataTexture {
     }
 
     this.markDirty(index);
-  }
-
-  /**
-   * Gets the number of texels per item.
-   */
-  getTexelsPerItem(): number {
-    return this.TEXELS_PER_ITEM;
   }
 }
 

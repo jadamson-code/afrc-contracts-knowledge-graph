@@ -1,15 +1,9 @@
 import { DataTexture } from "sigma/rendering";
 import { beforeEach, describe, expect, test } from "vitest";
 
-/**
- * Concrete implementation for testing the abstract DataTexture class.
- */
 class TestDataTexture extends DataTexture {
-  protected readonly TEXELS_PER_ITEM = 2;
-
   constructor(gl: WebGL2RenderingContext, initialCapacity?: number) {
-    super(gl, initialCapacity);
-    this.initializeTexture();
+    super(gl, 2, initialCapacity);
   }
 
   /** Expose protected data for testing */

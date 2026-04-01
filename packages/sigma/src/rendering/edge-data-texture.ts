@@ -38,11 +38,8 @@ import { DataTexture } from "./data-texture";
  *   texel1: (N * 2 + 1) % textureWidth, (N * 2 + 1) / textureWidth
  */
 export class EdgeDataTexture extends DataTexture {
-  protected readonly TEXELS_PER_ITEM = 2;
-
   constructor(gl: WebGL2RenderingContext, initialCapacity?: number) {
-    super(gl, initialCapacity);
-    this.initializeTexture();
+    super(gl, 2, initialCapacity);
   }
 
   /**

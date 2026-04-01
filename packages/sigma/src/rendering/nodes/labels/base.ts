@@ -8,9 +8,14 @@
 import { Attributes } from "graphology-types";
 
 import type Sigma from "../../../sigma";
-import type { LabelDisplayData, RenderParams } from "../../../types";
+import type { LabelDisplayData } from "../../../types";
 import { Program } from "../../program";
-import { InstancedProgramDefinition, ProgramDefinition, ProgramInfo } from "../../utils";
+import { ProgramInfo } from "../../utils";
+
+interface LabelDataBase {
+  hidden?: boolean;
+  text?: string;
+}
 
 /**
  * Base class for label program implementations.
@@ -20,12 +25,16 @@ import { InstancedProgramDefinition, ProgramDefinition, ProgramInfo } from "../.
  *
  * Visibility is handled by processing only visible labels each frame
  * (determined by LabelGrid), so all characters in the buffer are rendered.
+ *
+ * The DataType generic allows reuse by both node labels (LabelDisplayData)
+ * and edge labels (EdgeLabelDisplayData) via EdgeLabelProgram.
  */
 export abstract class LabelProgram<
   Uniform extends string = string,
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
+  DataType extends LabelDataBase = LabelDisplayData,
 > extends Program<Uniform, N, E, G> {
   /**
    * Ensure all glyphs for the given texts are generated and available.
@@ -68,7 +77,7 @@ export abstract class LabelProgram<
   /**
    * Process a label and write its character data to the GPU buffer.
    */
-  processLabel(_labelKey: string, offset: number, data: LabelDisplayData): number {
+  processLabel(_labelKey: string, offset: number, data: DataType): number {
     if (data.hidden || !data.text) {
       return 0;
     }
@@ -93,12 +102,7 @@ export abstract class LabelProgram<
    * @param char - The character to process
    * @param charIndex - Index of character within the label text
    */
-  protected abstract processCharacter(
-    index: number,
-    labelData: LabelDisplayData,
-    char: string,
-    charIndex: number,
-  ): void;
+  protected abstract processCharacter(index: number, labelData: DataType, char: string, charIndex: number): void;
 
   /**
    * Get the label at a given screen position.
@@ -160,9 +164,6 @@ export abstract class LabelProgram<
       super.reallocate(this.bufferCapacity);
     }
   }
-
-  abstract getDefinition(): ProgramDefinition<Uniform> | InstancedProgramDefinition<Uniform>;
-  abstract setUniforms(params: RenderParams, programInfo: ProgramInfo): void;
 }
 
 export type LabelProgramType<

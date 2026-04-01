@@ -26,11 +26,8 @@ import { DataTexture } from "./data-texture";
  *   y = N / textureWidth
  */
 export class NodeDataTexture extends DataTexture {
-  protected readonly TEXELS_PER_ITEM = 1;
-
   constructor(gl: WebGL2RenderingContext, initialCapacity?: number) {
-    super(gl, initialCapacity);
-    this.initializeTexture();
+    super(gl, 1, initialCapacity);
   }
 
   /**

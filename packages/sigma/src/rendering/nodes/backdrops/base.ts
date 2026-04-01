@@ -10,9 +10,9 @@
 import { Attributes } from "graphology-types";
 
 import type Sigma from "../../../sigma";
-import type { LabelPosition, RenderParams } from "../../../types";
+import type { LabelPosition } from "../../../types";
 import { Program } from "../../program";
-import { InstancedProgramDefinition, ProgramDefinition, ProgramInfo } from "../../utils";
+import { ProgramInfo } from "../../utils";
 
 export interface BackdropDisplayData {
   key: string;
@@ -72,9 +72,6 @@ export abstract class BackdropProgram<
       super.reallocate(this.bufferCapacity);
     }
   }
-
-  abstract getDefinition(): ProgramDefinition<Uniform> | InstancedProgramDefinition<Uniform>;
-  abstract setUniforms(params: RenderParams, programInfo: ProgramInfo): void;
 }
 
 export type BackdropProgramType<

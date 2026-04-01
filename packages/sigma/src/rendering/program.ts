@@ -157,8 +157,6 @@ export abstract class Program<
     fragmentShaderSource: string,
     frameBuffer: WebGLFramebuffer | null,
   ): ProgramInfo {
-    const def = this.getDefinition();
-
     // WebGL buffers
     const buffer = gl.createBuffer();
     if (buffer === null) throw new Error("Program: error while creating the WebGL buffer.");
@@ -170,20 +168,20 @@ export abstract class Program<
 
     // Initializing locations
     const uniformLocations = {} as ProgramInfo["uniformLocations"];
-    def.UNIFORMS.forEach((uniformName) => {
+    this.UNIFORMS.forEach((uniformName) => {
       const location = gl.getUniformLocation(program, uniformName);
       if (location) uniformLocations[uniformName] = location;
     });
 
     const attributeLocations = {} as ProgramInfo["attributeLocations"];
-    def.ATTRIBUTES.forEach((attr) => {
+    this.ATTRIBUTES.forEach((attr) => {
       attributeLocations[attr.name] = gl.getAttribLocation(program, attr.name);
     });
 
     // For instanced programs:
     let constantBuffer;
-    if ("CONSTANT_ATTRIBUTES" in def) {
-      def.CONSTANT_ATTRIBUTES.forEach((attr) => {
+    if (this.isInstanced) {
+      this.CONSTANT_ATTRIBUTES.forEach((attr) => {
         attributeLocations[attr.name] = gl.getAttribLocation(program, attr.name);
       });
 

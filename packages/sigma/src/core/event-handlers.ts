@@ -282,14 +282,12 @@ export function bindGraphHandlers(
 
   activeListeners.eachNodeAttributesUpdatedGraphUpdate = (e: { hints?: { attributes?: string[] } }) => {
     const updatedFields = e.hints?.attributes;
-    graph.forEachNode((node) => ctx.updateNode(node));
     const layoutChanged = !updatedFields || updatedFields.some((f) => LAYOUT_IMPACTING_FIELDS.has(f));
     ctx.refresh({ partialGraph: { nodes: graph.nodes() }, skipIndexation: !layoutChanged, schedule: true });
   };
 
   activeListeners.eachEdgeAttributesUpdatedGraphUpdate = (e: { hints?: { attributes?: string[] } }) => {
     const updatedFields = e.hints?.attributes;
-    graph.forEachEdge((edge) => ctx.updateEdge(edge));
     const layoutChanged = updatedFields && ["zIndex", "type"].some((f) => updatedFields?.includes(f));
     ctx.refresh({ partialGraph: { edges: graph.edges() }, skipIndexation: !layoutChanged, schedule: true });
   };

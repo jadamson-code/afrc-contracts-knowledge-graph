@@ -186,6 +186,14 @@ export default class Sigma<
   private nodeProgram: NodeProgram<string, N, E, G> | null = null;
   private edgeProgram: EdgeProgram<string, N, E, G> | null = null;
 
+  // Cached static properties from the edge program class — read once at construction,
+  // used on every addEdgeToProgram call (100k+ times for large graphs).
+  private edgeProgramPathNameToIndex: Record<string, number> | undefined = undefined;
+  private edgeProgramExtremityNameToIndex: Record<string, number> | undefined = undefined;
+  private edgeProgramExtremitiesPool: Array<{ name: string; length: number }> | undefined = undefined;
+  private edgeProgramDefaultHeadIndex = 0;
+  private edgeProgramDefaultTailIndex = 0;
+
   // Custom layer programs (fullscreen quad effects rendered at specific depth positions)
   private customLayerPrograms = new Map<
     string,
@@ -402,6 +410,18 @@ export default class Sigma<
     this.edgeVariableEntries = Object.entries(edgeVariables) as [string, { type: string; default: unknown }][];
     this.edgePathsByName = new Map(edgePaths.map((p) => [p.name, p]));
     this.edgeProgram = new EdgeProgramClass(gl, null, sigma);
+    const edgeProgramClass = EdgeProgramClass as unknown as {
+      programOptions?: { extremities?: Array<{ name: string; length: number }> };
+      pathNameToIndex?: Record<string, number>;
+      extremityNameToIndex?: Record<string, number>;
+      defaultHeadIndex?: number;
+      defaultTailIndex?: number;
+    };
+    this.edgeProgramPathNameToIndex = edgeProgramClass.pathNameToIndex;
+    this.edgeProgramExtremityNameToIndex = edgeProgramClass.extremityNameToIndex;
+    this.edgeProgramExtremitiesPool = edgeProgramClass.programOptions?.extremities;
+    this.edgeProgramDefaultHeadIndex = edgeProgramClass.defaultHeadIndex ?? 0;
+    this.edgeProgramDefaultTailIndex = edgeProgramClass.defaultTailIndex ?? 0;
 
     // Create edge label program if the edge program has one
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1215,8 +1235,9 @@ export default class Sigma<
     const attrs = this.internals.graph.getNodeAttributes(key);
     const nodeState = this.stateManager.getNodeState(key);
 
-    // Evaluate styles directly into a fresh display data object
-    let data: NodeDisplayData = {} as NodeDisplayData;
+    // Reuse the existing cached object if available to avoid allocation pressure.
+    // evaluateNodeStyle resets all fields before writing, so stale values don't survive.
+    let data: NodeDisplayData = (this.internals.nodeDataCache[key] || {}) as NodeDisplayData;
     evaluateNodeStyle(
       this.stylesDeclaration!.nodes as Record<string, unknown>,
       attrs,
@@ -1574,23 +1595,14 @@ export default class Sigma<
     const sourceNodeIndex = this.internals.nodeDataTexture!.getIndex(source);
     const targetNodeIndex = this.internals.nodeDataTexture!.getIndex(target);
 
-    // Get program class static properties
-    const programStatic = this.edgeProgram!.constructor as unknown as {
-      programOptions?: { extremities?: Array<{ name: string; length: number }> };
-      pathNameToIndex?: Record<string, number>;
-      extremityNameToIndex?: Record<string, number>;
-      defaultHeadIndex?: number;
-      defaultTailIndex?: number;
-    };
-
-    const pathNameToIndex = programStatic.pathNameToIndex;
-    const extremityNameToIndex = programStatic.extremityNameToIndex;
-    const extremitiesPool = programStatic.programOptions?.extremities;
+    const pathNameToIndex = this.edgeProgramPathNameToIndex;
+    const extremityNameToIndex = this.edgeProgramExtremityNameToIndex;
+    const extremitiesPool = this.edgeProgramExtremitiesPool;
 
     // Start with program defaults
     let pathId = 0;
-    let headId = programStatic.defaultHeadIndex ?? 0;
-    let tailId = programStatic.defaultTailIndex ?? 0;
+    let headId = this.edgeProgramDefaultHeadIndex;
+    let tailId = this.edgeProgramDefaultTailIndex;
 
     // Get edge-specified path/head/tail names
     const edgeData = data as unknown as {

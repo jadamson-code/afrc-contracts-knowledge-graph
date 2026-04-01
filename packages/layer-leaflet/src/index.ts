@@ -7,6 +7,19 @@ import { Sigma } from "sigma";
 
 import { graphToLatlng, latlngToGraph } from "./utils";
 
+// Prevents tile blinking on view changes. Leaflet's default GridLayer listens
+// to viewprereset and calls _invalidateAll, which destroys every tile and
+// reloads from scratch. Since we only change the viewport (never the CRS),
+// this is unnecessary and causes a visible blink. The other handlers
+// (viewreset, zoom, moveend) still run and handle tile updates gracefully.
+class SmoothTileLayer extends TileLayer {
+  getEvents() {
+    const events = super.getEvents!();
+    delete events.viewprereset;
+    return events;
+  }
+}
+
 /**
  * On the graph, we store the 2D projection of the geographical lat/long.
  *
@@ -136,19 +149,6 @@ export default function bindLeafletLayer(
     tileAttribution = opts.tileLayer.attribution;
   }
 
-  // Subclass TileLayer to prevent tile blinking on view changes.
-  // Leaflet's default GridLayer listens to viewprereset and calls
-  // _invalidateAll, which destroys every tile and reloads from scratch.
-  // Since we only change the viewport (never the CRS), this is unnecessary
-  // and causes a visible blink. The other handlers (viewreset, zoom,
-  // moveend) still run and handle tile updates gracefully.
-  class SmoothTileLayer extends TileLayer {
-    getEvents() {
-      const events = super.getEvents!();
-      delete events.viewprereset;
-      return events;
-    }
-  }
   new SmoothTileLayer(tileUrl, { attribution: tileAttribution }).addTo(map);
 
   // Camera state memoization to skip redundant fitBounds calls

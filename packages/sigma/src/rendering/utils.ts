@@ -42,6 +42,27 @@ export interface InstancedProgramDefinition<Uniform extends string = string> ext
   CONSTANT_DATA: number[][];
 }
 
+/**
+ * Describes an optional transform feedback pre-pass for a program.
+ * The pre-pass runs once per instance (POINTS draw with RASTERIZER_DISCARD),
+ * writes computed values into a GPU buffer, and the main draw reads them
+ * back as per-instance attributes — eliminating redundant per-vertex work.
+ */
+export interface PrePassDefinition {
+  /** Vertex shader source for the pre-pass. */
+  shaderSource: string;
+  /** Transform feedback varying names (interleaved into one buffer). */
+  tfVaryingNames: string[];
+  /** Total floats written per instance (= sum of output attribute sizes). */
+  floatsPerInstance: number;
+  /** How the output buffer binds as per-instance attributes in the main shader. */
+  outputAttributes: Array<{ name: string; size: number; floatOffset: number }>;
+  /** Uniform names the pre-pass needs; the base class looks up their locations. */
+  uniformNames: string[];
+  /** Name of the single float attribute read from the instance buffer (e.g. "a_edgeIndex"). */
+  inputAttributeName: string;
+}
+
 function loadShader(type: string, gl: WebGL2RenderingContext, source: string): WebGLShader {
   const glType = type === "VERTEX" ? gl.VERTEX_SHADER : gl.FRAGMENT_SHADER;
 
@@ -102,6 +123,32 @@ export function loadProgram(gl: WebGL2RenderingContext, shaders: Array<WebGLShad
     throw new Error("loadProgram: error while linking the program.");
   }
 
+  return program;
+}
+
+/**
+ * Creates a WebGL program with transform feedback varyings, linked before
+ * any fragment stage. A trivial fragment shader is always included for
+ * driver compatibility (RASTERIZER_DISCARD prevents it from executing).
+ */
+export function loadTransformFeedbackProgram(
+  gl: WebGL2RenderingContext,
+  vertexShader: WebGLShader,
+  fragmentShader: WebGLShader,
+  tfVaryingNames: string[],
+): WebGLProgram {
+  const program = gl.createProgram();
+  if (program === null) throw new Error("loadTransformFeedbackProgram: error while creating the program.");
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.transformFeedbackVaryings(program, tfVaryingNames, gl.INTERLEAVED_ATTRIBS);
+  gl.linkProgram(program);
+  const linked = gl.getProgramParameter(program, gl.LINK_STATUS);
+  if (!linked) {
+    const infoLog = gl.getProgramInfoLog(program);
+    gl.deleteProgram(program);
+    throw new Error(`loadTransformFeedbackProgram: error while linking the program.\n${infoLog}`);
+  }
   return program;
 }
 

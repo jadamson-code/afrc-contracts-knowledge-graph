@@ -586,6 +586,8 @@ export interface GeneratedEdgeShaders {
   vertexShader: string;
   /** Complete fragment shader source */
   fragmentShader: string;
+  /** Pre-pass vertex shader source (transform feedback) */
+  prePassVertexShader: string;
   /** List of uniform names used */
   uniforms: string[];
   /** List of attribute specifications */

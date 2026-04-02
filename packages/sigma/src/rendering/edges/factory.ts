@@ -21,9 +21,9 @@ import {
   packAttributes,
 } from "../data-texture";
 import { isAttributeSource } from "../nodes";
-import { ProgramInfo } from "../utils";
+import { PrePassDefinition, ProgramInfo } from "../utils";
 import { EdgeProgram as BaseEdgeProgram, EdgeProgramType, ResolvedEdgeIds } from "./base";
-import { generateEdgeShaders } from "./generator";
+import { PREPASS_FLOATS_PER_EDGE, PREPASS_TF_VARYING_NAMES, generateEdgeShaders } from "./generator";
 import { type EdgeLabelProgramType, createEdgeLabelProgram } from "./labels";
 import { EDGE_ATTRIBUTE_TEXTURE_UNIT } from "./path-attribute-texture";
 import {
@@ -249,6 +249,90 @@ export function createEdgeProgram<
       };
     }
 
+    protected getPrePassDefinition(): PrePassDefinition {
+      const uniformNames = [
+        "u_sizeRatio",
+        "u_correctionRatio",
+        "u_cameraAngle",
+        "u_minEdgeThickness",
+        "u_nodeDataTexture",
+        "u_nodeDataTextureWidth",
+        "u_edgeDataTexture",
+        "u_edgeDataTextureWidth",
+        "u_edgeAttributeTexture",
+        "u_edgeAttributeTextureWidth",
+        "u_edgeAttributeTexelsPerEdge",
+      ];
+      [...paths, ...extremities].forEach((source) => source.uniforms.forEach((u) => uniformNames.push(u.name)));
+
+      return {
+        shaderSource: generated!.prePassVertexShader,
+        tfVaryingNames: PREPASS_TF_VARYING_NAMES,
+        floatsPerInstance: PREPASS_FLOATS_PER_EDGE,
+        outputAttributes: [{ name: "pre_clamp", size: 4, floatOffset: 0 }],
+        uniformNames,
+        inputAttributeName: "a_edgeIndex",
+      };
+    }
+
+    protected setPrePassUniforms(
+      gl: WebGL2RenderingContext,
+      locs: Record<string, WebGLUniformLocation>,
+      params: RenderParams,
+    ): void {
+      if (locs.u_sizeRatio) gl.uniform1f(locs.u_sizeRatio, params.sizeRatio);
+      if (locs.u_correctionRatio) gl.uniform1f(locs.u_correctionRatio, params.correctionRatio);
+      if (locs.u_cameraAngle) gl.uniform1f(locs.u_cameraAngle, params.cameraAngle);
+      if (locs.u_minEdgeThickness) gl.uniform1f(locs.u_minEdgeThickness, params.minEdgeThickness);
+      if (locs.u_nodeDataTexture) gl.uniform1i(locs.u_nodeDataTexture, params.nodeDataTextureUnit);
+      if (locs.u_nodeDataTextureWidth) gl.uniform1i(locs.u_nodeDataTextureWidth, params.nodeDataTextureWidth);
+      if (locs.u_edgeDataTexture) gl.uniform1i(locs.u_edgeDataTexture, params.edgeDataTextureUnit);
+      if (locs.u_edgeDataTextureWidth) gl.uniform1i(locs.u_edgeDataTextureWidth, params.edgeDataTextureWidth);
+
+      if (this.edgeAttributeTexture && this.layout.floatsPerItem > 0) {
+        this.edgeAttributeTexture.bind(EDGE_ATTRIBUTE_TEXTURE_UNIT);
+        if (locs.u_edgeAttributeTexture) gl.uniform1i(locs.u_edgeAttributeTexture, EDGE_ATTRIBUTE_TEXTURE_UNIT);
+        if (locs.u_edgeAttributeTextureWidth)
+          gl.uniform1i(locs.u_edgeAttributeTextureWidth, this.edgeAttributeTexture.getTextureWidth());
+        if (locs.u_edgeAttributeTexelsPerEdge)
+          gl.uniform1i(locs.u_edgeAttributeTexelsPerEdge, this.edgeAttributeTexture.getTexelsPerItem());
+      }
+
+      const processedUniforms = new Set<string>();
+      for (const source of [...paths, ...extremities]) {
+        for (const uniform of source.uniforms) {
+          if (processedUniforms.has(uniform.name) || uniform.type === "sampler2D") continue;
+          processedUniforms.add(uniform.name);
+          const loc = locs[uniform.name];
+          if (!loc) continue;
+          switch (uniform.type) {
+            case "float":
+              gl.uniform1f(loc, uniform.value);
+              break;
+            case "int":
+            case "bool":
+              gl.uniform1i(loc, uniform.value);
+              break;
+            case "vec2":
+              gl.uniform2fv(loc, uniform.value);
+              break;
+            case "vec3":
+              gl.uniform3fv(loc, uniform.value);
+              break;
+            case "vec4":
+              gl.uniform4fv(loc, uniform.value);
+              break;
+            case "mat3":
+              gl.uniformMatrix3fv(loc, false, uniform.value);
+              break;
+            case "mat4":
+              gl.uniformMatrix4fv(loc, false, uniform.value);
+              break;
+          }
+        }
+      }
+    }
+
     getDefinition() {
       const { TRIANGLE_STRIP } = WebGL2RenderingContext;
 
@@ -307,6 +391,9 @@ export function createEdgeProgram<
         generated.fragmentShader,
         this._pickingBuffer,
       );
+
+      // Rebuild pre-pass program with updated shaders
+      this.rebuildPrePass(gl);
     }
 
     processVisibleItem(
@@ -434,12 +521,8 @@ export function createEdgeProgram<
     }
 
     protected renderProgram(params: RenderParams, programInfo: ProgramInfo): void {
-      // Check for shader regeneration
       this.maybeRegenerateShaders();
-
-      // Call beforeRender hook for all layers
       this.layerLifecycles.forEach((hooks) => hooks.beforeRender?.());
-
       super.renderProgram(params, programInfo);
     }
 

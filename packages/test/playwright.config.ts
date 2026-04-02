@@ -13,7 +13,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: "http://localhost:4321",
+    baseURL: "http://localhost:4323",
     trace: "on-first-retry",
   },
 
@@ -25,8 +25,8 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: "npm run start --workspace=@sigma/website",
-    url: "http://localhost:4321",
+    command: "npm run start --workspace=@sigma/website -- --port 4323",
+    url: "http://localhost:4323",
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },

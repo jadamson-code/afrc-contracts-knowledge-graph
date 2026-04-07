@@ -1,6 +1,6 @@
 {
   "name": "@sigma/layer-maplibre",
-  "version": "3.0.0",
+  "version": "4.0.0-alpha.0",
   "description": "A plugin to set a geographical map in background",
   "main": "dist/sigma-layer-maplibre.cjs.js",
   "module": "dist/sigma-layer-maplibre.esm.js",
@@ -37,7 +37,7 @@
     ]
   },
   "dependencies": {
-    "@sigma/utils": ">=3.0.0"
+    "@sigma/utils": "^4.0.0-alpha.0"
   },
   "peerDependencies": {
     "maplibre-gl": "^4.5.0",

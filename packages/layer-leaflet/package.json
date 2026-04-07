@@ -41,7 +41,7 @@
   },
   "peerDependencies": {
     "leaflet": "^1.9.4",
-    "sigma": ">=3.0.0-beta.10"
+    "sigma": ">=4.0.0-alpha.0"
   },
   "exports": {
     ".": {

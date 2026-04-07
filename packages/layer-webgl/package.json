@@ -34,7 +34,7 @@
     ]
   },
   "peerDependencies": {
-    "sigma": ">=3.0.0-beta.24"
+    "sigma": ">=4.0.0-alpha.0"
   },
   "exports": {
     ".": {

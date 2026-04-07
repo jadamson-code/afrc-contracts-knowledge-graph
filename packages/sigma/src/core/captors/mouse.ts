@@ -21,6 +21,8 @@ export const MOUSE_SETTINGS_KEYS = [
   "enableCameraMouseRotation",
   "inertiaDuration",
   "inertiaRatio",
+  "enableScrollBlocking",
+  "scrollBlockingReleaseThreshold",
   "zoomDuration",
   "zoomingRatio",
 ] as const;
@@ -77,6 +79,7 @@ export default class MouseCaptor<
 
   currentWheelDirection: -1 | 0 | 1 = 0;
   lastWheelTriggerTime?: number;
+  consecutiveBoundaryWheelEvents = 0;
 
   settings: MouseSettings = DEFAULT_MOUSE_SETTINGS;
 
@@ -97,7 +100,7 @@ export default class MouseCaptor<
     container.addEventListener("click", this.handleClick, { capture: false });
     container.addEventListener("contextmenu", this.handleRightClick, { capture: false });
     container.addEventListener("mousedown", this.handleDown, { capture: false });
-    container.addEventListener("wheel", this.handleWheel, { capture: false });
+    container.addEventListener("wheel", this.handleWheel, { capture: false, passive: false });
     container.addEventListener("mouseleave", this.handleLeave, { capture: false });
     container.addEventListener("mouseenter", this.handleEnter, { capture: false });
 
@@ -372,18 +375,30 @@ export default class MouseCaptor<
       return;
     }
 
-    // Default behavior
+    const { enableScrollBlocking, scrollBlockingReleaseThreshold } = this.settings;
     const currentRatio = camera.getState().ratio;
     const ratioDiff = delta > 0 ? 1 / this.settings.zoomingRatio : this.settings.zoomingRatio;
     const newRatio = camera.getBoundedRatio(currentRatio * ratioDiff);
     const wheelDirection = delta > 0 ? 1 : -1;
     const now = Date.now();
+    const atBoundary = currentRatio === newRatio;
 
-    // Exit early without preventing default behavior when ratio doesn't change:
-    if (currentRatio === newRatio) return;
+    if (atBoundary) {
+      this.consecutiveBoundaryWheelEvents++;
+    } else {
+      this.consecutiveBoundaryWheelEvents = 0;
+    }
 
-    e.preventDefault();
-    e.stopPropagation();
+    // Determine whether to block page scroll:
+    const shouldBlock =
+      enableScrollBlocking && (!atBoundary || this.consecutiveBoundaryWheelEvents <= scrollBlockingReleaseThreshold);
+
+    if (shouldBlock) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (atBoundary) return;
 
     // Cancel events that are too close each other and in the same direction:
     if (

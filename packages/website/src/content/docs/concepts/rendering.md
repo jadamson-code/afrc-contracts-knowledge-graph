@@ -12,11 +12,11 @@ At its core, WebGL operates using two types of shaders:
 - **Vertex shaders** process each vertex and determine its position on the screen.
 - **Fragment shaders** determine the color of each pixel in the area bounded by vertices.
 
-Sigma generates its shaders from the [primitives declaration](/concepts/styles-and-primitives/). When you declare shapes, layers, paths, and extremities, sigma compiles them into optimized WebGL programs. A single program can handle multiple shapes (circle, square, triangle, diamond) and multiple layers (fill, border, image, piechart) -- each node selects which shape and layers it uses through style properties.
+Sigma generates its shaders from the [primitives declaration](/concepts/styles-and-primitives/). When you declare shapes, layers, paths, and extremities, sigma compiles them into optimized WebGL programs. A single program can handle multiple shapes (circle, square, triangle, diamond) and multiple layers (fill, border, image, piechart), and styles properties will determine which shape or layers will each node have.
 
 ## Node rendering
 
-Each node is rendered as a quad (two triangles forming a rectangle) positioned at the node's coordinates and scaled to its size. The fragment shader uses **signed distance functions** (SDFs) to draw the node's shape with pixel-perfect anti-aliasing. The SDF approach means shapes scale cleanly at any zoom level without jagged edges.
+Each node is rendered as a quad (two triangles forming a rectangle) positioned at the node's coordinates and scaled to its size. The fragment shader uses **[Signed Distance Fields](https://en.wikipedia.org/wiki/Signed_distance_function)** (SDFs) to draw the node's shape with pixel-perfect anti-aliasing. The SDF approach means shapes scale cleanly at any zoom level without jagged edges.
 
 Layers are composited within the fragment shader itself. For example, a node with a fill layer, a border layer, and an image layer runs all three fragment computations for every pixel, compositing them from back to front. Layers that have no data for a given node (for example, an image layer on a node without an `image` attribute) output transparent pixels automatically.
 
@@ -35,16 +35,9 @@ You can insert additional DOM elements (HTML overlays, custom canvases) between 
 
 ## Depth layers
 
-Within the single WebGL canvas, rendering order is controlled through **depth layers** declared in `primitives.depthLayers`. Elements assigned to later depth layers are drawn on top of earlier ones. The defaults are:
+Within the single WebGL canvas, rendering order is controlled through **depth layers** declared in `primitives.depthLayers`. Elements assigned to later depth layers are drawn on top of earlier ones.
 
-1. `edges` -- regular edges
-2. `edgeLabels` -- edge labels
-3. `nodes` -- regular nodes
-4. `nodeLabels` -- node labels
-5. `topNodes` -- highlighted/hovered nodes
-6. `topNodeLabels` -- highlighted/hovered node labels
-
-Each depth layer gets its own WebGL draw call, with elements sorted by `zIndex` within each layer. The `depth` and `labelDepth` style properties assign elements to specific depth layers -- for example, setting `depth: "topNodes"` on a hovered node renders it on top of all regular nodes.
+Each depth layer gets its own WebGL draw call, with elements sorted by `zIndex` within each layer. The `depth` and `labelDepth` style properties assign elements to specific depth layers. For example, setting `depth: "topNodes"` on a hovered node renders it on top of all regular nodes.
 
 You can define custom depth layers for your own use cases (e.g., a `"selectedNodes"` layer between `nodes` and `topNodes`).
 
@@ -52,10 +45,10 @@ You can define custom depth layers for your own use cases (e.g., a `"selectedNod
 
 To detect which node or edge is under the mouse cursor, sigma uses **[GPU picking](https://webglfundamentals.org/webgl/lessons/webgl-picking.html)**. It draws a hidden framebuffer where each element is rendered with a unique color encoding its identity. When the user moves the mouse, sigma reads the pixel at the cursor position from this framebuffer to identify which element is there.
 
-This approach is efficient because it reuses the same vertex positions as the visible render -- only the fragment shader changes to output ID colors instead of visual colors. The picking framebuffer is rendered at a lower resolution (controlled by the `pickingDownSizingRatio` setting) to save memory.
+This approach is efficient because it reuses the same vertex positions as the visible render. Only the fragment shader changes to output ID colors instead of visual colors. The picking framebuffer is rendered at a lower resolution (controlled by the `pickingDownSizingRatio` setting) to save memory.
 
-Edge events use the same picking mechanism but are disabled by default for performance. Enable them with the `enableEdgeEvents` setting.
+Edge and label events use the same picking mechanism but are disabled by default for performance. Enable them with the `enableEdgeEvents` and `labelEvents` settings.
 
 ## Data textures
 
-Node and edge attributes are uploaded to the GPU via **data textures** -- large textures where each pixel stores attribute values for one element. This allows the vertex and fragment shaders to look up any node's or edge's data by index, which is essential for features like edge clamping (adjusting edge endpoints to the boundary of non-circular shapes).
+Node and edge attributes are uploaded to the GPU via **data textures**, i.e. large textures where each pixel stores attribute values for one element. This allows the vertex and fragment shaders to look up any node's or edge's data by index, which is essential for features like edge clamping (adjusting edge endpoints to the boundary of non-circular shapes).

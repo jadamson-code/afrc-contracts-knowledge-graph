@@ -1,0 +1,63 @@
+<div id="sigma-container"></div>
+
+<style>
+  #sigma-container {
+    width: 100%;
+    height: 100%;
+  }
+</style>
+
+<script>
+  import { layerBorder } from "@sigma/node-border";
+  import Graph from "graphology";
+  import Sigma from "sigma";
+  import { extremityArrow, layerFill, pathLine, sdfCircle } from "sigma/rendering";
+
+  const graph = new Graph();
+  graph.addNode("a", { x: 0, y: 0, size: 15, color: "#e22653", label: "Alice" });
+  graph.addNode("b", { x: 100, y: -100, size: 10, color: "#277da1", label: "Bob" });
+  graph.addEdge("a", "b");
+
+  const container = document.getElementById("sigma-container") as HTMLElement;
+
+  const renderer = new Sigma(graph, container, {
+    primitives: {
+      nodes: {
+        shapes: [sdfCircle()],
+        layers: [
+          layerFill(),
+          layerBorder({
+            borders: [
+              { size: 0.1, color: "#333" },
+              { size: 0, color: { attribute: "color" }, fill: true },
+            ],
+          }),
+        ],
+      },
+      edges: {
+        paths: [pathLine()],
+        extremities: [extremityArrow()],
+      },
+      depthLayers: ["edges", "nodes", "nodeLabels", "topNodes", "topNodeLabels"],
+    },
+    styles: {
+      nodes: [
+        {
+          color: { attribute: "color" },
+          size: { attribute: "size", defaultValue: 10 },
+          label: { attribute: "label" },
+        },
+        {
+          whenState: "isHovered",
+          then: {
+            size: 20,
+            depth: "topNodes",
+            labelDepth: "topNodeLabels",
+            labelVisibility: "visible",
+          },
+        },
+      ],
+      edges: [{ color: "#ccc", size: 2, head: "arrow" }],
+    },
+  });
+</script>

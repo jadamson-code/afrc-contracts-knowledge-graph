@@ -348,6 +348,12 @@ export interface NodeLabelBuiltInVariables<
   labelAttachment?: GraphicValue<NA, NS, GS, string | null>;
   /** Where to place the attachment relative to the label */
   labelAttachmentPlacement?: GraphicValue<NA, NS, GS, "below" | "above" | "left" | "right">;
+  /** Label background fill color (transparent = no background) */
+  labelBackgroundColor?: GraphicValue<NA, NS, GS, string>;
+  /** Label background padding in pixels */
+  labelBackgroundPadding?: GraphicValue<NA, NS, GS, number>;
+  /** CSS cursor to show when hovering this node's label */
+  labelCursor?: GraphicValue<NA, NS, GS, string>;
 }
 
 /**

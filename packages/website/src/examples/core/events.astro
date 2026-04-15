@@ -68,6 +68,7 @@
   const renderer = new Sigma(graph, container, {
     settings: {
       enableEdgeEvents: true,
+      labelEvents: "separate",
     },
     edgeReducer(edge, data) {
       if (edge === hoveredEdge) return { ...data, color: "#cc0000" };
@@ -84,10 +85,14 @@
     "doubleClickNode",
     "wheelNode",
   ] as const;
+  const labelEvents = ["enterLabel", "leaveLabel", "clickLabel"] as const;
   const edgeEvents = ["downEdge", "clickEdge", "rightClickEdge", "doubleClickEdge", "wheelEdge"] as const;
   const stageEvents = ["downStage", "clickStage", "doubleClickStage", "wheelStage"] as const;
 
   nodeEvents.forEach((eventType) => renderer.on(eventType, ({ node }) => logEvent(eventType, "node", node)));
+  labelEvents.forEach((eventType) =>
+    renderer.on(eventType, ({ parentType, parentKey }) => logEvent(eventType, parentType, parentKey)),
+  );
   edgeEvents.forEach((eventType) => renderer.on(eventType, ({ edge }) => logEvent(eventType, "edge", edge)));
 
   renderer.on("enterEdge", ({ edge }) => {

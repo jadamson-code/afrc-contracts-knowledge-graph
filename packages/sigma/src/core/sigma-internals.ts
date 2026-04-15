@@ -17,6 +17,7 @@ import {
   BackdropProgram,
   EdgeDataTexture,
   EdgeLabelProgram,
+  LabelBackgroundProgram,
   LabelProgram,
   NodeDataTexture,
 } from "../rendering";
@@ -48,8 +49,10 @@ export type SigmaInternals<
   stateManager: {
     hoveredNode: string | null;
     hoveredEdge: string | null;
+    hoveredLabel: string | null;
     setHoveredNode(key: string | null): void;
     setHoveredEdge(key: string | null): void;
+    setHoveredLabel(key: string | null): void;
     getNodeState(key: string): BaseNodeState;
   };
   dragManager: DragManager;
@@ -58,6 +61,7 @@ export type SigmaInternals<
   labelProgram: LabelProgram<string, N, E, G> | null;
   edgeLabelProgram: EdgeLabelProgram<string, N, E, G> | null;
   backdropProgram: BackdropProgram<string, N, E, G> | null;
+  labelBackgroundProgram: LabelBackgroundProgram<string, N, E, G> | null;
   attachmentManager: AttachmentManager | null;
   attachmentProgram: AttachmentProgram<N, E, G> | null;
   nodeDataTexture: NodeDataTexture | null;
@@ -71,6 +75,7 @@ export type SigmaInternals<
   getCameraState(): CameraState;
   getNodeAtPosition(pos: Coordinates): string | null;
   getEdgeAtPoint(x: number, y: number): string | null;
+  getLabelAtPosition(x: number, y: number): string | null;
   setNodeState(key: string, state: Partial<BaseNodeState>): void;
   setEdgeState(key: string, state: Partial<BaseEdgeState>): void;
   updateContainerCursor(): void;

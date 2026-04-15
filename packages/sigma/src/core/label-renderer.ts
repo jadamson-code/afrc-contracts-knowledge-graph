@@ -9,10 +9,18 @@
 import { Attributes } from "graphology-types";
 
 import { LabelAttachmentContext } from "../primitives";
-import { BackdropDisplayData, POSITION_MODE_MAP, getShapeId } from "../rendering";
+import { BackdropDisplayData, LABEL_ID_OFFSET, LabelBackgroundData, POSITION_MODE_MAP, getShapeId } from "../rendering";
 import { ATTACHMENT_GAP, ATTACHMENT_PLACEMENT_MAP, ATTACHMENT_TEXTURE_UNIT } from "../rendering/nodes/attachments";
 import { EdgeLabelDisplayData, LabelDisplayData, RenderParams } from "../types";
-import { colorToArray, extend, matrixFromCamera, multiplyVec2, parseFontString } from "../utils";
+import {
+  colorToArray,
+  extend,
+  floatColor,
+  indexToColor,
+  matrixFromCamera,
+  multiplyVec2,
+  parseFontString,
+} from "../utils";
 import { LabelGrid, edgeLabelsToDisplayFromNodes } from "./labels";
 import { SigmaInternals } from "./sigma-internals";
 
@@ -375,6 +383,67 @@ export class LabelRenderer<
 
     backdropProgram.invalidateBuffers();
     backdropProgram.render(params);
+  }
+
+  /** Render label background rectangles (picking + optional visual) for displayed node labels. */
+  renderLabelBackgrounds(params: RenderParams, depth?: string): void {
+    const { labelBackgroundProgram, nodeDataCache, nodeIndices, nodeShapeMap, nodeGlobalShapeIds, settings } =
+      this.internals;
+    if (!labelBackgroundProgram) return;
+
+    const { labelEvents } = settings;
+
+    const nodes: string[] = [];
+    for (const key of this.displayedNodeLabels) {
+      const data = nodeDataCache[key];
+      if (!data || data.visibility === "hidden") continue;
+      if (depth && data.labelDepth !== depth) continue;
+      // When events are disabled, skip nodes with no visual background — nothing to render.
+      if (!labelEvents && !data.labelBackgroundColor) continue;
+      nodes.push(key);
+    }
+
+    if (nodes.length === 0) return;
+
+    labelBackgroundProgram.reallocate(nodes.length);
+
+    for (let i = 0; i < nodes.length; i++) {
+      const key = nodes[i];
+      const data = nodeDataCache[key];
+      const nodeIndex = nodeIndices[key];
+
+      const { width: labelWidth, height: labelHeight } = this.measureNodeLabel(data);
+
+      let shapeId: number;
+      if (nodeShapeMap && nodeGlobalShapeIds) {
+        const localIndex = nodeShapeMap[data.shape || Object.keys(nodeShapeMap)[0]];
+        shapeId = nodeGlobalShapeIds[localIndex];
+      } else {
+        shapeId = getShapeId(data.shape || "circle");
+      }
+
+      const pickingIndex = labelEvents === "separate" ? nodeIndex + LABEL_ID_OFFSET : nodeIndex;
+      const bgColor = data.labelBackgroundColor ? floatColor(data.labelBackgroundColor) : floatColor("transparent");
+
+      const bgData: LabelBackgroundData = {
+        x: data.x,
+        y: data.y,
+        size: data.size,
+        shapeId,
+        id: indexToColor(pickingIndex),
+        color: bgColor,
+        labelWidth,
+        labelHeight,
+        positionMode: POSITION_MODE_MAP[data.labelPosition || "right"] ?? 0,
+        labelAngle: data.labelAngle ?? 0,
+        padding: data.labelBackgroundPadding ?? 3,
+      };
+
+      labelBackgroundProgram.processLabelBackground(i, bgData);
+    }
+
+    labelBackgroundProgram.invalidateBuffers();
+    labelBackgroundProgram.render(params);
   }
 
   /**

@@ -10,6 +10,9 @@
 export { LabelProgram } from "./base";
 export type { LabelProgramType } from "./base";
 
+export { LABEL_ID_OFFSET, LabelBackgroundProgram, createLabelBackgroundProgram } from "./background";
+export type { LabelBackgroundData, LabelBackgroundProgramType } from "./background";
+
 export { createLabelProgram } from "./factory";
 export type { CreateLabelProgramOptions } from "./factory";
 

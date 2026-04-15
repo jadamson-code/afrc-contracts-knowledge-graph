@@ -41,6 +41,9 @@ import {
   EdgeLabelProgram,
   EdgePath,
   EdgeProgram,
+  LABEL_ID_OFFSET,
+  LabelBackgroundProgram,
+  LabelBackgroundProgramType,
   LabelProgram,
   LabelProgramType,
   NodeDataTexture,
@@ -160,6 +163,7 @@ export default class Sigma<
   private graphToViewportRatio = 1;
   private nodeItemIDsIndex: Record<number, string> = {};
   private edgeItemIDsIndex: Record<number, string> = {};
+  private labelItemIDsIndex: Record<number, string> = {};
   private edgeIndices: Record<string, number> = {};
   private prevNodeVisibilities: Record<string, string | undefined> = {};
 
@@ -393,6 +397,14 @@ export default class Sigma<
       ? new BackdropProgramClass(gl, null, sigma)
       : null;
 
+    // Create label background program if the node program has one
+    const LabelBackgroundProgramClass = NodeProgramClass.LabelBackgroundProgram as
+      | LabelBackgroundProgramType<N, E, G>
+      | undefined;
+    const labelBackgroundProgram: LabelBackgroundProgram<string, N, E, G> | null = LabelBackgroundProgramClass
+      ? new LabelBackgroundProgramClass(gl, this.pickingFrameBuffer, sigma)
+      : null;
+
     // Create label attachment system if attachments are declared
     const labelAttachments = resolvedPrimitives?.nodes?.labelAttachments;
     let attachmentManager: AttachmentManager | null = null;
@@ -437,6 +449,7 @@ export default class Sigma<
       labelProgram,
       edgeLabelProgram,
       backdropProgram,
+      labelBackgroundProgram,
       attachmentManager,
       attachmentProgram,
       nodeDataTexture,
@@ -449,6 +462,7 @@ export default class Sigma<
       getCameraState: () => this.camera.getState(),
       getNodeAtPosition: (pos) => this.getNodeAtPosition(pos),
       getEdgeAtPoint: (x, y) => this.getEdgeAtPoint(x, y),
+      getLabelAtPosition: (x, y) => this.getLabelAtPosition(x, y),
       setNodeState: (key, state) => this.setNodeState(key, state),
       setEdgeState: (key, state) => this.setEdgeState(key, state),
       updateContainerCursor: () => this.updateContainerCursor(),
@@ -673,6 +687,20 @@ export default class Sigma<
     return this.edgeItemIDsIndex[index] ?? null;
   }
 
+  private getLabelAtPosition(x: number, y: number): string | null {
+    if (this.labelRenderer.displayedNodeLabels.size === 0) return null;
+    const color = getPixelColor(
+      this.webGLContext!,
+      this.pickingFrameBuffer,
+      x,
+      y,
+      this.internals.pixelRatio,
+      this.internals.settings.pickingDownSizingRatio,
+    );
+    const index = colorToIndex(...color);
+    return this.labelItemIDsIndex[index] ?? null;
+  }
+
   private getNodeShapeId(data: NodeDisplayData): number {
     if (
       this.internals.nodeShapeMap &&
@@ -778,6 +806,13 @@ export default class Sigma<
 
     this.nodeItemIDsIndex = nodeItemIDsIndex;
     this.internals.nodeIndices = nodeIndices;
+
+    // Build label item IDs index for "separate" label events mode
+    const labelItemIDsIndex: typeof this.labelItemIDsIndex = {};
+    for (const node in nodeIndices) {
+      labelItemIDsIndex[nodeIndices[node] + LABEL_ID_OFFSET] = node;
+    }
+    this.labelItemIDsIndex = labelItemIDsIndex;
 
     // Track visibility so the next processNodes call can detect changes
     for (let i = 0, l = nodes.length; i < l; i++) {
@@ -1134,6 +1169,13 @@ export default class Sigma<
       // Label attachments for this depth (after nodes, before labels)
       this.labelRenderer.renderAttachments(params, depth);
 
+      // Label backgrounds for this depth (after nodes so picking overwrites nodes in "over" mode).
+      // Picking is skipped when label events are disabled; transparent nodes discard in the visual pass.
+      this.labelRenderer.renderLabelBackgrounds(
+        this.internals.settings.labelEvents ? params : { ...params, pickingFrameBuffer: null },
+        depth,
+      );
+
       // Node labels for this depth
       if (this.internals.settings.renderLabels) {
         this.labelRenderer.renderWebGLLabels(params, depth);
@@ -1453,6 +1495,7 @@ export default class Sigma<
     this.internals.nodesWithForcedLabels = new Set<string>();
     this.internals.nodesWithBackdrop = new Set<string>();
     this.nodeItemIDsIndex = {};
+    this.labelItemIDsIndex = {};
     this.prevNodeVisibilities = {};
     // Clear bucket data
     this.itemBuckets.nodes.clearAll();
@@ -2073,6 +2116,11 @@ export default class Sigma<
     if (this.stateManager.hoveredNode) {
       this.container.style.cursor =
         this.internals.nodeDataCache[this.stateManager.hoveredNode]?.cursor || this.resolvedStageStyle.cursor || "";
+    } else if (this.stateManager.hoveredLabel) {
+      this.container.style.cursor =
+        this.internals.nodeDataCache[this.stateManager.hoveredLabel]?.labelCursor ||
+        this.resolvedStageStyle.cursor ||
+        "";
     } else if (this.stateManager.hoveredEdge) {
       this.container.style.cursor =
         this.internals.edgeDataCache[this.stateManager.hoveredEdge]?.cursor || this.resolvedStageStyle.cursor || "";
@@ -2911,11 +2959,13 @@ export default class Sigma<
     this.internals.labelProgram?.kill();
     this.internals.edgeLabelProgram?.kill();
     this.internals.backdropProgram?.kill();
+    this.internals.labelBackgroundProgram?.kill();
     this.internals.attachmentProgram?.kill();
     this.internals.attachmentManager?.kill();
     this.internals.labelProgram = null;
     this.internals.edgeLabelProgram = null;
     this.internals.backdropProgram = null;
+    this.internals.labelBackgroundProgram = null;
     this.internals.attachmentProgram = null;
     this.internals.attachmentManager = null;
 

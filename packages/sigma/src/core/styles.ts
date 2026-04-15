@@ -596,10 +596,14 @@ export function evaluateNodeStyle<
   for (let i = 0, l = NODE_DEFAULT_KEYS.length; i < l; i++) {
     r[NODE_DEFAULT_KEYS[i]] = NODE_DEFAULT_VALUES[i];
   }
-  // x/y have no fixed default, they must come from style rules or graph attributes.
-  // Reset them so stale values from a previous render cycle don't survive into this evaluation.
+  // x/y and optional label-background fields have no fixed default
+  // reset them so stale values from a previous render cycle don't survive into
+  // this evaluation:
   r.x = undefined;
   r.y = undefined;
+  r.labelBackgroundColor = undefined;
+  r.labelBackgroundPadding = undefined;
+  r.labelCursor = undefined;
 
   if (!styleDeclaration) {
     // No styles, resolve from attributes with defaults

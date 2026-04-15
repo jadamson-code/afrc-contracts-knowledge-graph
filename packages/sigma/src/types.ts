@@ -99,6 +99,9 @@ export interface NodeDisplayData extends Coordinates, DisplayData {
   backdropArea?: "both" | "node" | "label"; // Which area the backdrop covers
   labelAttachment?: string | null; // Label attachment name (references primitives.nodes.labelAttachments)
   labelAttachmentPlacement?: "below" | "above" | "left" | "right"; // Where to place attachment relative to label
+  labelBackgroundColor?: string; // Label background fill color (transparent = no background)
+  labelBackgroundPadding?: number; // Label background padding in pixels
+  labelCursor?: string; // CSS cursor to show when hovering this node's label
 }
 export interface EdgeDisplayData extends DisplayData {
   path?: string; // Path type for regular edges (e.g., "straight", "curved")
@@ -260,7 +263,11 @@ export type SigmaAdditionalEvents = {
   nodeDragEnd(payload: SigmaNodeDragEventPayload): void;
 };
 
-export type SigmaEvents = SigmaStageEvents & SigmaNodeEvents & SigmaEdgeEvents & SigmaAdditionalEvents;
+export type SigmaEvents = SigmaStageEvents &
+  SigmaNodeEvents &
+  SigmaEdgeEvents &
+  SigmaLabelEvents &
+  SigmaAdditionalEvents;
 export type SigmaEventType = keyof SigmaEvents;
 
 /**

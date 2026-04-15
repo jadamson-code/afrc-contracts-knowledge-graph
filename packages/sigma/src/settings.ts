@@ -23,6 +23,7 @@ export interface Settings {
   renderLabels: boolean;
   renderEdgeLabels: boolean;
   enableEdgeEvents: boolean;
+  labelEvents: false | "extend" | "separate";
   pickingDownSizingRatio: number;
   stagePadding: number;
   minEdgeThickness: number;
@@ -88,6 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
   renderLabels: true,
   renderEdgeLabels: false,
   enableEdgeEvents: false,
+  labelEvents: false,
   pickingDownSizingRatio: 2,
   stagePadding: 30,
   minEdgeThickness: 1.7,

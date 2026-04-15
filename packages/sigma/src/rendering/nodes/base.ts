@@ -11,7 +11,7 @@ import { NodeDisplayData } from "../../types";
 import { indexToColor } from "../../utils";
 import { Program } from "../program";
 import { BackdropProgramType } from "./backdrops";
-import { LabelProgramType } from "./labels";
+import { LabelBackgroundProgramType, LabelProgramType } from "./labels";
 
 export abstract class NodeProgram<
   Uniform extends string = string,
@@ -36,6 +36,12 @@ export abstract class NodeProgram<
    * This is set by createNodeProgram() for programs created via the factory.
    */
   static BackdropProgram: BackdropProgramType | undefined;
+
+  /**
+   * Static reference to the associated LabelBackgroundProgram class.
+   * This is set by createNodeProgram() for programs created via the factory.
+   */
+  static LabelBackgroundProgram: LabelBackgroundProgramType | undefined;
 
   process(nodeIndex: number, offset: number, data: NodeDisplayData, textureIndex: number, nodeKey: string): void {
     let i = offset * this.STRIDE;
@@ -71,4 +77,5 @@ export type NodeProgramType<
   ): NodeProgram<string, N, E, G>;
   LabelProgram?: LabelProgramType<N, E, G>;
   BackdropProgram?: BackdropProgramType<N, E, G>;
+  LabelBackgroundProgram?: LabelBackgroundProgramType<N, E, G>;
 };

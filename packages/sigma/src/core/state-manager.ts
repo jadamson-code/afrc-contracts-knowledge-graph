@@ -30,9 +30,10 @@ export class StateManager<NS = {}, ES = {}, GS = {}> {
   // Graph-level state, kept up to date by updateGraphStateFrom* methods.
   graphState: FullGraphState<GS>;
 
-  // Hover tracking: at most one hovered node and one hovered edge at a time.
+  // Hover tracking: at most one hovered node, edge, and label at a time.
   hoveredNode: string | null = null;
   hoveredEdge: string | null = null;
+  hoveredLabel: string | null = null;
 
   // Dirty sets consumed by sigma's refreshState / render cycle.
   dirtyNodes: Set<string> = new Set();
@@ -141,6 +142,7 @@ export class StateManager<NS = {}, ES = {}, GS = {}> {
     this.nodeStates.delete(key);
     this.dirtyNodes.delete(key);
     if (this.hoveredNode === key) this.hoveredNode = null;
+    if (this.hoveredLabel === key) this.hoveredLabel = null;
   }
   removeEdge(key: string): void {
     this.edgeStates.delete(key);
@@ -152,6 +154,7 @@ export class StateManager<NS = {}, ES = {}, GS = {}> {
     this.nodeStates.clear();
     this.dirtyNodes.clear();
     this.hoveredNode = null;
+    this.hoveredLabel = null;
   }
   clearEdges(): void {
     this.edgeStates.clear();
@@ -175,6 +178,9 @@ export class StateManager<NS = {}, ES = {}, GS = {}> {
   }
   setHoveredEdge(key: string | null): void {
     this.hoveredEdge = key;
+  }
+  setHoveredLabel(key: string | null): void {
+    this.hoveredLabel = key;
   }
 
   // Graph flag computation

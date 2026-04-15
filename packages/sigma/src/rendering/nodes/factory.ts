@@ -24,7 +24,7 @@ import { ProgramInfo } from "../utils";
 import { createBackdropProgram } from "./backdrops";
 import { NodeProgram, NodeProgramType } from "./base";
 import { generateShaders } from "./generator";
-import { createLabelProgram } from "./labels";
+import { createLabelBackgroundProgram, createLabelProgram } from "./labels";
 import { FragmentLayer, LayerLifecycleContext, LayerLifecycleHooks, NodeProgramOptions } from "./types";
 
 // Texture unit for layer attribute texture (units 0-4 used by sigma, unit 5 for layer attributes)
@@ -118,6 +118,14 @@ export function createNodeProgram<
     shapeGlobalIds: shapes.length > 1 ? shapeGlobalIds : undefined,
   });
 
+  // Create the label background program class (for label picking and optional visual background)
+  const LabelBackgroundProgramClass = createLabelBackgroundProgram({
+    shapes,
+    rotateWithCamera,
+    label: labelOptions,
+    shapeGlobalIds: shapes.length > 1 ? shapeGlobalIds : undefined,
+  });
+
   // Compute layout once for all instances
   const layerAttributeLayout = computeAttributeLayout(layers);
 
@@ -136,6 +144,9 @@ export function createNodeProgram<
 
     // Static reference to the associated BackdropProgram
     static BackdropProgram = BackdropProgramClass;
+
+    // Static reference to the associated LabelBackgroundProgram
+    static LabelBackgroundProgram = LabelBackgroundProgramClass;
 
     // Static shared texture per GL context
     private static layerTextures = new WeakMap<WebGL2RenderingContext, ItemAttributeTexture>();

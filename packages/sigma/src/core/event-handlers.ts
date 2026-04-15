@@ -99,6 +99,33 @@ export function bindInteractionHandlers<
         internals.updateContainerCursor();
       }
     }
+
+    if (internals.settings.labelEvents === "separate") {
+      const labelToHover = stateManager.hoveredNode ? null : internals.getLabelAtPosition(event.x, event.y);
+
+      if (labelToHover !== stateManager.hoveredLabel) {
+        if (stateManager.hoveredLabel) {
+          const prevKey = stateManager.hoveredLabel;
+          stateManager.setHoveredLabel(null);
+          internals.emit("leaveLabel", {
+            ...baseEvent,
+            label: internals.nodeDataCache[prevKey]?.label || prevKey,
+            parentType: "node",
+            parentKey: prevKey,
+          });
+        }
+        stateManager.setHoveredLabel(labelToHover);
+        if (labelToHover) {
+          internals.emit("enterLabel", {
+            ...baseEvent,
+            label: internals.nodeDataCache[labelToHover]?.label || labelToHover,
+            parentType: "node",
+            parentKey: labelToHover,
+          });
+        }
+        internals.updateContainerCursor();
+      }
+    }
   };
 
   // Drag movement (body-level, fires even outside the canvas)
@@ -155,6 +182,18 @@ export function bindInteractionHandlers<
       internals.emit("leaveEdge", { ...baseEvent, edge });
     }
 
+    if (internals.settings.labelEvents === "separate" && stateManager.hoveredLabel) {
+      const prevKey = stateManager.hoveredLabel;
+      stateManager.setHoveredLabel(null);
+      internals.emit("leaveLabel", {
+        ...baseEvent,
+        label: internals.nodeDataCache[prevKey]?.label || prevKey,
+        parentType: "node",
+        parentKey: prevKey,
+      });
+      internals.updateContainerCursor();
+    }
+
     internals.emit("leaveStage", baseEvent);
   };
 
@@ -181,6 +220,21 @@ export function bindInteractionHandlers<
 
       const nodeAtPosition = internals.getNodeAtPosition(event);
       if (nodeAtPosition) return internals.emit(`${eventType}Node`, { ...baseEvent, node: nodeAtPosition });
+
+      if (
+        internals.settings.labelEvents === "separate" &&
+        (eventType === "click" || eventType === "rightClick" || eventType === "doubleClick")
+      ) {
+        const labelKey = internals.getLabelAtPosition(event.x, event.y);
+        if (labelKey) {
+          return internals.emit(`${eventType}Label`, {
+            ...baseEvent,
+            label: internals.nodeDataCache[labelKey]?.label || labelKey,
+            parentType: "node",
+            parentKey: labelKey,
+          });
+        }
+      }
 
       if (internals.settings.enableEdgeEvents) {
         const edge = internals.getEdgeAtPoint(event.x, event.y);

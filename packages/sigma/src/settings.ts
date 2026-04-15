@@ -45,7 +45,6 @@ export interface Settings {
   zoomToSizeRatioFunction: (ratio: number) => number;
   itemSizesReference: "screen" | "positions";
   autoRescale: boolean | "once";
-  autoCenter: boolean;
 
   // Node drag
   enableNodeDrag: boolean;
@@ -111,7 +110,6 @@ export const DEFAULT_SETTINGS: Settings = {
   zoomToSizeRatioFunction: Math.sqrt,
   itemSizesReference: "positions",
   autoRescale: true,
-  autoCenter: true,
 
   // Node drag
   enableNodeDrag: false,

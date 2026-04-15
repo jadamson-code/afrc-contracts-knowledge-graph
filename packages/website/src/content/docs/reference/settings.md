@@ -71,7 +71,6 @@ The `cameraPanBoundaries` setting accepts:
 | `itemSizesReference`      | `"screen" \| "positions"`   | `"positions"` | How node/edge sizes are interpreted. `"screen"`: sizes are in pixels regardless of zoom. `"positions"`: sizes scale with graph coordinates   |
 | `zoomToSizeRatioFunction` | `(ratio: number) => number` | `Math.sqrt`   | Maps camera zoom ratio to a size scaling factor. Applied in both `"screen"` and `"positions"` modes                                          |
 | `autoRescale`             | `boolean \| "once"`         | `true`        | Automatically rescale the graph to fit the viewport. `"once"` captures the initial extent and freezes it, useful for drag-and-drop scenarios |
-| `autoCenter`              | `boolean`                   | `true`        | Automatically center the graph in the viewport                                                                                               |
 
 ## Label optimization
 

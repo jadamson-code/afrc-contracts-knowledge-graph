@@ -360,6 +360,9 @@ export function createNodeProgram<
       if (uniformLocations.u_correctionRatio) {
         gl.uniform1f(uniformLocations.u_correctionRatio, params.correctionRatio);
       }
+      if (uniformLocations.u_pickingPadding) {
+        gl.uniform1f(uniformLocations.u_pickingPadding, params.nodePickingPadding);
+      }
       if (uniformLocations.u_cameraAngle) {
         gl.uniform1f(uniformLocations.u_cameraAngle, params.cameraAngle);
       }

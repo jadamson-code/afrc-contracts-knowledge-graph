@@ -461,6 +461,9 @@ export function createEdgeProgram<
       if (uniformLocations.u_minEdgeThickness) {
         gl.uniform1f(uniformLocations.u_minEdgeThickness, params.minEdgeThickness);
       }
+      if (uniformLocations.u_pickingPadding) {
+        gl.uniform1f(uniformLocations.u_pickingPadding, params.edgePickingPadding);
+      }
       if (uniformLocations.u_nodeDataTexture) {
         gl.uniform1i(uniformLocations.u_nodeDataTexture, params.nodeDataTextureUnit);
       }

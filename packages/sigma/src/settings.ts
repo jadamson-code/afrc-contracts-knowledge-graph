@@ -25,6 +25,9 @@ export interface Settings {
   enableEdgeEvents: boolean;
   labelEvents: false | "extend" | "separate";
   pickingDownSizingRatio: number;
+  nodePickingPadding: number;
+  edgePickingPadding: number;
+  labelPickingPadding: number;
   stagePadding: number;
   minEdgeThickness: number;
   antiAliasingFeather: number;
@@ -90,6 +93,9 @@ export const DEFAULT_SETTINGS: Settings = {
   enableEdgeEvents: false,
   labelEvents: false,
   pickingDownSizingRatio: 2,
+  nodePickingPadding: 0,
+  edgePickingPadding: 4,
+  labelPickingPadding: 10,
   stagePadding: 30,
   minEdgeThickness: 1.7,
   antiAliasingFeather: 1,

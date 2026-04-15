@@ -48,6 +48,7 @@ export function generateVertexShader(shapes: SDFShape[], layers: FragmentLayer[]
     "u_sizeRatio",
     "u_correctionRatio",
     "u_cameraAngle",
+    "u_pickingPadding",
     "u_nodeDataTexture",
     "u_layerAttributeTexture",
   ]);
@@ -113,6 +114,9 @@ uniform mat3 u_matrix;
 uniform float u_sizeRatio;
 uniform float u_correctionRatio;
 uniform float u_cameraAngle;
+#ifdef PICKING_MODE
+uniform float u_pickingPadding;
+#endif
 uniform sampler2D u_nodeDataTexture;
 uniform int u_nodeDataTextureWidth;
 
@@ -152,8 +156,13 @@ ${fetchCode}
   // Calculate the actual size in pixels
   float size = a_size * u_correctionRatio / u_sizeRatio * 2.0;
 
-  // Calculate vertex position (center + offset for quad corner)
-  vec2 offset = a_quadCorner * size;
+  // In PICKING_MODE, inflate the quad by nodePickingPadding pixels on each side
+  #ifdef PICKING_MODE
+    float paddedSize = size + u_pickingPadding * u_correctionRatio;
+    vec2 offset = a_quadCorner * paddedSize;
+  #else
+    vec2 offset = a_quadCorner * size;
+  #endif
 ${
   rotateWithCamera
     ? ""
@@ -170,8 +179,12 @@ ${
     1
   );
 
-  // Pass UV coordinates (already in [-1, 1] range from a_quadCorner)
-  v_uv = a_quadCorner;
+  // In PICKING_MODE, UV is scaled beyond [-1, 1] to match the inflated quad
+  #ifdef PICKING_MODE
+    v_uv = a_quadCorner * (paddedSize / size);
+  #else
+    v_uv = a_quadCorner;
+  #endif
 
   // Pass ID to fragment shader
   v_id = a_id;
@@ -288,6 +301,9 @@ in float v_shapeId;  // Shape ID for multi-shape programs
 
 // Standard uniforms (needed for some layer calculations like pixel-mode borders)
 uniform float u_correctionRatio;
+#ifdef PICKING_MODE
+uniform float u_pickingPadding;
+#endif
 
 // Shape uniforms
 ${shapeUniforms}
@@ -347,9 +363,12 @@ void main() {
   queryNodeSDF(int(v_shapeId), v_uv, context.shapeSize);
 
   // 2. Early discard for pixels fully outside the shape (with AA margin)
-  if (context.sdf > context.aaWidth) {
-    discard;
-  }
+  // In PICKING_MODE, allow extra fragments up to the picking padding distance
+  #ifdef PICKING_MODE
+    if (context.sdf > u_pickingPadding * v_pixelToUV + context.aaWidth) discard;
+  #else
+    if (context.sdf > context.aaWidth) discard;
+  #endif
 
   // 3. Apply layers sequentially with "over" compositing
   vec4 color = vec4(0.0);
@@ -357,8 +376,8 @@ void main() {
 ${layerCalls}
 
   #ifdef PICKING_MODE
-    // Picking pass: output node ID for pixels inside shape
-    if (context.sdf > 0.0) discard;
+    // Picking pass: output node ID for pixels within the picking area
+    if (context.sdf > u_pickingPadding * v_pixelToUV) discard;
     fragColor = v_id;
     fragColor.a *= bias;
   #else
@@ -385,6 +404,7 @@ export function collectUniforms(shapes: SDFShape[], layers: FragmentLayer[]): st
   uniformNames.add("u_sizeRatio");
   uniformNames.add("u_correctionRatio");
   uniformNames.add("u_cameraAngle");
+  uniformNames.add("u_pickingPadding");
   uniformNames.add("u_nodeDataTexture");
   uniformNames.add("u_nodeDataTextureWidth");
 

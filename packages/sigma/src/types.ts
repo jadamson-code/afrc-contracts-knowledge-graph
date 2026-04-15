@@ -164,6 +164,9 @@ export interface RenderParams {
   downSizingRatio: number;
   minEdgeThickness: number;
   antiAliasingFeather: number;
+  nodePickingPadding: number;
+  edgePickingPadding: number;
+  labelPickingPadding: number;
   nodeDataTextureUnit: number;
   nodeDataTextureWidth: number;
   edgeDataTextureUnit: number;

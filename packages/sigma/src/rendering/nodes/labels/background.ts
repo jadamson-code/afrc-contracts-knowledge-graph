@@ -404,7 +404,7 @@ export function createLabelBackgroundProgram<
       gl.uniform1f(uniformLocations.u_labelMargin, NodeLabelBackgroundProgram.labelMargin);
       gl.uniform1f(uniformLocations.u_zoomLabelSizeRatio, 1 / zoomToLabelSizeRatioFunction(params.zoomRatio));
       gl.uniform1f(uniformLocations.u_labelPixelSnapping, params.labelPixelSnapping);
-      gl.uniform1f(uniformLocations.u_pickingPadding, 10);
+      gl.uniform1f(uniformLocations.u_pickingPadding, params.labelPickingPadding);
 
       const seenUniforms = new Set<string>();
       for (const shape of shapes) {

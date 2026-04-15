@@ -57,6 +57,7 @@ function collectUniformsMulti(paths: EdgePath[], extremities: EdgeExtremity[], l
     "u_pixelRatio",
     "u_cameraAngle",
     "u_minEdgeThickness",
+    "u_pickingPadding",
     "u_nodeDataTexture",
     "u_nodeDataTextureWidth",
     "u_edgeDataTexture",
@@ -565,6 +566,7 @@ function generateVertexShaderMulti(
     "u_pixelRatio",
     "u_cameraAngle",
     "u_minEdgeThickness",
+    "u_pickingPadding",
     "u_nodeDataTexture",
   ]);
 
@@ -616,6 +618,9 @@ uniform float u_zoomRatio;
 uniform float u_pixelRatio;
 uniform float u_cameraAngle;
 uniform float u_minEdgeThickness;
+#ifdef PICKING_MODE
+uniform float u_pickingPadding;
+#endif
 uniform sampler2D u_nodeDataTexture;
 uniform int u_nodeDataTextureWidth;
 uniform sampler2D u_edgeDataTexture;
@@ -774,6 +779,13 @@ ${textureFetch.varyingAssignments}
   // Convert to webGL units for geometry expansion
   float aaWidthWebGL = antialiasingWidth * webGLThickness;
 
+  // Extra geometry width for picking padding (0 in visual mode)
+  #ifdef PICKING_MODE
+    float pickingPaddingWebGL = u_pickingPadding * u_correctionRatio;
+  #else
+    float pickingPaddingWebGL = 0.0;
+  #endif
+
   // Straight-line direction and normal (for blending when straightenFactor > 0)
   vec2 straightDir = length(a_target - a_source) > 0.0001
     ? normalize(a_target - a_source) : vec2(1.0, 0.0);
@@ -797,7 +809,7 @@ ${textureFetch.varyingAssignments}
     normal = vec2(-tang.y, tang.x);
     vec2 centerPos = mix(queryPathPosition(pathId, tStart, a_source, a_target),
                          queryPathPosition(pathId, tTailEnd, a_source, a_target), zoneT);
-    float halfWidth = webGLThickness * scaledTailWidth * 0.5 + aaWidthWebGL;
+    float halfWidth = webGLThickness * scaledTailWidth * 0.5 + aaWidthWebGL + pickingPaddingWebGL;
     position = centerPos + normal * side * halfWidth;
     t = mix(tStart, tTailEnd, zoneT);
 
@@ -805,7 +817,7 @@ ${textureFetch.varyingAssignments}
     // BODY ZONE: follows path curvature with width = 1.0
     t = mix(tTailEnd, tHeadStart, zoneT);
     normal = queryPathNormal(pathId, t, a_source, a_target);
-    float halfWidth = webGLThickness * 0.5 + aaWidthWebGL;
+    float halfWidth = webGLThickness * 0.5 + aaWidthWebGL + pickingPaddingWebGL;
     position = queryPathPosition(pathId, t, a_source, a_target) + normal * side * halfWidth;
 
   } else {
@@ -814,16 +826,16 @@ ${textureFetch.varyingAssignments}
     normal = vec2(-tang.y, tang.x);
     vec2 centerPos = mix(queryPathPosition(pathId, tHeadStart, a_source, a_target),
                          queryPathPosition(pathId, tEnd, a_source, a_target), zoneT);
-    float halfWidth = webGLThickness * scaledHeadWidth * 0.5 + aaWidthWebGL;
+    float halfWidth = webGLThickness * scaledHeadWidth * 0.5 + aaWidthWebGL + pickingPaddingWebGL;
     position = centerPos + normal * side * halfWidth;
     t = mix(tHeadStart, tEnd, zoneT);
   }
 
   // Blend toward straight line based on path twist in extremity zones
   if (straightenFactor > 0.001) {
-    float zoneWidth = zone < 0.5 ? webGLThickness * scaledTailWidth * 0.5 + aaWidthWebGL :
-                      zone < 1.5 ? webGLThickness * 0.5 + aaWidthWebGL :
-                      webGLThickness * scaledHeadWidth * 0.5 + aaWidthWebGL;
+    float zoneWidth = zone < 0.5 ? webGLThickness * scaledTailWidth * 0.5 + aaWidthWebGL + pickingPaddingWebGL :
+                      zone < 1.5 ? webGLThickness * 0.5 + aaWidthWebGL + pickingPaddingWebGL :
+                      webGLThickness * scaledHeadWidth * 0.5 + aaWidthWebGL + pickingPaddingWebGL;
     vec2 straightPos = mix(a_source, a_target, t) + straightNormal * side * zoneWidth;
     position = mix(position, straightPos, straightenFactor);
   }
@@ -884,6 +896,7 @@ function generateFragmentShaderMulti(paths: EdgePath[], extremities: EdgeExtremi
     "u_pixelRatio",
     "u_cameraAngle",
     "u_minEdgeThickness",
+    "u_pickingPadding",
   ]);
 
   const seenUniforms = new Set<string>();
@@ -950,6 +963,9 @@ ${textureFetch.fragmentVaryingDeclarations}
 uniform float u_sizeRatio;
 uniform float u_correctionRatio;
 uniform float u_cameraAngle;
+#ifdef PICKING_MODE
+uniform float u_pickingPadding;
+#endif
 
 // Custom uniforms
 ${customUniforms.join("\n")}
@@ -1026,7 +1042,12 @@ void main() {
   float zoneWidthFactor = v_zone < 0.5 ? v_tailWidthRatio :
                           v_zone < 1.5 ? 1.0 :
                           v_headWidthRatio;
-  float halfGeometryWidth = halfThickness * zoneWidthFactor + aaWidthWebGL;
+  // In PICKING_MODE, inflate halfGeometryWidth to match the inflated vertex geometry
+  #ifdef PICKING_MODE
+    float halfGeometryWidth = halfThickness * zoneWidthFactor + aaWidthWebGL + u_pickingPadding * aaWidthWebGL;
+  #else
+    float halfGeometryWidth = halfThickness * zoneWidthFactor + aaWidthWebGL;
+  #endif
   float distFromCenter = abs(v_side) * halfGeometryWidth;
 
   // Populate EdgeContext (for layer functions)
@@ -1103,8 +1124,8 @@ ${
   }
 
   #ifdef PICKING_MODE
-    // Picking pass: output edge ID for pixels inside edge
-    if (finalSDF > 0.0) discard;
+    // Picking pass: output edge ID for pixels within the picking area
+    if (finalSDF > u_pickingPadding * aaWidthWebGL) discard;
     fragColor = v_id;
   #else
     // Visual pass: anti-aliased edge with layers

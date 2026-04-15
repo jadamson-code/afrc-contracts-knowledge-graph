@@ -6,7 +6,7 @@ sidebar:
 
 import SigmaExample from "../../../../components/SigmaExample.astro";
 
-By default, sigma renders all nodes as circles. To use other shapes, declare them in `primitives.nodes.shapes` and assign shapes to nodes via a style rule.
+By default, sigma renders all nodes as circles. To use other shapes, declare them in `primitives.nodes.shapes` first, and then assign shapes to nodes via a style rule.
 
 ## Built-in shapes
 
@@ -35,11 +35,11 @@ new Sigma(graph, container, {
 
 ## Custom shapes
 
-You can create custom shapes by implementing the `SDFShape` interface. A shape is defined by a GLSL [signed distance function](https://iquilezles.org/articles/distfunctions2d/) — a function that returns the distance from a point to the shape boundary (negative inside, positive outside).
+You can create custom shapes by implementing the `SDFShape` interface. A shape is defined by a GLSL [signed distance function](https://en.wikipedia.org/wiki/Signed_distance_function), i.e. a function that returns the distance from a point to the shape boundary (negative inside, positive outside).
 
 The GLSL function must follow the naming convention `sdf_{name}(vec2 uv, float size, ...)`. The `uv` parameter is the pixel offset from the node center, and `size` is the node radius. Additional parameters correspond to uniforms declared in the `uniforms` array.
 
-The `inradiusFactor` controls how edge endpoints are clamped to the shape boundary (ratio of inradius to circumradius). For a circle it's 1.0, for a square it's ~0.707.
+The `inradiusFactor` controls how edge endpoints are clamped to the shape boundary (ratio of inradius to circumradius). For a circle it's 1.0, for a square it's ~0.707 (half of `Math.sqrt(2)`).
 
 For a comprehensive catalog of 2D SDF primitives, see [Inigo Quilez's reference](https://iquilezles.org/articles/distfunctions2d/).
 

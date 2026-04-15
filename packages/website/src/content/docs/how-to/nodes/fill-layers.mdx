@@ -6,13 +6,13 @@ sidebar:
 
 import SigmaExample from "../../../../components/SigmaExample.astro";
 
-Node appearance is built by compositing **layers** from back to front. Sigma ships with one built-in layer (`layerFill`), and three extension packages add specialized layers for borders, images, and piecharts.
+Node appearance is built by compositing **layers** from back to front. These layers determine "how to colorize each pixel" within a node's shape. Sigma ships with one built-in layer (`layerFill`), and three extension packages add specialized layers for borders, images, and piecharts.
 
 ## How layers work
 
-Layers are declared in `primitives.nodes.layers`. They are composited in order — earlier layers render behind later ones. Layers automatically disable themselves when they have no data for a given node (e.g., an image layer on a node without an `image` attribute renders as transparent).
+Layers are declared in `primitives.nodes.layers`. They are composited in order: earlier layers render behind later ones. Layers automatically disable themselves when they have no data for a given node (e.g., an image layer on a node without an `image` attribute renders as transparent).
 
-All nodes share the same WebGL program regardless of which layers they use.
+All nodes share the same WebGL program, with the same shaders, regardless of which layers they use.
 
 ## Available layers
 
@@ -43,6 +43,6 @@ The `@sigma/node-piechart` package renders nodes as pie charts. Slice proportion
 
 ## Composing layers
 
-Layers compose naturally. The example below combines a fill, a border, and an image layer — composited in declaration order:
+Layers compose naturally. The example below combines a fill, a border and an image layer, composited in declaration order:
 
 <SigmaExample id="styling/node-layers-composed" height="500px" />

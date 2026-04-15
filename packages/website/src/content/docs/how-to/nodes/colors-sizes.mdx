@@ -6,15 +6,15 @@ sidebar:
 
 import SigmaExample from "../../../../components/SigmaExample.astro";
 
-Sigma.js reads node colors and sizes from graph attributes. You control the mapping between attributes and visual properties through `styles`.
+Most of the time, people want to map node colors and sizes to graph attributes. You control the mapping between attributes and visual properties through `styles`.
 
-The example below uses a categorical binding for colors and a numerical binding for sizes:
+The example below shows how to map some node categorical attribute to colors, and some node number attribute to sizes:
 
 <SigmaExample id="styling/node-colors-sizes" height="500px" />
 
 ## Setting colors and sizes
 
-The simplest approach reads `color` and `size` directly from graph attributes:
+The most common approach reads `color` and `size` directly from graph attributes (when they are stored "as is" in the graphology instance):
 
 ```typescript
 import Graph from "graphology";

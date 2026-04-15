@@ -6,7 +6,7 @@ sidebar:
 
 import SigmaExample from "../../../../components/SigmaExample.astro";
 
-Sigma v4 gives you full control over edge appearance through the **primitives** and **styles** system. You can combine different path geometries, colors, and dashed layers.
+Sigma v4 gives you full control over edge appearance through the **primitives** and **styles** system. You can combine different path geometries and fill layers.
 
 <SigmaExample id="styling/edge-styles" height="500px" />
 
@@ -22,13 +22,13 @@ Sigma ships with five built-in path types:
 | `pathStepCurved()` | Step with rounded corners                       |
 | `pathCurvedS()`    | S-shaped cubic curve                            |
 
-Declare which paths your graph uses in `primitives.edges.paths`, then assign them per-edge via styles. The first path in the array is the default. Edges whose `path` attribute does not match any declared path fall back to it.
+Declare which paths your graph uses in `primitives.edges.paths`, then assign them per-edge via styles.
 
-For arrowheads and other endpoint shapes, see [Extremities](/how-to/edges/extremities/).
+For arrowheads and other endpoint shapes, see the [Extremities](/how-to/edges/extremities/) documentation.
 
 ## Edge colors
 
-Edge colors work like node colors — set them in the graph data and read them via styles:
+Edge colors work like node colors. Set them in the graph data and read them via styles:
 
 ```typescript
 graph.addEdge("a", "b", { color: "#e63946" });

@@ -6,6 +6,8 @@ import fixedColorsSource from "./fixed-colors?raw";
 import fixedValuesPlay from "./fixed-values";
 import fixedValuesSource from "./fixed-values?raw";
 import template from "./index.html?raw";
+import manyPlay from "./many-values";
+import manySource from "./many-values?raw";
 import offsetsPlay from "./offsets";
 import offsetsSource from "./offsets?raw";
 
@@ -49,6 +51,18 @@ export const offsets: Story = {
   parameters: {
     storySource: {
       source: offsetsSource,
+    },
+  },
+};
+
+export const manyValues: Story = {
+  name: "Many values",
+  render: () => template,
+  play: wrapStory(manyPlay),
+  args: {},
+  parameters: {
+    storySource: {
+      source: manySource,
     },
   },
 };

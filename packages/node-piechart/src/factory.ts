@@ -63,6 +63,37 @@ export default function createNodePiechartProgram<
       };
     }
 
+    /**
+     * Overrides the default `getProgramInfo` to check if the user reach the webgl limitation about the number of vertex attributes.
+     */
+    getProgramInfo(
+      name: "normal" | "pick",
+      gl: WebGLRenderingContext | WebGL2RenderingContext,
+      vertexShaderSource: string,
+      fragmentShaderSource: string,
+      frameBuffer: WebGLFramebuffer | null,
+    ): ProgramInfo {
+      // Counting the number of needed attributes in the vertex shader
+      // Base attributes: a_position, a_id, a_size, and constant a_angle.
+      let count = 4;
+      if ("attribute" in offset) count += 1;
+      count += slices.reduce((sum, { color, value }) => {
+        if ("attribute" in color) sum += 1;
+        if ("attribute" in value) sum += 1;
+        return sum;
+      }, 0);
+
+      const maxVertexAttributes = gl.getParameter(gl.MAX_VERTEX_ATTRIBS) as number;
+
+      // Checking if the limit is reached
+      if (count > maxVertexAttributes)
+        throw new Error(
+          `createNodePiechartProgram: Too many slices. The node program requires ${count} vertex attributes, but the current WebGL context only supports ${maxVertexAttributes}. Please reduce the number of slices.`,
+        );
+
+      return super.getProgramInfo(name, gl, vertexShaderSource, fragmentShaderSource, frameBuffer);
+    }
+
     processVisibleItem(nodeIndex: number, startIndex: number, data: NodeDisplayData) {
       const array = this.array;
 
@@ -86,7 +117,6 @@ export default function createNodePiechartProgram<
 
     setUniforms(params: RenderParams, { gl, uniformLocations }: ProgramInfo): void {
       const { u_sizeRatio, u_correctionRatio, u_cameraAngle, u_matrix, u_defaultColor } = uniformLocations;
-
       gl.uniform1f(u_correctionRatio, params.correctionRatio);
       gl.uniform1f(u_sizeRatio, params.sizeRatio);
       gl.uniform1f(u_cameraAngle, params.cameraAngle);

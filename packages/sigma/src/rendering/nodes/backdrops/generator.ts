@@ -531,10 +531,13 @@ void main() {
   }
 
   // Gaussian-like shadow falloff (mimics canvas shadowBlur)
-  float shadowDist = max(0.0, combinedSdf);
+  vec4 shadow = vec4(0.0);
   float sigma = shadowBlur / 2.5;
-  float shadowAlpha = exp(-(shadowDist * shadowDist) / (2.0 * sigma * sigma)) * shadowColor.a;
-  vec4 shadow = vec4(shadowColor.rgb * shadowAlpha, shadowAlpha);
+  if (sigma > 0.001) {
+    float shadowDist = max(0.0, combinedSdf);
+    float shadowAlpha = exp(-(shadowDist * shadowDist) / (2.0 * sigma * sigma)) * shadowColor.a;
+    shadow = vec4(shadowColor.rgb * shadowAlpha, shadowAlpha);
+  }
 
   fragColor = background + shadow * (1.0 - background.a);
   fragPicking = vec4(0.0);

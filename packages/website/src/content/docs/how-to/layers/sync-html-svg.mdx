@@ -6,7 +6,9 @@ sidebar:
 
 import SigmaExample from "../../../../components/SigmaExample.astro";
 
-Sometimes you need to render HTML or SVG elements positioned in graph space — cluster labels, tooltips, annotations, or custom overlays. The pattern is straightforward: create DOM elements, position them using `graphToViewport()`, and update their positions on every render.
+Sometimes you need to render HTML or SVG elements positioned in graph space (cluster labels, tooltips, annotations,
+custom overlays...). The pattern is straightforward: create DOM elements, position them using `graphToViewport()`, and
+update their positions on every render.
 
 ## The pattern
 
@@ -33,9 +35,15 @@ renderer.on("afterRender", () => {
 });
 ```
 
+:::note
+The `pointer-events: none;` CSS rule is **very important** here. It allows having mouse and touch interactions being applied
+the Sigma's layers, rather than this new DOM layer, even if it actually renders over Sigma's graph.
+:::
+
 ## Example: cluster labels
 
-A common use case is rendering cluster names over groups of nodes. Compute the centroid of each cluster's nodes, create HTML labels, and reposition them on every render.
+A common use case is rendering cluster names over groups of nodes. Compute the centroid of each cluster's nodes, create
+HTML labels, and reposition them on every render.
 
 <SigmaExample id="cookbook/cluster-labels" height="500px" />
 
@@ -49,5 +57,7 @@ The key parts of this example:
 
 - Use `pointer-events: none` on the overlay container so mouse events pass through to sigma.
 - Use `overflow: hidden` to clip elements that move off-screen during panning.
-- For SVG overlays, the same pattern applies — create an `<svg>` element with the same dimensions as the container and use `graphToViewport()` to position elements.
-- If you need elements to interact with mouse events (e.g. clickable labels), set `pointer-events: auto` on those specific elements.
+- For SVG overlays, the same pattern applies: create an `<svg>` element with the same dimensions as the container and
+  use `graphToViewport()` to position elements.
+- If you need elements to interact with mouse events (e.g. clickable labels), set `pointer-events: auto` on those
+  specific elements.

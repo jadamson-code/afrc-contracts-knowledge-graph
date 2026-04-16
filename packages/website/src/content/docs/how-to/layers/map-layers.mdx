@@ -7,7 +7,9 @@ sidebar:
 
 import SigmaExample from "../../../../components/SigmaExample.astro";
 
-Sigma.js can render graphs on top of geographic maps using the `@sigma/layer-leaflet` or `@sigma/layer-maplibre` packages. Both work the same way: they synchronize a map layer with sigma's camera so that nodes are positioned by latitude and longitude.
+Sigma.js can render graphs on top of geographic maps using the `@sigma/layer-leaflet` or `@sigma/layer-maplibre`
+packages. Both work the same way: they synchronize a map layer with sigma's camera so that nodes are positioned by
+latitude and longitude.
 
 ## Installation
 
@@ -27,11 +29,13 @@ Nodes positioned by latitude/longitude on an OpenStreetMap base layer:
 
 <SigmaExample id="map-layers/leaflet-basic" height="400px" />
 
-Set `x: 0, y: 0` on every node — the map layer overwrites these coordinates with projected positions. If you omit `getNodeLatLng`, the layer reads `lat` and `lng` directly from node attributes.
+Set `x: 0, y: 0` on every node. The map layer overwrites these coordinates with projected positions. If you omit
+`getNodeLatLng`, the layer reads `lat` and `lng` directly from node attributes.
 
 ## MapLibre
 
-The same concept using MapLibre GL as the map provider. The `mapOptions` object is passed directly to the MapLibre `Map` constructor:
+The same concept using MapLibre GL as the map provider. The `mapOptions` object is passed directly to the MapLibre `Map`
+constructor:
 
 <SigmaExample id="map-layers/maplibre-basic" height="400px" />
 
@@ -55,7 +59,8 @@ Combining graph nodes with GeoJSON polygon overlays:
 
 ## Cleanup
 
-Both `bindLeafletLayer` and `bindMaplibreLayer` return a `clean` function that removes the map layer and restores sigma's original settings:
+Both `bindLeafletLayer` and `bindMaplibreLayer` return a `clean` function that removes the map layer and restores
+sigma's original settings:
 
 ```typescript
 const { clean } = bindLeafletLayer(renderer, {
@@ -74,8 +79,13 @@ clean();
 
 ## Precision at high zoom levels
 
-The map layers use a fixed [Web Mercator](https://en.wikipedia.org/wiki/Web_Mercator_projection) coordinate space covering the entire world. When your graph nodes are clustered in a small geographic area and you zoom in deeply, the WebGL shaders may produce visual artifacts due to **float32 precision limits** — nodes and edges can appear to jitter or misalign.
+The map layers use a fixed [Web Mercator](https://en.wikipedia.org/wiki/Web_Mercator_projection) coordinate space
+covering the entire world. When your graph nodes are clustered in a small geographic area and you zoom in deeply, the
+WebGL shaders may produce visual artifacts due to **float32 precision limits**. Nodes and edges can then appear to
+jitter or misalign.
 
 This affects both `@sigma/layer-leaflet` and `@sigma/layer-maplibre`.
 
-To minimize precision issues, design your graph so that nodes span a reasonably large portion of the world map rather than being concentrated in a very small area. For graphs that cover a city block or less, consider whether a geographic map layer is the right fit.
+To minimize precision issues, design your graph so that nodes span a reasonably large portion of the world map rather
+than being concentrated in a very small area. For graphs that cover a city block or less, consider whether a geographic
+map layer is the right fit.

@@ -7,7 +7,8 @@ sidebar:
 
 import SigmaExample from "../../../../components/SigmaExample.astro";
 
-The `@sigma/layer-webgl` package lets you add custom WebGL rendering layers behind the graph. The most common use case is drawing contours around groups of nodes to highlight communities.
+The `@sigma/layer-webgl` package lets you add custom WebGL rendering layers behind the graph. The most common use case
+is drawing contours around groups of nodes to highlight communities. Here are some examples:
 
 ### Highlight communities
 
@@ -35,13 +36,22 @@ npm install @sigma/layer-webgl
 
 ## Drawing contours
 
-The built-in `createContoursProgram` renders smooth contour shapes around a set of nodes -- useful for visualizing communities or clusters.
+The built-in `createContoursProgram` renders smooth contour shapes around a set of nodes. That can be useful for
+visualizing communities or clusters.
 
 ```typescript
 import { bindWebGLLayer, createContoursProgram } from "@sigma/layer-webgl";
 import Sigma from "sigma";
 
-const renderer = new Sigma(graph, container);
+const renderer = new Sigma(graph, container, {
+  primitives: {
+    depthLayers: [
+      "edges", "edgeLabels",
+      "community-highlight",
+      "nodes", "nodeLabels", "topNodes", "topNodeLabels"],
+    },
+  },
+});
 
 // Draw a red contour around a group of nodes:
 const communityNodes = ["node1", "node2", "node3", "node4"];
@@ -88,51 +98,10 @@ createContoursProgram(nodeIds, {
 Each call to `bindWebGLLayer` requires a unique string ID. You can add as many layers as you need:
 
 ```typescript
-const cleanA = bindWebGLLayer("group-a", renderer, createContoursProgram(groupA, optionsA));
-const cleanB = bindWebGLLayer("group-b", renderer, createContoursProgram(groupB, optionsB));
+const cleanA = bindWebGLLayer("highlights", renderer, createContoursProgram(groupA, optionsA));
+const cleanB = bindWebGLLayer("highlights", renderer, createContoursProgram(groupB, optionsB));
 
 // Remove individually:
 cleanA();
 cleanB();
 ```
-
-## Custom WebGL layers
-
-For fully custom rendering, extend the `WebGLLayerProgram` class. You need to implement three methods:
-
-```typescript
-import { WebGLLayerDefinition, WebGLLayerProgram, bindWebGLLayer } from "@sigma/layer-webgl";
-import type { ProgramInfo } from "sigma/rendering";
-import type { RenderParams } from "sigma/types";
-
-class MyLayerProgram extends WebGLLayerProgram {
-  getCustomLayerDefinition(): WebGLLayerDefinition {
-    return {
-      FRAGMENT_SHADER_SOURCE: `#version 300 es
-        precision highp float;
-        out vec4 fragColor;
-        uniform float u_width;
-        uniform float u_height;
-        void main() {
-          vec2 uv = gl_FragCoord.xy / vec2(u_width, u_height);
-          fragColor = vec4(uv, 0.5, 0.3);
-        }`,
-      DATA_UNIFORMS: [],
-      CAMERA_UNIFORMS: ["u_width", "u_height"],
-    };
-  }
-
-  setCameraUniforms(params: RenderParams, { gl, uniformLocations }: ProgramInfo) {
-    gl.uniform1f(uniformLocations.u_width, gl.canvas.width);
-    gl.uniform1f(uniformLocations.u_height, gl.canvas.height);
-  }
-
-  cacheDataUniforms(_programInfo: ProgramInfo) {
-    // Set data-dependent uniforms here (called when the graph changes)
-  }
-}
-
-const clean = bindWebGLLayer("my-custom-layer", renderer, MyLayerProgram);
-```
-
-The layer renders a full-screen quad. Your fragment shader receives the camera state through `CAMERA_UNIFORMS` and graph-dependent data through `DATA_UNIFORMS`. See the `createContoursProgram` source code for a complete example.

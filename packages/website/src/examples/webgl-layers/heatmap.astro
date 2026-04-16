@@ -32,7 +32,7 @@
     primitives: {
       depthLayers: ["heatmap", ...DEFAULT_DEPTH_LAYERS],
     },
-    edgeReducer: (_key, data) => (showEdges ? data : { ...data, hidden: true }),
+    edgeReducer: (_key, data) => (showEdges ? data : { ...data, visibility: "hidden" }),
   });
 
   const HEATMAP_COLOR_STOPS = [

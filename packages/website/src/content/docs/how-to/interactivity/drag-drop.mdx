@@ -6,11 +6,12 @@ sidebar:
 
 import SigmaExample from "../../../../components/SigmaExample.astro";
 
-Sigma includes built-in node drag support via the `enableNodeDrag` setting. Combined with `autoRescale: "once"`, it handles coordinate conversion, camera panning suppression, and state management automatically.
+Sigma includes built-in node drag support via the `enableNodeDrag` setting. Combined with `autoRescale: "once"`, it
+handles coordinate conversion, camera panning suppression, and state management automatically.
 
 ## Live example
 
-Drag any node to reposition it. The force layout pins dragged nodes and resumes when released.
+In this example, you can drag any node to reposition it. The force layout pins dragged nodes, and resumes when released.
 
 <SigmaExample id="core/drag-drop" height="500px" />
 
@@ -27,7 +28,8 @@ const renderer = new Sigma(graph, container, {
 });
 ```
 
-`autoRescale: "once"` freezes the coordinate system after the first render, preventing the viewport from rescaling as nodes are dragged outside the original bounding box.
+`autoRescale: "once"` freezes the coordinate system after the first render, preventing the viewport from rescaling as
+nodes are dragged outside the original bounding box.
 
 ## Styling dragged nodes
 
@@ -59,7 +61,8 @@ const renderer = new Sigma(graph, container, {
 
 ## Integration with force layouts
 
-Since sigma tracks the `isDragged` state on each node, the force layout can read it directly via `getNodeState()` — no event handlers or extra attributes needed:
+Since sigma tracks the `isDragged` state on each node, the force layout can read it directly via `getNodeState()`. No
+event handlers or extra attributes is needed:
 
 ```typescript
 import ForceSupervisor from "graphology-layout-force/worker";
@@ -76,7 +79,20 @@ layout.start();
 
 ## Cancelling drag for specific nodes
 
-Use `preventSigmaDefault()` on the `nodeDragStart` event to make certain nodes non-draggable:
+The `getDraggedNodes` setting allows telling Sigma which nodes should be dragged. This can be used to drag multiple
+nodes at once, or in the contrary, prevent some nodes to be dragged:
+
+```typescript
+const renderer = new Sigma(graph, container, {
+  settings: {
+    // ...
+    getDraggedNodes: (node) => (graph.getNodeAttribute(node, "locked") ? [] : [node]),
+    // ...
+  },
+});
+```
+
+Alternatively, you can use `preventSigmaDefault()` on the `nodeDragStart` event to make nodes non-draggable:
 
 ```typescript
 renderer.on("nodeDragStart", ({ node, preventSigmaDefault }) => {
@@ -103,51 +119,67 @@ The following example combines several drag features on a grid graph:
 The example extends sigma's built-in state with application-specific flags:
 
 ```typescript
-const renderer = new Sigma<
-  Attributes, Attributes, Attributes,
-  BaseNodeState & { isSelected?: boolean },
-  BaseEdgeState,
-  BaseGraphState & { selectionSize?: number }
->(graph, container, { ... });
+const renderer = new Sigma(graph, container, {
+  // ...
+  customNodeState: {
+    isSelected: false,
+  },
+  customGraphState: {
+    selectionSize: 0,
+  },
+  // ...
+});
 ```
 
 These custom flags can then be used in style predicates (`"isSelected"`) and read/written via `getNodeState()` / `setNodeState()` / `setGraphState()`.
 
 ### The `getDraggedNodes` setting
 
-This callback connects your selection state to drag. When the dragged node is selected, all selected nodes move together:
+This callback connects your selection state to drag. When the dragged node is selected, all selected nodes move
+together:
 
 ```typescript
-getDraggedNodes: (node) => {
-  if (renderer.getNodeState(node).isSelected) {
-    const selected: string[] = [];
-    graph.forEachNode((n) => {
-      if (renderer.getNodeState(n).isSelected) selected.push(n);
-    });
-    return selected;
-  }
-  return [node];
-},
+const renderer = new Sigma(graph, container, {
+  settings: {
+    // ...
+    getDraggedNodes: (node) => {
+      if (renderer.getNodeState(node).isSelected) {
+        return graph.filterNodes((n: string) => renderer.getNodeState(n).isSelected);
+      }
+      return [node];
+    },
+    // ...
+  },
+});
 ```
 
 ### Position constraints
 
-`dragPositionToAttributes` transforms positions before they are written to the graph. It receives the computed graph-space position and returns the attributes to set:
+`dragPositionToAttributes` transforms positions before they are written to the graph. It receives the computed
+graph-space position and returns the attributes to set:
 
 ```typescript
 const SNAP_SIZE = 0.5;
-
-dragPositionToAttributes: (position) => ({
-  x: Math.round(position.x / SNAP_SIZE) * SNAP_SIZE,
-  y: Math.round(position.y / SNAP_SIZE) * SNAP_SIZE,
-}),
+const renderer = new Sigma(graph, container, {
+  settings: {
+    // ...
+    dragPositionToAttributes: (position) => ({
+      x: Math.round(position.x / SNAP_SIZE) * SNAP_SIZE,
+      y: Math.round(position.y / SNAP_SIZE) * SNAP_SIZE,
+    }),
+    // ...
+  },
+});
 ```
 
-When position attributes differ from `x`/`y` (e.g. via styles mapping `x: { attribute: "lng" }`), sigma infers the correct attribute names automatically. Use `dragPositionToAttributes` when you need to transform values (snapping, scaling) or write to different attributes than the ones used for reading.
+When position attributes differ from `x`/`y` (e.g. via styles mapping `x: { attribute: "lng" }`), sigma infers the
+correct attribute names automatically. Use `dragPositionToAttributes` when you need to transform values (snapping,
+scaling) or write to different attributes than the ones used for reading.
 
 ## Events
 
-Three events are available for observing the drag lifecycle. All payloads include `node`, `allDraggedNodes`, and the wrapped `MouseCoords` event:
+Three events are available for observing the drag lifecycle. All payloads include `node`, `allDraggedNodes`, and the
+wrapped `MouseCoords` event:
 
 | Event           | Description                                                     |
 | --------------- | --------------------------------------------------------------- |

@@ -17,10 +17,10 @@ By default, sigma supports these interactions:
 | **Pan**     | Drag the background               | Drag with one finger |
 | **Zoom**    | Scroll wheel                      | Pinch                |
 | **Rotate**  | Right-click drag                  | Two-finger rotate    |
-| **Hover**   | Move cursor over a node           | —                    |
+| **Hover**   | Move cursor over a node           | -                    |
 | **Click**   | Click a node, edge, or background | Tap                  |
 
-Each interaction can be enabled or disabled via settings:
+Some of these interactions can be enabled or disabled via settings:
 
 ```typescript
 new Sigma(graph, container, {
@@ -44,15 +44,15 @@ renderer.on("clickNode", ({ node, event }) => {
 });
 
 renderer.on("enterNode", ({ node }) => {
-  document.body.style.cursor = "pointer";
+  console.log("Entering node", node);
 });
 
-renderer.on("leaveNode", () => {
-  document.body.style.cursor = "default";
+renderer.on("leaveNode", ({ node }) => {
+  console.log("Entering node", node);
 });
 
 renderer.on("clickStage", () => {
-  // User clicked the background — e.g. deselect all
+  // User clicked the background, e.g. deselect all
 });
 ```
 
@@ -70,29 +70,8 @@ new Sigma(graph, container, {
 
 ## Live example
 
-Interact with the graph below — every event is logged in the overlay panel.
+Interact with the graph below. Every event is logged in the overlay panel.
 
 <SigmaExample id="core/events" height="500px" />
-
-## Building a context menu
-
-Here is a concrete example: show a context menu on right-click.
-
-```typescript
-renderer.on("rightClickNode", ({ node, event }) => {
-  // Prevent the browser's default context menu
-  event.original.preventDefault();
-
-  const menu = document.getElementById("context-menu")!;
-  menu.style.left = `${event.x}px`;
-  menu.style.top = `${event.y}px`;
-  menu.style.display = "block";
-  menu.dataset.node = node;
-});
-
-renderer.on("clickStage", () => {
-  document.getElementById("context-menu")!.style.display = "none";
-});
-```
 
 For the full list of events and their payloads, see the [Events reference](/reference/events/).

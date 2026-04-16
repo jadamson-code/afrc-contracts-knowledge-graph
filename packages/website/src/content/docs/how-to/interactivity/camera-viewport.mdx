@@ -6,7 +6,8 @@ sidebar:
 
 import SigmaExample from "../../../../components/SigmaExample.astro";
 
-Sigma's camera controls what portion of the graph is visible. You can constrain user interactions, animate the camera, and convert between coordinate systems.
+Sigma's camera controls what portion of the graph is visible. You can constrain user interactions, animate the camera,
+and convert between coordinate systems.
 
 ## Zoom and pan boundaries
 
@@ -31,7 +32,8 @@ new Sigma(graph, container, {
 });
 ```
 
-The `tolerance` value controls how far past the graph bounding box the user can pan, as a fraction of the viewport. Set `cameraPanBoundaries: true` for the default tolerance, or `null` (default) to disable.
+The `tolerance` value controls how far past the graph bounding box the user can pan, as a fraction of the viewport. Set
+`cameraPanBoundaries: true` for the default tolerance, or `null` (default) to disable.
 
 ## Animated transitions
 
@@ -69,10 +71,10 @@ camera.setState({ x: 0.5, y: 0.5, ratio: 1, angle: 0 });
 Convert between graph space and screen space:
 
 ```typescript
-// Graph coordinates → screen pixels
+// Graph coordinates -> screen pixels
 const screenPos = renderer.graphToViewport({ x: 0, y: 0 });
 
-// Screen pixels → graph coordinates
+// Screen pixels -> graph coordinates
 const graphPos = renderer.viewportToGraph({ x: 100, y: 200 });
 ```
 
@@ -84,7 +86,7 @@ The `@sigma/utils` package provides helpers for working with the viewport:
 import { fitViewportToNodes, getNodesInViewport } from "@sigma/utils";
 
 // Animate the camera to fit a set of nodes
-fitViewportToNodes(renderer, ["node1", "node2", "node3"], { duration: 500 });
+fitViewportToNodes(renderer, ["node1", "node2", "node3"], { animate: true });
 
 // Get all nodes currently visible on screen
 const visibleNodes = getNodesInViewport(renderer);

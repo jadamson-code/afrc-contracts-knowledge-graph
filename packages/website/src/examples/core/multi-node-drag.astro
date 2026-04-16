@@ -42,14 +42,13 @@
     }
   }
 
-  const renderer = new Sigma<
-    Attributes,
-    Attributes,
-    Attributes,
-    BaseNodeState & { isSelected?: boolean },
-    BaseEdgeState,
-    BaseGraphState & { selectionSize?: number }
-  >(graph, container, {
+  const renderer = new Sigma(graph, container, {
+    customNodeState: {
+      isSelected: false,
+    },
+    customGraphState: {
+      selectionSize: 0,
+    },
     settings: {
       autoRescale: "once",
       itemSizesReference: "positions",
@@ -57,11 +56,7 @@
       // Multi-node drag: if the dragged node is selected, drag the whole selection
       getDraggedNodes: (node) => {
         if (renderer.getNodeState(node).isSelected) {
-          const selected: string[] = [];
-          graph.forEachNode((n) => {
-            if (renderer.getNodeState(n).isSelected) selected.push(n);
-          });
-          return selected;
+          return graph.filterNodes((n: string) => renderer.getNodeState(n).isSelected);
         }
         return [node];
       },

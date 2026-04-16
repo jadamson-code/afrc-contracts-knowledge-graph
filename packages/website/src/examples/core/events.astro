@@ -89,7 +89,7 @@
   const edgeEvents = ["downEdge", "clickEdge", "rightClickEdge", "doubleClickEdge", "wheelEdge"] as const;
   const stageEvents = ["downStage", "clickStage", "doubleClickStage", "wheelStage"] as const;
 
-  nodeEvents.forEach((eventType) => renderer.on(eventType, ({ node }) => logEvent(eventType, "node", node)));
+  nodeEvents.forEach((eventType) => renderer.on(eventType, ({ node, event }) => logEvent(eventType, "node", node)));
   labelEvents.forEach((eventType) =>
     renderer.on(eventType, ({ parentType, parentKey }) => logEvent(eventType, parentType, parentKey)),
   );

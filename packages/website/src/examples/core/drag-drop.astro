@@ -25,6 +25,7 @@
       autoRescale: "once",
       itemSizesReference: "positions",
       enableNodeDrag: true,
+      getDraggedNodes: (node) => (graph.getNodeAttribute(node, "label").includes("b") ? [] : [node]),
     },
     styles: {
       nodes: [

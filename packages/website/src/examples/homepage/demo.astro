@@ -71,6 +71,7 @@
   import { nodeExtent } from "graphology-metrics/graph/extent";
   import { bindWebGLLayer, createColorLayerProgram } from "@sigma/layer-webgl";
   import { loadDataset } from "./load-dataset";
+  import { escape } from "lodash-es";
 
   type NodeStatus = "normal" | "active";
   type EdgeStatus = "normal" | "direct" | "indirect";
@@ -101,7 +102,7 @@
     return {
       type: "svg",
       svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="19">
-        <text x="4" y="13" font-family='${FONT_FAMILY}' font-size="${fontSize}" fill="#333">${author}</text>
+        <text x="4" y="13" font-family='${FONT_FAMILY}' font-size="${fontSize}" fill="#333">${escape(author)}</text>
       </svg>`,
     };
   }

@@ -257,6 +257,7 @@ out vec4 v_color;
 ${hasBorder ? "out vec4 v_borderColor;" : ""}
 out float v_edgeFade;  // 0 = fully visible, 1 = fully faded (outside body)
 out float v_alphaModifier;  // 0-1 based on label visibility ratio
+out float v_fontScale;  // Ratio of rendered font size to atlas font size
 ${hasBorder ? "out float v_positionMode;  // Position mode for conditional border (0=over needs border)" : ""}
 
 // ============================================================================
@@ -480,6 +481,11 @@ ${textureFetch.varyingAssignments}
   float charOffsetWebGL = charTextOffset * fontScale * pixelToGraph;
   float charAdvanceWebGL = charAdvance * fontScale * pixelToGraph;`
   }
+
+  // Font scale varying for fragment shader gamma scaling.
+  // Ratio of rendered font size to atlas font size — used to tighten the
+  // anti-aliasing band for large labels so they stay sharp.
+  v_fontScale = fontScale;
 
   // -------------------------------------------------------------------------
   // Step 4: Compute visibility ratio and alpha modifier
@@ -835,6 +841,7 @@ in vec4 v_color;
 ${hasBorder ? "in vec4 v_borderColor;" : ""}
 in float v_edgeFade;  // 0 = fully visible, 1 = fully faded
 in float v_alphaModifier;  // 0-1 based on label visibility ratio
+in float v_fontScale;  // Ratio of rendered font size to atlas font size
 ${hasBorder ? "in float v_positionMode;  // Position mode (0=over, 1=above, 2=below, 3=auto)" : ""}
 
 uniform sampler2D u_atlas;
@@ -857,8 +864,9 @@ void main() {
   // Edge threshold accounting for SDF buffer padding
   float edge = 1.0 - u_sdfBuffer;
 
-  // Anti-aliasing width adjusted for pixel density
-  float aaWidth = u_gamma / u_pixelRatio;
+  // Scale gamma inversely with font scale so small labels get a wider AA band
+  // (smoother) and large labels get a tighter band (sharper).
+  float aaWidth = u_gamma / (u_pixelRatio * v_fontScale);
 
   // Apply edge fade for soft truncation at body boundaries
   // Also apply visibility-based alpha modifier for short edge labels

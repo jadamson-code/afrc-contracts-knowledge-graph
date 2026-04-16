@@ -238,8 +238,8 @@ export function createEdgeLabelProgram<
 
       // Initialize SDF atlas manager for glyph generation
       this.atlasManager = new SDFAtlasManager();
-      // Gamma controls anti-aliasing sharpness: lower = sharper edges
-      this.gamma = 0.08;
+      // Base gamma for SDF anti-aliasing, scaled by fontScale in the shader
+      this.gamma = 0.025;
       this.sdfBuffer = DEFAULT_SDF_ATLAS_OPTIONS.cutoff;
 
       // Create and configure WebGL texture for glyph atlas

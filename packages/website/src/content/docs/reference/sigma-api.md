@@ -153,7 +153,7 @@ All coordinate methods accept an optional `override` parameter to use custom cam
 | `createLayer(id, tag, opts?)`           | `HTMLElement`            | Create and insert a DOM element layer                                      |
 | `createWebGLContext(id, opts?)`         | `WebGL2RenderingContext` | Create a WebGL2 context with optional picking                              |
 | `killLayer(id)`                         | `this`                   | Destroy a layer                                                            |
-| `getCanvases()`                         | `object`                 | Get all canvas layers keyed by ID                                          |
+| `getStageCanvas()`                      | `HTMLCanvasElement`      | Get the stage canvas element                                               |
 | `getMouseLayer()`                       | `HTMLElement`            | Get the mouse interaction layer                                            |
 | `addCustomLayerProgram(depth, program)` | `this`                   | Register a custom fullscreen WebGL program at a depth layer                |
 | `removeCustomLayerProgram(depth)`       | `this`                   | Unregister and kill a custom layer program                                 |

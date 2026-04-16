@@ -127,7 +127,9 @@ export default class Sigma<
   private mouseCaptor: MouseCaptor<N, E, G>;
   private touchCaptor: TouchCaptor<N, E, G>;
   private container: HTMLElement;
-  private elements: PlainObject<HTMLElement> = {};
+  private stageCanvas: HTMLCanvasElement = null!;
+  private mouseLayer: HTMLElement = null!;
+  private extraElements: PlainObject<HTMLElement> = {};
   private webGLContext: WebGL2RenderingContext | null = null;
   private pickingFrameBuffer: WebGLFramebuffer | null = null;
   private pickingTexture: WebGLTexture | null = null;
@@ -349,9 +351,18 @@ export default class Sigma<
       edges: new BucketCollection(numDepthLayers * resolvedSettings.maxDepthLevels),
     };
 
-    // Initializing contexts
-    this.createWebGLContext("stage", { picking: true });
-    this.createLayer("mouse", "div", { style: { touchAction: "none", userSelect: "none" } });
+    // Initializing stage canvas and WebGL context
+    this.stageCanvas = createElement<HTMLCanvasElement>("canvas", { position: "absolute" }, { class: "sigma-stage" });
+    this.container.appendChild(this.stageCanvas);
+    this.initWebGLContext();
+
+    // Initializing mouse interaction layer
+    this.mouseLayer = createElement<HTMLElement>(
+      "div",
+      { position: "absolute", touchAction: "none", userSelect: "none" },
+      { class: "sigma-mouse" },
+    );
+    this.container.appendChild(this.mouseLayer);
 
     // Apply initial stage styles
     if (this.resolvedStageStyle.background) {
@@ -490,9 +501,9 @@ export default class Sigma<
 
     // Initializing captors
     // Cast to Sigma<N, E, G> since captors don't use state generics
-    this.mouseCaptor = new MouseCaptor(this.elements.mouse, this as unknown as Sigma<N, E, G>);
+    this.mouseCaptor = new MouseCaptor(this.mouseLayer, this as unknown as Sigma<N, E, G>);
     this.mouseCaptor.setSettings(this.internals.settings);
-    this.touchCaptor = new TouchCaptor(this.elements.mouse, this as unknown as Sigma<N, E, G>);
+    this.touchCaptor = new TouchCaptor(this.mouseLayer, this as unknown as Sigma<N, E, G>);
     this.touchCaptor.setSettings(this.internals.settings);
 
     // Binding event handlers
@@ -1679,6 +1690,89 @@ export default class Sigma<
   }
 
   /**
+   * Resolves a layer element by id, checking both built-in layers (stage,
+   * mouse) and extra layers added via createLayer.
+   */
+  private getLayerElement(id: string): HTMLElement {
+    if (id === "stage") return this.stageCanvas;
+    if (id === "mouse") return this.mouseLayer;
+    const element = this.extraElements[id];
+    if (!element) throw new Error(`Sigma: layer "${id}" does not exist`);
+    return element;
+  }
+
+  /**
+   * Creates a WebGL 2 context on the given canvas with default settings,
+   * validates it, and configures blending.
+   */
+  private getWebGL2Context(
+    canvas: HTMLCanvasElement,
+    options?: { preserveDrawingBuffer?: boolean; antialias?: boolean },
+  ): WebGL2RenderingContext {
+    const gl = canvas.getContext("webgl2", {
+      preserveDrawingBuffer: false,
+      antialias: false,
+      depth: true,
+      ...options,
+    });
+
+    if (!gl) {
+      throw new Error(
+        "Sigma: WebGL 2 is not supported by your browser. " +
+          "Please use a modern browser (Chrome 56+, Firefox 51+, Safari 15+, Edge 79+).",
+      );
+    }
+
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    return gl;
+  }
+
+  /**
+   * Initializes the main WebGL 2 context on the stage canvas, with picking
+   * framebuffer.
+   */
+  private initWebGLContext(): void {
+    const gl = this.getWebGL2Context(this.stageCanvas);
+    this.webGLContext = gl;
+
+    // Create picking framebuffer for two-pass rendering
+    const frameBuffer = gl.createFramebuffer();
+    if (!frameBuffer) throw new Error(`Sigma: cannot create picking frame buffer`);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+
+    // Create picking texture for IDs (single attachment, no blending needed)
+    const pickingTexture = gl.createTexture();
+    if (!pickingTexture) throw new Error(`Sigma: cannot create picking texture`);
+    gl.bindTexture(gl.TEXTURE_2D, pickingTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    // NEAREST filtering for exact pixel reads (no interpolation)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pickingTexture, 0);
+
+    // Create depth buffer for proper depth testing during picking
+    const depthBuffer = gl.createRenderbuffer();
+    if (!depthBuffer) throw new Error(`Sigma: cannot create picking depth buffer`);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 1, 1);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuffer);
+
+    // Verify framebuffer is complete
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+      throw new Error(`Sigma: picking framebuffer is not complete`);
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    this.pickingFrameBuffer = frameBuffer;
+    this.pickingTexture = pickingTexture;
+    this.pickingDepthBuffer = depthBuffer;
+  }
+
+  /**
    * Function used to create a layer element.
    *
    * @param {string} id - Context's id.
@@ -1691,7 +1785,7 @@ export default class Sigma<
     tag: string,
     options: { style?: Partial<CSSStyleDeclaration> } & ({ beforeLayer?: string } | { afterLayer?: string }) = {},
   ): T {
-    if (this.elements[id]) throw new Error(`Sigma: a layer named "${id}" already exists`);
+    if (this.extraElements[id]) throw new Error(`Sigma: a layer named "${id}" already exists`);
 
     const element = createElement<T>(
       tag,
@@ -1705,12 +1799,12 @@ export default class Sigma<
 
     if (options.style) Object.assign(element.style, options.style);
 
-    this.elements[id] = element;
+    this.extraElements[id] = element;
 
     if ("beforeLayer" in options && options.beforeLayer) {
-      this.elements[options.beforeLayer].before(element);
+      this.getLayerElement(options.beforeLayer).before(element);
     } else if ("afterLayer" in options && options.afterLayer) {
-      this.elements[options.afterLayer].after(element);
+      this.getLayerElement(options.afterLayer).after(element);
     } else {
       this.container.appendChild(element);
     }
@@ -1746,78 +1840,12 @@ export default class Sigma<
       preserveDrawingBuffer?: boolean;
       antialias?: boolean;
       hidden?: boolean;
-      picking?: boolean;
     } & ({ canvas?: HTMLCanvasElement; style?: undefined } | { style?: CSSStyleDeclaration; canvas?: undefined }) = {},
   ): WebGL2RenderingContext {
     const canvas = options?.canvas || this.createCanvas(id, options);
     if (options.hidden) canvas.remove();
 
-    const contextOptions = {
-      preserveDrawingBuffer: false,
-      antialias: false,
-      depth: true,
-      ...options,
-    };
-
-    // Request WebGL 2 context
-    const context = canvas.getContext("webgl2", contextOptions);
-
-    if (!context) {
-      throw new Error(
-        "Sigma: WebGL 2 is not supported by your browser. " +
-          "Please use a modern browser (Chrome 56+, Firefox 51+, Safari 15+, Edge 79+).",
-      );
-    }
-
-    const gl = context as WebGL2RenderingContext;
-
-    // Store as main WebGL context if this is the stage
-    if (id === "stage") {
-      this.webGLContext = gl;
-    }
-
-    // Blending:
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-
-    // Create picking framebuffer for two-pass rendering
-    if (options.picking) {
-      const frameBuffer = gl.createFramebuffer();
-      if (!frameBuffer) throw new Error(`Sigma: cannot create picking frame buffer`);
-
-      gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
-
-      // Create picking texture for IDs (single attachment, no blending needed)
-      const pickingTexture = gl.createTexture();
-      if (!pickingTexture) throw new Error(`Sigma: cannot create picking texture`);
-      gl.bindTexture(gl.TEXTURE_2D, pickingTexture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      // NEAREST filtering for exact pixel reads (no interpolation)
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pickingTexture, 0);
-
-      // Create depth buffer for proper depth testing during picking
-      const depthBuffer = gl.createRenderbuffer();
-      if (!depthBuffer) throw new Error(`Sigma: cannot create picking depth buffer`);
-      gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
-      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 1, 1);
-      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuffer);
-
-      // Verify framebuffer is complete
-      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
-        throw new Error(`Sigma: picking framebuffer is not complete`);
-      }
-
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-      this.pickingFrameBuffer = frameBuffer;
-      this.pickingTexture = pickingTexture;
-      this.pickingDepthBuffer = depthBuffer;
-    }
-
-    return gl;
+    return this.getWebGL2Context(canvas, options);
   }
 
   /**
@@ -1827,18 +1855,13 @@ export default class Sigma<
    * @return {Sigma}
    */
   killLayer(id: string): this {
-    const element = this.elements[id];
+    const element = this.extraElements[id];
 
     if (!element) throw new Error(`Sigma: cannot kill layer ${id}, which does not exist`);
 
-    if (id === "stage" && this.webGLContext) {
-      this.webGLContext.getExtension("WEBGL_lose_context")?.loseContext();
-      this.webGLContext = null;
-    }
-
     // Delete layer element
     element.remove();
-    delete this.elements[id];
+    delete this.extraElements[id];
 
     return this;
   }
@@ -2273,17 +2296,15 @@ export default class Sigma<
     if (!force && previousWidth === this.width && previousHeight === this.height) return this;
 
     // Sizing dom elements
-    for (const id in this.elements) {
-      const element = this.elements[id];
-
+    for (const element of [this.stageCanvas, this.mouseLayer, ...Object.values(this.extraElements)]) {
       element.style.width = this.width + "px";
       element.style.height = this.height + "px";
     }
 
     // Sizing WebGL context
     if (this.webGLContext) {
-      this.elements.stage.setAttribute("width", this.width * this.internals.pixelRatio + "px");
-      this.elements.stage.setAttribute("height", this.height * this.internals.pixelRatio + "px");
+      this.stageCanvas.setAttribute("width", this.width * this.internals.pixelRatio + "px");
+      this.stageCanvas.setAttribute("height", this.height * this.internals.pixelRatio + "px");
 
       this.webGLContext.viewport(0, 0, this.width * this.internals.pixelRatio, this.height * this.internals.pixelRatio);
     }
@@ -3000,15 +3021,21 @@ export default class Sigma<
       this.internals.edgeDataTexture = null;
     }
 
-    // Kill all canvas/WebGL contexts
-    for (const id in this.elements) {
-      this.killLayer(id);
+    // Kill WebGL context
+    if (this.webGLContext) {
+      this.webGLContext.getExtension("WEBGL_lose_context")?.loseContext();
+      this.webGLContext = null;
     }
 
-    // Destroying remaining collections
-    this.webGLContext = null;
+    // Remove all DOM elements
+    this.stageCanvas.remove();
+    this.mouseLayer.remove();
+    for (const id in this.extraElements) {
+      this.extraElements[id].remove();
+    }
+    this.extraElements = {};
+
     this.labelRenderer.kill();
-    this.elements = {};
   }
 
   /**
@@ -3027,21 +3054,16 @@ export default class Sigma<
   }
 
   /**
-   * Method that returns the collection of all used canvases.
-   *
-   * @return {PlainObject<HTMLCanvasElement>} - The collection of canvases.
+   * Method that returns the stage canvas element.
    */
-  getCanvases(): PlainObject<HTMLCanvasElement> {
-    const res: Record<string, HTMLCanvasElement> = {};
-    for (const layer in this.elements)
-      if (this.elements[layer] instanceof HTMLCanvasElement) res[layer] = this.elements[layer] as HTMLCanvasElement;
-    return res;
+  getStageCanvas(): HTMLCanvasElement {
+    return this.stageCanvas;
   }
 
   /**
    * Returns the mouse interaction layer element.
    */
   getMouseLayer(): HTMLElement {
-    return this.elements.mouse;
+    return this.mouseLayer;
   }
 }

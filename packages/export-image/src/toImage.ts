@@ -4,7 +4,7 @@ import { drawOnCanvas } from "./drawOnCanvas";
 import { DEFAULT_TO_IMAGE_OPTIONS, ToImageOptions } from "./options";
 
 /**
- * This function takes a Sigma instance, draws its layers on a canvas using `drawOnCanvas`, and returns a promise that
+ * This function takes a Sigma instance, draws the stage canvas using `drawOnCanvas`, and returns a promise that
  * resolves to a blob of the expected image. Accepted formats are "image/png" and "image/jpeg".
  */
 export async function toBlob(sigma: Sigma, opts: Partial<ToImageOptions> = {}): Promise<Blob> {

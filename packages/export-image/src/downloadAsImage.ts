@@ -5,7 +5,7 @@ import { DEFAULT_TO_IMAGE_OPTIONS, ToImageOptions } from "./options";
 import { toBlob } from "./toImage";
 
 /**
- * This function takes a Sigma instance, draws its layers on a canvas using `drawOnCanvas`, and then downloads a local
+ * This function takes a Sigma instance, draws the stage canvas using `drawOnCanvas`, and then downloads a local
  * image file from the canvas. Accepted formats are "image/png" and "image/jpeg".
  */
 export async function downloadAsImage(sigma: Sigma, opts: Partial<ToImageOptions> = {}): Promise<void> {

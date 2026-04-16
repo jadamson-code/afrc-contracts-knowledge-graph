@@ -6,12 +6,11 @@ This package provides various functions to capture snapshots of a [sigma.js](htt
 
 The following options can be used to customize the image export:
 
-- `layers` (`null | string[]`, default: `null`): Specify the graph layers to render (from `sigma.getCanvases()`). If `null`, all layers are rendered.
 - `width` (`null | number`, default: `null`): Set the width of the output image. If `null`, the canvas will use the sigma container's width.
 - `height` (`null | number`, default: `null`): Set the height of the output image. If `null`, the canvas will use the sigma container's height.
 - `fileName` (`string`, default: `"graph"`): The name of the file to download.
 - `format` (`"png" | "jpeg"`, default: `"png"`): The image format, either PNG or JPEG.
-- `sigmaSettings` (`Partial<Settings>`, default: `{}`): Custom settings for the sigma instance used during rendering.
+- `sigmaOverrides` (`Partial<{ primitives, styles, settings }>`, default: `{}`): Override the primitives, styles, and/or settings of the temporary sigma instance used for rendering.
 - `cameraState` (`null | CameraState`, default: `null`): The camera state to use for the rendering. If `null`, the current camera state is used.
 - `backgroundColor` (`string`, default: `"transparent"`): The background color of the image.
 - `withTempRenderer` (`null | ((tmpRenderer: Sigma) => void) | ((tmpRenderer: Sigma) => Promise<void>)`, default: `null`): A callback function for custom operations using the temporary sigma renderer before rendering the image.
@@ -20,7 +19,9 @@ The following options can be used to customize the image export:
 
 #### `drawOnCanvas`
 
-This function creates a new temporary sigma instance, renders it with the given options, and draws its layers (or the selected layers) on a new HTML canvas element. It then returns it as a `Promise<HTMLCanvasElement>`. This function is the core function, used by all other ones.
+This function creates a new temporary sigma instance, renders it with the given options, and draws the stage canvas on a new HTML canvas element. It then returns it as a `Promise<HTMLCanvasElement>`. This function is the core function, used by all other ones.
+
+Node, edge, and graph states are automatically copied from the source sigma instance to the temporary renderer, so the exported image reflects the current visual state (hover, highlight, etc.).
 
 #### `toBlob`
 

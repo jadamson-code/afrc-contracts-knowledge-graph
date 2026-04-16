@@ -153,6 +153,7 @@ export default class Sigma<
   private matrix: Float32Array = identity();
   private invMatrix: Float32Array = identity();
   private correctionRatio = 1;
+  private frameId = 0;
   private customBBox: { x: Extent; y: Extent } | null = null;
   private normalizationFunction: NormalizationFunction = createNormalizationFunction({
     x: [0, 1],
@@ -1081,6 +1082,7 @@ export default class Sigma<
     // when I change the graph, the viewport or the camera. It might be useful later, so I prefer to let this comment:
     // console.log(this.graphToViewportRatio * this.correctionRatio * this.normalizationFunction.ratio * 2);
 
+    this.frameId++;
     const params: RenderParams = this.getRenderParams();
     // When edge events are disabled, skip the edge picking pass to avoid GPU overhead
     const edgeParams: RenderParams = this.internals.settings.enableEdgeEvents
@@ -1155,8 +1157,10 @@ export default class Sigma<
       // Cache attachment textures before backdrops so backdrop sizing includes them
       this.labelRenderer.cacheAttachments(depth);
 
-      // Backdrops for nodes in this depth (before node programs so they appear behind)
-      this.labelRenderer.renderBackdrops(params, depth);
+      // Backdrops for nodes in this depth (before node programs so they appear behind).
+      // Backdrops are not pickable, so pass null picking buffer to prevent their visual color
+      // from leaking into the picking framebuffer via layout(location=0) out vec4 fragColor.
+      this.labelRenderer.renderBackdrops({ ...params, pickingFrameBuffer: null }, depth);
 
       // Nodes in this depth
       const nodeRanges = this.depthRanges.nodes[depth];
@@ -1166,8 +1170,10 @@ export default class Sigma<
         }
       }
 
-      // Label attachments for this depth (after nodes, before labels)
-      this.labelRenderer.renderAttachments(params, depth);
+      // Label attachments for this depth (after nodes, before labels).
+      // Attachments are not pickable, so pass null picking buffer to prevent the atlas texture
+      // from leaking into the picking framebuffer via layout(location=0) out vec4 fragColor.
+      this.labelRenderer.renderAttachments({ ...params, pickingFrameBuffer: null }, depth);
 
       // Label backgrounds for this depth (after nodes so picking overwrites nodes in "over" mode).
       // Picking is skipped when label events are disabled; transparent nodes discard in the visual pass.
@@ -1637,6 +1643,7 @@ export default class Sigma<
    */
   getRenderParams(): RenderParams {
     return {
+      frameId: this.frameId,
       matrix: this.matrix,
       invMatrix: this.invMatrix,
       width: this.width,

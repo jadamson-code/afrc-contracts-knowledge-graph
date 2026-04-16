@@ -152,6 +152,7 @@ export type CoordinateConversionOverride = {
 };
 
 export interface RenderParams {
+  frameId: number;
   width: number;
   height: number;
   sizeRatio: number;

@@ -98,6 +98,7 @@ export abstract class Program<
   private prePassUniformLocations: Record<string, WebGLUniformLocation> = {};
   private prePassInputAttrLoc = -1;
   private prePassDef: PrePassDefinition | null = null;
+  private prePassLastFrameId = -1;
 
   abstract getDefinition(): ProgramDefinition<Uniform> | InstancedProgramDefinition<Uniform>;
 
@@ -522,8 +523,11 @@ export abstract class Program<
       gl.enable(gl.BLEND);
     }
 
-    // Run pre-pass once for the normal render; pick pass reuses the same buffer
-    if (!isPicking && this.prePassProgram) this._runPrePass(params);
+    // Run pre-pass at most once per frame; picking pass reuses the same buffer
+    if (!isPicking && this.prePassProgram && this.prePassLastFrameId !== params.frameId) {
+      this._runPrePass(params);
+      this.prePassLastFrameId = params.frameId;
+    }
 
     gl.useProgram(program);
     this.setUniforms(params, programInfo);
@@ -538,7 +542,15 @@ export abstract class Program<
 
     const gl = this.normalProgram.gl;
 
-    // Pass 1: Render to picking framebuffer (with blending disabled)
+    // Pass 1: Render to screen (with blending enabled).
+    // Runs the pre-pass (transform feedback) so that picking can reuse its output.
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, params.width * params.pixelRatio, params.height * params.pixelRatio);
+    this.bindProgram(this.normalProgram);
+    this.renderProgram(params, this.normalProgram);
+    this.unbindProgram(this.normalProgram);
+
+    // Pass 2: Render to picking framebuffer (with blending disabled)
     if (this.pickProgram && params.pickingFrameBuffer) {
       const pickingWidth = Math.ceil((params.width * params.pixelRatio) / params.downSizingRatio);
       const pickingHeight = Math.ceil((params.height * params.pixelRatio) / params.downSizingRatio);
@@ -548,14 +560,11 @@ export abstract class Program<
       this.bindProgram(this.pickProgram);
       this.renderProgram(params, this.pickProgram);
       this.unbindProgram(this.pickProgram);
-    }
 
-    // Pass 2: Render to screen (with blending enabled)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, params.width * params.pixelRatio, params.height * params.pixelRatio);
-    this.bindProgram(this.normalProgram);
-    this.renderProgram(params, this.normalProgram);
-    this.unbindProgram(this.normalProgram);
+      // Restore main framebuffer so callers don't need to rebind
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, params.width * params.pixelRatio, params.height * params.pixelRatio);
+    }
   }
 
   drawWebGL(method: number /* GLenum */, { gl }: ProgramInfo): void {

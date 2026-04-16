@@ -45,9 +45,9 @@ styles: {
 
 By default, sigma uses density-based culling to avoid overlapping labels. You can override this per-node:
 
-- `"auto"` (default) — density-based, only the most important labels are shown
-- `"visible"` — always displayed
-- `"hidden"` — never displayed
+- `"auto"` (default): density-based, only the most important labels are shown, and depending on the zoom level
+- `"visible"`: always displayed
+- `"hidden"`: never displayed
 
 ```typescript
 styles: {
@@ -61,13 +61,13 @@ styles: {
 }
 ```
 
-The `labelRenderedSizeThreshold` and `labelDensity` settings control the density-based culling behavior — see [Settings](/reference/settings/).
+The `labelRenderedSizeThreshold` and `labelDensity` settings control the density-based culling behavior (see [Settings](/reference/settings/)).
 
-This example demonstrates label positioning, visibility modes, and density-based culling:
+This example demonstrates label rendering at various font sizes and styles:
 
 <SigmaExample id="styling/label-rendering" height="500px" />
 
-This example shows custom label font families, sizes, and colors:
+This example shows how to play with label colors, backgrounds and positions:
 
 <SigmaExample id="styling/label-styles" height="500px" />
 
@@ -81,11 +81,13 @@ new Sigma(graph, container, {
 });
 ```
 
-Label text comes from the edge's `label` attribute:
+By default, label text comes from the edge's `label` attribute:
 
 ```typescript
 graph.addEdge("a", "b", { label: "connects to" });
 ```
+
+However, `label` is also an edge style property, that can be rebound to another attribute, for instance.
 
 ### Position
 
@@ -93,7 +95,7 @@ Edge labels can be placed relative to the edge path:
 
 | Position  | Description                                              |
 | --------- | -------------------------------------------------------- |
-| `"over"`  | Centered directly on the edge path                       |
+| `"over"`  | Centered directly on the edge path (default)             |
 | `"above"` | Offset above the edge path                               |
 | `"below"` | Offset below the edge path                               |
 | `"auto"`  | GPU picks above or below based on which node is leftmost |
@@ -108,8 +110,8 @@ styles: {
 
 Edge labels support two font size modes, configured in `primitives.edges.label`:
 
-- **`"fixed"`** (default) — constant pixel size regardless of zoom
-- **`"scaled"`** — scales with camera zoom
+- **`"fixed"`** (default): constant pixel size regardless of zoom
+- **`"scaled"`**: scales with camera zoom
 
 ```typescript
 primitives: {
@@ -133,6 +135,6 @@ primitives: {
 },
 ```
 
-This example shows edge label positioning, font size modes, and text borders:
+This example shows how to manipulate edge label positioning, font size modes, and text borders:
 
 <SigmaExample id="styling/edge-label-styles" height="500px" />

@@ -3,18 +3,25 @@ title: Migrating from v3 to v4
 description: What changed between sigma.js v3 and v4, and how to migrate.
 ---
 
-Sigma.js v4 replaces the imperative, class-based rendering system with a declarative configuration approach. This guide covers the major changes and shows how to migrate existing code.
+Sigma.js v4 replaces the imperative, class-based rendering system with a declarative configuration approach. This guide
+covers the major changes and shows how to migrate existing code.
 
 ## What's new
 
-### Primitives and layers
+### Primitives
 
-Node rendering is now configured through **primitives** -- a declarative description of shapes, layers, and variables. Instead of picking a specific program class per node type, you describe what rendering capabilities your graph needs, and sigma generates a single optimized WebGL program.
+In sigma v3, nodes and edges appearance had to be tackled with different programs. Now, sigma v4 compile one single
+program for all nodes, one single program for all edges, etc... The **primitives** are the description of "what these
+programs can render", basically.
+
+For instance, node primitives include shapes (the external shape of each node) and layers (how to colorize each pixel),
+and edge primitives include paths (what shape each edge must follow) and extremities (what shape each edge must have on
+each extremity).
 
 ```typescript
 import { layerFill, sdfCircle, sdfSquare } from "sigma/rendering";
 
-// v4: One program renders circles, squares, borders, and images
+// v4: One program renders circles or squares nodes, with or without borders and images:
 const renderer = new Sigma(graph, container, {
   primitives: {
     nodes: {
@@ -31,7 +38,8 @@ const renderer = new Sigma(graph, container, {
 
 ### Styles system
 
-**Styles** replace most uses of `nodeReducer` and `edgeReducer`. They are declarative rules that map graph attributes and state flags to visual properties:
+**Styles** replace most uses of `nodeReducer` and `edgeReducer`. They are declarative rules that map graph attributes
+and states to visual properties (i.e. primitives):
 
 ```typescript
 const renderer = new Sigma(graph, container, {
@@ -48,7 +56,7 @@ const renderer = new Sigma(graph, container, {
 
 ### State management
 
-Instead of storing UI state in graph attributes and using reducers to transform them, v4 provides a dedicated state layer:
+Instead of storing UI state in graph attributes or an external store, v4 provides a dedicated state layer:
 
 ```typescript
 // Set state on individual nodes or edges
@@ -62,14 +70,21 @@ renderer.setGraphState({ hasActiveSubgraph: true });
 You can extend the built-in state types with custom fields:
 
 ```typescript
-interface CustomNodeState extends BaseNodeState {
-  isActive: boolean;
-}
+const renderer = new Sigma(graph, container, {
+  // ...
+  customNodeState: {
+    isActive: false,
+  },
+  customGraphState: {
+    hasActiveNodes: false,
+  },
+  // ...
+});
 ```
 
 ### Depth layers
 
-Rendering order is controlled through named **depth layers** instead of z-index manipulation:
+Rendering order is controlled through named **depth layers**, in addition to z-index manipulation:
 
 ```typescript
 const renderer = new Sigma(graph, container, {
@@ -84,7 +99,7 @@ const renderer = new Sigma(graph, container, {
 
 ### Edge paths and extremities
 
-Edges support multiple path types and extremities in a single program:
+Edges now support multiple path types and extremities in a single program:
 
 ```typescript
 import { extremityArrow, pathCurved, pathLine, pathStepCurved } from "sigma/rendering";
@@ -104,15 +119,19 @@ const renderer = new Sigma(graph, container, {
 
 ## What's removed
 
-- **`nodeProgramClasses` / `edgeProgramClasses` settings** -- replaced by the `primitives` configuration
-- **`defaultNodeType` / `defaultEdgeType` settings** -- node and edge rendering is now configured through primitives and layers
-- **Standalone node/edge program packages** (like the old `@sigma/node-square`) -- shapes are now built-in; `@sigma/node-border`, `@sigma/node-image`, and `@sigma/node-piechart` still exist but as layer plugins
-- **`NodeProgram` / `EdgeProgram` class pattern** -- replaced by the declarative primitives system
-- **`hidden` / `forceLabel` attributes** -- replaced by `visibility` and `labelVisibility` style properties with `when` predicates
+- **`nodeProgramClasses` / `edgeProgramClasses` settings**: replaced by the `primitives` configuration
+- **`defaultNodeType` / `defaultEdgeType` settings**: node and edge rendering is now configured through primitives and
+  layers
+- **Standalone node/edge program packages** (like the old `@sigma/node-square`): shapes are now built-in;
+  `@sigma/node-border`, `@sigma/node-image`, and `@sigma/node-piechart` still exist but as layer plugins
+- **`NodeProgram` / `EdgeProgram` class pattern**: replaced by the declarative primitives system
+- **`hidden` / `forceLabel` attributes**: replaced by `visibility` and `labelVisibility` style properties with `when`
+  predicates
 
 ## What's still available
 
-- **`nodeReducer` / `edgeReducer`** -- still work as escape hatches for complex logic that styles cannot express, but styles should be preferred for most cases
+- **`nodeReducer` / `edgeReducer`**: still work as escape hatches for complex logic that styles cannot express, but
+styles should be preferred for most cases
 
 ## Migration steps
 
@@ -163,7 +182,8 @@ const renderer = new Sigma(graph, container, {
 });
 ```
 
-In v4, all layers are compiled into a single WebGL program. Layers that have no data (for example, an image layer on a node with no `image` attribute) automatically become transparent.
+In v4, all layers are compiled into a single WebGL program. Layers that have no data (for example, an image layer on a
+node with no `image` attribute) automatically become transparent.
 
 ### 2. Replace `nodeReducer` / `edgeReducer` with `styles`
 
@@ -208,7 +228,8 @@ const renderer = new Sigma(graph, container, {
 });
 ```
 
-Style rules are evaluated in order, and later rules override earlier ones. This replaces imperative mutation of a data object with a layered, declarative approach.
+Style rules are evaluated in order, and later rules override earlier ones. This replaces imperative mutation of a data
+object with a layered, declarative approach.
 
 ### 3. Replace external state with `setNodeState` / `setGraphState`
 
@@ -233,7 +254,8 @@ renderer.on("enterNode", ({ node }) => {
 });
 ```
 
-State updates are separate from graph data, and `refresh({ skipIndexation: true })` avoids re-indexing the graph when only visual state changed.
+State updates are separate from graph data, and `refresh({ skipIndexation: true })` avoids re-indexing the graph when
+only visual state changed.
 
 ### 4. Replace `zIndex` with depth layers
 
@@ -264,15 +286,22 @@ styles: {
 },
 ```
 
+:::note
+This does not apply to cases where you want nodes to be sorted in a very specific way. In these cases, you should keep
+using the `zIndex` primitive.
+
+But it replaces all cases where some part of the graph should appear at another depth, and in a much more efficient way.
+:::
+
 ### 5. Update imports from removed packages
 
-Old standalone shape packages are no longer needed. Shapes are built into sigma:
+Some old standalone shape packages are no longer needed. Shapes are built into sigma:
 
 ```typescript
 // v3
 import { NodeSquareProgram } from "@sigma/node-square";
 
-// v4: just declare the shape
+// v4: just import the shapes
 import { sdfCircle, sdfSquare, sdfTriangle, sdfDiamond } from "sigma/rendering";
 
 primitives: {
@@ -280,7 +309,8 @@ primitives: {
 }
 ```
 
-Layer packages (`@sigma/node-border`, `@sigma/node-image`, `@sigma/node-piechart`) still exist but are used differently -- import the factory function and call it in the `layers` array:
+Some layer packages (`@sigma/node-border`, `@sigma/node-image`, `@sigma/node-piechart`) still exist, but are used
+differently:
 
 ```typescript
 import { layerBorder } from "@sigma/node-border";

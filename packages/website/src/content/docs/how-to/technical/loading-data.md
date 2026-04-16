@@ -5,11 +5,13 @@ sidebar:
 description: How to load graph data from GEXF, CSV, and JSON files.
 ---
 
-Sigma.js renders a [graphology](https://graphology.github.io/) graph instance. Graphology provides utilities for loading data from several formats, and you can always build graphs programmatically.
+Sigma.js renders a [graphology](https://graphology.github.io/) graph instance. Graphology provides utilities for loading
+data from several formats, and you can always build graphs programmatically.
 
 ## Loading a GEXF file
 
-[GEXF](https://gexf.net/) is an XML-based graph format commonly used with [Gephi](https://gephi.org/). Use the `graphology-gexf` package to parse GEXF files:
+[GEXF](https://gexf.net/) is an XML-based graph format commonly used with [Gephi](https://gephi.org/). Use the
+`graphology-gexf` package to parse GEXF files:
 
 ```bash
 npm install graphology-gexf
@@ -28,7 +30,9 @@ fetch("./my-graph.gexf")
   });
 ```
 
-The GEXF parser reads node positions, colors, sizes, labels, and any other attributes stored in the file. If your GEXF file does not contain positions, you will need to apply a [layout algorithm](https://graphology.github.io/standard-library/layout-forceatlas2.html) before rendering.
+The GEXF parser reads node positions, colors, sizes, labels, and any other attributes stored in the file. If your GEXF
+file does not contain positions, you will need to apply a
+[layout algorithm](https://graphology.github.io/standard-library/layout-forceatlas2.html) before rendering.
 
 ## Loading from JSON
 
@@ -62,7 +66,8 @@ You can also export a graph to this format with `graph.export()`.
 
 ## Loading from CSV
 
-For CSV data, parse the file with your preferred CSV library (such as [Papa Parse](https://www.papaparse.com/) or [d3-dsv](https://github.com/d3/d3-dsv)) and build the graph manually:
+For CSV data, parse the file with your preferred CSV library (such as [Papa Parse](https://www.papaparse.com/) or
+[d3-dsv](https://github.com/d3/d3-dsv)) and build the graph manually:
 
 ```typescript
 import Graph from "graphology";

@@ -1,5 +1,55 @@
 # sigma.js - changelog:
 
+## 4.0.0
+
+This new version carries a **complete rewrite** of the programs system, initially to address various depth or opacity
+related issues, but that ended up covering much more (_styles_ and _primitives_ APIs, better node shapes and edge paths
+support...). Please read the ["Migrating from v3 to v4"](https://v4.sigmajs.org/how-to/technical/migration-v3-v4/) guide
+to know more.
+
+### Rendering engine
+
+- Migrates nodes and edges labels to WebGL using
+  [Signed Distance Fields](https://en.wikipedia.org/wiki/Signed_distance_function)
+- Merges all WebGL layers into one single layer
+- Drops WebGL 1 support in favor of WebGL 2
+
+### New programs system
+
+- Replaces multi-programs support with
+  [**primitives**](https://v4.sigmajs.org/concepts/styles-and-primitives/#primitives) (node shapes, edge paths and
+  extremities...) based single-program compilation
+- Implements declarative [**styles**](https://v4.sigmajs.org/concepts/styles-and-primitives/#styles) API, to link graph
+  data and state to the primitives (should replace `nodeReducer` and `edgeReducer` in most cases)
+- Implements `depth` layers, to allow rendering any type of items at any depth
+- Adds various styles and primitives, to render [label attachments](https://v4.sigmajs.org/how-to/labels/attachments/),
+  [label backdrops](https://v4.sigmajs.org/how-to/labels/backdrops/) and label backgrounds
+- Adds various built-in edge paths (`pathLine`, `pathCurved`, `pathCurvedS`, `pathStep`, `pathStepCurved`, `pathLoop`)
+- Adds `layerDashed` for edges ([#1497](https://github.com/jacomyal/sigma.js/issues/1497))
+- Adds `opacity` for nodes and edges ([#1426](https://github.com/jacomyal/sigma.js/issues/1426))
+- Removes `@sigma/edge-curve` and `@sigma/node-square`, replaced with built-in path and shape primitives
+
+### New features
+
+- Adds internal **state** for nodes, edges and graph
+- Adds internal logic in sigma to handle **parallel edges** and **self-loops** natively
+- Adds built-in **node dragging** support
+- Adds node and edge label events
+- Adds right-click drag camera rotation
+- Adds picking padding settings to increase hit box sizes ([#1493](https://github.com/jacomyal/sigma.js/issues/1493))
+- Upgrades `@sigma/layer-leaflet` and `@sigma/layer-maplibre`, with one-way sync from sigma to the map
+- Upgrades `@sigma/layer-webgl`, with simple color layer, and more complex heatmap layer
+
+### Other breaking changes
+
+- Replaces `hidden` and `forceLabel` data attributes with new `visibility` and `labelVisibility` style properties
+- Switches `itemSizesReference` default setting value from `screen` to `positions`
+
+### Documentation
+
+- Rewrites website and examples on Astro Starlight, with a `starlight-typedoc`-generated API reference (and drops
+  Storybook at the same time)
+
 ## 3.0.2
 
 ### Bug fixes

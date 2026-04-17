@@ -2,13 +2,18 @@
 
 <br />
 
-![Sigma.js](packages/website/static/img/logo-sigma-text.svg)
+![Sigma.js](packages/website/public/img/logo-sigma-text.svg)
 
-**[Website](https://www.sigmajs.org/)** | **[Documentation](https://www.sigmajs.org/docs)** | <strong><a rel="me" href="https://vis.social/@sigmajs">Mastodon</a></strong>
+**[Website](https://www.v4.sigmajs.org/)** | **[Documentation](https://www.v4.sigmajs.org/docs)** | <strong><a rel="me" href="https://vis.social/@sigmajs">Mastodon</a></strong>
 
 ---
 
-[Sigma.js](https://www.sigmajs.org) is an open-source JavaScript library aimed at visualizing graphs of thousands of nodes and edges using WebGL, mainly developed by [@jacomyal](https://github.com/jacomyal) and [@Yomguithereal](https://github.com/Yomguithereal), and built on top of [graphology](https://graphology.github.io/).
+[Sigma.js](https://www.v4.sigmajs.org) is an open-source JavaScript library aimed at visualizing graphs of thousands of
+nodes and edges using WebGL, mainly developed by [@jacomyal](https://github.com/jacomyal) and
+[@Yomguithereal](https://github.com/Yomguithereal), and built on top of [graphology](https://graphology.github.io/).
+
+> **Note:** This branch tracks sigma v4, currently published as `4.0.0-alpha`. The stable v3 release is on the
+> [`main`](https://github.com/jacomyal/sigma.js/tree/main) branch.
 
 ## How to use in your project
 
@@ -38,6 +43,19 @@ To integrate sigma into your project, follow these simple steps:
    const sigmaInstance = new Sigma(graph, document.getElementById("container"));
    ```
 
+## Companion packages
+
+Sigma ships as a family of packages living in this monorepo. Install only what you need:
+
+- [`@sigma/node-image`](packages/node-image): node program that renders images
+- [`@sigma/node-border`](packages/node-border): node program that renders concentric discs
+- [`@sigma/node-piechart`](packages/node-piechart): node program that renders nodes as piecharts
+- [`@sigma/layer-leaflet`](packages/layer-leaflet): plugin to set a Leaflet map in background
+- [`@sigma/layer-maplibre`](packages/layer-maplibre): plugin to set a MapLibre map in background
+- [`@sigma/layer-webgl`](packages/layer-webgl): helpers to draw custom WebGL layers
+- [`@sigma/export-image`](packages/export-image): captures snapshots of sigma instances as images
+- [`@sigma/utils`](packages/utils): utility functions to ease sigma usage
+
 ## How to develop locally
 
 To run the website locally:
@@ -54,13 +72,16 @@ This will open the website in your web browser, which live reloads when you modi
 ## Resources
 
 - **GitHub Project:** The source code and collaborative development efforts for Sigma.js are hosted on [GitHub](https://github.com/jacomyal/sigma.js).
-- **Website:** The official website, [sigmajs.org](https://sigmajs.org), kindly designed by [Robin de Mourat](https://github.com/robindemourat/) from the [Sciences-Po médialab](https://medialab.sciencespo.fr/en/) team, showcases the library's capabilities.
-- **Documentation:** A detailed documentation is available at [sigmajs.org/docs](https://sigmajs.org/docs). It provides extensive guides, interactive examples, and API references for users.
-- **Demo:** A comprehensive demo, available at [sigmajs.org/demo](https://sigmajs.org/demo), features a full-featured React-based web application utilizing Sigma.js.
+- **Website:** The official website, [v4.sigmajs.org](https://v4.sigmajs.org), kindly designed by [Robin de Mourat](https://github.com/robindemourat/)
+  from the [Sciences-Po médialab](https://medialab.sciencespo.fr/en/) team, showcases the library's capabilities.
+- **Documentation:** A detailed documentation is available at [v4.sigmajs.org/docs](https://v4.sigmajs.org/docs). It
+  provides extensive guides, interactive examples, and API references for users.
 
 ## How to contribute
 
-You can contribute by submitting [issues tickets](http://github.com/jacomyal/sigma.js/issues) and proposing [pull requests](http://github.com/jacomyal/sigma.js/pulls). Make sure that tests and linting pass before submitting any pull request.
+You can contribute by submitting [issues tickets](http://github.com/jacomyal/sigma.js/issues) and proposing
+[pull requests](http://github.com/jacomyal/sigma.js/pulls). Make sure that tests and linting pass before submitting any
+pull request.
 
 You can also browse the related documentation [here](https://github.com/jacomyal/sigma.js/tree/main/CONTRIBUTING.md).
 
@@ -71,4 +92,5 @@ Run `npm run createPackage` from the project root. It will:
 - Ask you the new package name
 - Copy the `packages/template` folder
 - Update the new package `package.json` entries (name, description, exports)
-- Update various other files (buildable packages list in `tsconfig.json`, Preconstruct compatible packages list in `package.json`...)
+- Update various other files (buildable packages list in `tsconfig.json`, Preconstruct compatible packages list in
+  `package.json`...)

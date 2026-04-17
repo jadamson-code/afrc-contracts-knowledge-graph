@@ -83,3 +83,10 @@ export {
   type EdgeLabelShaderOptions,
   type GeneratedEdgeLabelShaders,
 } from "./labels/generator";
+export {
+  EdgeLabelBackgroundProgram,
+  createEdgeLabelBackgroundProgram,
+  type EdgeLabelBackgroundData,
+  type EdgeLabelBackgroundProgramType,
+  type CreateEdgeLabelBackgroundProgramOptions,
+} from "./labels/background";

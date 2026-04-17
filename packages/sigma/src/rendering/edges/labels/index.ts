@@ -6,6 +6,7 @@
  *
  * @module
  */
+export * from "./background";
 export * from "./base";
 export * from "./factory";
 export * from "./generator";

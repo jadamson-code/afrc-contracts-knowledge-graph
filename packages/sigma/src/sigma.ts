@@ -38,6 +38,8 @@ import {
   BackdropProgramType,
   BucketCollection,
   EdgeDataTexture,
+  EdgeLabelBackgroundProgram,
+  EdgeLabelBackgroundProgramType,
   EdgeLabelProgram,
   EdgePath,
   EdgeProgram,
@@ -442,6 +444,16 @@ export default class Sigma<
       ? new EdgeLabelProgramClass(gl, null, sigma)
       : null;
 
+    // Create edge label background program (ribbon along the edge path).
+    // Picking framebuffer is passed so label events can be wired onto the ribbon.
+    const EdgeLabelBackgroundProgramClass = (
+      EdgeProgramClass as unknown as {
+        LabelBackgroundProgram?: EdgeLabelBackgroundProgramType<N, E, G>;
+      }
+    ).LabelBackgroundProgram;
+    const edgeLabelBackgroundProgram: EdgeLabelBackgroundProgram<string, N, E, G> | null =
+      EdgeLabelBackgroundProgramClass ? new EdgeLabelBackgroundProgramClass(gl, this.pickingFrameBuffer, sigma) : null;
+
     // Create the shared internals object. All reassignable fields are plain properties;
     // satellites hold a reference to this object and see updates via direct assignment.
     this.internals = {
@@ -460,6 +472,7 @@ export default class Sigma<
       nodeStyleAnalysis,
       labelProgram,
       edgeLabelProgram,
+      edgeLabelBackgroundProgram,
       backdropProgram,
       labelBackgroundProgram,
       attachmentManager,
@@ -1136,6 +1149,12 @@ export default class Sigma<
       this.labelRenderer.computeDisplayedNodeLabels();
     }
 
+    // Pre-compute edge label candidates (consumed by both the background pass
+    // and the label pass inside the depth loop).
+    if (this.internals.settings.renderEdgeLabels) {
+      this.labelRenderer.computeDisplayedEdgeLabels();
+    }
+
     // Pre-render pass for custom layers (offscreen work like density splatting)
     // before the depth loop to avoid framebuffer switching mid-loop.
     for (const program of this.customLayerPrograms.values()) {
@@ -1160,8 +1179,11 @@ export default class Sigma<
         }
       }
 
-      // Edge labels for this depth
+      // Edge labels for this depth (backgrounds first so they paint under the
+      // text). Backgrounds always render when an edge declares a
+      // labelBackgroundColor — independently of labelEvents.
       if (this.internals.settings.renderEdgeLabels && (!this.internals.settings.hideLabelsOnMove || !moving)) {
+        this.labelRenderer.renderEdgeLabelBackgrounds({ ...params, pickingFrameBuffer: null }, depth);
         this.labelRenderer.renderEdgeLabels(params, depth);
       }
 
@@ -2989,12 +3011,14 @@ export default class Sigma<
     this.edgeProgram.kill();
     this.internals.labelProgram?.kill();
     this.internals.edgeLabelProgram?.kill();
+    this.internals.edgeLabelBackgroundProgram?.kill();
     this.internals.backdropProgram?.kill();
     this.internals.labelBackgroundProgram?.kill();
     this.internals.attachmentProgram?.kill();
     this.internals.attachmentManager?.kill();
     this.internals.labelProgram = null;
     this.internals.edgeLabelProgram = null;
+    this.internals.edgeLabelBackgroundProgram = null;
     this.internals.backdropProgram = null;
     this.internals.labelBackgroundProgram = null;
     this.internals.attachmentProgram = null;

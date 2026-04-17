@@ -24,7 +24,12 @@ import { isAttributeSource } from "../nodes";
 import { PrePassDefinition, ProgramInfo } from "../utils";
 import { EdgeProgram as BaseEdgeProgram, EdgeProgramType, ResolvedEdgeIds } from "./base";
 import { PREPASS_FLOATS_PER_EDGE, PREPASS_TF_VARYING_NAMES, generateEdgeShaders } from "./generator";
-import { type EdgeLabelProgramType, createEdgeLabelProgram } from "./labels";
+import {
+  type EdgeLabelBackgroundProgramType,
+  type EdgeLabelProgramType,
+  createEdgeLabelBackgroundProgram,
+  createEdgeLabelProgram,
+} from "./labels";
 import { EDGE_ATTRIBUTE_TEXTURE_UNIT } from "./path-attribute-texture";
 import {
   EdgeExtremity,
@@ -566,6 +571,13 @@ export function createEdgeProgram<
     ...options.label,
   });
   (EdgeProgramClass as unknown as { LabelProgram: EdgeLabelProgramType }).LabelProgram = LabelProgramClass;
+
+  // Create and attach the label background program (ribbon that follows the
+  // edge path). It reads its shader config from the label program so the two
+  // cannot drift.
+  const LabelBackgroundProgramClass = createEdgeLabelBackgroundProgram({ labelProgram: LabelProgramClass });
+  (EdgeProgramClass as unknown as { LabelBackgroundProgram: EdgeLabelBackgroundProgramType }).LabelBackgroundProgram =
+    LabelBackgroundProgramClass;
 
   return EdgeProgramClass as unknown as EdgeProgramType<N, E, G>;
 }

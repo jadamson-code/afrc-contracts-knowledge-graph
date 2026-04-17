@@ -18,7 +18,16 @@
 
   const container = document.getElementById("sigma-container") as HTMLElement;
 
-  const COL_POSITIONS: EdgeLabelPosition[] = ["over", "above", "below", "auto"];
+  // Each column demonstrates one label styling variation. The first four use
+  // text borders for readability; the last one uses a label background
+  // (ribbon) instead — both styles live side by side.
+  const COLS = [
+    { position: "over" as EdgeLabelPosition, background: false, label: "over / border" },
+    { position: "above" as EdgeLabelPosition, background: false, label: "above / border" },
+    { position: "below" as EdgeLabelPosition, background: false, label: "below / border" },
+    { position: "auto" as EdgeLabelPosition, background: false, label: "auto / border" },
+    { position: "over" as EdgeLabelPosition, background: true, label: "over / background" },
+  ];
   const PATHS = [
     { name: "straight", label: "Straight" },
     { name: "curved", label: "Curved" },
@@ -30,6 +39,7 @@
   const NODE_SPACING = 50;
   const EDGE_SIZE = 5;
   const EDGE_COLOR = "#5B8FF9";
+  const LABEL_BACKGROUND_COLOR = "#c3d2f1";
 
   const { fontSizeMode, headType, tailType } = registerControls({
     fontSizeMode: {
@@ -64,9 +74,9 @@
   const graph = new Graph();
 
   for (let row = 0; row < PATHS.length; row++) {
-    for (let col = 0; col < COL_POSITIONS.length; col++) {
+    for (let col = 0; col < COLS.length; col++) {
       const pathInfo = PATHS[row];
-      const position = COL_POSITIONS[col];
+      const colInfo = COLS[col];
       const cellX = col * COL_SPACING;
       const cellY = -row * ROW_SPACING;
 
@@ -85,10 +95,11 @@
       graph.addEdge(sourceId, targetId, {
         size: EDGE_SIZE,
         color: EDGE_COLOR,
-        label: `${pathInfo.label} / ${position}`,
+        label: `${pathInfo.label} / ${colInfo.label}`,
         path: pathInfo.name,
-        labelPosition: position,
+        labelPosition: colInfo.position,
         curvature: pathInfo.name === "curved" ? 0.3 : 0,
+        labelBackground: colInfo.background,
       });
     }
   }
@@ -117,6 +128,13 @@
           path: { attribute: "path" },
           labelVisibility: "visible",
           labelPosition: { attribute: "labelPosition", defaultValue: "over" },
+        },
+        {
+          whenData: "labelBackground",
+          then: {
+            labelBackgroundColor: LABEL_BACKGROUND_COLOR,
+            labelBackgroundPadding: 4,
+          },
         },
       ],
     },

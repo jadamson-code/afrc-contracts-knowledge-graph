@@ -434,6 +434,10 @@ export interface EdgeLabelBuiltInVariables<
   labelPosition?: GraphicValue<EA, ES, GS, number | "over" | "above" | "below" | "auto">;
   /** Depth layer for label render ordering */
   labelDepth?: GraphicValue<EA, ES, GS, Layer>;
+  /** Label background fill color (transparent = no background) */
+  labelBackgroundColor?: GraphicValue<EA, ES, GS, string>;
+  /** Label background padding in pixels */
+  labelBackgroundPadding?: GraphicValue<EA, ES, GS, number>;
 }
 
 /**

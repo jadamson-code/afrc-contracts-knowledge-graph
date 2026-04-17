@@ -111,6 +111,8 @@ export interface EdgeDisplayData extends DisplayData {
   head?: string; // Head extremity type (e.g., "arrow")
   tail?: string; // Tail extremity type (e.g., "arrow")
   labelPosition?: EdgeLabelPosition; // Label position relative to edge path
+  labelBackgroundColor?: string; // Label background fill color (transparent = no background)
+  labelBackgroundPadding?: number; // Label background padding in pixels
 }
 
 export type NodeReducer<

@@ -9,9 +9,16 @@
 import { Attributes } from "graphology-types";
 
 import { LabelAttachmentContext } from "../primitives";
-import { BackdropDisplayData, LABEL_ID_OFFSET, LabelBackgroundData, POSITION_MODE_MAP, getShapeId } from "../rendering";
+import {
+  BackdropDisplayData,
+  EdgeLabelBackgroundData,
+  LABEL_ID_OFFSET,
+  LabelBackgroundData,
+  POSITION_MODE_MAP,
+  getShapeId,
+} from "../rendering";
 import { ATTACHMENT_GAP, ATTACHMENT_PLACEMENT_MAP, ATTACHMENT_TEXTURE_UNIT } from "../rendering/nodes/attachments";
-import { EdgeLabelDisplayData, LabelDisplayData, RenderParams } from "../types";
+import { EdgeLabelDisplayData, EdgeLabelPosition, LabelDisplayData, RenderParams } from "../types";
 import {
   colorToArray,
   extend,
@@ -27,6 +34,9 @@ import { SigmaInternals } from "./sigma-internals";
 const X_LABEL_MARGIN = 150;
 const Y_LABEL_MARGIN = 50;
 const BACKDROP_AREA_MAP: Record<string, number> = { both: 0, node: 1, label: 2 };
+const EDGE_POSITION_MODE_MAP: Record<EdgeLabelPosition, number> = { over: 0, above: 1, below: 2, auto: 3 };
+const DEFAULT_EDGE_LABEL_SIZE = 12;
+const DEFAULT_EDGE_LABEL_PADDING = 3;
 
 /**
  * Owns the label grid and per-frame label sets, and exposes all label, backdrop,
@@ -40,6 +50,8 @@ export class LabelRenderer<
   labelGrid: LabelGrid = new LabelGrid();
   displayedNodeLabels: Set<string> = new Set();
   displayedEdgeLabels: Set<string> = new Set();
+  /** Per-frame edge-label candidate list, shared by background and label passes. */
+  private edgeLabelCandidates: string[] = [];
   private renderedNodeLabels: Set<string> = new Set();
   private labelSizeCache = new Map<string, { width: number; height: number }>();
   private measureContext: CanvasRenderingContext2D | null = null;
@@ -529,86 +541,90 @@ export class LabelRenderer<
     attachmentProgram.render(params);
   }
 
-  /** Render edge labels for the given depth layer using WebGL (SDF-based). */
-  renderEdgeLabels(params: RenderParams, depth?: string): void {
-    const {
-      graph,
-      stateManager,
-      nodeDataCache,
-      edgeDataCache,
-      primitives,
-      edgeLabelProgram,
-      nodeDataTexture,
-      edgeDataTexture,
-      edgesWithForcedLabels,
-    } = this.internals;
+  /**
+   * Compute the per-frame list of edge labels to consider for rendering.
+   * Called once before the depth loop; both `renderEdgeLabels` and
+   * `renderEdgeLabelBackgrounds` consume it with their own depth filter.
+   */
+  computeDisplayedEdgeLabels(): void {
+    const { graph, stateManager, edgesWithForcedLabels } = this.internals;
     const highlightedNodes = new Set<string>(
       graph.filterNodes((node) => stateManager.getNodeState(node).isHighlighted),
     );
 
-    const edgeLabelsToDisplay = edgeLabelsToDisplayFromNodes({
+    const list = edgeLabelsToDisplayFromNodes({
       graph,
       hoveredNode: stateManager.hoveredNode,
       displayedNodeLabels: this.displayedNodeLabels,
       highlightedNodes,
     });
-    extend(edgeLabelsToDisplay, edgesWithForcedLabels);
+    extend(list, edgesWithForcedLabels);
+    this.edgeLabelCandidates = list;
+    this.displayedEdgeLabels = new Set();
+  }
 
-    if (!edgeLabelProgram) return;
+  /**
+   * Returns the edge display data for candidates matching this depth that
+   * should actually render (visibility checks applied). Shared filter logic
+   * used by both the label and background passes.
+   */
+  private filterEdgeLabelsForDepth(depth?: string): string[] {
+    const { graph, nodeDataCache, edgeDataCache } = this.internals;
+    const result: string[] = [];
+    const seen = new Set<string>();
+    for (let i = 0, l = this.edgeLabelCandidates.length; i < l; i++) {
+      const edge = this.edgeLabelCandidates[i];
+      if (seen.has(edge)) continue;
+      seen.add(edge);
 
-    const displayedLabels = new Set<string>();
-
-    let totalCharacters = 0;
-    const edgesToProcess: Array<{
-      edge: string;
-      sourceData: { x: number; y: number; hidden?: boolean; size: number; shape?: string };
-      targetData: { x: number; y: number; hidden?: boolean; size: number; shape?: string };
-      edgeData: (typeof edgeDataCache)[string];
-      sourceKey: string;
-      targetKey: string;
-    }> = [];
-
-    for (let i = 0, l = edgeLabelsToDisplay.length; i < l; i++) {
-      const edge = edgeLabelsToDisplay[i];
-      if (displayedLabels.has(edge)) continue;
-
-      const extremities = graph.extremities(edge),
-        sourceData = nodeDataCache[extremities[0]],
-        targetData = nodeDataCache[extremities[1]],
-        edgeData = edgeDataCache[edge];
+      const extremities = graph.extremities(edge);
+      const sourceData = nodeDataCache[extremities[0]];
+      const targetData = nodeDataCache[extremities[1]];
+      const edgeData = edgeDataCache[edge];
+      if (!edgeData || !sourceData || !targetData) continue;
 
       if (
         edgeData.visibility === "hidden" ||
         edgeData.labelVisibility === "hidden" ||
         sourceData.visibility === "hidden" ||
         targetData.visibility === "hidden"
-      ) {
+      )
         continue;
-      }
 
       if (depth && edgeData.labelDepth !== depth) continue;
       if (!edgeData.label) continue;
 
-      totalCharacters += edgeData.label.length;
-      edgesToProcess.push({
-        edge,
-        sourceData,
-        targetData,
-        edgeData,
-        sourceKey: extremities[0],
-        targetKey: extremities[1],
-      });
-      displayedLabels.add(edge);
+      result.push(edge);
     }
+    return result;
+  }
+
+  /** Render edge labels for the given depth layer using WebGL (SDF-based). */
+  renderEdgeLabels(params: RenderParams, depth?: string): void {
+    const { graph, nodeDataCache, edgeDataCache, primitives, edgeLabelProgram, nodeDataTexture, edgeDataTexture } =
+      this.internals;
+
+    if (!edgeLabelProgram) return;
+
+    const edgesToRender = this.filterEdgeLabelsForDepth(depth);
+
+    let totalCharacters = 0;
+    for (const edge of edgesToRender) totalCharacters += edgeDataCache[edge].label!.length;
 
     edgeLabelProgram.reallocate(totalCharacters);
 
-    const defaultEdgeLabelSize = 12;
     const defaultEdgeLabelMargin = primitives?.edges?.label?.margin ?? 5;
     const defaultEdgeLabelPosition = "over" as const;
 
     let characterOffset = 0;
-    for (const { edge, sourceData, targetData, edgeData, sourceKey, targetKey } of edgesToProcess) {
+    for (const edge of edgesToRender) {
+      const extremities = graph.extremities(edge);
+      const sourceKey = extremities[0];
+      const targetKey = extremities[1];
+      const sourceData = nodeDataCache[sourceKey];
+      const targetData = nodeDataCache[targetKey];
+      const edgeData = edgeDataCache[edge];
+
       const sourceNodeIndex = nodeDataTexture!.getIndex(sourceKey);
       const targetNodeIndex = nodeDataTexture!.getIndex(targetKey);
       const edgeIndex = edgeDataTexture!.getIndex(edge);
@@ -617,7 +633,7 @@ export class LabelRenderer<
         text: edgeData.label!,
         x: (sourceData.x + targetData.x) / 2,
         y: (sourceData.y + targetData.y) / 2,
-        size: defaultEdgeLabelSize,
+        size: DEFAULT_EDGE_LABEL_SIZE,
         color: edgeData.labelColor,
         nodeSize: 0,
         nodeIndex: -1,
@@ -649,11 +665,69 @@ export class LabelRenderer<
 
       const charsProcessed = edgeLabelProgram.processEdgeLabel(edge, characterOffset, labelData);
       characterOffset += charsProcessed;
+      this.displayedEdgeLabels.add(edge);
     }
 
     edgeLabelProgram.invalidateBuffers();
     edgeLabelProgram.render(params);
+  }
 
-    this.displayedEdgeLabels = displayedLabels;
+  /**
+   * Render ribbons behind edge labels: curves along the same offset path the
+   * label characters follow. Rendered per-depth, before edge labels so the
+   * text paints on top. Always runs the visual pass when an edge declares a
+   * `labelBackgroundColor`; picking writes are gated by the caller.
+   */
+  renderEdgeLabelBackgrounds(params: RenderParams, depth?: string): void {
+    const { edgeLabelBackgroundProgram, edgeLabelProgram, edgeDataCache, primitives, edgeDataTexture } = this.internals;
+    if (!edgeLabelBackgroundProgram || !edgeDataTexture) return;
+
+    const defaultEdgeLabelMargin = primitives?.edges?.label?.margin ?? 5;
+    const defaultEdgeLabelPosition = "over" as const;
+
+    // Only render ribbons for edges that actually declare a background fill.
+    // (Picking coverage of edge label areas is a follow-up: when added, this
+    // filter should also include all candidates in "separate" events mode.)
+    const candidates = this.filterEdgeLabelsForDepth(depth);
+    const toRender: string[] = [];
+    for (const edge of candidates) {
+      if (edgeDataCache[edge].labelBackgroundColor) toRender.push(edge);
+    }
+
+    if (toRender.length === 0) return;
+
+    edgeLabelBackgroundProgram.reallocate(toRender.length);
+
+    for (let i = 0; i < toRender.length; i++) {
+      const edge = toRender[i];
+      const edgeData = edgeDataCache[edge];
+      const text = edgeData.label!;
+      // Measure in atlas units (the unit consumed by the shader).
+      const totalTextWidth = edgeLabelProgram?.measureLabelAtlasWidth
+        ? edgeLabelProgram.measureLabelAtlasWidth(text)
+        : text.length * 30;
+
+      const position = edgeData.labelPosition ?? defaultEdgeLabelPosition;
+      const positionMode = typeof position === "string" ? (EDGE_POSITION_MODE_MAP[position] ?? 0) : 0;
+
+      const data: EdgeLabelBackgroundData = {
+        edgeIndex: edgeDataTexture.getIndex(edge),
+        edgeAttrIndex: i,
+        baseFontSize: DEFAULT_EDGE_LABEL_SIZE,
+        totalTextWidth,
+        positionMode,
+        margin: defaultEdgeLabelMargin,
+        padding: edgeData.labelBackgroundPadding ?? DEFAULT_EDGE_LABEL_PADDING,
+        color: floatColor(edgeData.labelBackgroundColor!),
+        // Picking id left at 0 for now; label-event wiring for edges is a follow-up.
+        id: 0,
+        curvature: (edgeData as unknown as { curvature?: number }).curvature || 0,
+      };
+
+      edgeLabelBackgroundProgram.processEdgeLabelBackground(i, edge, data);
+    }
+
+    edgeLabelBackgroundProgram.invalidateBuffers();
+    edgeLabelBackgroundProgram.render(params);
   }
 }

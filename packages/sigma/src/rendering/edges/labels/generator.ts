@@ -24,13 +24,15 @@ import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../../shapes";
 import { numberToGLSLFloat } from "../../utils";
 import { layerPlain } from "../layers";
 import { generateEdgeAttributeTextureFetch } from "../path-attribute-texture";
-import {
-  generateFindSourceClampT,
-  generateFindTargetClampT,
-  generateNumericalTangentNormal,
-  generatePathFallbacks,
-} from "../shared-glsl";
+import { generateNumericalTangentNormal, generatePathFallbacks } from "../shared-glsl";
 import { EdgePath } from "../types";
+import {
+  EDGE_LABEL_BODY_BOUNDS_GLSL,
+  EDGE_LABEL_PERP_OFFSET_GLSL,
+  generateAllClampFunctions,
+  generateEdgeLabelAlphaGlsl,
+  generatePathSelector,
+} from "./shared-shader-glsl";
 
 // Atlas font size constant - used for converting glyph units to screen pixels
 const ATLAS_FONT_SIZE = DEFAULT_SDF_ATLAS_OPTIONS.fontSize;
@@ -90,90 +92,6 @@ export interface EdgeLabelShaderOptions {
  *    e. Rotate character quad to align with tangent
  *    f. Apply perpendicular offset (for above/below positioning)
  */
-/**
- * Generates a path selector function for multi-path support.
- * Creates a switch statement that dispatches to the correct path function based on pathId.
- */
-function generatePathSelector(
-  paths: EdgePath[],
-  queryName: string,
-  pathFunc: string,
-  returnType: string,
-  params: string,
-  args: string,
-): string {
-  if (paths.length === 1) {
-    return `${returnType} ${queryName}(int pathId, ${params}) {
-  return path_${paths[0].name}_${pathFunc}(${args});
-}`;
-  }
-
-  const cases = paths.map((p, i) => `    case ${i}: return path_${p.name}_${pathFunc}(${args});`).join("\n");
-
-  return `${returnType} ${queryName}(int pathId, ${params}) {
-  switch (pathId) {
-${cases}
-    default: return path_${paths[0].name}_${pathFunc}(${args});
-  }
-}`;
-}
-
-/**
- * Generates all clamp T functions and their selectors for multi-path support.
- */
-function generateAllClampFunctions(paths: EdgePath[]): string {
-  // Generate individual clamp functions for each path
-  const clampFunctions = paths
-    .map(
-      (p) => `${generateFindSourceClampT(p.name)}
-${generateFindTargetClampT(p.name)}`,
-    )
-    .join("\n\n");
-
-  // Generate selector functions
-  let selectors: string;
-  if (paths.length === 1) {
-    selectors = `
-float queryFindSourceClampT(int pathId, vec2 source, float sourceSize, int sourceShapeId, vec2 target, float margin) {
-  return findSourceClampT_${paths[0].name}(source, sourceSize, sourceShapeId, target, margin);
-}
-
-float queryFindTargetClampT(int pathId, vec2 source, vec2 target, float targetSize, int targetShapeId, float margin) {
-  return findTargetClampT_${paths[0].name}(source, target, targetSize, targetShapeId, margin);
-}`;
-  } else {
-    const sourceCases = paths
-      .map(
-        (p, i) =>
-          `    case ${i}: return findSourceClampT_${p.name}(source, sourceSize, sourceShapeId, target, margin);`,
-      )
-      .join("\n");
-    const targetCases = paths
-      .map(
-        (p, i) =>
-          `    case ${i}: return findTargetClampT_${p.name}(source, target, targetSize, targetShapeId, margin);`,
-      )
-      .join("\n");
-
-    selectors = `
-float queryFindSourceClampT(int pathId, vec2 source, float sourceSize, int sourceShapeId, vec2 target, float margin) {
-  switch (pathId) {
-${sourceCases}
-    default: return findSourceClampT_${paths[0].name}(source, sourceSize, sourceShapeId, target, margin);
-  }
-}
-
-float queryFindTargetClampT(int pathId, vec2 source, vec2 target, float targetSize, int targetShapeId, float margin) {
-  switch (pathId) {
-${targetCases}
-    default: return findTargetClampT_${paths[0].name}(source, target, targetSize, targetShapeId, margin);
-  }
-}`;
-  }
-
-  return `${clampFunctions}\n${selectors}`;
-}
-
 export function generateEdgeLabelVertexShader(options: EdgeLabelShaderOptions): string {
   const {
     paths,
@@ -266,8 +184,6 @@ ${hasBorder ? "out float v_positionMode;  // Position mode for conditional borde
 
 const float bias = 255.0 / 254.0;
 const float FADE_WIDTH_PIXELS = 15.0;  // Width of fade gradient in pixels
-const float MIN_VISIBILITY_THRESHOLD = ${numberToGLSLFloat(minVisibilityThreshold)};
-const float FULL_VISIBILITY_THRESHOLD = ${numberToGLSLFloat(fullVisibilityThreshold)};
 const float ATLAS_FONT_SIZE = ${numberToGLSLFloat(ATLAS_FONT_SIZE)};  // Base font size used in SDF atlas
 const float VERTICAL_CENTER_RATIO = ${numberToGLSLFloat(VERTICAL_CENTER_RATIO)};  // Baseline to visual center ratio
 
@@ -354,6 +270,14 @@ ${paths.map((p, i) => (p.hasSharpCorners ? `    case ${i}: return path_${p.name}
 ${generateAllClampFunctions(paths)}
 
 // ============================================================================
+// Shared edge-label helpers (body bounds, alpha ramp, perpendicular offset)
+// ============================================================================
+
+${EDGE_LABEL_BODY_BOUNDS_GLSL}
+${generateEdgeLabelAlphaGlsl(minVisibilityThreshold, fullVisibilityThreshold)}
+${EDGE_LABEL_PERP_OFFSET_GLSL}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -432,33 +356,16 @@ ${textureFetch.varyingAssignments}
   float webGLThickness = thickness * u_correctionRatio / u_sizeRatio;
 
   // -------------------------------------------------------------------------
-  // Step 2: Compute body bounds
+  // Step 2: Compute body bounds (truncated at node boundaries + extremities)
   // -------------------------------------------------------------------------
-  // Always find where path exits source node and enters target node
-  // This ensures labels are truncated at node boundaries, not node centers
-  float tStart = queryFindSourceClampT(pathId, source, sourceSize, sourceShapeId, target, 0.0);
-  float tEnd = queryFindTargetClampT(pathId, source, target, targetSize, targetShapeId, 0.0);
-
-  // Compute path length
-  float pathLength = queryPathLength(pathId, source, target);
-  float visibleLength = pathLength * (tEnd - tStart);
-
-  // Compute extremity lengths in WebGL units
-  float headLength = headLengthRatio * webGLThickness;
-  float tailLength = tailLengthRatio * webGLThickness;
-
-  // Handle short edges: scale down extremities if needed
-  float totalNeededLength = headLength + tailLength;
-  if (totalNeededLength > visibleLength && totalNeededLength > 0.0001) {
-    float extremityScale = visibleLength / totalNeededLength;
-    headLength *= extremityScale;
-    tailLength *= extremityScale;
-  }
-
-  // Body bounds in arc distance (WebGL units)
-  float bodyStartDist = tStart * pathLength + tailLength;
-  float bodyEndDist = tEnd * pathLength - headLength;
-  float bodyLength = max(bodyEndDist - bodyStartDist, 0.0);
+  vec3 bodyBounds = computeEdgeLabelBodyBounds(
+    pathId, source, sourceSize, sourceShapeId,
+    target, targetSize, targetShapeId,
+    webGLThickness, headLengthRatio, tailLengthRatio
+  );
+  float bodyStartDist = bodyBounds.x;
+  float bodyEndDist = bodyBounds.y;
+  float bodyLength = bodyBounds.z;
 
   // -------------------------------------------------------------------------
   // Step 3: Compute font scale and text dimensions
@@ -488,23 +395,9 @@ ${textureFetch.varyingAssignments}
   v_fontScale = fontScale;
 
   // -------------------------------------------------------------------------
-  // Step 4: Compute visibility ratio and alpha modifier
+  // Step 4: Alpha modifier from how much of the label fits in the body
   // -------------------------------------------------------------------------
-  // Visibility ratio: how much of the label fits in the body
-  float visibilityRatio = textWidthWebGL > 0.0001 ? min(bodyLength / textWidthWebGL, 1.0) : 1.0;
-
-  // Compute alpha modifier based on visibility thresholds:
-  // - Below MIN_VISIBILITY_THRESHOLD: hidden (alpha = 0)
-  // - Between thresholds: gradual fade in
-  // - Above FULL_VISIBILITY_THRESHOLD: full opacity (alpha = 1)
-  float alphaModifier;
-  if (visibilityRatio < MIN_VISIBILITY_THRESHOLD) {
-    alphaModifier = 0.0;
-  } else if (visibilityRatio < FULL_VISIBILITY_THRESHOLD) {
-    alphaModifier = (visibilityRatio - MIN_VISIBILITY_THRESHOLD) / (FULL_VISIBILITY_THRESHOLD - MIN_VISIBILITY_THRESHOLD);
-  } else {
-    alphaModifier = 1.0;
-  }
+  float alphaModifier = computeEdgeLabelAlpha(bodyLength, textWidthWebGL);
 
   // -------------------------------------------------------------------------
   // Step 5: Compute character center offset (truncation check moved to after curvature adjustment)
@@ -516,38 +409,20 @@ ${textureFetch.varyingAssignments}
   // Step 6: Compute perpendicular offset based on position mode
   // -------------------------------------------------------------------------
   // Position modes: 0=over, 1=above, 2=below, 3=auto
-  // We need to compute this early for curvature-adaptive spacing
+  // Needed early for curvature-adaptive character spacing in Step 7
   float halfThickness = webGLThickness * 0.5;
   ${
     isScaledMode
       ? `// Scaled mode: margin and text height scale with zoom (same factor as font)
-  // Use u_zoomSizeRatio so margin scales consistently with the font
   float marginWebGL = margin * u_zoomSizeRatio * u_correctionRatio / u_sizeRatio;
   float halfTextHeight = baseFontSize * 0.35 * u_zoomSizeRatio * u_correctionRatio / u_sizeRatio;`
       : `// Fixed mode: margin and text height stay constant in screen pixels
   float marginWebGL = margin * pixelToGraph;
   float halfTextHeight = baseFontSize * 0.35 * pixelToGraph;`
   }
-  float perpOffset = 0.0;
-
-  if (positionMode == 1.0) {
-    // "above": positive perpendicular offset
-    perpOffset = halfThickness + marginWebGL + halfTextHeight;
-  } else if (positionMode == 2.0) {
-    // "below": negative perpendicular offset
-    perpOffset = -(halfThickness + marginWebGL + halfTextHeight);
-  } else if (positionMode == 3.0) {
-    // "auto": determine based on screen positions of source and target
-    // Transform source and target to clip space to compare screen X positions
-    vec3 sourceClip = u_matrix * vec3(source, 1.0);
-    vec3 targetClip = u_matrix * vec3(target, 1.0);
-    // If source is to the left of target on screen, use "above"; otherwise "below"
-    // This ensures text is always readable (not upside-down)
-    perpOffset = sourceClip.x < targetClip.x
-      ? (halfThickness + marginWebGL + halfTextHeight)
-      : -(halfThickness + marginWebGL + halfTextHeight);
-  }
-  // else positionMode == 0.0 ("over"): perpOffset stays 0
+  float perpOffset = computeEdgeLabelPerpOffset(
+    positionMode, halfThickness, marginWebGL, halfTextHeight, source, target, u_matrix
+  );
 
   // -------------------------------------------------------------------------
   // Step 7: Position character on path using offset path traversal

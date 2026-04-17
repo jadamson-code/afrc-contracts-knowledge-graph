@@ -28,7 +28,7 @@ import { layerPlain } from "../layers";
 import { EDGE_ATTRIBUTE_TEXTURE_UNIT } from "../path-attribute-texture";
 import type { EdgeLabelOptions, EdgePath } from "../types";
 import { EdgeLabelProgram } from "./base";
-import type { EdgeLabelProgramType } from "./base";
+import type { EdgeLabelProgramType, EdgeLabelShaderConfig } from "./base";
 import { GeneratedEdgeLabelShaders, generateEdgeLabelShaders } from "./generator";
 
 /**
@@ -129,10 +129,19 @@ export function createEdgeLabelProgram<
     position: labelPosition,
     margin: labelMargin,
     textBorder,
-    fontSizeMode,
+    fontSizeMode = "fixed",
     minVisibilityThreshold = 0.7,
     fullVisibilityThreshold = 0.8,
   } = options;
+
+  const labelShaderConfig: EdgeLabelShaderConfig = {
+    paths,
+    headLengthRatio,
+    tailLengthRatio,
+    fontSizeMode,
+    minVisibilityThreshold,
+    fullVisibilityThreshold,
+  };
 
   const hasBorder = !!textBorder;
 
@@ -166,6 +175,11 @@ export function createEdgeLabelProgram<
       }
       return generated;
     }
+
+    /** Resolved shader config — the single source of truth for companion
+     *  programs (e.g. label background) that must match this label's
+     *  body bounds, visibility ramp, and perpendicular offset. */
+    static readonly labelShaderConfig = labelShaderConfig;
 
     /** Static reference to extremity ratios */
     static readonly headLengthRatio = headLengthRatio;
@@ -698,6 +712,26 @@ export function createEdgeLabelProgram<
       }
 
       this.atlasManager.flush();
+    }
+
+    /**
+     * Measures a label's width in atlas (glyph) units — the unit consumed by
+     * the edge label and background shaders for `a_totalTextWidth`.
+     */
+    measureLabelAtlasWidth(text: string, fontKey?: string): number {
+      const actualFontKey = fontKey || this.defaultFontKey;
+
+      this.atlasManager.ensureGlyphs(text, actualFontKey);
+      if (this.atlasManager.hasPendingGlyphs()) this.atlasManager.flush();
+
+      let width = 0;
+      for (const char of text) {
+        const cp = char.codePointAt(0);
+        if (cp === undefined) continue;
+        const glyph = this.atlasManager.getGlyph(cp, actualFontKey);
+        if (glyph) width += glyph.advance;
+      }
+      return width;
     }
 
     // -----------------------------------------------------------------------

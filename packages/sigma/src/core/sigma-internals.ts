@@ -16,6 +16,7 @@ import {
   AttachmentManager,
   BackdropProgram,
   EdgeDataTexture,
+  EdgeLabelBackgroundProgram,
   EdgeLabelProgram,
   LabelBackgroundProgram,
   LabelProgram,
@@ -60,6 +61,7 @@ export type SigmaInternals<
   // WebGL programs
   labelProgram: LabelProgram<string, N, E, G> | null;
   edgeLabelProgram: EdgeLabelProgram<string, N, E, G> | null;
+  edgeLabelBackgroundProgram: EdgeLabelBackgroundProgram<string, N, E, G> | null;
   backdropProgram: BackdropProgram<string, N, E, G> | null;
   labelBackgroundProgram: LabelBackgroundProgram<string, N, E, G> | null;
   attachmentManager: AttachmentManager | null;

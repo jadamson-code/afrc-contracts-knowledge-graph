@@ -55,8 +55,6 @@
       "packages/node-border",
       "packages/node-image",
       "packages/node-piechart",
-      "packages/node-square",
-      "packages/edge-curve",
       "packages/layer-leaflet",
       "packages/layer-maplibre",
       "packages/layer-webgl",

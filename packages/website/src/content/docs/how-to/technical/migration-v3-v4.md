@@ -131,7 +131,7 @@ const renderer = new Sigma(graph, container, {
 ## What's still available
 
 - **`nodeReducer` / `edgeReducer`**: still work as escape hatches for complex logic that styles cannot express, but
-styles should be preferred for most cases
+  styles should be preferred for most cases
 
 ## Migration steps
 

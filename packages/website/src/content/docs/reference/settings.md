@@ -4,7 +4,8 @@ sidebar:
   label: Settings
 ---
 
-Settings control camera behavior, interaction, and rendering performance. They are separate from [styles](/reference/style-properties/), which handle visual appearance.
+Settings control camera behavior, interaction, and rendering performance. They are separate from
+[styles](/reference/style-properties/), which handle visual appearance.
 
 Pass settings when creating a sigma instance:
 
@@ -26,35 +27,41 @@ renderer.setSettings({ hideEdgesOnMove: true });
 
 ## Rendering
 
-| Setting                  | Type      | Default | Description                                           |
-| ------------------------ | --------- | ------- | ----------------------------------------------------- |
-| `renderLabels`           | `boolean` | `true`  | Whether to render node labels                         |
-| `renderEdgeLabels`       | `boolean` | `false` | Whether to render edge labels                         |
-| `enableEdgeEvents`       | `boolean` | `false` | Enable mouse events on edges (has a performance cost) |
-| `stagePadding`           | `number`  | `30`    | Padding around the graph in pixels                    |
-| `minEdgeThickness`       | `number`  | `1.7`   | Minimum edge thickness in pixels                      |
-| `antiAliasingFeather`    | `number`  | `1`     | Anti-aliasing feather amount for WebGL rendering      |
-| `pickingDownSizingRatio` | `number`  | `2`     | Down-sizing ratio for the picking framebuffer         |
-| `maxDepthLevels`         | `number`  | `20`    | Maximum number of depth levels for z-ordering         |
+| Setting                  | Type                              | Default | Description                                                                                                                    |
+| ------------------------ | --------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `renderLabels`           | `boolean`                         | `true`  | Whether to render node labels                                                                                                  |
+| `renderEdgeLabels`       | `boolean`                         | `false` | Whether to render edge labels                                                                                                  |
+| `enableEdgeEvents`       | `boolean`                         | `false` | Enable mouse events on edges (has a performance cost)                                                                          |
+| `labelEvents`            | `false \| "extend" \| "separate"` | `false` | Enable label events. `"extend"` fires them alongside the parent node/edge event; `"separate"` makes labels standalone targets. |
+| `stagePadding`           | `number`                          | `30`    | Padding around the graph in pixels                                                                                             |
+| `minEdgeThickness`       | `number`                          | `1.7`   | Minimum edge thickness in pixels                                                                                               |
+| `antiAliasingFeather`    | `number`                          | `1`     | Anti-aliasing feather amount for WebGL rendering                                                                               |
+| `pickingDownSizingRatio` | `number`                          | `2`     | Down-sizing ratio for the picking framebuffer                                                                                  |
+| `nodePickingPadding`     | `number`                          | `0`     | Extra pixel padding added around nodes when picking under the cursor                                                           |
+| `edgePickingPadding`     | `number`                          | `4`     | Extra pixel padding added around edges when picking under the cursor                                                           |
+| `labelPickingPadding`    | `number`                          | `10`    | Extra pixel padding added around labels when picking under the cursor                                                          |
+| `maxDepthLevels`         | `number`                          | `20`    | Maximum number of depth levels for z-ordering                                                                                  |
 
 ## Camera
 
-| Setting                     | Type             | Default | Description                                                          |
-| --------------------------- | ---------------- | ------- | -------------------------------------------------------------------- |
-| `enableCameraZooming`       | `boolean`        | `true`  | Allow zooming with the mouse wheel                                   |
-| `enableCameraPanning`       | `boolean`        | `true`  | Allow panning by dragging the background                             |
-| `enableCameraRotation`      | `boolean`        | `true`  | Allow camera rotation                                                |
-| `enableCameraMouseRotation` | `boolean`        | `true`  | Allow mouse-based camera rotation                                    |
-| `minCameraRatio`            | `number \| null` | `null`  | Minimum zoom level (smaller = more zoomed in). `null` means no limit |
-| `maxCameraRatio`            | `number \| null` | `null`  | Maximum zoom level (larger = more zoomed out). `null` means no limit |
-| `cameraPanBoundaries`       | see below        | `null`  | Constrain the camera panning area                                    |
+| Setting                          | Type             | Default | Description                                                                                                                    |
+| -------------------------------- | ---------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `enableCameraZooming`            | `boolean`        | `true`  | Allow zooming with the mouse wheel                                                                                             |
+| `enableCameraPanning`            | `boolean`        | `true`  | Allow panning by dragging the background                                                                                       |
+| `enableCameraRotation`           | `boolean`        | `true`  | Allow camera rotation                                                                                                          |
+| `enableCameraMouseRotation`      | `boolean`        | `true`  | Allow mouse-based camera rotation                                                                                              |
+| `minCameraRatio`                 | `number \| null` | `null`  | Minimum zoom level (smaller = more zoomed in). `null` means no limit                                                           |
+| `maxCameraRatio`                 | `number \| null` | `null`  | Maximum zoom level (larger = more zoomed out). `null` means no limit                                                           |
+| `cameraPanBoundaries`            | see below        | `null`  | Constrain the camera panning area                                                                                              |
+| `enableScrollBlocking`           | `boolean`        | `true`  | When zoom hits a min/max bound, block page scroll so wheel events keep targeting sigma                                         |
+| `scrollBlockingReleaseThreshold` | `number`         | `5`     | Number of consecutive wheel events at a zoom boundary still blocked before page scroll is released. `Infinity` never releases. |
 
 ### Camera pan boundaries
 
 The `cameraPanBoundaries` setting accepts:
 
-- `null` -- no boundaries (default)
-- `true` -- automatically constrain to the graph extent
+- `null`: no boundaries (default)
+- `true`: automatically constrain to the graph extent
 - An object with `tolerance` and/or `boundaries`:
 
 ```typescript
@@ -66,11 +73,11 @@ The `cameraPanBoundaries` setting accepts:
 
 ## Sizing and scaling
 
-| Setting                   | Type                        | Default       | Description                                                                                                                                  |
-| ------------------------- | --------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `itemSizesReference`      | `"screen" \| "positions"`   | `"positions"` | How node/edge sizes are interpreted. `"screen"`: sizes are in pixels regardless of zoom. `"positions"`: sizes scale with graph coordinates   |
-| `zoomToSizeRatioFunction` | `(ratio: number) => number` | `Math.sqrt`   | Maps camera zoom ratio to a size scaling factor. Applied in both `"screen"` and `"positions"` modes                                          |
-| `autoRescale`             | `boolean \| "once"`         | `true`        | Automatically rescale the graph to fit the viewport. `"once"` captures the initial extent and freezes it, useful for drag-and-drop scenarios |
+| Setting                   | Type                        | Default       | Description                                                                                                                                                                                                                   |
+| ------------------------- | --------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `itemSizesReference`      | `"screen" \| "positions"`   | `"positions"` | Reference space for node/edge sizes. `"positions"`: sizes live in graph space and scale with zoom. `"screen"`: sizes stay constant in screen pixels regardless of zoom. In both modes `zoomToSizeRatioFunction` still applies |
+| `zoomToSizeRatioFunction` | `(ratio: number) => number` | `Math.sqrt`   | Maps camera zoom ratio to a size scaling factor. Applied in both `"screen"` and `"positions"` modes                                                                                                                           |
+| `autoRescale`             | `boolean \| "once"`         | `true`        | Automatically rescale the graph to fit the viewport. `"once"` captures the initial extent and freezes it, useful for drag-and-drop scenarios                                                                                  |
 
 ## Label optimization
 
@@ -91,10 +98,10 @@ The `cameraPanBoundaries` setting accepts:
 
 ## Performance
 
-| Setting            | Type      | Default | Description                                                                                    |
-| ------------------ | --------- | ------- | ---------------------------------------------------------------------------------------------- |
-| `hideEdgesOnMove`  | `boolean` | `false` | Hide edges while the camera is moving (panning, zooming). Improves performance on large graphs |
-| `hideLabelsOnMove` | `boolean` | `false` | Hide labels while the camera is moving                                                         |
+| Setting            | Type      | Default | Description                                              |
+| ------------------ | --------- | ------- | -------------------------------------------------------- |
+| `hideEdgesOnMove`  | `boolean` | `false` | Hide edges while the camera is moving (panning, zooming) |
+| `hideLabelsOnMove` | `boolean` | `false` | Hide labels while the camera is moving                   |
 
 ## Mouse and touch interaction
 

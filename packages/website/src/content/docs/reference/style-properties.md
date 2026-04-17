@@ -4,7 +4,9 @@ sidebar:
   label: Style properties
 ---
 
-Every node and edge has a set of built-in style properties that control its visual appearance. These properties are set through the [styles system](/concepts/styles-and-primitives/) using any [style value type](/reference/style-value-types/).
+Every node and edge has a set of built-in style properties that control its visual appearance. These properties are set
+through the [styles system](/concepts/styles-and-primitives/) using any
+[style value type](/reference/style-value-types/).
 
 Custom properties can be added via [primitives variables](/reference/primitives-schema/).
 
@@ -14,12 +16,12 @@ These are the built-in style properties available for nodes:
 
 ### Position and geometry
 
-| Property | Type     | Description                                                                                                 |
-| -------- | -------- | ----------------------------------------------------------------------------------------------------------- |
-| `x`      | `number` | X coordinate in graph space                                                                                 |
-| `y`      | `number` | Y coordinate in graph space                                                                                 |
-| `size`   | `number` | Node size (actual pixel size depends on `autoRescale`, `itemSizesReference`, and `zoomToSizeRatioFunction`) |
-| `shape`  | `string` | Shape name (e.g. `"circle"`, `"square"`). Must match a shape declared in `primitives.nodes.shapes`          |
+| Property | Type     | Description                                                                                                          |
+| -------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| `x`      | `number` | X coordinate in graph space                                                                                          |
+| `y`      | `number` | Y coordinate in graph space                                                                                          |
+| `size`   | `number` | Node size (actual pixel size depends on `autoRescale`, `itemSizesReference`, and `zoomToSizeRatioFunction` settings) |
+| `shape`  | `string` | Shape name (e.g. `"circle"`, `"square"`). Must match a shape declared in `primitives.nodes.shapes`                   |
 
 ### Appearance
 
@@ -56,6 +58,9 @@ These are the built-in style properties available for nodes:
 | `labelDepth`               | `string`                                            | Depth layer for label rendering                                        |
 | `labelAttachment`          | `string \| null`                                    | Label attachment name (references `primitives.nodes.labelAttachments`) |
 | `labelAttachmentPlacement` | `"below" \| "above" \| "left" \| "right"`           | Attachment position relative to label                                  |
+| `labelBackgroundColor`     | `string`                                            | Label background fill color (transparent = no background)              |
+| `labelBackgroundPadding`   | `number`                                            | Padding around the label background in pixels                          |
+| `labelCursor`              | `string`                                            | CSS cursor to show when hovering the label (requires `labelEvents`)    |
 
 ### Backdrop properties
 
@@ -106,26 +111,28 @@ Backdrops render a background shape behind nodes and their labels, typically use
 
 ### Label properties
 
-| Property          | Type                                     | Description                        |
-| ----------------- | ---------------------------------------- | ---------------------------------- |
-| `label`           | `string`                                 | Label text content                 |
-| `labelColor`      | `string`                                 | Label text color                   |
-| `labelSize`       | `number`                                 | Label font size in pixels          |
-| `labelFont`       | `string`                                 | Label font family                  |
-| `labelVisibility` | `"auto" \| "visible" \| "hidden"`        | Label visibility mode              |
-| `labelPosition`   | `"over" \| "above" \| "below" \| "auto"` | Position relative to the edge path |
-| `labelDepth`      | `string`                                 | Depth layer for label rendering    |
+| Property          | Type                                               | Description                                                                           |
+| ----------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `label`           | `string`                                           | Label text content                                                                    |
+| `labelColor`      | `string`                                           | Label text color                                                                      |
+| `labelSize`       | `number`                                           | Label font size in pixels                                                             |
+| `labelFont`       | `string`                                           | Label font family                                                                     |
+| `labelVisibility` | `"auto" \| "visible" \| "hidden"`                  | Label visibility mode                                                                 |
+| `labelPosition`   | `number \| "over" \| "above" \| "below" \| "auto"` | Position mode, or a ratio along the edge (`0` = source, `0.5` = middle, `1` = target) |
+| `labelDepth`      | `string`                                           | Depth layer for label rendering                                                       |
 
 ## Stage style properties
 
-Stage styles apply to the sigma container itself. Unlike node and edge styles, stage styles only support [graph state](/reference/style-value-types/) conditionals (not attribute bindings).
+Stage styles apply to the sigma container itself. Unlike node and edge styles, stage styles only support
+[graph state](/reference/style-value-types/) conditionals (not attribute bindings).
 
 | Property     | Type     | Description                                             |
 | ------------ | -------- | ------------------------------------------------------- |
 | `cursor`     | `string` | CSS cursor on the stage (fallback when nothing hovered) |
 | `background` | `string` | Stage background color                                  |
 
-Stage styles support the same rule-level conditionals as nodes/edges, but predicates match against **graph state** flags (e.g. `isDragging`, `hasHovered`):
+Stage styles support the same rule-level conditionals as nodes/edges, but predicates match against **graph state** flags
+(e.g. `isDragging`, `hasHovered`):
 
 ```typescript
 const renderer = new Sigma(graph, container, {
@@ -141,9 +148,11 @@ const renderer = new Sigma(graph, container, {
 
 ## Custom variables
 
-Additional style properties can be declared via `primitives.nodes.variables` and `primitives.edges.variables`. These are used by custom rendering layers.
+Additional style properties can be declared via `primitives.nodes.variables` and `primitives.edges.variables`. These are
+used by custom rendering layers.
 
 ```typescript
+import { layerBorder } from "@sigma/node-border";
 import { layerFill } from "sigma/rendering";
 
 const renderer = new Sigma(graph, container, {
@@ -168,4 +177,5 @@ const renderer = new Sigma(graph, container, {
 });
 ```
 
-Once declared, custom variables can be styled exactly like built-in properties -- with any [style value type](/reference/style-value-types/).
+Once declared, custom variables can be styled exactly like built-in properties, with any
+[style value type](/reference/style-value-types/).

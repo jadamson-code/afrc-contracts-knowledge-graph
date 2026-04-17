@@ -20,31 +20,41 @@ new Sigma(graph, container, options?)
 
 ### Options
 
-| Property           | Type                    | Description                                                                                                              |
-| ------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `primitives`       | `PrimitivesDeclaration` | Shapes, layers, paths, extremities, depth layers. See [Primitives schema](/reference/primitives-schema/)                 |
-| `styles`           | `StylesDeclaration`     | Style rules for nodes and edges. See [Styles and primitives](/concepts/styles-and-primitives/)                           |
-| `settings`         | `Partial<Settings>`     | Behavior and performance settings. See [Settings](/reference/settings/)                                                  |
-| `nodeReducer`      | `function`              | Escape hatch for complex node styling. `(key, displayData, attrs, state, graphState, graph) => Partial<NodeDisplayData>` |
-| `edgeReducer`      | `function`              | Same for edges                                                                                                           |
-| `customNodeState`  | `object`                | Runtime default values for custom node state fields (required when extending `BaseNodeState` with non-optional fields)   |
-| `customEdgeState`  | `object`                | Runtime default values for custom edge state fields                                                                      |
-| `customGraphState` | `object`                | Runtime default values for custom graph state fields                                                                     |
+| Property           | Type                | Description                                                                                                       |
+| ------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `primitives`       | `P`                 | Shapes, layers, paths, extremities, depth layers. See [Primitives schema](/reference/primitives-schema/)          |
+| `styles`           | `StylesDeclaration` | Style rules for nodes and edges. See [Styles and primitives](/concepts/styles-and-primitives/)                    |
+| `settings`         | `Partial<Settings>` | Behavior and performance settings. See [Settings](/reference/settings/)                                           |
+| `nodeReducer`      | `function`          | Escape hatch for complex node styling. `(key, data, attrs, state, graphState, graph) => Partial<NodeDisplayData>` |
+| `edgeReducer`      | `function`          | Same shape as `nodeReducer`, for edges. Returns `Partial<EdgeDisplayData>`.                                       |
+| `customNodeState`  | `NS`                | Runtime default values for custom node state fields                                                               |
+| `customEdgeState`  | `ES`                | Runtime default values for custom edge state fields                                                               |
+| `customGraphState` | `GS`                | Runtime default values for custom graph state fields                                                              |
 
 ### Generic type parameters
 
 ```typescript
-Sigma<N, E, G, NS, ES, GS>;
+Sigma<N, E, G, NS, ES, GS, P>;
 ```
 
-| Parameter | Extends          | Default          | Description           |
-| --------- | ---------------- | ---------------- | --------------------- |
-| `N`       | `Attributes`     | `Attributes`     | Node attributes type  |
-| `E`       | `Attributes`     | `Attributes`     | Edge attributes type  |
-| `G`       | `Attributes`     | `Attributes`     | Graph attributes type |
-| `NS`      | `BaseNodeState`  | `BaseNodeState`  | Node state type       |
-| `ES`      | `BaseEdgeState`  | `BaseEdgeState`  | Edge state type       |
-| `GS`      | `BaseGraphState` | `BaseGraphState` | Graph state type      |
+| Parameter | Extends                 | Default                 | Description             |
+| --------- | ----------------------- | ----------------------- | ----------------------- |
+| `N`       | `Attributes`            | `Attributes`            | Node attributes type    |
+| `E`       | `Attributes`            | `Attributes`            | Edge attributes type    |
+| `G`       | `Attributes`            | `Attributes`            | Graph attributes type   |
+| `NS`      | `{}`                    | `{}`                    | Custom node state type  |
+| `ES`      | `{}`                    | `{}`                    | Custom edge state type  |
+| `GS`      | `{}`                    | `{}`                    | Custom graph state type |
+| `P`       | `PrimitivesDeclaration` | `PrimitivesDeclaration` | Primitives type         |
+
+:::note
+Most of the time, these generics will be inferred from Sigma's constructor arguments:
+
+- `N`, `E` and `G` are inferred from the given `graph: Graph<N, E, G>`
+- `NS`, `ES` and `GS` are inferred from the given `customNodeState`, `customEdgeState` and `customGraphState`
+- `P` is inferred from the given `primitives` object
+
+:::
 
 ## Lifecycle
 
@@ -56,11 +66,11 @@ Sigma<N, E, G, NS, ES, GS>;
 
 ## Rendering
 
-| Method                   | Returns | Description                                                                          |
-| ------------------------ | ------- | ------------------------------------------------------------------------------------ |
-| `refresh(opts?)`         | `this`  | Re-process data and render. Options: `{ partialGraph?, skipIndexation?, schedule? }` |
-| `scheduleRefresh(opts?)` | `this`  | Debounced: schedule refresh for next animation frame                                 |
-| `scheduleRender()`       | `this`  | Debounced: schedule render-only (no re-processing) for next frame                    |
+| Method                   | Returns | Description                                                                                 |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------- |
+| `refresh(opts?)`         | `this`  | Re-process data and render. Options: `{ partialGraph?, skipIndexation?, schedule? }`        |
+| `scheduleRefresh(opts?)` | `this`  | Debounced version of `refresh` (always sets `schedule: true`). Options: `{ partialGraph? }` |
+| `scheduleRender()`       | `this`  | Debounced: schedule a render-only pass for the next animation frame (no re-processing)      |
 
 ## Node state
 
@@ -115,6 +125,13 @@ All coordinate methods accept an optional `override` parameter to use custom cam
 | `getCustomBBox()`     | `object \| null`           | Get custom bounding box override, if set    |
 | `setCustomBBox(bbox)` | `this`                     | Override the bounding box (`null` to reset) |
 
+:::note
+In sigma v3, the most common use-case of these custom bounding boxes management was to freeze the auto-computed bounding
+box after the first rendering, especially for applications with nodes dragging capabilities.
+
+Sigma v4 has a shortcut for that, using the `autoRescale: 'once'` setting.
+:::
+
 ## Settings
 
 | Method                   | Returns       | Description                                           |
@@ -143,20 +160,6 @@ All coordinate methods accept an optional `override` parameter to use custom cam
 | `setCamera(camera)` | `void`        | Replace the camera instance                                       |
 | `getMouseCaptor()`  | `MouseCaptor` | Get the mouse event captor                                        |
 | `getTouchCaptor()`  | `TouchCaptor` | Get the touch event captor                                        |
-
-## Layers and WebGL
-
-| Method                                  | Returns                  | Description                                                                |
-| --------------------------------------- | ------------------------ | -------------------------------------------------------------------------- |
-| `getWebGLContext()`                     | `WebGL2RenderingContext` | Get the main WebGL2 context                                                |
-| `createCanvas(id, opts?)`               | `HTMLCanvasElement`      | Create and insert a canvas layer. Options: `{ beforeLayer?, afterLayer? }` |
-| `createLayer(id, tag, opts?)`           | `HTMLElement`            | Create and insert a DOM element layer                                      |
-| `createWebGLContext(id, opts?)`         | `WebGL2RenderingContext` | Create a WebGL2 context with optional picking                              |
-| `killLayer(id)`                         | `this`                   | Destroy a layer                                                            |
-| `getStageCanvas()`                      | `HTMLCanvasElement`      | Get the stage canvas element                                               |
-| `getMouseLayer()`                       | `HTMLElement`            | Get the mouse interaction layer                                            |
-| `addCustomLayerProgram(depth, program)` | `this`                   | Register a custom fullscreen WebGL program at a depth layer                |
-| `removeCustomLayerProgram(depth)`       | `this`                   | Unregister and kill a custom layer program                                 |
 
 ## Utilities
 

@@ -12,8 +12,8 @@ The camera state has four properties:
 
 ```typescript
 interface CameraState {
-  x: number; // Horizontal position (0–1 normalized, 0.5 = center)
-  y: number; // Vertical position (0–1 normalized, 0.5 = center)
+  x: number; // Horizontal position in framed graph space (0.5 = center)
+  y: number; // Vertical position in framed graph space (0.5 = center)
   angle: number; // Rotation in radians
   ratio: number; // Zoom level (smaller = more zoomed in)
 }
@@ -33,6 +33,8 @@ interface CameraState {
 | ------------------- | ------- | ----------------------------------------------------------------- |
 | `setState(partial)` | `this`  | Update state immediately. Emits `"updated"` event                 |
 | `updateState(fn)`   | `this`  | Update state using a function: `fn(currentState) => partialState` |
+
+Both of these functions emit an `"updated"` event after, but only if the state has effectively changed.
 
 ## Animation
 
@@ -56,7 +58,7 @@ camera.animate({ x: 0.5 }, { duration: 500 }, () => console.log("done"));
 
 ### Easing options
 
-Named easings: `"linear"`, `"quadraticIn"`, `"quadraticOut"`, `"quadraticInOut"`, `"cubicIn"`, `"cubicOut"`, `"cubicInOut"`
+Named: `"linear"`, `"quadraticIn"`, `"quadraticOut"`, `"quadraticInOut"`, `"cubicIn"`, `"cubicOut"`, `"cubicInOut"`, `"exponentialIn"`, `"exponentialOut"`, `"exponentialInOut"`
 
 Custom easing: any `(t: number) => number` function where `t` goes from 0 to 1.
 
@@ -71,11 +73,29 @@ Custom easing: any `(t: number) => number` function where `t` goes from 0 to 1.
 
 ## Lifecycle
 
-| Method      | Returns  | Description                                    |
-| ----------- | -------- | ---------------------------------------------- |
-| `enable()`  | `this`   | Enable camera updates                          |
-| `disable()` | `this`   | Disable all camera updates                     |
-| `copy()`    | `Camera` | Create an independent copy with the same state |
+| Method               | Returns  | Description                                                |
+| -------------------- | -------- | ---------------------------------------------------------- |
+| `enable()`           | `this`   | Enable camera updates                                      |
+| `disable()`          | `this`   | Disable all camera updates                                 |
+| `copy()`             | `Camera` | Create an independent copy with the same state             |
+| `Camera.from(state)` | `Camera` | Static: create a new camera initialized to the given state |
+
+## Interaction flags
+
+Fine-grained flags toggle what kind of state updates the camera accepts. They are honored by `validateState()`, so both
+direct `setState` calls and animations respect them.
+
+| Property          | Type      | Default | Description            |
+| ----------------- | --------- | ------- | ---------------------- |
+| `enabledZooming`  | `boolean` | `true`  | Accept `ratio` changes |
+| `enabledPanning`  | `boolean` | `true`  | Accept `x`/`y` changes |
+| `enabledRotation` | `boolean` | `true`  | Accept `angle` changes |
+
+## Custom state validation
+
+| Property | Type                                            | Default | Description                                                                                                                    |
+| -------- | ----------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `clean`  | `((state: CameraState) => CameraState) \| null` | `null`  | Optional hook applied inside `validateState()`. Receives the merged next state and returns a possibly constrained replacement. |
 
 ## Bounds
 

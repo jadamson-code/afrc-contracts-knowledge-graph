@@ -4,7 +4,8 @@ sidebar:
   label: State flags
 ---
 
-Sigma maintains state for every node, every edge, and the graph as a whole. State flags drive [conditional styles](/reference/style-value-types/) and can be read or updated at any time.
+Sigma maintains state for every node, every edge, and the graph as a whole. State flags drive
+[conditional styles](/reference/style-value-types/) and can be read or updated at any time.
 
 ## Node state
 
@@ -23,15 +24,13 @@ Default: all `false`.
 
 ```typescript
 interface BaseEdgeState {
-  isHovered: boolean; // Mouse is over this edge (requires enableEdgeEvents)
+  isHovered: boolean; // Mouse is over this edge (requires enableEdgeEvents for mouse-only hover, or labelEvents for label-driven hover)
   isHidden: boolean; // Edge is hidden from rendering
   isHighlighted: boolean; // Edge is highlighted
-  parallelIndex: number; // 0-based position in the parallel edge group
-  parallelCount: number; // Total edges between the same endpoints (1 when alone)
 }
 ```
 
-Default: all `false`, `parallelIndex: 0`, `parallelCount: 1`.
+Default: all `false`.
 
 ## Graph state
 
@@ -41,7 +40,7 @@ interface BaseGraphState {
   isPanning: boolean; // User is panning
   isZooming: boolean; // User is zooming
   isDragging: boolean; // User is dragging a node
-  hasHovered: boolean; // At least one node is hovered
+  hasHovered: boolean; // At least one node or edge is hovered
   hasHighlighted: boolean; // At least one node is highlighted
 }
 ```
@@ -52,7 +51,7 @@ Default: `isIdle: true`, all others `false`.
 
 ```typescript
 // Nodes
-renderer.getNodeState("node-1"); // → NS
+renderer.getNodeState("node-1");
 renderer.setNodeState("node-1", { isHighlighted: true }); // partial merge
 renderer.setNodesState(["n1", "n2"], { isHidden: true }); // batch
 
@@ -66,24 +65,21 @@ renderer.getGraphState();
 renderer.setGraphState({ hasActiveSubgraph: true });
 ```
 
-State updates automatically schedule a render. Call `refresh({ skipIndexation: true })` if you need the update to take effect immediately.
+State updates automatically schedule a render. Call `refresh({ skipIndexation: true })` if you need the update to take
+effect immediately.
 
 ## Custom state via TypeScript generics
 
 Extend the base interfaces to add your own state flags:
 
 ```typescript
-import type { BaseEdgeState, BaseGraphState, BaseNodeState } from "sigma/types";
-
-interface MyNodeState extends BaseNodeState {
-  isActive: boolean;
-}
-
-interface MyGraphState extends BaseGraphState {
-  hasActiveSubgraph: boolean;
-}
-
-const renderer = new Sigma<object, object, object, MyNodeState, BaseEdgeState, MyGraphState>(graph, container, {
+const renderer = new Sigma(graph, container, {
+  customNodeState: {
+    isActive: false,
+  },
+  customGraphState: {
+    hasActiveSubgraph: false,
+  },
   styles: {
     nodes: [
       { color: { attribute: "color" } },

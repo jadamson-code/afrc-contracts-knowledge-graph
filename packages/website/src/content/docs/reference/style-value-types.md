@@ -71,14 +71,14 @@ Maps a numeric attribute to a min/max output range.
 | `max`          | `number` | No       | Output maximum                           |
 | `minValue`     | `number` | No       | Input minimum (values below are clamped) |
 | `maxValue`     | `number` | No       | Input maximum (values above are clamped) |
-| `defaultValue` | `number` | No       | Fallback if attribute is missing         |
+| `defaultValue` | `number` | No       | Fallback if the attribute is missing.    |
 | `easing`       | `Easing` | No       | Interpolation curve (see below)          |
 
 ### Easing functions
 
 Named: `"linear"`, `"quadraticIn"`, `"quadraticOut"`, `"quadraticInOut"`, `"cubicIn"`, `"cubicOut"`, `"cubicInOut"`, `"exponentialIn"`, `"exponentialOut"`, `"exponentialInOut"`
 
-Custom: `(t: number) => number` where `t` is 0–1.
+Custom easing: any `(t: number) => number` function where `t` goes from 0 to 1.
 
 ## Function
 
@@ -93,6 +93,14 @@ Full control via a callback. Receives the element's attributes, state, graph sta
 ```
 
 Signature: `(attributes: A, state: S, graphState: GS, graph: AbstractGraph) => T`
+
+:::note
+Sigma does **static analysis** on the styles declaration, to identify dependencies between items, attributes and state
+fields. Using these custom functions instead prevents this static analysis, and will cause styles to be reevaluated much
+more often.
+
+In performance oriented applications that handle large graphs, you should try as much as possible to avoid those.
+:::
 
 ## Inline conditional
 
@@ -116,7 +124,8 @@ A concise conditional within a single property.
 
 ## Rule-level conditionals
 
-When you need to change multiple properties based on the same condition, use a rule-level conditional instead of inline conditionals on each property:
+When you need to change multiple properties based on the same condition, use a rule-level conditional instead of inline
+conditionals on each property:
 
 ```typescript
 styles: {
@@ -134,7 +143,8 @@ Rules are evaluated in order. Later rules override earlier ones for any properti
 
 ## Rule-level match
 
-When you need to apply different styles based on a categorical attribute (e.g. node type, edge kind), use a `matchData`/`cases` rule. It selects a style block based on the value of a graph attribute:
+When you need to apply different styles based on a categorical attribute (e.g. node type, edge kind), use a
+`matchData`/`cases` rule. It selects a style block based on the value of a graph attribute:
 
 ```typescript
 styles: {
@@ -156,15 +166,20 @@ styles: {
 | `matchData` | `string`                          | Yes      | Attribute name to read from the element       |
 | `cases`     | `Record<string, StyleProperties>` | Yes      | Mapping from attribute values to style blocks |
 
-If the attribute value doesn't match any case, the rule is skipped. Attribute values are coerced to strings for lookup (so a numeric attribute `2` matches the key `"2"`).
+If the attribute value doesn't match any case, the rule is skipped. Attribute values are coerced to strings for lookup
+(so a numeric attribute `2` matches the key `"2"`).
 
-Unlike function-based `when` predicates, `matchData`/`cases` only reads graph attributes, so sigma can skip re-evaluation when only the interaction state changes (e.g. hovering). This makes it the preferred approach for attribute-based branching on large graphs.
+Unlike function-based `when` predicates, `matchData`/`cases` only reads graph attributes, so sigma can skip
+re-evaluation when only the interaction state changes (e.g. hovering). This makes it the preferred approach for
+attribute-based branching on large graphs.
 
-There is also `matchState` for branching on a state key value (e.g. `matchState: "status"`).
+There is also `matchState` for branching on a **custom** state field. It takes a single state key
+(`matchState: "status"`) and looks up the value of that field in `cases`. It's intended for categorical values you add
+via the state generics (the built-in state flags are booleans and are better expressed with `whenState`).
 
 ## Predicates
 
-There are three kinds of predicates used in `whenState`/`whenData`/`when` and the `match*` variants.
+Predicates drive `whenState`/`whenData`/`when` (inline and rule-level conditionals) and the `match*` rule variants.
 
 **`whenState`** matches against element state flags:
 
@@ -174,10 +189,26 @@ There are three kinds of predicates used in `whenState`/`whenData`/`when` and th
 | Array  | `["isHovered", "isActive"]`            | ALL named flags are `true` (AND) |
 | Object | `{ isHovered: true, isActive: false }` | All specified values match       |
 
-**`whenData`** matches against graph attributes (same forms, but for attribute names/values). Re-evaluated only when graph data changes, not on interaction state changes.
+**`whenData`** matches against graph attributes (same forms, but for attribute names/values). Re-evaluated only when
+graph data changes, not on interaction state changes.
 
 **`when`** takes a function for full control:
 
 | Form     | Example                                    | Matches when                |
 | -------- | ------------------------------------------ | --------------------------- |
 | Function | `(attrs, state, graphState, graph) => ...` | The function returns `true` |
+
+:::note
+As stated above for style functions, using the `when` function predicates prevents static analysis, and will negatively
+impact performances.
+:::
+
+**`matchData`** / **`matchState`** branch to a case block by attribute or state value:
+
+| Form         | Example                                                     | Picks the case where                    |
+| ------------ | ----------------------------------------------------------- | --------------------------------------- |
+| `matchData`  | `{ matchData: "type", cases: { a: {...}, b: {...} } }`      | `attributes[type]` matches the case key |
+| `matchState` | `{ matchState: "status", cases: { ok: {...}, ko: {...} } }` | `state[status]` matches the case key    |
+
+Case keys are strings, and attribute/state values are coerced to strings for lookup. If no case matches, the rule is
+skipped.

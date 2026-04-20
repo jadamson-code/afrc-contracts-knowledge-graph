@@ -27,8 +27,8 @@ import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
 import { layerPlain } from "../layers";
 import { EDGE_ATTRIBUTE_TEXTURE_UNIT } from "../path-attribute-texture";
 import type { EdgeLabelOptions, EdgePath } from "../types";
-import { EdgeLabelProgram } from "./base";
-import type { EdgeLabelProgramType, EdgeLabelShaderConfig } from "./base";
+import { EdgeLabelProgram, resolveEdgeLabelShaderConfig } from "./base";
+import type { EdgeLabelProgramType } from "./base";
 import { GeneratedEdgeLabelShaders, generateEdgeLabelShaders } from "./generator";
 
 /**
@@ -121,27 +121,9 @@ export function createEdgeLabelProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: CreateEdgeLabelProgramOptions): EdgeLabelProgramType<N, E, G> {
-  const {
-    paths,
-    headLengthRatio = 0,
-    tailLengthRatio = 0,
-    color: labelColor,
-    position: labelPosition,
-    margin: labelMargin,
-    textBorder,
-    fontSizeMode = "fixed",
-    minVisibilityThreshold = 0.7,
-    fullVisibilityThreshold = 0.8,
-  } = options;
-
-  const labelShaderConfig: EdgeLabelShaderConfig = {
-    paths,
-    headLengthRatio,
-    tailLengthRatio,
-    fontSizeMode,
-    minVisibilityThreshold,
-    fullVisibilityThreshold,
-  };
+  const { color: labelColor, position: labelPosition, margin: labelMargin, textBorder } = options;
+  const labelShaderConfig = resolveEdgeLabelShaderConfig(options);
+  const { paths, fontSizeMode, minVisibilityThreshold, fullVisibilityThreshold } = labelShaderConfig;
 
   const hasBorder = !!textBorder;
 
@@ -176,21 +158,10 @@ export function createEdgeLabelProgram<
       return generated;
     }
 
-    /** Resolved shader config — the single source of truth for companion
-     *  programs (e.g. label background) that must match this label's
-     *  body bounds, visibility ramp, and perpendicular offset. */
-    static readonly labelShaderConfig = labelShaderConfig;
-
-    /** Static reference to extremity ratios */
-    static readonly headLengthRatio = headLengthRatio;
-    static readonly tailLengthRatio = tailLengthRatio;
-
-    /** Static reference to label styling options (overrides settings when provided) */
+    /** Label styling statics read by the renderer to override data-supplied values. */
     static readonly labelColor = labelColor;
     static readonly labelPosition = labelPosition;
     static readonly labelMargin = labelMargin;
-    static readonly textBorder = textBorder;
-    static readonly fontSizeMode = fontSizeMode;
 
     // -----------------------------------------------------------------------
     // Instance Properties

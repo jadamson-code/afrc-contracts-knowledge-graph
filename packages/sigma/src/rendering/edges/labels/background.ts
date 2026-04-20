@@ -28,19 +28,11 @@ import type Sigma from "../../../sigma";
 import type { RenderParams } from "../../../types";
 import { ItemAttributeTexture, computeAttributeLayout } from "../../data-texture";
 import { Program } from "../../program";
-import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../../shapes";
 import { InstancedProgramDefinition, ProgramInfo, numberToGLSLFloat } from "../../utils";
 import { layerPlain } from "../layers";
 import { EDGE_ATTRIBUTE_TEXTURE_UNIT, generateEdgeAttributeTextureFetch } from "../path-attribute-texture";
-import { generateNumericalTangentNormal, generatePathFallbacks } from "../shared-glsl";
-import type { EdgeLabelProgramType, EdgeLabelShaderConfig } from "./base";
-import {
-  EDGE_LABEL_BODY_BOUNDS_GLSL,
-  EDGE_LABEL_PERP_OFFSET_GLSL,
-  generateAllClampFunctions,
-  generateEdgeLabelAlphaGlsl,
-  generatePathSelector,
-} from "./shared-shader-glsl";
+import type { EdgeLabelShaderConfig } from "./base";
+import { generateEdgeLabelShaderPreamble } from "./shared-shader-glsl";
 
 const ATLAS_FONT_SIZE = DEFAULT_SDF_ATLAS_OPTIONS.fontSize;
 
@@ -88,18 +80,6 @@ function generateVertexShader(config: EdgeLabelShaderConfig): string {
   const attributeLayout = computeAttributeLayout([...paths, layer]);
   const textureFetch = generateEdgeAttributeTextureFetch(attributeLayout);
 
-  const pathGlsl = paths
-    .map(
-      (p) => `// Path: ${p.name}
-${p.glsl}
-
-${p.analyticalTangentGlsl || generateNumericalTangentNormal(p.name)}
-
-${generatePathFallbacks(p.name, p.glsl)}
-`,
-    )
-    .join("\n");
-
   return /*glsl*/ `#version 300 es
 
 // Per-instance attributes
@@ -146,29 +126,8 @@ ${textureFetch.vertexVaryingDeclarations.replace(/out /g, "")}
 float v_sourceNodeSize;
 float v_targetNodeSize;
 
-// Node shape SDFs (required by binary-search clamp functions)
-${getAllShapeGLSL()}
-${generateShapeSelectorGLSL()}
-
-// Path functions
-${pathGlsl}
-
-// Path selectors (dispatch by pathId)
-${generatePathSelector(paths, "queryPathPosition", "position", "vec2", "float t, vec2 source, vec2 target", "t, source, target")}
-
-${generatePathSelector(paths, "queryPathTangent", "tangent", "vec2", "float t, vec2 source, vec2 target", "t, source, target")}
-
-${generatePathSelector(paths, "queryPathLength", "length", "float", "vec2 source, vec2 target", "source, target")}
-
-${generatePathSelector(paths, "queryPathTAtDistance", "t_at_distance", "float", "float dist, vec2 source, vec2 target", "dist, source, target")}
-
-// Node clamp (binary search where path exits source / enters target)
-${generateAllClampFunctions(paths)}
-
-// Shared edge-label helpers (body bounds, alpha ramp, perpendicular offset)
-${EDGE_LABEL_BODY_BOUNDS_GLSL}
-${generateEdgeLabelAlphaGlsl(minVisibilityThreshold, fullVisibilityThreshold)}
-${EDGE_LABEL_PERP_OFFSET_GLSL}
+// Shared preamble: shape SDFs, path functions + selectors, clamp, helpers.
+${generateEdgeLabelShaderPreamble({ paths, minVisibilityThreshold, fullVisibilityThreshold })}
 
 void main() {
   int vIdx = int(a_vertexIndex);
@@ -356,30 +315,25 @@ export type EdgeLabelBackgroundProgramType<
 // Factory
 // ============================================================================
 
-export interface CreateEdgeLabelBackgroundProgramOptions<
-  N extends Attributes = Attributes,
-  E extends Attributes = Attributes,
-  G extends Attributes = Attributes,
-> {
+export interface CreateEdgeLabelBackgroundProgramOptions {
   /**
-   * The edge label program class this background pairs with. Its
-   * `labelShaderConfig` static is the single source of truth for paths,
-   * extremity ratios, font size mode, and visibility thresholds — the
-   * background must match these exactly or the ribbon misaligns.
+   * Resolved shader config shared with the paired edge label program. The
+   * outer edge factory builds it once via `resolveEdgeLabelShaderConfig`
+   * and hands the same object to both sub-factories — they cannot drift.
    */
-  labelProgram: EdgeLabelProgramType<N, E, G>;
+  shaderConfig: EdgeLabelShaderConfig;
 }
 
 export function createEdgeLabelBackgroundProgram<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
->(options: CreateEdgeLabelBackgroundProgramOptions<N, E, G>): EdgeLabelBackgroundProgramType<N, E, G> {
-  const shaderConfig = options.labelProgram.labelShaderConfig;
+>(options: CreateEdgeLabelBackgroundProgramOptions): EdgeLabelBackgroundProgramType<N, E, G> {
+  const { shaderConfig } = options;
   const { paths, fontSizeMode } = shaderConfig;
 
   if (paths.length === 0) {
-    throw new Error("createEdgeLabelBackgroundProgram: labelProgram must declare at least one path");
+    throw new Error("createEdgeLabelBackgroundProgram: shaderConfig must declare at least one path");
   }
 
   // Factory-level, closure-captured state. `getDefinition()` runs inside the

@@ -29,6 +29,7 @@ import {
   type EdgeLabelProgramType,
   createEdgeLabelBackgroundProgram,
   createEdgeLabelProgram,
+  resolveEdgeLabelShaderConfig,
 } from "./labels";
 import { EDGE_ATTRIBUTE_TEXTURE_UNIT } from "./path-attribute-texture";
 import {
@@ -558,24 +559,26 @@ export function createEdgeProgram<
     }
   };
 
-  // Create and attach the label program for this edge type
-  // This allows WebGL edge label rendering that follows all path types
+  // Collect the flat options used by both the label factory and the shader
+  // config. Single object keeps the two factory calls in lockstep.
   const defaultHeadExtremity = extremities[defaultHeadIndex];
   const defaultTailExtremity = extremities[defaultTailIndex];
-  const LabelProgramClass = createEdgeLabelProgram({
-    paths, // Pass all paths for multi-path support
-    // Pass extremity length ratios so labels know where the edge body starts/ends
+  const labelFactoryOptions = {
+    paths,
     headLengthRatio: !isAttributeSource(defaultHeadExtremity.length) ? defaultHeadExtremity.length : 0,
     tailLengthRatio: !isAttributeSource(defaultTailExtremity.length) ? defaultTailExtremity.length : 0,
-    // Pass label styling options from EdgeProgramOptions (spread since interfaces match)
     ...options.label,
-  });
+  };
+  const labelShaderConfig = resolveEdgeLabelShaderConfig(labelFactoryOptions);
+
+  // Create and attach the label program (SDF text along the edge path).
+  const LabelProgramClass = createEdgeLabelProgram(labelFactoryOptions);
   (EdgeProgramClass as unknown as { LabelProgram: EdgeLabelProgramType }).LabelProgram = LabelProgramClass;
 
-  // Create and attach the label background program (ribbon that follows the
-  // edge path). It reads its shader config from the label program so the two
-  // cannot drift.
-  const LabelBackgroundProgramClass = createEdgeLabelBackgroundProgram({ labelProgram: LabelProgramClass });
+  // Create and attach the label background program (ribbon behind the text).
+  // Both programs consume the same resolved shader config, so the ribbon
+  // cannot drift from the text it pairs with.
+  const LabelBackgroundProgramClass = createEdgeLabelBackgroundProgram({ shaderConfig: labelShaderConfig });
   (EdgeProgramClass as unknown as { LabelBackgroundProgram: EdgeLabelBackgroundProgramType }).LabelBackgroundProgram =
     LabelBackgroundProgramClass;
 

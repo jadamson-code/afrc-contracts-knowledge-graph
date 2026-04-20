@@ -680,7 +680,7 @@ export class LabelRenderer<
    */
   renderEdgeLabelBackgrounds(params: RenderParams, depth?: string): void {
     const { edgeLabelBackgroundProgram, edgeLabelProgram, edgeDataCache, primitives, edgeDataTexture } = this.internals;
-    if (!edgeLabelBackgroundProgram || !edgeDataTexture) return;
+    if (!edgeLabelBackgroundProgram || !edgeLabelProgram || !edgeDataTexture) return;
 
     const defaultEdgeLabelMargin = primitives?.edges?.label?.margin ?? 5;
     const defaultEdgeLabelPosition = "over" as const;
@@ -703,9 +703,7 @@ export class LabelRenderer<
       const edgeData = edgeDataCache[edge];
       const text = edgeData.label!;
       // Measure in atlas units (the unit consumed by the shader).
-      const totalTextWidth = edgeLabelProgram?.measureLabelAtlasWidth
-        ? edgeLabelProgram.measureLabelAtlasWidth(text)
-        : text.length * 30;
+      const totalTextWidth = edgeLabelProgram.measureLabelAtlasWidth(text);
 
       const position = edgeData.labelPosition ?? defaultEdgeLabelPosition;
       const positionMode = typeof position === "string" ? (EDGE_POSITION_MODE_MAP[position] ?? 0) : 0;

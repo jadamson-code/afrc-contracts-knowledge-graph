@@ -14,8 +14,14 @@
  *
  * @module
  */
+import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../../shapes";
 import { numberToGLSLFloat } from "../../utils";
-import { generateFindSourceClampT, generateFindTargetClampT } from "../shared-glsl";
+import {
+  generateFindSourceClampT,
+  generateFindTargetClampT,
+  generateNumericalTangentNormal,
+  generatePathFallbacks,
+} from "../shared-glsl";
 import type { EdgePath } from "../types";
 
 /**
@@ -168,3 +174,106 @@ float computeEdgeLabelPerpOffset(
   return 0.0;
 }
 `;
+
+/**
+ * Emits the GLSL preamble shared by edge label shaders (both the SDF text
+ * shader and the ribbon background shader). Covers everything between the
+ * attribute/uniform declarations and `main()`: shape SDFs, per-path
+ * functions, path-query selectors, clamp functions, and the three helpers
+ * above. A single source of truth so the two shaders cannot drift on body
+ * bounds, path sampling, or visibility ramp.
+ *
+ * Expects the caller to have declared `v_sourceNodeSize` / `v_targetNodeSize`
+ * and any path-attribute varyings (e.g. `v_curvature`) before splicing this
+ * in, since some path functions read them.
+ */
+export interface EdgeLabelShaderPreambleOptions {
+  paths: EdgePath[];
+  minVisibilityThreshold: number;
+  fullVisibilityThreshold: number;
+}
+
+export function generateEdgeLabelShaderPreamble(options: EdgeLabelShaderPreambleOptions): string {
+  const { paths, minVisibilityThreshold, fullVisibilityThreshold } = options;
+  const hasAnySharpCorners = paths.some((p) => p.hasSharpCorners);
+
+  const pathGlsl = paths
+    .map(
+      (p) => `// --- Path: ${p.name} ---
+${p.glsl}
+
+// Tangent/normal functions: analytical if provided, otherwise numerical
+${p.analyticalTangentGlsl || generateNumericalTangentNormal(p.name)}
+
+// Auto-generated fallbacks for any missing path functions
+${generatePathFallbacks(p.name, p.glsl)}
+
+// Corner skip helpers (for paths with sharp corners like step/taxi)
+${p.cornerSkipGlsl || ""}
+`,
+    )
+    .join("\n");
+
+  const sharpCornersDispatch = hasAnySharpCorners
+    ? `// Corner function selectors (only some paths have sharp corners)
+vec2 queryGetCornerTs(int pathId, vec2 source, vec2 target) {
+  switch (pathId) {
+${paths.map((p, i) => (p.hasSharpCorners ? `    case ${i}: return path_${p.name}_getCornerTs(source, target);` : `    case ${i}: return vec2(-1.0, -1.0); // No corners for ${p.name}`)).join("\n")}
+    default: return vec2(-1.0, -1.0);
+  }
+}
+
+vec2 queryGetCornerConcavity(int pathId, vec2 source, vec2 target, float perpOffset) {
+  switch (pathId) {
+${paths.map((p, i) => (p.hasSharpCorners ? `    case ${i}: return path_${p.name}_getCornerConcavity(source, target, perpOffset);` : `    case ${i}: return vec2(0.0, 0.0); // No corners for ${p.name}`)).join("\n")}
+    default: return vec2(0.0, 0.0);
+  }
+}`
+    : "";
+
+  return /*glsl*/ `
+// ============================================================================
+// Node Shape SDFs (for binary-search clamp)
+// ============================================================================
+
+${getAllShapeGLSL()}
+
+${generateShapeSelectorGLSL()}
+
+// ============================================================================
+// Path Functions (one block per path)
+// ============================================================================
+
+${pathGlsl}
+
+// ============================================================================
+// Path Query Selectors (dispatch by pathId)
+// ============================================================================
+
+${generatePathSelector(paths, "queryPathPosition", "position", "vec2", "float t, vec2 source, vec2 target", "t, source, target")}
+
+${generatePathSelector(paths, "queryPathTangent", "tangent", "vec2", "float t, vec2 source, vec2 target", "t, source, target")}
+
+${generatePathSelector(paths, "queryPathNormal", "normal", "vec2", "float t, vec2 source, vec2 target", "t, source, target")}
+
+${generatePathSelector(paths, "queryPathLength", "length", "float", "vec2 source, vec2 target", "source, target")}
+
+${generatePathSelector(paths, "queryPathTAtDistance", "t_at_distance", "float", "float dist, vec2 source, vec2 target", "dist, source, target")}
+
+${sharpCornersDispatch}
+
+// ============================================================================
+// Binary Search Clamp Functions (find where path exits source / enters target)
+// ============================================================================
+
+${generateAllClampFunctions(paths)}
+
+// ============================================================================
+// Shared helpers (body bounds, alpha ramp, perpendicular offset)
+// ============================================================================
+
+${EDGE_LABEL_BODY_BOUNDS_GLSL}
+${generateEdgeLabelAlphaGlsl(minVisibilityThreshold, fullVisibilityThreshold)}
+${EDGE_LABEL_PERP_OFFSET_GLSL}
+`;
+}

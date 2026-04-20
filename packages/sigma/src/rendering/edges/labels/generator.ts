@@ -20,19 +20,11 @@
  */
 import { DEFAULT_SDF_ATLAS_OPTIONS } from "../../../core/sdf-atlas";
 import { computeAttributeLayout } from "../../data-texture";
-import { generateShapeSelectorGLSL, getAllShapeGLSL } from "../../shapes";
 import { numberToGLSLFloat } from "../../utils";
 import { layerPlain } from "../layers";
 import { generateEdgeAttributeTextureFetch } from "../path-attribute-texture";
-import { generateNumericalTangentNormal, generatePathFallbacks } from "../shared-glsl";
 import { EdgePath } from "../types";
-import {
-  EDGE_LABEL_BODY_BOUNDS_GLSL,
-  EDGE_LABEL_PERP_OFFSET_GLSL,
-  generateAllClampFunctions,
-  generateEdgeLabelAlphaGlsl,
-  generatePathSelector,
-} from "./shared-shader-glsl";
+import { generateEdgeLabelShaderPreamble } from "./shared-shader-glsl";
 
 // Atlas font size constant - used for converting glyph units to screen pixels
 const ATLAS_FONT_SIZE = DEFAULT_SDF_ATLAS_OPTIONS.fontSize;
@@ -200,82 +192,8 @@ ${textureFetch.vertexVaryingDeclarations.replace(/out /g, "")}
 float v_sourceNodeSize;
 float v_targetNodeSize;
 
-// ============================================================================
-// Node Shape SDFs (for binary search)
-// ============================================================================
-
-${getAllShapeGLSL()}
-
-// Shape selector function
-${generateShapeSelectorGLSL()}
-
-// ============================================================================
-// Path Functions (all paths for multi-path support)
-// ============================================================================
-
-${paths
-  .map(
-    (p) => `// --- Path: ${p.name} ---
-${p.glsl}
-
-// Tangent/normal functions: use analytical if provided, otherwise numerical
-${p.analyticalTangentGlsl || generateNumericalTangentNormal(p.name)}
-
-// Auto-generated fallbacks for any missing path functions
-${generatePathFallbacks(p.name, p.glsl)}
-
-// Corner skip helpers (for paths with sharp corners like step/taxi)
-${p.cornerSkipGlsl || ""}
-`,
-  )
-  .join("\n")}
-
-// ============================================================================
-// Path Selector Functions (dispatch based on pathId)
-// ============================================================================
-
-${generatePathSelector(paths, "queryPathPosition", "position", "vec2", "float t, vec2 source, vec2 target", "t, source, target")}
-
-${generatePathSelector(paths, "queryPathTangent", "tangent", "vec2", "float t, vec2 source, vec2 target", "t, source, target")}
-
-${generatePathSelector(paths, "queryPathNormal", "normal", "vec2", "float t, vec2 source, vec2 target", "t, source, target")}
-
-${generatePathSelector(paths, "queryPathLength", "length", "float", "vec2 source, vec2 target", "source, target")}
-
-${generatePathSelector(paths, "queryPathTAtDistance", "t_at_distance", "float", "float dist, vec2 source, vec2 target", "dist, source, target")}
-
-${
-  hasAnySharpCorners
-    ? `// Corner function selectors (only some paths have sharp corners)
-vec2 queryGetCornerTs(int pathId, vec2 source, vec2 target) {
-  switch (pathId) {
-${paths.map((p, i) => (p.hasSharpCorners ? `    case ${i}: return path_${p.name}_getCornerTs(source, target);` : `    case ${i}: return vec2(-1.0, -1.0); // No corners for ${p.name}`)).join("\n")}
-    default: return vec2(-1.0, -1.0);
-  }
-}
-
-vec2 queryGetCornerConcavity(int pathId, vec2 source, vec2 target, float perpOffset) {
-  switch (pathId) {
-${paths.map((p, i) => (p.hasSharpCorners ? `    case ${i}: return path_${p.name}_getCornerConcavity(source, target, perpOffset);` : `    case ${i}: return vec2(0.0, 0.0); // No corners for ${p.name}`)).join("\n")}
-    default: return vec2(0.0, 0.0);
-  }
-}`
-    : ""
-}
-
-// ============================================================================
-// Binary Search Functions (from shared-glsl.ts)
-// ============================================================================
-
-${generateAllClampFunctions(paths)}
-
-// ============================================================================
-// Shared edge-label helpers (body bounds, alpha ramp, perpendicular offset)
-// ============================================================================
-
-${EDGE_LABEL_BODY_BOUNDS_GLSL}
-${generateEdgeLabelAlphaGlsl(minVisibilityThreshold, fullVisibilityThreshold)}
-${EDGE_LABEL_PERP_OFFSET_GLSL}
+// Shared preamble: shape SDFs, path functions + selectors, clamp, helpers.
+${generateEdgeLabelShaderPreamble({ paths, minVisibilityThreshold, fullVisibilityThreshold })}
 
 // ============================================================================
 // Main

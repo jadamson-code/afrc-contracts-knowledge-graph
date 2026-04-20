@@ -4,18 +4,17 @@
 
 ![Sigma.js](packages/website/public/img/logo-sigma-text.svg)
 
-**[Website](https://www.v4.sigmajs.org/)** | **[Documentation](https://www.v4.sigmajs.org/docs)** | <strong><a rel="me" href="https://vis.social/@sigmajs">Mastodon</a></strong>
+**[Website](https://v4.sigmajs.org/)** | **[Documentation](https://v4.sigmajs.org/docs)** | <strong><a rel="me" href="https://vis.social/@sigmajs">Mastodon</a></strong>
 
 ---
 
-[Sigma.js](https://www.v4.sigmajs.org) is an open-source JavaScript library aimed at visualizing graphs of thousands of
-nodes and edges using WebGL, mainly developed by [@jacomyal](https://github.com/jacomyal) and
-[@Yomguithereal](https://github.com/Yomguithereal), and built on top of [graphology](https://graphology.github.io/).
+[Sigma.js](https://v4.sigmajs.org) is an open-source JavaScript library aimed at visualizing graphs of thousands of
+nodes and edges using WebGL, and built on top of [graphology](https://graphology.github.io/).
 
-> **Note:** This branch tracks sigma v4, currently published as `4.0.0-alpha`. The stable v3 release is on the
+> **Note:** This branch tracks sigma v4, currently published as `4.0.0-alpha.x`. The stable v3 release is on the
 > [`main`](https://github.com/jacomyal/sigma.js/tree/main) branch.
 
-## How to use in your project
+## Usage
 
 To integrate sigma into your project, follow these simple steps:
 
@@ -56,41 +55,51 @@ Sigma ships as a family of packages living in this monorepo. Install only what y
 - [`@sigma/export-image`](packages/export-image): captures snapshots of sigma instances as images
 - [`@sigma/utils`](packages/utils): utility functions to ease sigma usage
 
-## How to develop locally
+## Resources
+
+- **GitHub Project:** The source code and collaborative development efforts for Sigma.js are hosted on
+  [GitHub](https://github.com/jacomyal/sigma.js).
+- **Website:** The official website, [v4.sigmajs.org](https://v4.sigmajs.org), showcases the library's capabilities.
+- **Documentation:** A detailed documentation is available at [v4.sigmajs.org/docs](https://v4.sigmajs.org/docs). It
+  provides extensive guides, interactive examples, and API references for users.
+
+## Local development
 
 To run the website locally:
 
 ```bash
-git clone git@github.com:jacomyal/sigma.js.git
+git clone https://github.com/jacomyal/sigma.js.git
 cd sigma.js
 npm install
 npm run start
 ```
 
-This will open the website in your web browser, which live reloads when you modify the examples or the package sources.
+This will open the website in your web browser (including all its live examples), which live reloads when you modify the
+examples or the package sources.
 
-## Resources
+## Contributing
 
-- **GitHub Project:** The source code and collaborative development efforts for Sigma.js are hosted on [GitHub](https://github.com/jacomyal/sigma.js).
-- **Website:** The official website, [v4.sigmajs.org](https://v4.sigmajs.org), kindly designed by [Robin de Mourat](https://github.com/robindemourat/)
-  from the [Sciences-Po médialab](https://medialab.sciencespo.fr/en/) team, showcases the library's capabilities.
-- **Documentation:** A detailed documentation is available at [v4.sigmajs.org/docs](https://v4.sigmajs.org/docs). It
-  provides extensive guides, interactive examples, and API references for users.
-
-## How to contribute
-
-You can contribute by submitting [issues tickets](http://github.com/jacomyal/sigma.js/issues) and proposing
-[pull requests](http://github.com/jacomyal/sigma.js/pulls). Make sure that tests and linting pass before submitting any
+You can contribute by submitting [issues tickets](https://github.com/jacomyal/sigma.js/issues) and proposing
+[pull requests](https://github.com/jacomyal/sigma.js/pulls). Make sure that tests and linting pass before submitting any
 pull request.
 
-You can also browse the related documentation [here](https://github.com/jacomyal/sigma.js/tree/main/CONTRIBUTING.md).
+You can also browse the related [CONTRIBUTING.md](CONTRIBUTING.md) guide.
 
-## How to start a new package
+## Team and sponsors
 
-Run `npm run createPackage` from the project root. It will:
+Sigma is developed by [Alexis Jacomy](https://github.com/jacomyal) and [Benoît Simard](https://github.com/sim51) at
+[OuestWare](https://www.ouestware.com/en/), together with [Guillaume Plique](https://github.com/Yomguithereal) from
+the [Sciences Po médialab](https://medialab.sciencespo.fr/en/), who also maintains
+[graphology](https://graphology.github.io/).
 
-- Ask you the new package name
-- Copy the `packages/template` folder
-- Update the new package `package.json` entries (name, description, exports)
-- Update various other files (buildable packages list in `tsconfig.json`, Preconstruct compatible packages list in
-  `package.json`...)
+The project was initially supported by Sciences Po médialab through the v1 and v2 development. OuestWare has provided
+continuous support since, and [G.V()](https://gdotv.com/) actively sponsored the v3 and v4 development. The current
+website was designed by [Robin de Mourat](https://github.com/robindemourat/).
+
+Since v4, sigma's development also includes help from LLMs. They are used to draft mechanical code (particularly shader
+and boilerplate-heavy parts), while the architecture, API design, and core logic remain human-authored.
+
+## Professional support
+
+[OuestWare](https://www.ouestware.com/en/) offers professional support, custom development, and consulting around
+sigma. Reach out at [contact@ouestware.com](mailto:contact@ouestware.com).

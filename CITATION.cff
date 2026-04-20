@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: "Sigma.js: a JavaScript library for graph visualization"
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Alexis
+    family-names: Jacomy
+    orcid: "https://orcid.org/0009-0008-3797-2985"
+    affiliation: OuestWare
+  - given-names: Guillaume
+    family-names: Plique
+    orcid: "https://orcid.org/0000-0003-4916-8472"
+    affiliation: médialab - Sciences Po
+repository-code: "https://github.com/jacomyal/sigma.js"
+url: "https://www.sigmajs.org"
+keywords:
+  - graph visualization
+  - webgl
+  - javascript
+license: MIT

@@ -21,7 +21,7 @@ for (const id of EXAMPLES) {
     // Allow WebGL rendering to complete
     await page.waitForTimeout(500);
     await expect(page).toHaveScreenshot(`${id}.png`, {
-      maxDiffPixelRatio: 0.01,
+      maxDiffPixelRatio: 0.001,
     });
   });
 }

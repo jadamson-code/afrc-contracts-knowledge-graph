@@ -423,7 +423,7 @@ const DEFAULT_NODE_DISPLAY_DATA: Partial<NodeDisplayData> = {
   label: "",
   labelColor: "#000",
   labelSize: 12,
-  labelFont: "Arial, sans-serif",
+  labelFont: "sans-serif",
   labelVisibility: "auto",
   labelPosition: "right",
   labelAngle: 0,

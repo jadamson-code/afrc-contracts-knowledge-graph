@@ -20,7 +20,18 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1280, height: 720 },
+        deviceScaleFactor: 1,
+        // Pin the WebGL stack to SwiftShader so snapshots are identical across
+        // machines (local dev, CI, contributors). Without this, rendering goes
+        // through each host's GPU driver and alpha-heavy scenes diverge by a
+        // few percent of pixels.
+        launchOptions: {
+          args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--disable-gpu"],
+        },
+      },
     },
   ],
 

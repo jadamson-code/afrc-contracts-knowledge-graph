@@ -26,31 +26,34 @@ const GRAPH: Pick<SerializedGraph, "nodes" | "edges"> = {
   edges: [{ source: "n1", target: "n2" }],
 };
 
-beforeEach<SigmaTestContext>(async (context) => {
-  const graph = new Graph();
-  graph.import(GRAPH);
-  const container = createElement("div", { width: `${STAGE_WIDTH}px`, height: `${STAGE_HEIGHT}px` }) as HTMLDivElement;
-  document.body.append(container);
-
-  context.sigma = new Sigma(graph, container, {
-    settings: {
-      zoomDuration: 30,
-      inertiaDuration: 30,
-      doubleClickZoomingDuration: 30,
-      doubleClickTimeout: 5000,
-    },
-  });
-  context.graph = graph;
-  context.container = container;
-  context.target = context.sigma.getMouseLayer();
-});
-
-afterEach<SigmaTestContext>(async ({ sigma }) => {
-  sigma.kill();
-  sigma.getContainer().remove();
-});
-
 describe("Sigma interaction events", () => {
+  beforeEach<SigmaTestContext>(async (context) => {
+    const graph = new Graph();
+    graph.import(GRAPH);
+    const container = createElement("div", {
+      width: `${STAGE_WIDTH}px`,
+      height: `${STAGE_HEIGHT}px`,
+    }) as HTMLDivElement;
+    document.body.append(container);
+
+    context.sigma = new Sigma(graph, container, {
+      settings: {
+        zoomDuration: 30,
+        inertiaDuration: 30,
+        doubleClickZoomingDuration: 30,
+        doubleClickTimeout: 5000,
+      },
+    });
+    context.graph = graph;
+    context.container = container;
+    context.target = context.sigma.getMouseLayer();
+  });
+
+  afterEach<SigmaTestContext>(async ({ sigma }) => {
+    sigma.kill();
+    sigma.getContainer().remove();
+  });
+
   test<SigmaTestContext>('it should trigger the events "downNode", "upNode", "clickNode", "downNode", "upNode" and finally "doubleClickNode" when double clicking a node with the mouse', async ({
     sigma,
     graph,
@@ -230,11 +233,16 @@ describe("Sigma label events", () => {
     }) as HTMLDivElement;
     document.body.append(container);
 
-    context.sigma = new Sigma(graph, container, {
+    const sigma = new Sigma(graph, container, {
       settings: {
         renderLabels: true,
         renderEdgeLabels: true,
         labelEvents: "separate",
+        // Tests click the same container multiple times to scan label hitboxes.
+        // A tiny doubleClickTimeout keeps each click standalone; otherwise
+        // consecutive clicks collapse into a double-click and clickLabel
+        // never fires.
+        doubleClickTimeout: 0,
       },
       nodeReducer: (_key, data) => ({
         ...data,
@@ -247,10 +255,12 @@ describe("Sigma label events", () => {
         labelBackgroundColor: "#eee",
       }),
     });
+    context.sigma = sigma;
     context.graph = graph;
     context.container = container;
-    // Let the first frame paint so the picking framebuffer is populated.
-    await wait(50);
+    // Wait for the first full frame so the picking framebuffer is populated.
+    // A bare timeout is flaky under heavy parallel test load.
+    await new Promise<void>((resolve) => sigma.once("afterRender", () => resolve()));
   });
 
   afterEach<LabelEventContext>(async ({ sigma }) => {

@@ -6,8 +6,8 @@
  *
  * Run with: npx vitest typecheck
  */
+import { layerFill, layerPlain, pathLine, sdfCircle } from "sigma/rendering";
 import { defineSigmaOptions } from "sigma/types";
-import { sdfCircle, layerFill, pathLine, layerPlain } from "sigma/rendering";
 import { describe, test } from "vitest";
 
 // NOTE: We intentionally DO NOT import satellite packages here.

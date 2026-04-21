@@ -6,8 +6,14 @@
  *
  * @module
  */
+import {
+  FactoryOptionsFromSchema,
+  ResolvedOptionsFromSchema,
+  enumProp,
+  numberProp,
+  stringProp,
+} from "sigma/primitives";
 import { FragmentLayer, SDFShape, layerFill, sdfCircle } from "sigma/rendering";
-import { enumProp, FactoryOptionsFromSchema, ResolvedOptionsFromSchema, numberProp, stringProp } from "sigma/primitives";
 
 import { DEFAULT_TEXTURE_MANAGER_OPTIONS, TextureManager, TextureManagerOptions } from "./texture";
 

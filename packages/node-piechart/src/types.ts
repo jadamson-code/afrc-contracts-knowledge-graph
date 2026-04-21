@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { arrayProp, colorProp, FactoryOptionsFromSchema, numberProp } from "sigma/primitives";
+import { FactoryOptionsFromSchema, arrayProp, colorProp, numberProp } from "sigma/primitives";
 
 /**
  * Schema for the piechart layer.

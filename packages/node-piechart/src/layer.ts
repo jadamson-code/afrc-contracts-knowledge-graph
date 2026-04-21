@@ -90,7 +90,9 @@ function generatePiechartGLSL(slices: NonNullable<LayerPiechartOptions["slices"]
   // Generate value assignments
   const valueAssignments = slices
     .map(({ value }, i) => {
-      const valueGLSL = isAttributeValue(value) ? `v_sliceValue_${i + 1}` : numberToGLSLFloat(typeof value === "number" ? value : 1);
+      const valueGLSL = isAttributeValue(value)
+        ? `v_sliceValue_${i + 1}`
+        : numberToGLSLFloat(typeof value === "number" ? value : 1);
       return `  float sliceValue_${i + 1} = ${valueGLSL};`;
     })
     .join("\n");
@@ -100,10 +102,14 @@ function generatePiechartGLSL(slices: NonNullable<LayerPiechartOptions["slices"]
 
   // Generate angle calculations and color selection
   const angleCalculations = slices
-    .map((_, i) => `    float angle_${i + 1} = angle_${i} + sliceValue_${i + 1} * ${numberToGLSLFloat(TWO_PI)} / total;`)
+    .map(
+      (_, i) => `    float angle_${i + 1} = angle_${i} + sliceValue_${i + 1} * ${numberToGLSLFloat(TWO_PI)} / total;`,
+    )
     .join("\n");
 
-  const colorSelections = slices.map((_, i) => `if (angle < angle_${i + 1}) color = sliceColor_${i + 1};`).join("\n    else ");
+  const colorSelections = slices
+    .map((_, i) => `if (angle < angle_${i + 1}) color = sliceColor_${i + 1};`)
+    .join("\n    else ");
 
   // Build the complete GLSL function
   // language=GLSL

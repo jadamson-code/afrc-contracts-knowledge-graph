@@ -9,7 +9,7 @@
 import { layerBorder } from "@sigma/node-border";
 import { layerImage } from "@sigma/node-image";
 import { layerPiechart } from "@sigma/node-piechart";
-import { sdfCircle, layerFill } from "sigma/rendering";
+import { layerFill, sdfCircle } from "sigma/rendering";
 import { defineSigmaOptions } from "sigma/types";
 import { describe, expectTypeOf, test } from "vitest";
 

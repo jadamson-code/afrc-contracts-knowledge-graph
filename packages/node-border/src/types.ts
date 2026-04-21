@@ -6,15 +6,8 @@
  *
  * @module
  */
+import { FactoryOptionsFromSchema, arrayProp, booleanProp, colorProp, enumProp, numberProp } from "sigma/primitives";
 import { SDFShape, sdfCircle } from "sigma/rendering";
-import {
-  arrayProp,
-  booleanProp,
-  colorProp,
-  enumProp,
-  FactoryOptionsFromSchema,
-  numberProp,
-} from "sigma/primitives";
 
 /**
  * Mode for border size specification.

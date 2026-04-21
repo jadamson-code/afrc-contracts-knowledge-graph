@@ -74,11 +74,15 @@ function generateBorderGLSL(borders: NonNullable<LayerBorderOptions["borders"]>)
   const nonFillSizesExpr = nonFillSizes || "0.0";
 
   // Generate fill border sizes
-  const fillSizeCalculations = borders.flatMap((b, i) => (b.fill ? [`  float borderSize_${i + 1} = fillBorderSize;`] : [])).join("\n");
+  const fillSizeCalculations = borders
+    .flatMap((b, i) => (b.fill ? [`  float borderSize_${i + 1} = fillBorderSize;`] : []))
+    .join("\n");
 
   // Generate cumulative boundary calculations (from outside to inside)
   // In SDF space: boundary_0 = 0.0 (shape edge), boundaries go negative (inside)
-  const boundaryCalculations = borders.map((_, i) => `  float boundary_${i + 1} = boundary_${i} - borderSize_${i + 1};`).join("\n");
+  const boundaryCalculations = borders
+    .map((_, i) => `  float boundary_${i + 1} = boundary_${i} - borderSize_${i + 1};`)
+    .join("\n");
 
   // Generate color assignments
   const colorAssignments = borders

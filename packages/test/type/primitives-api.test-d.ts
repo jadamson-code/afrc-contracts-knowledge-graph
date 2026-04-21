@@ -11,14 +11,14 @@
 import { borderSchema } from "@sigma/node-border";
 import { imageSchema } from "@sigma/node-image";
 import { piechartSchema } from "@sigma/node-piechart";
-// Import real schema helpers from sigma/primitives
-import { colorProp, enumProp, numberProp, stringProp } from "sigma/primitives";
-// Import defineSigmaOptions from sigma/types
-import { defineSigmaOptions } from "sigma/types";
-// Import factory functions
-import { sdfCircle, sdfSquare, sdfTriangle, layerFill, pathLine, layerPlain } from "sigma/rendering";
 import Graph from "graphology";
 import Sigma from "sigma";
+// Import real schema helpers from sigma/primitives
+import { colorProp, enumProp, numberProp, stringProp } from "sigma/primitives";
+// Import factory functions
+import { layerFill, layerPlain, pathLine, sdfCircle, sdfSquare, sdfTriangle } from "sigma/rendering";
+// Import defineSigmaOptions from sigma/types
+import { defineSigmaOptions } from "sigma/types";
 import { describe, expectTypeOf, test } from "vitest";
 
 // =============================================================================
@@ -381,9 +381,7 @@ describe("matchData/cases style rules", () => {
         },
       },
       styles: {
-        edges: [
-          { matchData: "type", cases: { dashed: { dashSize: 5, dashColor: "#f00" } } },
-        ],
+        edges: [{ matchData: "type", cases: { dashed: { dashSize: 5, dashColor: "#f00" } } }],
       },
     });
   });
@@ -391,9 +389,7 @@ describe("matchData/cases style rules", () => {
   test("matchData/cases with attribute binding in case values compiles", () => {
     new Sigma(graph, container, {
       styles: {
-        nodes: [
-          { matchData: "type", cases: { person: { size: { attribute: "score", min: 5, max: 50 } } } },
-        ],
+        nodes: [{ matchData: "type", cases: { person: { size: { attribute: "score", min: 5, max: 50 } } } }],
       },
     });
   });

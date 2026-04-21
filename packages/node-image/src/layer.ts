@@ -57,10 +57,7 @@ function getTextureUnitOffset(name: string): number {
  * Note: The u_atlas uniform is declared directly in the GLSL code because
  * the shader generator doesn't support sampler2D array uniforms properly.
  */
-function generateImageGLSL(
-  options: ResolvedSchemaOptions,
-  texturesCount: number,
-): string {
+function generateImageGLSL(options: ResolvedSchemaOptions, texturesCount: number): string {
   const { name, drawingMode, padding } = options;
   const paddingRatio = numberToGLSLFloat(1.0 + 2.0 * padding);
   const effectiveTexturesCount = Math.max(1, texturesCount);

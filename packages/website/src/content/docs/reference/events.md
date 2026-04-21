@@ -71,21 +71,29 @@ dragging should not stop when the mouse leaves the stage.
 
 ### Label events
 
-Label events fire for clicks and hovers over rendered labels. They are disabled by default, you can enable them with
-`labelEvents: "extend"` (fires alongside the parent node/edge events) or `labelEvents: "separate"` (labels become
-independent targets and don't bubble to their parent).
+Label events fire for clicks and hovers over rendered labels. They are disabled by default, and configured separately
+for node and edge labels via `nodeLabelEvents` and `edgeLabelEvents`. Each accepts:
 
-- **clickLabel**: label clicked
-- **rightClickLabel**: label right-clicked
-- **doubleClickLabel**: label double-clicked
-- **enterLabel**: mouse enters a label
-- **leaveLabel**: mouse leaves a label
+- `"extend"`: label hits are routed to the parent node/edge event (e.g. clicking a node's label fires `clickNode`).
+- `"separate"`: labels become independent targets and their own label events fire instead.
 
-Payload: `{ label: string, parentType: "node", parentKey: string, event, preventSigmaDefault() }`.
+Node and edge labels emit distinct events so handlers don't have to branch on a parent-type discriminator:
 
-:::note
-Only **node labels** events are implemented yet.
-:::
+#### Node label events (`nodeLabelEvents: "separate"`)
+
+- **clickNodeLabel**, **rightClickNodeLabel**, **doubleClickNodeLabel**
+- **downNodeLabel**, **upNodeLabel**
+- **enterNodeLabel**, **leaveNodeLabel**
+
+Payload: `{ node: string, event, preventSigmaDefault() }`.
+
+#### Edge label events (`edgeLabelEvents: "separate"`)
+
+- **clickEdgeLabel**, **rightClickEdgeLabel**, **doubleClickEdgeLabel**
+- **downEdgeLabel**, **upEdgeLabel**
+- **enterEdgeLabel**, **leaveEdgeLabel**
+
+Payload: `{ edge: string, event, preventSigmaDefault() }`.
 
 ## Lifecycle events
 

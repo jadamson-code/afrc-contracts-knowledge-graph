@@ -230,14 +230,7 @@ export const DEFAULT_EDGE_PRIMITIVES: Required<EdgePrimitives> = {
   label: {},
 };
 
-export const DEFAULT_DEPTH_LAYERS = [
-  "edges",
-  "edgeLabels",
-  "nodes",
-  "nodeLabels",
-  "topNodes",
-  "topNodeLabels",
-] as const;
+export const DEFAULT_DEPTH_LAYERS = ["edges", "nodes", "topEdges", "topNodes"] as const;
 
 export const DEFAULT_PRIMITIVES: Required<PrimitivesDeclaration> = {
   nodes: DEFAULT_NODE_PRIMITIVES,

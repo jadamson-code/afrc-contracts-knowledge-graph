@@ -130,16 +130,13 @@
         // for "normal" items:
         "edges",
         "nodes",
-        "nodeLabels",
         // an overlay to grey out hidden items (when there is an active graph):
         "overlay",
         // for the active subgraph:
         "activeEdges",
         "activeNodes",
-        "activeNodeLabels",
         // for the active node itself:
         "focusedNodes",
-        "focusedNodeLabels",
       ],
       nodes: {
         shapes: [sdfDiamond()],
@@ -189,14 +186,13 @@
           matchState: "status",
           cases: {
             normal: { depth: "nodes" },
-            active: { depth: "activeNodes", labelDepth: "activeNodeLabels" },
+            active: { depth: "activeNodes" },
           },
         },
         {
           when: (_attributes, { isHovered, isHighlighted }) => isHovered || isHighlighted,
           then: {
             depth: "focusedNodes",
-            labelDepth: "focusedNodeLabels",
             labelVisibility: "visible",
             labelAttachment: "authorInfo",
             backdropVisibility: "visible",

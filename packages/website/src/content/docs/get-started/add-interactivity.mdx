@@ -129,14 +129,11 @@ const renderer = new Sigma(graph, document.getElementById("container")!, {
       // Base graph
       "edges",
       "nodes",
-      "nodeLabels",
       // Active subgraph
       "activeEdges",
       "activeNodes",
-      "activeNodeLabels",
       // Hovered node
       "topNodes",
-      "topNodeLabels",
     ],
   },
   styles: {
@@ -145,7 +142,8 @@ const renderer = new Sigma(graph, document.getElementById("container")!, {
 });
 ```
 
-From there, the `depth` and `labelDepth` can refer to those values, directly in the styles:
+From there, `depth` can refer to those values, directly in the styles (each depth layer paints both the item and
+its label, in that order):
 
 ```typescript
 styles: {
@@ -153,11 +151,11 @@ styles: {
     // ...
     {
       whenState: "isActive",
-      then: { depth: "activeNodes", labelDepth: "activeNodeLabels" },
+      then: { depth: "activeNodes" },
     },
     {
       whenState: "isHovered",
-      then: { depth: "topNodes", labelDepth: "topNodeLabels" },
+      then: { depth: "topNodes" },
     },
   ],
   edges: [

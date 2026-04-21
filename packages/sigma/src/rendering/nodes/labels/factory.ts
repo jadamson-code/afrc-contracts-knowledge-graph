@@ -106,7 +106,6 @@ export function createLabelProgram<
   G extends Attributes = Attributes,
 >(options: CreateLabelProgramOptions): LabelProgramType<N, E, G> {
   const { rotateWithCamera = false, label: labelOptions = {}, shapes } = options;
-  const labelPosition = labelOptions.position ?? "right";
   const labelMargin = labelOptions.margin ?? 5;
   const zoomToLabelSizeRatioFunction = labelOptions.zoomToLabelSizeRatioFunction ?? (() => 1);
 
@@ -141,9 +140,6 @@ export function createLabelProgram<
 
     /** Static reference to the generated shader code */
     static readonly generatedShaders = generatedShaders;
-
-    /** Static reference to the label position */
-    static readonly labelPosition = labelPosition;
 
     /** Static reference to the label margin */
     static readonly labelMargin = labelMargin;

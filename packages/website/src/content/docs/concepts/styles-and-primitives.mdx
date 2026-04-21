@@ -90,7 +90,7 @@ new Sigma(graph, container, {
 
 ### Depth layers
 
-The `depthLayers` array controls the rendering order of elements. Elements assigned to a later depth layer render on top of earlier ones:
+The `depthLayers` array controls the rendering order of elements. Elements assigned to a later depth layer render on top of earlier ones. Within a depth layer, sigma always paints in the same order: edges, edge labels, nodes, node labels.
 
 ```typescript
 new Sigma(graph, container, {
@@ -98,12 +98,10 @@ new Sigma(graph, container, {
   primitives: {
     // Here are the default depth layers:
     depthLayers: [
-      "edges", // Background edges
-      "edgeLabels", // Edge labels
-      "nodes", // Regular nodes
-      "nodeLabels", // Regular node labels
-      "topNodes", // Highlighted nodes (on top)
-      "topNodeLabels", // Highlighted node labels (on top)
+      "edges", // Background edges (and their labels)
+      "nodes", // Regular nodes (and their labels)
+      "topEdges", // Highlighted edges (and their labels)
+      "topNodes", // Highlighted nodes (and their labels)
     ],
   },
   // ...
@@ -111,6 +109,7 @@ new Sigma(graph, container, {
 ```
 
 Nodes, edges and their labels are assigned to depth layers through the `depth` and `labelDepth` style properties.
+By default, `labelDepth` mirrors `depth`: labels follow their parent item's layer unless explicitly overridden.
 
 :::note
 Everything is rendered in the same WebGL context, and sigma still supports the `zIndex` style property. This new `depth` mechanism makes it much easier to handle depth management in interactions. It also allows rendering some edges hover some nodes.

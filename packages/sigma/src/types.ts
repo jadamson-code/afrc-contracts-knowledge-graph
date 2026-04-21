@@ -273,7 +273,8 @@ export type SigmaAdditionalEvents = {
 export type SigmaEvents = SigmaStageEvents &
   SigmaNodeEvents &
   SigmaEdgeEvents &
-  SigmaLabelEvents &
+  SigmaNodeLabelEvents &
+  SigmaEdgeLabelEvents &
   SigmaAdditionalEvents;
 export type SigmaEventType = keyof SigmaEvents;
 
@@ -381,22 +382,38 @@ export interface EdgeLabelDisplayData extends Omit<LabelDisplayData, "position">
 
 /**
  * Label event types.
+ *
+ * Node and edge labels fire distinct events so handlers don't have to branch
+ * on `parentType`. Payload shapes mirror the corresponding node/edge events.
  */
-export interface SigmaLabelEventPayload extends SigmaEventPayload {
-  /** The label text */
-  label: string;
-  /** Type of parent element */
-  parentType: "node" | "edge";
-  /** Key of the parent element */
-  parentKey: string;
+export interface SigmaNodeLabelEventPayload extends SigmaEventPayload {
+  /** Key of the node the label belongs to */
+  node: string;
 }
 
-export type SigmaLabelEvents = {
-  clickLabel: (payload: SigmaLabelEventPayload) => void;
-  rightClickLabel: (payload: SigmaLabelEventPayload) => void;
-  doubleClickLabel: (payload: SigmaLabelEventPayload) => void;
-  enterLabel: (payload: SigmaLabelEventPayload) => void;
-  leaveLabel: (payload: SigmaLabelEventPayload) => void;
+export interface SigmaEdgeLabelEventPayload extends SigmaEventPayload {
+  /** Key of the edge the label belongs to */
+  edge: string;
+}
+
+export type SigmaNodeLabelEvents = {
+  clickNodeLabel: (payload: SigmaNodeLabelEventPayload) => void;
+  rightClickNodeLabel: (payload: SigmaNodeLabelEventPayload) => void;
+  doubleClickNodeLabel: (payload: SigmaNodeLabelEventPayload) => void;
+  downNodeLabel: (payload: SigmaNodeLabelEventPayload) => void;
+  upNodeLabel: (payload: SigmaNodeLabelEventPayload) => void;
+  enterNodeLabel: (payload: SigmaNodeLabelEventPayload) => void;
+  leaveNodeLabel: (payload: SigmaNodeLabelEventPayload) => void;
+};
+
+export type SigmaEdgeLabelEvents = {
+  clickEdgeLabel: (payload: SigmaEdgeLabelEventPayload) => void;
+  rightClickEdgeLabel: (payload: SigmaEdgeLabelEventPayload) => void;
+  doubleClickEdgeLabel: (payload: SigmaEdgeLabelEventPayload) => void;
+  downEdgeLabel: (payload: SigmaEdgeLabelEventPayload) => void;
+  upEdgeLabel: (payload: SigmaEdgeLabelEventPayload) => void;
+  enterEdgeLabel: (payload: SigmaEdgeLabelEventPayload) => void;
+  leaveEdgeLabel: (payload: SigmaEdgeLabelEventPayload) => void;
 };
 
 /**

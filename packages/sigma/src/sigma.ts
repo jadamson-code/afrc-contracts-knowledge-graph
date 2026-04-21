@@ -1193,11 +1193,12 @@ export default class Sigma<
       }
 
       // Edge labels for this depth (backgrounds first so they paint under the
-      // text). The background ribbon is the picking hitbox when labelEvents
-      // is on; picking buffer is skipped otherwise to save GPU work.
+      // text). The background ribbon is the picking hitbox when
+      // edgeLabelEvents is on; picking buffer is skipped otherwise to save
+      // GPU work.
       if (this.internals.settings.renderEdgeLabels && (!this.internals.settings.hideLabelsOnMove || !moving)) {
         this.labelRenderer.renderEdgeLabelBackgrounds(
-          this.internals.settings.labelEvents ? params : { ...params, pickingFrameBuffer: null },
+          this.internals.settings.edgeLabelEvents ? params : { ...params, pickingFrameBuffer: null },
           depth,
         );
         this.labelRenderer.renderEdgeLabels(params, depth);
@@ -1225,9 +1226,9 @@ export default class Sigma<
       this.labelRenderer.renderAttachments({ ...params, pickingFrameBuffer: null }, depth);
 
       // Label backgrounds for this depth (after nodes so picking overwrites nodes in "over" mode).
-      // Picking is skipped when label events are disabled; transparent nodes discard in the visual pass.
+      // Picking is skipped when node label events are disabled; transparent nodes discard in the visual pass.
       this.labelRenderer.renderLabelBackgrounds(
-        this.internals.settings.labelEvents ? params : { ...params, pickingFrameBuffer: null },
+        this.internals.settings.nodeLabelEvents ? params : { ...params, pickingFrameBuffer: null },
         depth,
       );
 

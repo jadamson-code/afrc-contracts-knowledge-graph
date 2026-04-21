@@ -121,7 +121,7 @@ export function createEdgeLabelProgram<
   E extends Attributes = Attributes,
   G extends Attributes = Attributes,
 >(options: CreateEdgeLabelProgramOptions): EdgeLabelProgramType<N, E, G> {
-  const { color: labelColor, position: labelPosition, margin: labelMargin, textBorder } = options;
+  const { color: labelColor, margin: labelMargin, textBorder } = options;
   const labelShaderConfig = resolveEdgeLabelShaderConfig(options);
   const { paths, fontSizeMode, minVisibilityThreshold, fullVisibilityThreshold } = labelShaderConfig;
 
@@ -160,7 +160,6 @@ export function createEdgeLabelProgram<
 
     /** Label styling statics read by the renderer to override data-supplied values. */
     static readonly labelColor = labelColor;
-    static readonly labelPosition = labelPosition;
     static readonly labelMargin = labelMargin;
 
     // -----------------------------------------------------------------------
@@ -429,12 +428,12 @@ export function createEdgeLabelProgram<
       array[i++] = labelData.size;
 
       // a_charMetrics: (charTextOffset, charAdvance, totalTextWidth, positionMode)
-      // Use program-level position override if specified, otherwise use labelData.position
-      const effectivePosition = GeneratedEdgeLabelProgram.labelPosition ?? labelData.position;
+      // Position is resolved by the style system into labelData.position; the
+      // background/picking reads the same style, so they can't disagree.
       array[i++] = xOffset;
       array[i++] = glyph.advance;
       array[i++] = cache.totalWidth;
-      array[i++] = positionToMode(effectivePosition);
+      array[i++] = positionToMode(labelData.position);
 
       // a_charDims: (charSize.x, charSize.y, charOffset.x, charOffset.y)
       array[i++] = glyph.atlasWidth; // includes SDF buffer

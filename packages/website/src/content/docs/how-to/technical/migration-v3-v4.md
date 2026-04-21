@@ -89,10 +89,10 @@ Rendering order is controlled through named **depth layers**, in addition to z-i
 ```typescript
 const renderer = new Sigma(graph, container, {
   primitives: {
-    depthLayers: ["edges", "nodes", "nodeLabels", "topEdges", "topNodes", "topNodeLabels"],
+    depthLayers: ["edges", "nodes", "topEdges", "topNodes"],
   },
   styles: {
-    nodes: [{ whenState: "isActive", then: { depth: "topNodes", labelDepth: "topNodeLabels" } }],
+    nodes: [{ whenState: "isActive", then: { depth: "topNodes" } }],
   },
 });
 ```
@@ -274,13 +274,13 @@ nodeReducer: (node, data) => {
 
 ```typescript
 primitives: {
-  depthLayers: ["edges", "nodes", "nodeLabels", "topNodes", "topNodeLabels"],
+  depthLayers: ["edges", "nodes", "topNodes"],
 },
 styles: {
   nodes: [
     {
       whenState: "isHighlighted",
-      then: { depth: "topNodes", labelDepth: "topNodeLabels" },
+      then: { depth: "topNodes" },
     },
   ],
 },

@@ -46,21 +46,21 @@ These are the built-in style properties available for nodes:
 
 ### Label properties
 
-| Property                   | Type                                                | Description                                                            |
-| -------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------- |
-| `label`                    | `string`                                            | Label text content                                                     |
-| `labelColor`               | `string`                                            | Label text color                                                       |
-| `labelSize`                | `number`                                            | Label font size in pixels                                              |
-| `labelFont`                | `string`                                            | Label font family (e.g. `"Georgia, serif"`)                            |
-| `labelVisibility`          | `"auto" \| "visible" \| "hidden"`                   | `"auto"` uses density-based culling, `"visible"` forces display        |
-| `labelPosition`            | `"right" \| "left" \| "above" \| "below" \| "over"` | Label position relative to node                                        |
-| `labelAngle`               | `number`                                            | Label rotation angle in radians                                        |
-| `labelDepth`               | `string`                                            | Depth layer for label rendering                                        |
-| `labelAttachment`          | `string \| null`                                    | Label attachment name (references `primitives.nodes.labelAttachments`) |
-| `labelAttachmentPlacement` | `"below" \| "above" \| "left" \| "right"`           | Attachment position relative to label                                  |
-| `labelBackgroundColor`     | `string`                                            | Label background fill color (transparent = no background)              |
-| `labelBackgroundPadding`   | `number`                                            | Padding around the label background in pixels                          |
-| `labelCursor`              | `string`                                            | CSS cursor to show when hovering the label (requires `labelEvents`)    |
+| Property                   | Type                                                | Description                                                             |
+| -------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
+| `label`                    | `string`                                            | Label text content                                                      |
+| `labelColor`               | `string`                                            | Label text color                                                        |
+| `labelSize`                | `number`                                            | Label font size in pixels                                               |
+| `labelFont`                | `string`                                            | Label font family (e.g. `"Georgia, serif"`)                             |
+| `labelVisibility`          | `"auto" \| "visible" \| "hidden"`                   | `"auto"` uses density-based culling, `"visible"` forces display         |
+| `labelPosition`            | `"right" \| "left" \| "above" \| "below" \| "over"` | Label position relative to node                                         |
+| `labelAngle`               | `number`                                            | Label rotation angle in radians                                         |
+| `labelDepth`               | `string`                                            | Depth layer for label rendering (defaults to `depth`)                   |
+| `labelAttachment`          | `string \| null`                                    | Label attachment name (references `primitives.nodes.labelAttachments`)  |
+| `labelAttachmentPlacement` | `"below" \| "above" \| "left" \| "right"`           | Attachment position relative to label                                   |
+| `labelBackgroundColor`     | `string`                                            | Label background fill color (transparent = no background)               |
+| `labelBackgroundPadding`   | `number`                                            | Padding around the label background in pixels                           |
+| `labelCursor`              | `string`                                            | CSS cursor to show when hovering the label (requires `nodeLabelEvents`) |
 
 ### Backdrop properties
 
@@ -111,15 +111,18 @@ Backdrops render a background shape behind nodes and their labels, typically use
 
 ### Label properties
 
-| Property          | Type                                               | Description                                                                           |
-| ----------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `label`           | `string`                                           | Label text content                                                                    |
-| `labelColor`      | `string`                                           | Label text color                                                                      |
-| `labelSize`       | `number`                                           | Label font size in pixels                                                             |
-| `labelFont`       | `string`                                           | Label font family                                                                     |
-| `labelVisibility` | `"auto" \| "visible" \| "hidden"`                  | Label visibility mode                                                                 |
-| `labelPosition`   | `number \| "over" \| "above" \| "below" \| "auto"` | Position mode, or a ratio along the edge (`0` = source, `0.5` = middle, `1` = target) |
-| `labelDepth`      | `string`                                           | Depth layer for label rendering                                                       |
+| Property                 | Type                                               | Description                                                                           |
+| ------------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `label`                  | `string`                                           | Label text content                                                                    |
+| `labelColor`             | `string`                                           | Label text color                                                                      |
+| `labelSize`              | `number`                                           | Label font size in pixels                                                             |
+| `labelFont`              | `string`                                           | Label font family                                                                     |
+| `labelVisibility`        | `"auto" \| "visible" \| "hidden"`                  | Label visibility mode                                                                 |
+| `labelPosition`          | `number \| "over" \| "above" \| "below" \| "auto"` | Position mode, or a ratio along the edge (`0` = source, `0.5` = middle, `1` = target) |
+| `labelDepth`             | `string`                                           | Depth layer for label rendering (defaults to `depth`)                                 |
+| `labelBackgroundColor`   | `string`                                           | Label background fill color (transparent = no background)                             |
+| `labelBackgroundPadding` | `number`                                           | Padding around the label background in pixels                                         |
+| `labelCursor`            | `string`                                           | CSS cursor to show when hovering the label (requires `edgeLabelEvents`)               |
 
 ## Stage style properties
 

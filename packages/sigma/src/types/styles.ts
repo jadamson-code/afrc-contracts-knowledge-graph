@@ -25,6 +25,7 @@ export type EmptyVariables = {};
  */
 export interface BaseNodeState {
   isHovered: boolean;
+  isLabelHovered: boolean;
   isHidden: boolean;
   isHighlighted: boolean;
   isDragged: boolean;
@@ -36,6 +37,7 @@ export interface BaseNodeState {
  */
 export interface BaseEdgeState {
   isHovered: boolean;
+  isLabelHovered: boolean;
   isHidden: boolean;
   isHighlighted: boolean;
   /** 0-based position in the parallel edge group (direction-aware ordering) */
@@ -720,6 +722,7 @@ export interface StylesDeclaration<
  */
 export const DEFAULT_NODE_STATE: BaseNodeState = {
   isHovered: false,
+  isLabelHovered: false,
   isHidden: false,
   isHighlighted: false,
   isDragged: false,
@@ -730,6 +733,7 @@ export const DEFAULT_NODE_STATE: BaseNodeState = {
  */
 export const DEFAULT_EDGE_STATE: BaseEdgeState = {
   isHovered: false,
+  isLabelHovered: false,
   isHidden: false,
   isHighlighted: false,
   parallelIndex: 0,
@@ -808,8 +812,8 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
     },
     labelDepth: {
       whenState: "isHovered",
-      then: "topNodeLabels",
-      else: "nodeLabels",
+      then: "topNodes",
+      else: "nodes",
     },
     labelVisibility: {
       whenState: "isHovered",
@@ -847,8 +851,8 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
     },
     labelDepth: {
       whenState: ["isHighlighted", "isHovered"],
-      then: "topNodeLabels",
-      else: "nodeLabels",
+      then: "topEdges",
+      else: "edges",
     },
     zIndex: {
       whenState: "isHovered",

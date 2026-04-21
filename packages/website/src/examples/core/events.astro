@@ -27,7 +27,15 @@
 <script>
   import Graph from "graphology";
   import Sigma from "sigma";
-  import { DEFAULT_STYLES, type MouseCoords } from "sigma/types";
+  import {
+    DEFAULT_STYLES,
+    type MouseCoords,
+    type SigmaEdgeEventPayload,
+    type SigmaEdgeLabelEventPayload,
+    type SigmaNodeEventPayload,
+    type SigmaNodeLabelEventPayload,
+    type SigmaStageEventPayload,
+  } from "sigma/types";
 
   import data from "../_data/data.json";
 
@@ -70,18 +78,22 @@
   const renderer = new Sigma(graph, container, {
     settings: {
       enableEdgeEvents: true,
-      labelEvents: "separate",
+      nodeLabelEvents: "separate",
+      edgeLabelEvents: "separate",
       renderEdgeLabels: true,
-    },
-    primitives: {
-      edges: {
-        label: {
-          position: "above",
-        },
-      },
+      edgePickingPadding: 30,
     },
     styles: {
-      edges: [DEFAULT_STYLES.edges, { labelDepth: "edges" }, { whenState: "isHovered", then: { color: "#cc0000" } }],
+      edges: [
+        DEFAULT_STYLES.edges,
+        { labelPosition: "above" },
+        { whenState: "isHovered", then: { color: "#cc0000", depth: "topEdges" } },
+        { whenState: "isLabelHovered", then: { labelColor: "#cc0000", depth: "topEdges" } },
+      ],
+      nodes: [
+        DEFAULT_STYLES.nodes,
+        { whenState: "isLabelHovered", then: { labelColor: "#cc0000", depth: "topNodes" } },
+      ],
     },
   });
 
@@ -94,7 +106,6 @@
     "doubleClickNode",
     "wheelNode",
   ] as const;
-  const labelEvents = ["enterLabel", "leaveLabel", "clickLabel"] as const;
   const edgeEvents = [
     "enterEdge",
     "leaveEdge",
@@ -104,25 +115,44 @@
     "doubleClickEdge",
     "wheelEdge",
   ] as const;
+  const nodeLabelEvents = [
+    "enterNodeLabel",
+    "leaveNodeLabel",
+    "downNodeLabel",
+    "upNodeLabel",
+    "clickNodeLabel",
+  ] as const;
+  const edgeLabelEvents = [
+    "enterEdgeLabel",
+    "leaveEdgeLabel",
+    "downEdgeLabel",
+    "upEdgeLabel",
+    "clickEdgeLabel",
+  ] as const;
   const stageEvents = ["downStage", "clickStage", "doubleClickStage", "wheelStage"] as const;
 
   nodeEvents.forEach((eventType) => {
-    renderer.on(eventType, ({ node, event }) => {
+    renderer.on(eventType, ({ node }: SigmaNodeEventPayload) => {
       logEvent(eventType, "node", node);
     });
   });
   edgeEvents.forEach((eventType) => {
-    renderer.on(eventType, ({ edge }) => {
+    renderer.on(eventType, ({ edge }: SigmaEdgeEventPayload) => {
       logEvent(eventType, "edge", edge);
     });
   });
-  labelEvents.forEach((eventType) => {
-    renderer.on(eventType, ({ parentType, parentKey }) => {
-      logEvent(eventType, parentType, parentKey);
+  nodeLabelEvents.forEach((eventType) => {
+    renderer.on(eventType, ({ node }: SigmaNodeLabelEventPayload) => {
+      logEvent(eventType, "node", node);
+    });
+  });
+  edgeLabelEvents.forEach((eventType) => {
+    renderer.on(eventType, ({ edge }: SigmaEdgeLabelEventPayload) => {
+      logEvent(eventType, "edge", edge);
     });
   });
   stageEvents.forEach((eventType) => {
-    renderer.on(eventType, ({ event }) => {
+    renderer.on(eventType, ({ event }: SigmaStageEventPayload) => {
       logEvent(eventType, "positions", event);
     });
   });

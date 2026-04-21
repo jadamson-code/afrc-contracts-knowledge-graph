@@ -28,6 +28,7 @@ const createTestGraph = () => {
 
 const defaultNodeState: BaseNodeState = {
   isHovered: false,
+  isLabelHovered: false,
   isHidden: false,
   isHighlighted: false,
   isDragged: false,

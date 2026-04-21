@@ -209,10 +209,10 @@ describe("Sigma interaction events", () => {
 // Label events
 // -----------------------------------------------------------------------------
 //
-// These cover the `labelEvents: "separate"` path for both nodes and edges:
-// clicking a label ribbon/rect must fire `clickLabel` with the correct
-// `parentType`. Node and edge labels share LABEL_ID_OFFSET in the picking
-// buffer; disjointness comes from their distinct index ranges.
+// These cover the "separate" path for both nodes and edges: clicking a
+// label ribbon/rect must fire `clickNodeLabel` / `clickEdgeLabel`. Node
+// and edge labels share LABEL_ID_OFFSET in the picking buffer;
+// disjointness comes from their distinct index ranges.
 
 describe("Sigma label events", () => {
   interface LabelEventContext {
@@ -237,11 +237,12 @@ describe("Sigma label events", () => {
       settings: {
         renderLabels: true,
         renderEdgeLabels: true,
-        labelEvents: "separate",
+        nodeLabelEvents: "separate",
+        edgeLabelEvents: "separate",
         // Tests click the same container multiple times to scan label hitboxes.
         // A tiny doubleClickTimeout keeps each click standalone; otherwise
-        // consecutive clicks collapse into a double-click and clickLabel
-        // never fires.
+        // consecutive clicks collapse into a double-click and the label
+        // click never fires.
         doubleClickTimeout: 0,
       },
       nodeReducer: (_key, data) => ({
@@ -268,14 +269,10 @@ describe("Sigma label events", () => {
     sigma.getContainer().remove();
   });
 
-  test<LabelEventContext>("clicking a node label fires clickLabel with parentType 'node'", async ({
-    sigma,
-    graph,
-    container,
-  }) => {
-    const labelEvents: { parentType: string; parentKey: string }[] = [];
-    sigma.on("clickLabel", ({ parentType, parentKey }) => {
-      labelEvents.push({ parentType, parentKey });
+  test<LabelEventContext>("clicking a node label fires clickNodeLabel", async ({ sigma, graph, container }) => {
+    const events: { node: string }[] = [];
+    sigma.on("clickNodeLabel", ({ node }) => {
+      events.push({ node });
     });
 
     // Node labels sit to the right of the node by default. The rendered label
@@ -284,20 +281,16 @@ describe("Sigma label events", () => {
     for (const dx of [30, 40, 50, 60]) {
       await userEvent.click(container, { position: { x: nodePos.x + dx, y: nodePos.y } });
       await wait(10);
-      if (labelEvents.length) break;
+      if (events.length) break;
     }
 
-    expect(labelEvents).toEqual([{ parentType: "node", parentKey: "n1" }]);
+    expect(events).toEqual([{ node: "n1" }]);
   });
 
-  test<LabelEventContext>("clicking an edge label fires clickLabel with parentType 'edge'", async ({
-    sigma,
-    graph,
-    container,
-  }) => {
-    const labelEvents: { parentType: string; parentKey: string }[] = [];
-    sigma.on("clickLabel", ({ parentType, parentKey }) => {
-      labelEvents.push({ parentType, parentKey });
+  test<LabelEventContext>("clicking an edge label fires clickEdgeLabel", async ({ sigma, graph, container }) => {
+    const events: { edge: string }[] = [];
+    sigma.on("clickEdgeLabel", ({ edge }) => {
+      events.push({ edge });
     });
 
     const n1 = graph.getNodeAttributes("n1") as Coordinates;
@@ -308,11 +301,11 @@ describe("Sigma label events", () => {
       for (const dx of [0, -4, 4, -8, 8]) {
         await userEvent.click(container, { position: { x: midViewport.x + dx, y: midViewport.y + dy } });
         await wait(10);
-        if (labelEvents.length) break;
+        if (events.length) break;
       }
-      if (labelEvents.length) break;
+      if (events.length) break;
     }
 
-    expect(labelEvents).toEqual([{ parentType: "edge", parentKey: graph.edges()[0] }]);
+    expect(events).toEqual([{ edge: graph.edges()[0] }]);
   });
 });

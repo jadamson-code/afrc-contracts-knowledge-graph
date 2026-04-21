@@ -59,14 +59,11 @@
         // Base graph
         "edges",
         "nodes",
-        "nodeLabels",
         // Active subgraph
         "activeEdges",
         "activeNodes",
-        "activeNodeLabels",
         // Hovered node
         "topNodes",
-        "topNodeLabels",
       ],
     },
     styles: {
@@ -87,11 +84,11 @@
         },
         {
           whenState: "isActive",
-          then: { depth: "activeNodes", labelDepth: "activeNodeLabels" },
+          then: { depth: "activeNodes" },
         },
         {
           whenState: "isHovered",
-          then: { depth: "topNodes", labelDepth: "topNodeLabels" },
+          then: { depth: "topNodes" },
         },
       ],
       edges: [

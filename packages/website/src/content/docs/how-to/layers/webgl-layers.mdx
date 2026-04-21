@@ -45,11 +45,7 @@ import Sigma from "sigma";
 
 const renderer = new Sigma(graph, container, {
   primitives: {
-    depthLayers: [
-      "edges", "edgeLabels",
-      "community-highlight",
-      "nodes", "nodeLabels", "topNodes", "topNodeLabels"],
-    },
+    depthLayers: ["edges", "community-highlight", "nodes", "topNodes"],
   },
 });
 

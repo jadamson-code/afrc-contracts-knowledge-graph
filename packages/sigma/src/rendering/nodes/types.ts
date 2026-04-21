@@ -10,7 +10,6 @@
  * @module
  */
 import { BackdropOptions } from "../../primitives/types";
-import { LabelPosition } from "../../types";
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
@@ -371,14 +370,12 @@ export interface LabelFontOptions {
 
 /**
  * Options for configuring labels rendered by the LabelProgram.
+ *
+ * Per-item label position is set via the style system (`labelPosition` style),
+ * not here — the primitives scope only configures program-wide defaults that
+ * styles can override.
  */
 export interface LabelOptions {
-  /**
-   * Default label position relative to node.
-   * Default: "right"
-   */
-  position?: LabelPosition;
-
   /**
    * Default margin between node edge and label in pixels.
    * Default: 5

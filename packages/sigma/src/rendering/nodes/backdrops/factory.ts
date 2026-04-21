@@ -11,7 +11,7 @@
 import { Attributes } from "graphology-types";
 
 import type Sigma from "../../../sigma";
-import type { LabelPosition, RenderParams } from "../../../types";
+import type { RenderParams } from "../../../types";
 import { POSITION_MODE_MAP } from "../../glsl";
 import { InstancedProgramDefinition, ProgramInfo } from "../../utils";
 import { LabelOptions, SDFShape } from "../types";
@@ -37,7 +37,6 @@ export function createBackdropProgram<
     throw new Error("createBackdropProgram: at least one shape must be provided in 'shapes'");
   }
 
-  const labelPosition: LabelPosition = labelOptions.position ?? "right";
   const labelMargin = labelOptions.margin ?? 5;
   const zoomToLabelSizeRatioFunction = labelOptions.zoomToLabelSizeRatioFunction ?? (() => 1);
 
@@ -49,7 +48,6 @@ export function createBackdropProgram<
   return class NodeBackdropProgram extends BackdropProgram<BackdropUniform, N, E, G> {
     static readonly programOptions = options;
     static readonly generatedShaders = generatedShaders;
-    static readonly labelPosition = labelPosition;
     static readonly labelMargin = labelMargin;
 
     constructor(gl: WebGL2RenderingContext, pickingBuffer: WebGLFramebuffer | null, renderer: Sigma<N, E, G>) {

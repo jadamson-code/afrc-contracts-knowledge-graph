@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { EdgeLabelFontSizeMode, EdgeLabelPosition } from "../../types";
+import { EdgeLabelFontSizeMode } from "../../types";
 import { AttributeSpecification, UniformSpecification, ValueSource } from "../nodes";
 
 export type { AttributeSpecification, UniformSpecification, ValueSource } from "../nodes/types";
@@ -454,18 +454,12 @@ export interface EdgeLabelOptions {
   color?: EdgeLabelColorSpecification;
 
   /**
-   * Label position relative to edge path.
-   * - "over": centered on the path
-   * - "above": above the path (positive perpendicular offset)
-   * - "below": below the path (negative perpendicular offset)
-   * - "auto": GPU determines based on edge direction (left-to-right = above, right-to-left = below)
-   * Default: uses settings.edgeLabelPosition
-   */
-  position?: EdgeLabelPosition;
-
-  /**
    * Margin between the edge surface and the label (in pixels) for "above"/"below"/"auto" modes.
    * Default: uses settings.edgeLabelMargin
+   *
+   * Note: per-edge position is set via the style system (`labelPosition`
+   * style), not here — styles are the single source of truth so the text
+   * and its background/picking hitbox can't disagree.
    */
   margin?: number;
 

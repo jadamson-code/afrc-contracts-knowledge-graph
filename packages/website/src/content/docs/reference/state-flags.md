@@ -11,7 +11,8 @@ Sigma maintains state for every node, every edge, and the graph as a whole. Stat
 
 ```typescript
 interface BaseNodeState {
-  isHovered: boolean; // Mouse is over this node
+  isHovered: boolean; // Mouse is over this node (or its label when nodeLabelEvents is "extend")
+  isLabelHovered: boolean; // Mouse is over this node's label (only set when nodeLabelEvents is "separate")
   isHidden: boolean; // Node is hidden from rendering
   isHighlighted: boolean; // Node is highlighted (e.g., search result)
   isDragged: boolean; // Node is being dragged
@@ -24,7 +25,8 @@ Default: all `false`.
 
 ```typescript
 interface BaseEdgeState {
-  isHovered: boolean; // Mouse is over this edge (requires enableEdgeEvents for mouse-only hover, or labelEvents for label-driven hover)
+  isHovered: boolean; // Mouse is over this edge (requires enableEdgeEvents, or edgeLabelEvents: "extend" for label-driven hover)
+  isLabelHovered: boolean; // Mouse is over this edge's label (only set when edgeLabelEvents is "separate")
   isHidden: boolean; // Edge is hidden from rendering
   isHighlighted: boolean; // Edge is highlighted
 }

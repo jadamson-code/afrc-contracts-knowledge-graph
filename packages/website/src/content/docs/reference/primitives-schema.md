@@ -213,7 +213,7 @@ An array of strings defining the rendering order. Elements assigned to later lay
 Default:
 
 ```typescript
-["edges", "edgeLabels", "nodes", "nodeLabels", "topNodes", "topNodeLabels"];
+["edges", "nodes", "topEdges", "topNodes"];
 ```
 
 Nodes and edges are assigned to depth layers via the `depth` and `labelDepth` style properties. See

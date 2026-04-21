@@ -47,7 +47,7 @@ To detect which node or edge is under the mouse cursor, sigma uses **[GPU pickin
 
 This approach is efficient because it reuses the same vertex positions as the visible render. Only the fragment shader changes to output ID colors instead of visual colors. The picking framebuffer is rendered at a lower resolution (controlled by the `pickingDownSizingRatio` setting) to save memory.
 
-Edge and label events use the same picking mechanism but are disabled by default for performance. Enable them with the `enableEdgeEvents` and `labelEvents` settings.
+Edge and label events use the same picking mechanism but are disabled by default for performance. Enable them with the `enableEdgeEvents`, `nodeLabelEvents` and `edgeLabelEvents` settings.
 
 ## Data textures
 

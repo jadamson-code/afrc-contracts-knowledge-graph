@@ -174,7 +174,9 @@ const { Component, source } = Astro.props;
 
   /* Stage-only mode: hide all chrome, show only the rendered example */
   html[data-stage-only] .tabs,
-  html[data-stage-only] .panel-source {
+  html[data-stage-only] .panel-source,
+  html[data-stage-only] .interaction,
+  html[data-stage-only] #controls {
     display: none !important;
   }
 

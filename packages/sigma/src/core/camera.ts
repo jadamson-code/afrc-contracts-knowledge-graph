@@ -6,7 +6,7 @@
  * @module
  */
 import { CameraState, TypedEventEmitter } from "../types";
-import { ANIMATE_DEFAULTS, AnimateOptions, easings } from "../utils";
+import { ANIMATE_DEFAULTS, AnimateOptions, resolveEasing } from "../utils";
 
 /**
  * Defaults.
@@ -187,8 +187,7 @@ export default class Camera extends TypedEventEmitter<CameraEvents> implements C
     };
     const validState = this.validateState(state);
 
-    const easing: (k: number) => number =
-      typeof options.easing === "function" ? options.easing : easings[options.easing];
+    const easing = resolveEasing(options.easing);
 
     // State
     const start = Date.now(),

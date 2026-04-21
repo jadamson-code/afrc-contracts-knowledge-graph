@@ -9,6 +9,8 @@
  */
 import { AbstractGraph } from "graphology-types";
 
+import { Easing } from "../utils/easings";
+
 /**
  * Generic attributes type (user-defined).
  */
@@ -114,7 +116,7 @@ export interface NumericalAttributeBinding extends DirectAttributeBinding<number
   /** Attribute value corresponding to max (defaults to data max) */
   maxValue?: number;
   /** Easing function for interpolation */
-  easing?: EasingFunction;
+  easing?: Easing;
 }
 
 /**
@@ -124,22 +126,6 @@ export interface NumericalAttributeBinding extends DirectAttributeBinding<number
 export interface CategoricalAttributeBinding<T> extends DirectAttributeBinding<T> {
   dict: Record<string, T>;
 }
-
-/**
- * Easing functions for numerical interpolation.
- */
-export type EasingFunction =
-  | "linear"
-  | "quadraticIn"
-  | "quadraticOut"
-  | "quadraticInOut"
-  | "cubicIn"
-  | "cubicOut"
-  | "cubicInOut"
-  | "exponentialIn"
-  | "exponentialOut"
-  | "exponentialInOut"
-  | ((t: number) => number);
 
 /**
  * Any attribute binding type.

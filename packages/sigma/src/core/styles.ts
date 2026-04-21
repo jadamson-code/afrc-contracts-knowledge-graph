@@ -18,7 +18,6 @@ import {
   CategoricalAttributeBinding,
   DataPredicate,
   DirectAttributeBinding,
-  EasingFunction,
   GraphicValue,
   NumericalAttributeBinding,
   type StageInlineConditional,
@@ -32,36 +31,7 @@ import {
   isInlineStateConditional,
   isValueFunction,
 } from "../types/styles";
-
-/**
- * Built-in easing functions for numerical interpolation.
- */
-const EASING_FUNCTIONS: Record<string, (t: number) => number> = {
-  linear: (t) => t,
-  quadraticIn: (t) => t * t,
-  quadraticOut: (t) => t * (2 - t),
-  quadraticInOut: (t) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t),
-  cubicIn: (t) => t * t * t,
-  cubicOut: (t) => --t * t * t + 1,
-  cubicInOut: (t) => (t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1),
-  exponentialIn: (t) => (t === 0 ? 0 : Math.pow(2, 10 * (t - 1))),
-  exponentialOut: (t) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t)),
-  exponentialInOut: (t) => {
-    if (t === 0) return 0;
-    if (t === 1) return 1;
-    if (t < 0.5) return Math.pow(2, 10 * (2 * t - 1)) / 2;
-    return (2 - Math.pow(2, -10 * (2 * t - 1))) / 2;
-  },
-};
-
-/**
- * Get an easing function from its name or return the function directly.
- */
-function getEasingFunction(easing: EasingFunction | undefined): (t: number) => number {
-  if (!easing) return EASING_FUNCTIONS.linear;
-  if (typeof easing === "function") return easing;
-  return EASING_FUNCTIONS[easing] || EASING_FUNCTIONS.linear;
-}
+import { resolveEasing } from "../utils/easings";
 
 /**
  * Type guard: checks if a binding has numerical range properties.
@@ -155,7 +125,7 @@ function resolveNumericalBinding(
   t = Math.max(0, Math.min(1, t)); // Clamp
 
   // Apply easing
-  const easingFn = getEasingFunction(binding.easing);
+  const easingFn = resolveEasing(binding.easing);
   t = easingFn(t);
 
   // Map to output range

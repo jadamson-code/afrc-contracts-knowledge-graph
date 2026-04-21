@@ -1,18 +1,13 @@
 import Graph from "graphology-types";
 
 import { PlainObject } from "../types";
-import { easings } from "./easings";
-
-/**
- * Defaults.
- */
-export type Easing = keyof typeof easings | ((k: number) => number);
+import { Easing, resolveEasing } from "./easings";
 
 export interface AnimateOptions {
   easing: Easing;
   duration: number;
 }
-export const ANIMATE_DEFAULTS = {
+export const ANIMATE_DEFAULTS: AnimateOptions = {
   easing: "quadraticInOut",
   duration: 150,
 };
@@ -28,7 +23,7 @@ export function animateNodes(
 ): () => void {
   const options: AnimateOptions = Object.assign({}, ANIMATE_DEFAULTS, opts);
 
-  const easing: (k: number) => number = typeof options.easing === "function" ? options.easing : easings[options.easing];
+  const easing = resolveEasing(options.easing);
 
   const start = Date.now();
 

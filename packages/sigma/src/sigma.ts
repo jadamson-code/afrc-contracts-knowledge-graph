@@ -13,7 +13,7 @@ import { EdgeGroupIndex } from "./core/edge-groups";
 import { bindGraphHandlers, bindInteractionHandlers, unbindGraphHandlers } from "./core/event-handlers";
 import { LabelRenderer } from "./core/label-renderer";
 import { SDFAtlasManager } from "./core/sdf-atlas";
-import { SigmaInternals } from "./core/sigma-internals";
+import { LabelHit, SigmaInternals } from "./core/sigma-internals";
 import { StateManager } from "./core/state-manager";
 import {
   ResolvedStageStyle,
@@ -168,8 +168,7 @@ export default class Sigma<
   private graphToViewportRatio = 1;
   private nodeItemIDsIndex: Record<number, string> = {};
   private edgeItemIDsIndex: Record<number, string> = {};
-  private labelItemIDsIndex: Record<number, string> = {};
-  private edgeIndices: Record<string, number> = {};
+  private labelItemIDsIndex: Record<number, LabelHit> = {};
   private prevNodeVisibilities: Record<string, string | undefined> = {};
 
   // Starting dimensions
@@ -463,6 +462,7 @@ export default class Sigma<
       nodesWithBackdrop: new Set<string>(),
       edgesWithForcedLabels: new Set<string>(),
       nodeIndices: {},
+      edgeIndices: {},
       settings: resolvedSettings,
       primitives: resolvedPrimitives,
       pixelRatio: getPixelRatio(),
@@ -712,8 +712,10 @@ export default class Sigma<
     return this.edgeItemIDsIndex[index] ?? null;
   }
 
-  private getLabelAtPosition(x: number, y: number): string | null {
-    if (this.labelRenderer.displayedNodeLabels.size === 0) return null;
+  private getLabelAtPosition(x: number, y: number): LabelHit | null {
+    if (this.labelRenderer.displayedNodeLabels.size === 0 && this.labelRenderer.displayedEdgeLabels.size === 0) {
+      return null;
+    }
     const color = getPixelColor(
       this.webGLContext!,
       this.pickingFrameBuffer,
@@ -832,13 +834,6 @@ export default class Sigma<
     this.nodeItemIDsIndex = nodeItemIDsIndex;
     this.internals.nodeIndices = nodeIndices;
 
-    // Build label item IDs index for "separate" label events mode
-    const labelItemIDsIndex: typeof this.labelItemIDsIndex = {};
-    for (const node in nodeIndices) {
-      labelItemIDsIndex[nodeIndices[node] + LABEL_ID_OFFSET] = node;
-    }
-    this.labelItemIDsIndex = labelItemIDsIndex;
-
     // Track visibility so the next processNodes call can detect changes
     for (let i = 0, l = nodes.length; i < l; i++) {
       this.prevNodeVisibilities[nodes[i]] = this.internals.nodeDataCache[nodes[i]].visibility;
@@ -866,7 +861,7 @@ export default class Sigma<
     this.edgeProgram.reallocate(edges.length);
 
     let edgeProcessCount = 0;
-    const edgeIndices: typeof this.edgeIndices = {};
+    const edgeIndices: typeof this.internals.edgeIndices = {};
     const edgeItemIDsIndex: typeof this.edgeItemIDsIndex = {};
     // Node IDs occupy 1..graph.order, so edges start after
     let incrID = graph.order + 1;
@@ -892,7 +887,21 @@ export default class Sigma<
     this.edgeProgram.invalidateBuffers();
 
     this.edgeItemIDsIndex = edgeItemIDsIndex;
-    this.edgeIndices = edgeIndices;
+    this.internals.edgeIndices = edgeIndices;
+  }
+
+  // Rebuild the label picking index from current node + edge index maps.
+  // Node and edge ranges are disjoint ([1, graph.order] and [graph.order + 1,
+  // graph.order + M]), so sharing LABEL_ID_OFFSET never collides.
+  private rebuildLabelItemIDsIndex(): void {
+    const labelItemIDsIndex: typeof this.labelItemIDsIndex = {};
+    for (const node in this.internals.nodeIndices) {
+      labelItemIDsIndex[this.internals.nodeIndices[node] + LABEL_ID_OFFSET] = { key: node, parentType: "node" };
+    }
+    for (const edge in this.internals.edgeIndices) {
+      labelItemIDsIndex[this.internals.edgeIndices[edge] + LABEL_ID_OFFSET] = { key: edge, parentType: "edge" };
+    }
+    this.labelItemIDsIndex = labelItemIDsIndex;
   }
 
   private getDepthOffset(depth: string): number {
@@ -1059,6 +1068,10 @@ export default class Sigma<
       this.internals.attachmentManager?.clear();
       const visibilityChanged = this.processNodes();
       if (this.pendingProcess === "full" || visibilityChanged) this.processEdges();
+      // Rebuild unconditionally, against current node + edge indices. On a
+      // nodes-only refresh processEdges is skipped but the cached edgeIndices
+      // are still valid, so edge-label picking keeps working.
+      this.rebuildLabelItemIDsIndex();
       this.pendingProcess = "none";
       this.emit("afterProcess");
     }
@@ -1180,10 +1193,13 @@ export default class Sigma<
       }
 
       // Edge labels for this depth (backgrounds first so they paint under the
-      // text). Backgrounds always render when an edge declares a
-      // labelBackgroundColor — independently of labelEvents.
+      // text). The background ribbon is the picking hitbox when labelEvents
+      // is on; picking buffer is skipped otherwise to save GPU work.
       if (this.internals.settings.renderEdgeLabels && (!this.internals.settings.hideLabelsOnMove || !moving)) {
-        this.labelRenderer.renderEdgeLabelBackgrounds({ ...params, pickingFrameBuffer: null }, depth);
+        this.labelRenderer.renderEdgeLabelBackgrounds(
+          this.internals.settings.labelEvents ? params : { ...params, pickingFrameBuffer: null },
+          depth,
+        );
         this.labelRenderer.renderEdgeLabels(params, depth);
       }
 
@@ -1553,7 +1569,7 @@ export default class Sigma<
     this.edgeTextureIndexCache = {};
     this.internals.edgesWithForcedLabels = new Set<string>();
     this.edgeItemIDsIndex = {};
-    this.edgeIndices = {};
+    this.internals.edgeIndices = {};
     // Clear bucket data
     this.itemBuckets.edges.clearAll();
     this.zIndexCache.edges = {};
@@ -2172,10 +2188,9 @@ export default class Sigma<
       this.container.style.cursor =
         this.internals.nodeDataCache[this.stateManager.hoveredNode]?.cursor || this.resolvedStageStyle.cursor || "";
     } else if (this.stateManager.hoveredLabel) {
-      this.container.style.cursor =
-        this.internals.nodeDataCache[this.stateManager.hoveredLabel]?.labelCursor ||
-        this.resolvedStageStyle.cursor ||
-        "";
+      const { key, parentType } = this.stateManager.hoveredLabel;
+      const cache = parentType === "edge" ? this.internals.edgeDataCache : this.internals.nodeDataCache;
+      this.container.style.cursor = cache[key]?.labelCursor || this.resolvedStageStyle.cursor || "";
     } else if (this.stateManager.hoveredEdge) {
       this.container.style.cursor =
         this.internals.edgeDataCache[this.stateManager.hoveredEdge]?.cursor || this.resolvedStageStyle.cursor || "";
@@ -2558,7 +2573,7 @@ export default class Sigma<
       }
       const programIndex = this.edgeProgramIndex[edge];
       if (programIndex !== undefined) {
-        this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
+        this.addEdgeToProgram(edge, this.internals.edgeIndices[edge], programIndex);
         this.edgeProgram.invalidateBuffers();
       }
       return;
@@ -2627,7 +2642,7 @@ export default class Sigma<
         data.tail !== oldTail;
 
       if (structuralDataChanged) {
-        this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
+        this.addEdgeToProgram(edge, this.internals.edgeIndices[edge], programIndex);
         this.edgeProgram.invalidateBuffers();
       } else {
         // Fast path: skip edge data texture, only update vertex buffer + attribute texture
@@ -2637,7 +2652,14 @@ export default class Sigma<
         const targetData = this.internals.nodeDataCache[target];
         const edgeTextureIndex = this.edgeTextureIndexCache[edge];
 
-        this.edgeProgram.process(this.edgeIndices[edge], programIndex, sourceData, targetData, data, edgeTextureIndex);
+        this.edgeProgram.process(
+          this.internals.edgeIndices[edge],
+          programIndex,
+          sourceData,
+          targetData,
+          data,
+          edgeTextureIndex,
+        );
         this.edgeProgram.invalidateBuffers();
       }
     }
@@ -2703,7 +2725,7 @@ export default class Sigma<
         if (skipIndexation) {
           const programIndex = this.edgeProgramIndex[edge];
           if (programIndex === undefined) throw new Error(`Sigma: edge "${edge}" can't be repaint`);
-          this.addEdgeToProgram(edge, this.edgeIndices[edge], programIndex);
+          this.addEdgeToProgram(edge, this.internals.edgeIndices[edge], programIndex);
         }
       }
       if (skipIndexation && edges.length > 0) this.edgeProgram.invalidateBuffers();

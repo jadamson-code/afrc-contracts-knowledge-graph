@@ -29,6 +29,12 @@ import { BaseEdgeState, BaseNodeState } from "../types/styles";
 import { DragManager } from "./drag-manager";
 import { StyleAnalysis } from "./styles";
 
+/** A picking hit on a label, identifying its parent item. */
+export interface LabelHit {
+  key: string;
+  parentType: "node" | "edge";
+}
+
 export type SigmaInternals<
   N extends Attributes = Attributes,
   E extends Attributes = Attributes,
@@ -41,6 +47,7 @@ export type SigmaInternals<
   nodesWithBackdrop: Set<string>;
   edgesWithForcedLabels: Set<string>;
   nodeIndices: Record<string, number>;
+  edgeIndices: Record<string, number>;
   // Settings and configuration
   settings: Settings;
   primitives: PrimitivesDeclaration | null;
@@ -50,10 +57,10 @@ export type SigmaInternals<
   stateManager: {
     hoveredNode: string | null;
     hoveredEdge: string | null;
-    hoveredLabel: string | null;
+    hoveredLabel: LabelHit | null;
     setHoveredNode(key: string | null): void;
     setHoveredEdge(key: string | null): void;
-    setHoveredLabel(key: string | null): void;
+    setHoveredLabel(hit: LabelHit | null): void;
     getNodeState(key: string): BaseNodeState;
   };
   dragManager: DragManager;
@@ -77,7 +84,7 @@ export type SigmaInternals<
   getCameraState(): CameraState;
   getNodeAtPosition(pos: Coordinates): string | null;
   getEdgeAtPoint(x: number, y: number): string | null;
-  getLabelAtPosition(x: number, y: number): string | null;
+  getLabelAtPosition(x: number, y: number): LabelHit | null;
   setNodeState(key: string, state: Partial<BaseNodeState>): void;
   setEdgeState(key: string, state: Partial<BaseEdgeState>): void;
   updateContainerCursor(): void;

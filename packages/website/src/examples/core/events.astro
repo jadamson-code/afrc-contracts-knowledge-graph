@@ -27,7 +27,7 @@
 <script>
   import Graph from "graphology";
   import Sigma from "sigma";
-  import type { MouseCoords } from "sigma/types";
+  import { DEFAULT_STYLES, type MouseCoords } from "sigma/types";
 
   import data from "../_data/data.json";
 
@@ -36,6 +36,9 @@
 
   const graph = new Graph();
   graph.import(data);
+  graph.forEachEdge((edge, attributes) => {
+    graph.setEdgeAttribute(edge, "label", `cooccurences: ${attributes.size}`);
+  });
 
   function logEvent(event: string, itemType: "node" | "edge" | "positions", item: string | MouseCoords): void {
     const div = document.createElement("div");
@@ -64,15 +67,21 @@
     if (logsDOM.children.length > 50) logsDOM.children[0].remove();
   }
 
-  let hoveredEdge: null | string = null;
   const renderer = new Sigma(graph, container, {
     settings: {
       enableEdgeEvents: true,
       labelEvents: "separate",
+      renderEdgeLabels: true,
     },
-    edgeReducer(edge, data) {
-      if (edge === hoveredEdge) return { ...data, color: "#cc0000" };
-      return data;
+    primitives: {
+      edges: {
+        label: {
+          position: "above",
+        },
+      },
+    },
+    styles: {
+      edges: [DEFAULT_STYLES.edges, { labelDepth: "edges" }, { whenState: "isHovered", then: { color: "#cc0000" } }],
     },
   });
 
@@ -86,26 +95,32 @@
     "wheelNode",
   ] as const;
   const labelEvents = ["enterLabel", "leaveLabel", "clickLabel"] as const;
-  const edgeEvents = ["downEdge", "clickEdge", "rightClickEdge", "doubleClickEdge", "wheelEdge"] as const;
+  const edgeEvents = [
+    "enterEdge",
+    "leaveEdge",
+    "downEdge",
+    "clickEdge",
+    "rightClickEdge",
+    "doubleClickEdge",
+    "wheelEdge",
+  ] as const;
   const stageEvents = ["downStage", "clickStage", "doubleClickStage", "wheelStage"] as const;
 
-  nodeEvents.forEach((eventType) => renderer.on(eventType, ({ node, event }) => logEvent(eventType, "node", node)));
-  labelEvents.forEach((eventType) =>
-    renderer.on(eventType, ({ parentType, parentKey }) => logEvent(eventType, parentType, parentKey)),
-  );
-  edgeEvents.forEach((eventType) => renderer.on(eventType, ({ edge }) => logEvent(eventType, "edge", edge)));
-
-  renderer.on("enterEdge", ({ edge }) => {
-    logEvent("enterEdge", "edge", edge);
-    hoveredEdge = edge;
-    renderer.refresh();
+  nodeEvents.forEach((eventType) => {
+    renderer.on(eventType, ({ node, event }) => {
+      logEvent(eventType, "node", node);
+    });
   });
-  renderer.on("leaveEdge", ({ edge }) => {
-    logEvent("leaveEdge", "edge", edge);
-    hoveredEdge = null;
-    renderer.refresh();
+  edgeEvents.forEach((eventType) => {
+    renderer.on(eventType, ({ edge }) => {
+      logEvent(eventType, "edge", edge);
+    });
   });
-
+  labelEvents.forEach((eventType) => {
+    renderer.on(eventType, ({ parentType, parentKey }) => {
+      logEvent(eventType, parentType, parentKey);
+    });
+  });
   stageEvents.forEach((eventType) => {
     renderer.on(eventType, ({ event }) => {
       logEvent(eventType, "positions", event);

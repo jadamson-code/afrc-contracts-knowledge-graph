@@ -438,6 +438,8 @@ export interface EdgeLabelBuiltInVariables<
   labelBackgroundColor?: GraphicValue<EA, ES, GS, string>;
   /** Label background padding in pixels */
   labelBackgroundPadding?: GraphicValue<EA, ES, GS, number>;
+  /** CSS cursor to show when hovering this edge's label */
+  labelCursor?: GraphicValue<EA, ES, GS, string>;
 }
 
 /**

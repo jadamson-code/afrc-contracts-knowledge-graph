@@ -21,6 +21,7 @@ import {
   createNodeState,
 } from "../types/styles";
 import { hasNewPartialProps } from "../utils";
+import { LabelHit } from "./sigma-internals";
 
 export class StateManager<NS = {}, ES = {}, GS = {}> {
   // Per-item state maps (lazily populated on first access).
@@ -33,7 +34,7 @@ export class StateManager<NS = {}, ES = {}, GS = {}> {
   // Hover tracking: at most one hovered node, edge, and label at a time.
   hoveredNode: string | null = null;
   hoveredEdge: string | null = null;
-  hoveredLabel: string | null = null;
+  hoveredLabel: LabelHit | null = null;
 
   // Dirty sets consumed by sigma's refreshState / render cycle.
   dirtyNodes: Set<string> = new Set();
@@ -142,24 +143,26 @@ export class StateManager<NS = {}, ES = {}, GS = {}> {
     this.nodeStates.delete(key);
     this.dirtyNodes.delete(key);
     if (this.hoveredNode === key) this.hoveredNode = null;
-    if (this.hoveredLabel === key) this.hoveredLabel = null;
+    if (this.hoveredLabel?.parentType === "node" && this.hoveredLabel.key === key) this.hoveredLabel = null;
   }
   removeEdge(key: string): void {
     this.edgeStates.delete(key);
     this.dirtyEdges.delete(key);
     if (this.hoveredEdge === key) this.hoveredEdge = null;
+    if (this.hoveredLabel?.parentType === "edge" && this.hoveredLabel.key === key) this.hoveredLabel = null;
   }
 
   clearNodes(): void {
     this.nodeStates.clear();
     this.dirtyNodes.clear();
     this.hoveredNode = null;
-    this.hoveredLabel = null;
+    if (this.hoveredLabel?.parentType === "node") this.hoveredLabel = null;
   }
   clearEdges(): void {
     this.edgeStates.clear();
     this.dirtyEdges.clear();
     this.hoveredEdge = null;
+    if (this.hoveredLabel?.parentType === "edge") this.hoveredLabel = null;
   }
   resetGraphState(): void {
     this.graphState = createGraphState<GS>(this.customGraphStateDefaults);
@@ -179,8 +182,8 @@ export class StateManager<NS = {}, ES = {}, GS = {}> {
   setHoveredEdge(key: string | null): void {
     this.hoveredEdge = key;
   }
-  setHoveredLabel(key: string | null): void {
-    this.hoveredLabel = key;
+  setHoveredLabel(hit: LabelHit | null): void {
+    this.hoveredLabel = hit;
   }
 
   // Graph flag computation

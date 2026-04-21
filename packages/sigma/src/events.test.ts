@@ -201,3 +201,108 @@ describe("Sigma interaction events", () => {
     expect(eventsCount).toEqual(0);
   });
 });
+
+// -----------------------------------------------------------------------------
+// Label events
+// -----------------------------------------------------------------------------
+//
+// These cover the `labelEvents: "separate"` path for both nodes and edges:
+// clicking a label ribbon/rect must fire `clickLabel` with the correct
+// `parentType`. Node and edge labels share LABEL_ID_OFFSET in the picking
+// buffer; disjointness comes from their distinct index ranges.
+
+describe("Sigma label events", () => {
+  interface LabelEventContext {
+    sigma: Sigma;
+    container: HTMLDivElement;
+    graph: Graph;
+  }
+
+  beforeEach<LabelEventContext>(async (context) => {
+    const graph = new Graph();
+    graph.addNode("n1", { x: 0, y: 0, size: 15, label: "N1", color: "blue" });
+    graph.addNode("n2", { x: 100, y: 0, size: 15, label: "N2", color: "red" });
+    graph.addEdge("n1", "n2", { label: "MID", size: 6 });
+
+    const container = createElement("div", {
+      width: `${STAGE_WIDTH}px`,
+      height: `${STAGE_HEIGHT}px`,
+    }) as HTMLDivElement;
+    document.body.append(container);
+
+    context.sigma = new Sigma(graph, container, {
+      settings: {
+        renderLabels: true,
+        renderEdgeLabels: true,
+        labelEvents: "separate",
+      },
+      nodeReducer: (_key, data) => ({
+        ...data,
+        labelVisibility: "visible",
+        labelBackgroundColor: "#eee",
+      }),
+      edgeReducer: (_key, data) => ({
+        ...data,
+        labelVisibility: "visible",
+        labelBackgroundColor: "#eee",
+      }),
+    });
+    context.graph = graph;
+    context.container = container;
+    // Let the first frame paint so the picking framebuffer is populated.
+    await wait(50);
+  });
+
+  afterEach<LabelEventContext>(async ({ sigma }) => {
+    sigma.kill();
+    sigma.getContainer().remove();
+  });
+
+  test<LabelEventContext>("clicking a node label fires clickLabel with parentType 'node'", async ({
+    sigma,
+    graph,
+    container,
+  }) => {
+    const labelEvents: { parentType: string; parentKey: string }[] = [];
+    sigma.on("clickLabel", ({ parentType, parentKey }) => {
+      labelEvents.push({ parentType, parentKey });
+    });
+
+    // Node labels sit to the right of the node by default. The rendered label
+    // size depends on pixel ratio, so scan a few offsets past the node edge.
+    const nodePos = sigma.graphToViewport(graph.getNodeAttributes("n1") as Coordinates);
+    for (const dx of [30, 40, 50, 60]) {
+      await userEvent.click(container, { position: { x: nodePos.x + dx, y: nodePos.y } });
+      await wait(10);
+      if (labelEvents.length) break;
+    }
+
+    expect(labelEvents).toEqual([{ parentType: "node", parentKey: "n1" }]);
+  });
+
+  test<LabelEventContext>("clicking an edge label fires clickLabel with parentType 'edge'", async ({
+    sigma,
+    graph,
+    container,
+  }) => {
+    const labelEvents: { parentType: string; parentKey: string }[] = [];
+    sigma.on("clickLabel", ({ parentType, parentKey }) => {
+      labelEvents.push({ parentType, parentKey });
+    });
+
+    const n1 = graph.getNodeAttributes("n1") as Coordinates;
+    const n2 = graph.getNodeAttributes("n2") as Coordinates;
+    const midViewport = sigma.graphToViewport({ x: (n1.x + n2.x) / 2, y: (n1.y + n2.y) / 2 });
+    // Scan ±8 px around the midpoint to tolerate ribbon-width / pixel-rounding.
+    for (const dy of [0, -4, 4, -8, 8]) {
+      for (const dx of [0, -4, 4, -8, 8]) {
+        await userEvent.click(container, { position: { x: midViewport.x + dx, y: midViewport.y + dy } });
+        await wait(10);
+        if (labelEvents.length) break;
+      }
+      if (labelEvents.length) break;
+    }
+
+    expect(labelEvents).toEqual([{ parentType: "edge", parentKey: graph.edges()[0] }]);
+  });
+});

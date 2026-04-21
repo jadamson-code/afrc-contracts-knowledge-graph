@@ -102,25 +102,32 @@ export function bindInteractionHandlers<
 
     if (internals.settings.labelEvents === "separate") {
       const labelToHover = stateManager.hoveredNode ? null : internals.getLabelAtPosition(event.x, event.y);
+      const prev = stateManager.hoveredLabel;
+      // Compare by key + parentType so we don't re-fire on equivalent hits
+      // returned as freshly-allocated objects across frames.
+      const unchanged =
+        (!prev && !labelToHover) ||
+        (!!prev && !!labelToHover && prev.key === labelToHover.key && prev.parentType === labelToHover.parentType);
 
-      if (labelToHover !== stateManager.hoveredLabel) {
-        if (stateManager.hoveredLabel) {
-          const prevKey = stateManager.hoveredLabel;
+      if (!unchanged) {
+        if (prev) {
+          const cache = prev.parentType === "edge" ? internals.edgeDataCache : internals.nodeDataCache;
           stateManager.setHoveredLabel(null);
           internals.emit("leaveLabel", {
             ...baseEvent,
-            label: internals.nodeDataCache[prevKey]?.label || prevKey,
-            parentType: "node",
-            parentKey: prevKey,
+            label: cache[prev.key]?.label || prev.key,
+            parentType: prev.parentType,
+            parentKey: prev.key,
           });
         }
         stateManager.setHoveredLabel(labelToHover);
         if (labelToHover) {
+          const cache = labelToHover.parentType === "edge" ? internals.edgeDataCache : internals.nodeDataCache;
           internals.emit("enterLabel", {
             ...baseEvent,
-            label: internals.nodeDataCache[labelToHover]?.label || labelToHover,
-            parentType: "node",
-            parentKey: labelToHover,
+            label: cache[labelToHover.key]?.label || labelToHover.key,
+            parentType: labelToHover.parentType,
+            parentKey: labelToHover.key,
           });
         }
         internals.updateContainerCursor();
@@ -183,13 +190,14 @@ export function bindInteractionHandlers<
     }
 
     if (internals.settings.labelEvents === "separate" && stateManager.hoveredLabel) {
-      const prevKey = stateManager.hoveredLabel;
+      const prev = stateManager.hoveredLabel;
+      const cache = prev.parentType === "edge" ? internals.edgeDataCache : internals.nodeDataCache;
       stateManager.setHoveredLabel(null);
       internals.emit("leaveLabel", {
         ...baseEvent,
-        label: internals.nodeDataCache[prevKey]?.label || prevKey,
-        parentType: "node",
-        parentKey: prevKey,
+        label: cache[prev.key]?.label || prev.key,
+        parentType: prev.parentType,
+        parentKey: prev.key,
       });
       internals.updateContainerCursor();
     }
@@ -225,13 +233,14 @@ export function bindInteractionHandlers<
         internals.settings.labelEvents === "separate" &&
         (eventType === "click" || eventType === "rightClick" || eventType === "doubleClick")
       ) {
-        const labelKey = internals.getLabelAtPosition(event.x, event.y);
-        if (labelKey) {
+        const hit = internals.getLabelAtPosition(event.x, event.y);
+        if (hit) {
+          const cache = hit.parentType === "edge" ? internals.edgeDataCache : internals.nodeDataCache;
           return internals.emit(`${eventType}Label`, {
             ...baseEvent,
-            label: internals.nodeDataCache[labelKey]?.label || labelKey,
-            parentType: "node",
-            parentKey: labelKey,
+            label: cache[hit.key]?.label || hit.key,
+            parentType: hit.parentType,
+            parentKey: hit.key,
           });
         }
       }

@@ -465,6 +465,7 @@ const DEFAULT_EDGE_DISPLAY_DATA: Partial<EdgeDisplayData> = {
   labelDepth: "edgeLabels",
   labelBackgroundColor: undefined,
   labelBackgroundPadding: undefined,
+  labelCursor: undefined,
 };
 
 // Keys used as rule control flow — skipped when iterating over style properties.

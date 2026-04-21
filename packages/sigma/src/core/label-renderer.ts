@@ -675,23 +675,33 @@ export class LabelRenderer<
   /**
    * Render ribbons behind edge labels: curves along the same offset path the
    * label characters follow. Rendered per-depth, before edge labels so the
-   * text paints on top. Always runs the visual pass when an edge declares a
-   * `labelBackgroundColor`; picking writes are gated by the caller.
+   * text paints on top. Renders every candidate when `labelEvents` is on (so
+   * picking covers transparent ribbons too); otherwise only those with a
+   * visual background fill. Picking writes are further gated by the caller
+   * via `pickingFrameBuffer: null`.
    */
   renderEdgeLabelBackgrounds(params: RenderParams, depth?: string): void {
-    const { edgeLabelBackgroundProgram, edgeLabelProgram, edgeDataCache, primitives, edgeDataTexture } = this.internals;
+    const {
+      edgeLabelBackgroundProgram,
+      edgeLabelProgram,
+      edgeDataCache,
+      edgeIndices,
+      primitives,
+      edgeDataTexture,
+      settings,
+    } = this.internals;
     if (!edgeLabelBackgroundProgram || !edgeLabelProgram || !edgeDataTexture) return;
 
+    const { labelEvents } = settings;
     const defaultEdgeLabelMargin = primitives?.edges?.label?.margin ?? 5;
     const defaultEdgeLabelPosition = "over" as const;
 
-    // Only render ribbons for edges that actually declare a background fill.
-    // (Picking coverage of edge label areas is a follow-up: when added, this
-    // filter should also include all candidates in "separate" events mode.)
     const candidates = this.filterEdgeLabelsForDepth(depth);
     const toRender: string[] = [];
     for (const edge of candidates) {
-      if (edgeDataCache[edge].labelBackgroundColor) toRender.push(edge);
+      // When events are disabled, skip edges with no visual background — nothing to render.
+      if (!labelEvents && !edgeDataCache[edge].labelBackgroundColor) continue;
+      toRender.push(edge);
     }
 
     if (toRender.length === 0) return;
@@ -708,6 +718,12 @@ export class LabelRenderer<
       const position = edgeData.labelPosition ?? defaultEdgeLabelPosition;
       const positionMode = typeof position === "string" ? (EDGE_POSITION_MODE_MAP[position] ?? 0) : 0;
 
+      const edgePickingIndex = edgeIndices[edge];
+      const pickingIndex = labelEvents === "separate" ? edgePickingIndex + LABEL_ID_OFFSET : edgePickingIndex;
+      const bgColor = edgeData.labelBackgroundColor
+        ? floatColor(edgeData.labelBackgroundColor)
+        : floatColor("transparent");
+
       const data: EdgeLabelBackgroundData = {
         edgeIndex: edgeDataTexture.getIndex(edge),
         edgeAttrIndex: i,
@@ -716,9 +732,8 @@ export class LabelRenderer<
         positionMode,
         margin: defaultEdgeLabelMargin,
         padding: edgeData.labelBackgroundPadding ?? DEFAULT_EDGE_LABEL_PADDING,
-        color: floatColor(edgeData.labelBackgroundColor!),
-        // Picking id left at 0 for now; label-event wiring for edges is a follow-up.
-        id: 0,
+        color: bgColor,
+        id: indexToColor(pickingIndex),
         curvature: (edgeData as unknown as { curvature?: number }).curvature || 0,
       };
 

@@ -113,6 +113,7 @@ export interface EdgeDisplayData extends DisplayData {
   labelPosition?: EdgeLabelPosition; // Label position relative to edge path
   labelBackgroundColor?: string; // Label background fill color (transparent = no background)
   labelBackgroundPadding?: number; // Label background padding in pixels
+  labelCursor?: string; // CSS cursor to show when hovering this edge's label
 }
 
 export type NodeReducer<

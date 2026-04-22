@@ -353,8 +353,6 @@ export default class Sigma<
     };
 
     // Initializing stage canvas and WebGL context
-    this.stageCanvas = createElement<HTMLCanvasElement>("canvas", { position: "absolute" }, { class: "sigma-stage" });
-    this.container.appendChild(this.stageCanvas);
     this.initWebGLContext();
 
     // Initializing mouse interaction layer
@@ -1743,7 +1741,6 @@ export default class Sigma<
    * mouse) and extra layers added via createLayer.
    */
   private getLayerElement(id: string): HTMLElement {
-    if (id === "stage") return this.stageCanvas;
     if (id === "mouse") return this.mouseLayer;
     const element = this.extraElements[id];
     if (!element) throw new Error(`Sigma: layer "${id}" does not exist`);
@@ -1751,37 +1748,12 @@ export default class Sigma<
   }
 
   /**
-   * Creates a WebGL 2 context on the given canvas with default settings,
-   * validates it, and configures blending.
-   */
-  private getWebGL2Context(
-    canvas: HTMLCanvasElement,
-    options?: { preserveDrawingBuffer?: boolean; antialias?: boolean },
-  ): WebGL2RenderingContext {
-    const gl = canvas.getContext("webgl2", {
-      preserveDrawingBuffer: false,
-      antialias: false,
-      depth: true,
-      ...options,
-    });
-
-    if (!gl) {
-      throw new Error(
-        "Sigma: WebGL 2 is not supported by your browser. " +
-          "Please use a modern browser (Chrome 56+, Firefox 51+, Safari 15+, Edge 79+).",
-      );
-    }
-
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    return gl;
-  }
-
-  /**
    * Initializes the main WebGL 2 context on the stage canvas, with picking
    * framebuffer.
    */
   private initWebGLContext(): void {
-    const gl = this.getWebGL2Context(this.stageCanvas);
+    const gl = this.createWebGLContext("stage");
+    this.stageCanvas = this.extraElements.stage as HTMLCanvasElement;
     this.webGLContext = gl;
 
     // Create picking framebuffer for two-pass rendering
@@ -1876,12 +1848,8 @@ export default class Sigma<
   }
 
   /**
-   * Function used to create a WebGL 2 context and add the relevant DOM
-   * elements.
-   *
-   * @param  {string}  id      - Context's id.
-   * @param  {object?} options - #getContext params to override (optional)
-   * @return {WebGL2RenderingContext}
+   * Creates a new canvas layer registered under `id` (killable via
+   * `killLayer`) and attaches a WebGL 2 context to it.
    */
   createWebGLContext(
     id: string,
@@ -1889,12 +1857,28 @@ export default class Sigma<
       preserveDrawingBuffer?: boolean;
       antialias?: boolean;
       hidden?: boolean;
-    } & ({ canvas?: HTMLCanvasElement; style?: undefined } | { style?: CSSStyleDeclaration; canvas?: undefined }) = {},
+      style?: Partial<CSSStyleDeclaration>;
+    } & ({ beforeLayer?: string } | { afterLayer?: string }) = {},
   ): WebGL2RenderingContext {
-    const canvas = options?.canvas || this.createCanvas(id, options);
+    const canvas = this.createCanvas(id, options);
     if (options.hidden) canvas.remove();
 
-    return this.getWebGL2Context(canvas, options);
+    const gl = canvas.getContext("webgl2", {
+      preserveDrawingBuffer: false,
+      antialias: false,
+      depth: true,
+      ...options,
+    });
+
+    if (!gl) {
+      throw new Error(
+        "Sigma: WebGL 2 is not supported by your browser. " +
+          "Please use a modern browser (Chrome 56+, Firefox 51+, Safari 15+, Edge 79+).",
+      );
+    }
+
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    return gl;
   }
 
   /**
@@ -1904,6 +1888,8 @@ export default class Sigma<
    * @return {Sigma}
    */
   killLayer(id: string): this {
+    if (id === "stage" || id === "mouse") throw new Error(`Sigma: cannot kill built-in layer "${id}"`);
+
     const element = this.extraElements[id];
 
     if (!element) throw new Error(`Sigma: cannot kill layer ${id}, which does not exist`);
@@ -2003,10 +1989,10 @@ export default class Sigma<
   /**
    * Method used to set the renderer's graph.
    *
-   * @return {Graph}
+   * @return {Sigma}
    */
-  setGraph(graph: Graph<N, E, G>): void {
-    if (graph === this.internals.graph) return;
+  setGraph(graph: Graph<N, E, G>): this {
+    if (graph === this.internals.graph) return this;
 
     // Check hoveredNode and hoveredEdge
     if (this.stateManager.hoveredNode && !graph.hasNode(this.stateManager.hoveredNode))
@@ -2030,6 +2016,8 @@ export default class Sigma<
 
     // Re-rendering now to avoid discrepancies from now to next frame
     this.refresh();
+
+    return this;
   }
 
   /**
@@ -2081,8 +2069,8 @@ export default class Sigma<
    * @param  {string} key - The node's key.
    * @return {NodeDisplayData | undefined} A copy of the desired node's attribute or undefined if not found
    */
-  getNodeDisplayData(key: unknown): NodeDisplayData | undefined {
-    const node = this.internals.nodeDataCache[key as string];
+  getNodeDisplayData(key: string): NodeDisplayData | undefined {
+    const node = this.internals.nodeDataCache[key];
     return node ? Object.assign({}, node) : undefined;
   }
 
@@ -2093,8 +2081,8 @@ export default class Sigma<
    * @param  {string} key - The edge's key.
    * @return {EdgeDisplayData | undefined} A copy of the desired edge's attribute or undefined if not found
    */
-  getEdgeDisplayData(key: unknown): EdgeDisplayData | undefined {
-    const edge = this.internals.edgeDataCache[key as string];
+  getEdgeDisplayData(key: string): EdgeDisplayData | undefined {
+    const edge = this.internals.edgeDataCache[key];
     return edge ? Object.assign({}, edge) : undefined;
   }
 
@@ -2363,8 +2351,8 @@ export default class Sigma<
     // If nothing has changed, we can stop right here
     if (!force && previousWidth === this.width && previousHeight === this.height) return this;
 
-    // Sizing dom elements
-    for (const element of [this.stageCanvas, this.mouseLayer, ...Object.values(this.extraElements)]) {
+    // Sizing dom elements (stage is in extraElements)
+    for (const element of [this.mouseLayer, ...Object.values(this.extraElements)]) {
       element.style.width = this.width + "px";
       element.style.height = this.height + "px";
     }
@@ -2798,7 +2786,7 @@ export default class Sigma<
    *
    * @return {Sigma}
    */
-  scheduleRefresh(opts?: { partialGraph?: { nodes?: string[]; edges?: string[] }; layoutUnchange?: boolean }): this {
+  scheduleRefresh(opts?: { partialGraph?: { nodes?: string[]; edges?: string[] }; skipIndexation?: boolean }): this {
     return this.refresh({ ...opts, schedule: true });
   }
 
@@ -2927,11 +2915,11 @@ export default class Sigma<
    * This method accepts an optional camera which can be useful if you need to translate coordinates
    * based on a different view than the one being currently being displayed on screen.
    *
-   * @param {Coordinates}                  viewportPoint
+   * @param {Coordinates}                  coordinates
    * @param {CoordinateConversionOverride} override
    */
-  viewportToGraph(viewportPoint: Coordinates, override: CoordinateConversionOverride = {}): Coordinates {
-    return this.normalizationFunction.inverse(this.viewportToFramedGraph(viewportPoint, override));
+  viewportToGraph(coordinates: Coordinates, override: CoordinateConversionOverride = {}): Coordinates {
+    return this.normalizationFunction.inverse(this.viewportToFramedGraph(coordinates, override));
   }
 
   /**
@@ -2941,11 +2929,11 @@ export default class Sigma<
    * This method accepts an optional camera which can be useful if you need to translate coordinates
    * based on a different view than the one being currently being displayed on screen.
    *
-   * @param {Coordinates}                  graphPoint
+   * @param {Coordinates}                  coordinates
    * @param {CoordinateConversionOverride} override
    */
-  graphToViewport(graphPoint: Coordinates, override: CoordinateConversionOverride = {}): Coordinates {
-    return this.framedGraphToViewport(this.normalizationFunction(graphPoint), override);
+  graphToViewport(coordinates: Coordinates, override: CoordinateConversionOverride = {}): Coordinates {
+    return this.framedGraphToViewport(this.normalizationFunction(coordinates), override);
   }
 
   /**
@@ -3104,8 +3092,7 @@ export default class Sigma<
       this.webGLContext = null;
     }
 
-    // Remove all DOM elements
-    this.stageCanvas.remove();
+    // Remove all DOM elements (stage is in extraElements)
     this.mouseLayer.remove();
     for (const id in this.extraElements) {
       this.extraElements[id].remove();

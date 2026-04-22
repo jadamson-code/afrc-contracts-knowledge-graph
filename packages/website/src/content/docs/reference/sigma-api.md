@@ -66,11 +66,11 @@ Most of the time, these generics will be inferred from Sigma's constructor argum
 
 ## Rendering
 
-| Method                   | Returns | Description                                                                                 |
-| ------------------------ | ------- | ------------------------------------------------------------------------------------------- |
-| `refresh(opts?)`         | `this`  | Re-process data and render. Options: `{ partialGraph?, skipIndexation?, schedule? }`        |
-| `scheduleRefresh(opts?)` | `this`  | Debounced version of `refresh` (always sets `schedule: true`). Options: `{ partialGraph? }` |
-| `scheduleRender()`       | `this`  | Debounced: schedule a render-only pass for the next animation frame (no re-processing)      |
+| Method                   | Returns | Description                                                                                                  |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------ |
+| `refresh(opts?)`         | `this`  | Re-process data and render. Options: `{ partialGraph?, skipIndexation?, schedule? }`                         |
+| `scheduleRefresh(opts?)` | `this`  | Debounced version of `refresh` (always sets `schedule: true`). Options: `{ partialGraph?, skipIndexation? }` |
+| `scheduleRender()`       | `this`  | Debounced: schedule a render-only pass for the next animation frame (no re-processing)                       |
 
 ## Node state
 
@@ -147,7 +147,7 @@ Sigma v4 has a shortcut for that, using the `autoRescale: 'once'` setting.
 | Method                 | Returns       | Description                                       |
 | ---------------------- | ------------- | ------------------------------------------------- |
 | `getGraph()`           | `Graph`       | Get the current graph instance                    |
-| `setGraph(graph)`      | `void`        | Replace the graph, rebind handlers, and refresh   |
+| `setGraph(graph)`      | `this`        | Replace the graph, rebind handlers, and refresh   |
 | `getContainer()`       | `HTMLElement` | Get the DOM container element                     |
 | `getDimensions()`      | `Dimensions`  | Get renderer pixel dimensions `{ width, height }` |
 | `getGraphDimensions()` | `Dimensions`  | Get graph extent dimensions                       |

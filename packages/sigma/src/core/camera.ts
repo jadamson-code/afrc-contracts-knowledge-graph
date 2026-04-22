@@ -18,6 +18,8 @@ const DEFAULT_ZOOMING_RATIO = 1.5;
  */
 export type CameraEvents = {
   updated(state: CameraState): void;
+  animationStart(from: CameraState, to: CameraState): void;
+  animationEnd(from: CameraState, to: CameraState, completed: boolean): void;
 };
 
 /**
@@ -39,6 +41,8 @@ export default class Camera extends TypedEventEmitter<CameraEvents> implements C
   private nextFrame: number | null = null;
   private previousState: CameraState | null = null;
   private enabled = true;
+  private currentAnimationFrom: CameraState | null = null;
+  private currentAnimationTo: CameraState | null = null;
 
   animationCallback?: () => void;
 
@@ -192,6 +196,7 @@ export default class Camera extends TypedEventEmitter<CameraEvents> implements C
     // State
     const start = Date.now(),
       initialState = this.getState();
+    const targetState: CameraState = { ...initialState, ...validState };
 
     // Function performing the animation
     const fn = () => {
@@ -201,6 +206,7 @@ export default class Camera extends TypedEventEmitter<CameraEvents> implements C
       if (t >= 1) {
         this.nextFrame = null;
         this.setState(validState);
+        this.emitAnimationEnd(true);
 
         if (this.animationCallback) {
           this.animationCallback.call(null);
@@ -226,15 +232,33 @@ export default class Camera extends TypedEventEmitter<CameraEvents> implements C
       this.nextFrame = requestAnimationFrame(fn);
     };
 
-    if (this.nextFrame) {
-      cancelAnimationFrame(this.nextFrame);
+    const wasAnimating = this.nextFrame !== null;
+    if (wasAnimating) {
+      cancelAnimationFrame(this.nextFrame as number);
+      this.nextFrame = null;
+      this.emitAnimationEnd(false);
       if (this.animationCallback) this.animationCallback.call(null);
+    }
+
+    this.currentAnimationFrom = initialState;
+    this.currentAnimationTo = targetState;
+    this.animationCallback = callback;
+    this.emit("animationStart", initialState, targetState);
+
+    if (wasAnimating) {
       this.nextFrame = requestAnimationFrame(fn);
     } else {
       fn();
     }
+  }
 
-    this.animationCallback = callback;
+  private emitAnimationEnd(completed: boolean): void {
+    const from = this.currentAnimationFrom;
+    const to = this.currentAnimationTo;
+    if (!from || !to) return;
+    this.currentAnimationFrom = null;
+    this.currentAnimationTo = null;
+    this.emit("animationEnd", from, to, completed);
   }
 
   /**

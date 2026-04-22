@@ -610,8 +610,16 @@ export default class Sigma<
     this.activeListeners.camera = () => {
       this.scheduleRender();
     };
+    this.activeListeners.cameraAnimationStart = (from: CameraState, to: CameraState) => {
+      if (from.ratio !== to.ratio) this.stateManager.setGraphState({ isZooming: true });
+    };
+    this.activeListeners.cameraAnimationEnd = () => {
+      this.stateManager.setGraphState({ isZooming: false });
+    };
 
     this.camera.on("updated", this.activeListeners.camera);
+    this.camera.on("animationStart", this.activeListeners.cameraAnimationStart);
+    this.camera.on("animationEnd", this.activeListeners.cameraAnimationEnd);
 
     return this;
   }
@@ -623,6 +631,8 @@ export default class Sigma<
    */
   private unbindCameraHandlers(): this {
     this.camera.removeListener("updated", this.activeListeners.camera);
+    this.camera.removeListener("animationStart", this.activeListeners.cameraAnimationStart);
+    this.camera.removeListener("animationEnd", this.activeListeners.cameraAnimationEnd);
     return this;
   }
 
@@ -2154,6 +2164,24 @@ export default class Sigma<
   setGraphState(state: Partial<BaseGraphState> | Partial<FullGraphState<GS>>): this {
     this.stateManager.setGraphState(state);
     return this;
+  }
+
+  /**
+   * Internal: toggle the graph-level `isPanning` flag. Called by captors when
+   * the user starts/stops dragging the stage. Not meant for user code — use
+   * `setGraphState` for custom flags instead.
+   */
+  _setPanning(isPanning: boolean): void {
+    this.stateManager.setGraphState({ isPanning });
+  }
+
+  /**
+   * Internal: toggle the graph-level `isZooming` flag. Called by captors for
+   * non-animated zoom gestures (e.g. pinch), which bypass `camera.animate`.
+   * Animated zooms are tracked automatically via camera events.
+   */
+  _setZooming(isZooming: boolean): void {
+    this.stateManager.setGraphState({ isZooming });
   }
 
   /**

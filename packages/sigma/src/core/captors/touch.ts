@@ -48,6 +48,8 @@ export default class TouchCaptor<
   enabled = true;
   isMoving = false;
   hasMoved = false;
+  isPanningStage = false;
+  isZoomingStage = false;
   startCameraState?: CameraState;
   touchMode = 0; // number of touches down
   movingTimeout?: number;
@@ -92,6 +94,22 @@ export default class TouchCaptor<
     };
   }
 
+  // Syncs isPanning/isZooming graph-state flags from the current gesture.
+  // Pinch (touchMode === 2) is a zoom gesture; single-finger drag with actual
+  // movement is a pan. Anything else clears both.
+  private syncStageFlags(): void {
+    const shouldPan = this.touchMode === 1 && this.hasMoved;
+    const shouldZoom = this.touchMode === 2;
+    if (shouldPan !== this.isPanningStage) {
+      this.isPanningStage = shouldPan;
+      this.renderer._setPanning(shouldPan);
+    }
+    if (shouldZoom !== this.isZoomingStage) {
+      this.isZoomingStage = shouldZoom;
+      this.renderer._setZooming(shouldZoom);
+    }
+  }
+
   handleStart(e: TouchEvent): void {
     if (!this.enabled) return;
 
@@ -109,6 +127,8 @@ export default class TouchCaptor<
       this.startTouchesAngle = Math.atan2(y1 - y0, x1 - x0);
       this.startTouchesDistance = Math.sqrt(Math.pow(x1 - x0, 2) + Math.pow(y1 - y0, 2));
     }
+
+    this.syncStageFlags();
 
     this.emit("touchdown", getTouchCoords(e, this.lastTouches, this.container));
     this.lastTouches = touches;
@@ -159,6 +179,8 @@ export default class TouchCaptor<
         this.touchMode = 0;
         break;
     }
+
+    this.syncStageFlags();
 
     this.emit("touchup", getTouchCoords(e, this.lastTouches, this.container));
 
@@ -233,6 +255,7 @@ export default class TouchCaptor<
     }
 
     this.isMoving = true;
+    this.syncStageFlags();
 
     if (this.movingTimeout) clearTimeout(this.movingTimeout);
 

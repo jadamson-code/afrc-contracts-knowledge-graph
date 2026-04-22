@@ -68,6 +68,7 @@ export default class MouseCaptor<
   lastMouseY: number | null = null;
   isMouseDown = false;
   isMoving = false;
+  isPanningStage = false;
   movingTimeout: number | null = null;
   startCameraState: CameraState | null = null;
   clicks = 0;
@@ -223,6 +224,11 @@ export default class MouseCaptor<
     const camera = this.renderer.getCamera();
     this.isMouseDown = false;
 
+    if (this.isPanningStage) {
+      this.isPanningStage = false;
+      this.renderer._setPanning(false);
+    }
+
     if (typeof this.movingTimeout === "number") {
       clearTimeout(this.movingTimeout);
       this.movingTimeout = null;
@@ -324,6 +330,11 @@ export default class MouseCaptor<
 
       const x = cameraState.x + offsetX,
         y = cameraState.y + offsetY;
+
+      if (!this.isPanningStage) {
+        this.isPanningStage = true;
+        this.renderer._setPanning(true);
+      }
 
       camera.setState({ x, y });
 

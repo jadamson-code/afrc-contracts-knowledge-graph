@@ -105,7 +105,7 @@ describe("Sigma state management", () => {
       sigma.setGraphState({ isPanning: true });
       const state = sigma.getGraphState();
       expect(state.isPanning).toBe(true);
-      expect(state.isIdle).toBe(true); // Other fields preserved
+      expect(state.isIdle).toBe(false);
     });
 
     test<SigmaTestContext>("graph state hasHovered updates when node is hovered", ({ sigma }) => {

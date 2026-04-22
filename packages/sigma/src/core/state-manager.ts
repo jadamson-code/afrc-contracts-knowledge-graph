@@ -101,7 +101,9 @@ export class StateManager<NS = {}, ES = {}, GS = {}> {
   setGraphState(state: Partial<BaseGraphState> | Partial<FullGraphState<GS>>): void {
     if (!hasNewPartialProps(this.graphState as Record<string, unknown>, state as Record<string, unknown>)) return;
 
-    this.graphState = { ...this.graphState, ...state };
+    const merged = { ...this.graphState, ...state } as FullGraphState<GS>;
+    merged.isIdle = !merged.isPanning && !merged.isZooming && !merged.isDragging;
+    this.graphState = merged;
     this.graphStateChanged = true;
     this.scheduleRefresh();
   }
@@ -202,15 +204,18 @@ export class StateManager<NS = {}, ES = {}, GS = {}> {
     // Also check edges for hover
     if (!hasHovered && this.hoveredEdge) hasHovered = true;
 
+    const isIdle = !this.graphState.isPanning && !this.graphState.isZooming && !isDragging;
+
     if (
       this.graphState.hasHovered !== hasHovered ||
       this.graphState.hasHighlighted !== hasHighlighted ||
-      this.graphState.isDragging !== isDragging
+      this.graphState.isDragging !== isDragging ||
+      this.graphState.isIdle !== isIdle
     ) {
       this.graphStateChanged = true;
     }
 
-    this.graphState = { ...this.graphState, hasHovered, hasHighlighted, isDragging };
+    this.graphState = { ...this.graphState, hasHovered, hasHighlighted, isDragging, isIdle };
   }
   updateGraphStateFromEdges(): void {
     let hasHovered = this.hoveredNode !== null;

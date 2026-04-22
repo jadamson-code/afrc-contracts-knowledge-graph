@@ -1974,10 +1974,12 @@ export default class Sigma<
    * @param  {Camera} camera - New camera.
    * @return {Sigma}
    */
-  setCamera(camera: Camera): void {
+  setCamera(camera: Camera): this {
     this.unbindCameraHandlers();
     this.camera = camera;
     this.bindCameraHandlers();
+    this.scheduleRender();
+    return this;
   }
 
   /**

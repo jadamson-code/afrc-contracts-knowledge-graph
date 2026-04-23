@@ -96,8 +96,12 @@ The project was initially supported by Sciences Po médialab through the v1 and 
 continuous support since, and [G.V()](https://gdotv.com/) actively sponsored the v3 and v4 development. The current
 website was designed by [Robin de Mourat](https://github.com/robindemourat/).
 
-Since v4, sigma's development also includes help from LLMs. They are used to draft mechanical code (particularly shader
-and boilerplate-heavy parts), while the architecture, API design, and core logic remain human-authored.
+Since v4, sigma's development also includes help from LLMs. They are used to draft mechanical code, while the
+architecture, API design, and core logic remain human-authored. Notably, they have been used for the following features:
+
+- [GLSL](https://en.wikipedia.org/wiki/OpenGL_Shading_Language) handling in programs generations
+- [Styles and primitives](https://v4.sigmajs.org/concepts/styles-and-primitives/) engines
+- [Label attachments](https://v4.sigmajs.org/how-to/labels/attachments/) rendering
 
 ## Professional support
 

@@ -2446,7 +2446,7 @@ export default class Sigma<
       const oldAttachment = this.internals.nodeDataCache[node]?.labelAttachment;
       this.updateNode(node);
       const newData = this.internals.nodeDataCache[node];
-      if (this.internals.attachmentManager && (newData.labelAttachment || oldAttachment)) {
+      if (this.internals.attachmentManager && newData.labelAttachment !== oldAttachment) {
         this.internals.attachmentManager.invalidateNode(node);
       }
       let shapeId: number;
@@ -2515,8 +2515,7 @@ export default class Sigma<
       data.shape = this.nodeShapeSlug;
     }
 
-    // Attachment invalidation
-    if (this.internals.attachmentManager && (data.labelAttachment || oldAttachment)) {
+    if (this.internals.attachmentManager && data.labelAttachment !== oldAttachment) {
       this.internals.attachmentManager.invalidateNode(node);
     }
 

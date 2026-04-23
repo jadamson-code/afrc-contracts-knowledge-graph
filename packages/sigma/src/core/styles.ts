@@ -471,6 +471,11 @@ function applyStyleRule(
       defaultValue,
     );
   }
+  // Mirror depth onto labelDepth when a rule sets depth without labelDepth,
+  // so label layers follow their element unless explicitly overridden.
+  if ("depth" in rule && !("labelDepth" in rule)) {
+    result.labelDepth = result.depth;
+  }
 }
 
 /**

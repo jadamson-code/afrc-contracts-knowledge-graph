@@ -796,11 +796,6 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
       then: "topNodes",
       else: "nodes",
     },
-    labelDepth: {
-      whenState: "isHovered",
-      then: "topNodes",
-      else: "nodes",
-    },
     labelVisibility: {
       whenState: "isHovered",
       then: "visible",
@@ -831,11 +826,6 @@ export const DEFAULT_STYLES: { nodes: NodeStyleRule; edges: EdgeStyleRule } = {
       else: "visible",
     },
     depth: {
-      whenState: ["isHighlighted", "isHovered"],
-      then: "topEdges",
-      else: "edges",
-    },
-    labelDepth: {
       whenState: ["isHighlighted", "isHovered"],
       then: "topEdges",
       else: "edges",

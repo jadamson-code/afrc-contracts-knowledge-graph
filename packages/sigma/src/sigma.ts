@@ -606,6 +606,7 @@ export default class Sigma<
    */
   private bindCameraHandlers(): this {
     this.activeListeners.camera = () => {
+      this.refreshMatrices();
       this.scheduleRender();
     };
     this.activeListeners.cameraAnimationStart = (from: CameraState, to: CameraState) => {
@@ -1049,6 +1050,21 @@ export default class Sigma<
   }
 
   /**
+   * Refreshes the cached matrices and their derived ratios from the current camera state, viewport, graph dimensions
+   * and stage padding.
+   */
+  private refreshMatrices(): void {
+    const cameraState = this.camera.getState();
+    const viewportDimensions = this.getDimensions();
+    const graphDimensions = this.getGraphDimensions();
+    const padding = this.getStagePadding();
+    this.matrix = matrixFromCamera(cameraState, viewportDimensions, graphDimensions, padding);
+    this.invMatrix = matrixFromCamera(cameraState, viewportDimensions, graphDimensions, padding, true);
+    this.correctionRatio = getMatrixImpact(this.matrix, cameraState, viewportDimensions);
+    this.graphToViewportRatio = this.getGraphToViewportRatio();
+  }
+
+  /**
    * Method used to render.
    *
    * @return {Sigma}
@@ -1107,15 +1123,9 @@ export default class Sigma<
       mouseCaptor.draggedEvents ||
       mouseCaptor.currentWheelDirection;
 
-    // Then we need to extract a matrix from the camera
-    const cameraState = this.camera.getState();
-    const viewportDimensions = this.getDimensions();
-    const graphDimensions = this.getGraphDimensions();
-    const padding = this.getStagePadding();
-    this.matrix = matrixFromCamera(cameraState, viewportDimensions, graphDimensions, padding);
-    this.invMatrix = matrixFromCamera(cameraState, viewportDimensions, graphDimensions, padding, true);
-    this.correctionRatio = getMatrixImpact(this.matrix, cameraState, viewportDimensions);
-    this.graphToViewportRatio = this.getGraphToViewportRatio();
+    // The camera-driven update happens via the "updated" listener, but processNodes and resize may have changed
+    // graph/viewport dimensions, so we refresh here too.
+    this.refreshMatrices();
 
     // [jacomyal]
     // This comment is related to the one above the `getMatrixImpact` definition:
@@ -2855,17 +2865,18 @@ export default class Sigma<
    * of computations.
    */
   framedGraphToViewport(coordinates: Coordinates, override: CoordinateConversionOverride = {}): Coordinates {
-    const recomputeMatrix = !!override.cameraState || !!override.viewportDimensions || !!override.graphDimensions;
-    const matrix = override.matrix
-      ? override.matrix
-      : recomputeMatrix
+    const recomputeMatrix =
+      !!override.cameraState || !!override.viewportDimensions || !!override.graphDimensions || !!override.padding;
+    const matrix =
+      override.matrix ||
+      (recomputeMatrix
         ? matrixFromCamera(
             override.cameraState || this.camera.getState(),
             override.viewportDimensions || this.getDimensions(),
             override.graphDimensions || this.getGraphDimensions(),
             override.padding || this.getStagePadding(),
           )
-        : this.matrix;
+        : this.matrix);
 
     const viewportPos = multiplyVec2(matrix, coordinates);
 
@@ -2883,10 +2894,11 @@ export default class Sigma<
    * of computations.
    */
   viewportToFramedGraph(coordinates: Coordinates, override: CoordinateConversionOverride = {}): Coordinates {
-    const recomputeMatrix = !!override.cameraState || !!override.viewportDimensions || !!override.graphDimensions;
-    const invMatrix = override.matrix
-      ? override.matrix
-      : recomputeMatrix
+    const recomputeMatrix =
+      !!override.cameraState || !!override.viewportDimensions || !!override.graphDimensions || !!override.padding;
+    const invMatrix =
+      override.matrix ||
+      (recomputeMatrix
         ? matrixFromCamera(
             override.cameraState || this.camera.getState(),
             override.viewportDimensions || this.getDimensions(),
@@ -2894,7 +2906,7 @@ export default class Sigma<
             override.padding || this.getStagePadding(),
             true,
           )
-        : this.invMatrix;
+        : this.invMatrix);
 
     const res = multiplyVec2(invMatrix, {
       x: (coordinates.x / this.width) * 2 - 1,

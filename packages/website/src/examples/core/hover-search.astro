@@ -42,6 +42,9 @@
     customGraphState: {
       hasActiveSubgraph: false,
     },
+    primitives: {
+      depthLayers: ["edges", "nodes", "topEdges", "topNodes", "activeNodes"],
+    },
     styles: {
       nodes: [
         {
@@ -60,6 +63,10 @@
         {
           whenState: "isActive",
           then: { depth: "topNodes", labelVisibility: "visible" },
+        },
+        {
+          whenState: "isHovered",
+          then: { depth: "activeNodes", labelVisibility: "visible" },
         },
       ],
       edges: [

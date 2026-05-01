@@ -1,87 +1,50 @@
-# Contributor Guide
+# Contributing
 
-Thank you for investing your time in contributing to our project!
+Thanks for your interest in contributing to the AFRC Contracts Knowledge Graph!
 
-In this guide you will get an overview of the contribution workflow from opening an issue, creating a PR, reviewing, and merging the PR.
+## Getting Started
 
-## Development Workflow
+1. Fork and clone the repository
+2. `npm install`
+3. Create a feature branch: `git checkout -b feature/my-feature`
+4. Make your changes
+5. Test: `npm run type-check`
+6. Commit and push
+7. Open a pull request
 
-1.  If you are a first-time contributor:
+## Development Guidelines
 
-    - Go to https://github.com/jacomyal/sigma.js and click on the **fork** button to create your own copy of the project.
+- **TypeScript**: All code must be properly typed
+- **Style**: Code is auto-formatted on save
+- **Components**: Use functional components with React hooks
+- **Testing**: Add tests for new features
+- **Documentation**: Update README for user-facing changes
 
-    - Clone the project to your local computer: `git clone git@github.com:your-username/sigma.js.git`
+## Project Structure
 
-    - Navigate to the folder sigma.js and add the upstream repository: `git remote add upstream git@github.com:jacomyal/sigma.js.git`
+- `/src/components` - React components
+- `/src/services` - Business logic (API, graph building, filters)
+- `/src/types` - TypeScript interfaces
+- `/scripts` - Data processing scripts
+- `/data` - Data files (raw API responses, processed graphs)
 
-    - Now, you have remote repositories named:
+## Common Tasks
 
-      - `upstream`, which refers to the `sigma.js` repository
-      - `origin`, which refers to your personal fork
-
-    - Next, you need to set up your build environment: `npm install`
-
-2.  Develop your contribution:
-
-    - Pull the latest changes from upstream
-
-      ```
-      git checkout main
-      git pull upstream main
-      ```
-
-    - Create a branch for the feature you want to work on. Since the branch name will appear in the merge message, use a sensible name such as 'bugfix-for-issue-1480': `git checkout -b bugfix-for-issue-1480`
-
-    - Commit locally as you progress (`git add` and `git commit`)
-
-3.  Test your contribution:
-
-    - Run the test suite locally: `npm run test`
-
-4.  Submit your contribution:
-
-    - Push your changes back to your fork on GitHub: `git push origin bugfix-for-issue-1480`
-
-    - Go to GitHub. The new branch will show up with a green Pull Request button, just click it.
-
-5.  Review process:
-
-    - Every Pull Request (PR) update triggers a set of [continuous integration](https://en.wikipedia.org/wiki/Continuous_integration) services
-      that check that the code is up to standards and passes all our tests.
-      These checks must pass before your PR can be merged. If one of the
-      checks fails, you can find out why by clicking on the "failed" icon (red
-      cross) and inspecting the build and test log.
-
-    - Reviewers (the other developers and interested community members) will
-      write inline and/or general comments on your PR to help
-      you improve its implementation, documentation, and style.
-      It's a friendly conversation from which we all learn and the
-      overall code quality benefits.Don't let the review
-      discourage you from contributing, its only aim is to improve the quality
-      of project, not to criticize. We are, after all, very grateful for the
-      time you're donating!.
-
-    - To update your PR, make your changes on your local repository
-      and commit. As soon as those changes are pushed up (to the same branch as
-      before) the PR will update automatically.
-
-> **_NOTE:_** If the PR closes an issue, make sure that GitHub knows to automatically close the issue when the PR is merged.
-> For example, if the PR closes issue number 1480, you could use the phrase "Fixes #1480" in the PR description or commit message.
-
-## Divergence from `upstream main`
-
-If GitHub indicates that the branch of your Pull Request can no longer
-be merged automatically, merge the main branch into yours :
-
-```
-git fetch upstream main
-git rebase upstream/main
+### Fetch Fresh Data
+```bash
+npm run fetch-data
 ```
 
-If any conflicts occur, they need to be fixed before continuing.
+### Transform Data
+```bash
+npm run transform-data
+```
 
-> **_NOTE:_** Please use **rebase** and not **merge**,
+### Build for Production
+```bash
+npm run build
+```
 
-## Bugs
+## Questions?
 
-Please report bugs on [GitHub](https://github.com/jacomyal/sigma.js/issues).
+Open an issue or reach out to the maintainers!

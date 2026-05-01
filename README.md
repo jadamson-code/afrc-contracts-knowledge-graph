@@ -1,78 +1,219 @@
-[![Build Status](https://github.com/jacomyal/sigma.js/workflows/Tests/badge.svg)](https://github.com/jacomyal/sigma.js/actions)
+# AFRC Contracts Knowledge Graph
 
-<br />
+🛩️ An interactive knowledge graph visualization of Air Force Reserve Component (AFRC) contracts using [Sigma.js](https://sigmajs.org/) and real data from [USAspending.gov](https://www.usaspending.gov/).
 
-![Sigma.js](packages/website/static/img/logo-sigma-text.svg)
+## 🌐 Live Demo
 
-**[Website](https://www.sigmajs.org/)** | **[Documentation](https://www.sigmajs.org/docs)** | **[Storybook](https://www.sigmajs.org/storybook)** | <strong><a rel="me" href="https://vis.social/@sigmajs">Mastodon</a></strong>
+- **Cloud Prototype (StackBlitz):** Coming soon
+- **Production Deploy (Vercel):** Coming soon
 
-> [!NOTE]
-> Sigma v4 is now available as an alpha release. See [v4.sigmajs.org](https://v4.sigmajs.org/) for the website, or the [`v4` branch](https://github.com/jacomyal/sigma.js/tree/v4) for the source code.
+## Overview
 
----
+This project visualizes complex relationships in federal contracting for the Air Force's Aircraft Procurement account (057-3010):
 
-[Sigma.js](https://www.sigmajs.org) is an open-source JavaScript library aimed at visualizing graphs of thousands of nodes and edges using WebGL, mainly developed by [@jacomyal](https://github.com/jacomyal) and [@Yomguithereal](https://github.com/Yomguithereal), and built on top of [graphology](https://graphology.github.io/).
+- **Nodes**: Contractors, contract industries (NAICS), fiscal years
+- **Edges**: Award relationships, funding flows, vendor connections
+- **Data Source**: Real AFRC contracts from [USAspending.gov](https://www.usaspending.gov/federal_account/057-3010)
 
-## How to use in your project
+## Features
 
-To integrate sigma into your project, follow these simple steps:
+- 📊 Real-time graph visualization with Sigma.js (WebGL-rendered, handles 1000s of nodes)
+- 🔍 Interactive filtering by contractor, contract value, industry type, and time period
+- 📈 Network analysis - see which contractors dominate procurement
+- 🎨 Color-coded nodes by industry classification (NAICS codes)
+- 📱 Responsive design with React
+- 🔗 Hover to see contract details in detail panel
+- 💾 Toggle between mock data and live API calls
+- 📡 Automatic data fetching and caching
 
-1. **Installation:** Add `sigma` and `graphology` to your project by running the following command:
+## Quick Start
 
-   ```bash
-   npm install sigma graphology
-   ```
-
-2. **Usage:** Import sigma into your JavaScript or TypeScript file:
-
-   ```javascript
-   import Graph from "graphology";
-   import Sigma from "sigma";
-   ```
-
-   Then, create a new `Sigma` instance with your graph data and target container:
-
-   ```javascript
-   const graph = new Graph();
-   graph.addNode("1", { label: "Node 1", x: 0, y: 0, size: 10, color: "blue" });
-   graph.addNode("2", { label: "Node 2", x: 1, y: 1, size: 20, color: "red" });
-   graph.addEdge("1", "2", { size: 5, color: "purple" });
-
-   const sigmaInstance = new Sigma(graph, document.getElementById("container"));
-   ```
-
-## How to develop locally
-
-To run the [Storybook](https://storybook.js.org/) locally:
+### Local Development (Mac)
 
 ```bash
-git clone git@github.com:jacomyal/sigma.js.git
-cd sigma.js
+# Clone the repository
+git clone https://github.com/jadamson-code/afrc-contracts-knowledge-graph.git
+cd afrc-contracts-knowledge-graph
+
+# Install dependencies
 npm install
-npm run start
+
+# Start dev server (opens http://localhost:3000)
+npm run dev
 ```
 
-This will open the Storybook in your web browser, which live reloads when you modify the stories or the package sources.
+### Fetch Real Data (Optional)
+
+```bash
+# Fetch latest AFRC contracts from USAspending API
+npm run fetch-data
+
+# Transform data into graph format
+npm run transform-data
+```
+
+### Build for Production
+
+```bash
+npm run build
+npm run preview
+```
+
+## Architecture
+
+### Data Pipeline
+
+```
+┌─────────────────────────────┐
+│   USAspending API           │
+│  (Real-time contracts)      │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│   Fetch Service             │
+│  (src/services/usaspending) │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│   Graph Builder             │
+│  (src/services/graphBuilder)│
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│   Graphology Graph Object   │
+│  (Nodes + Edges)            │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│   Sigma.js Visualization    │
+│  (WebGL Canvas Rendering)   │
+└─────────────────────────────┘
+```
+
+### Project Structure
+
+```
+.
+├── src/
+│   ├── components/
+│   │   ├── Graph.tsx              # Main Sigma graph component
+│   │   ├── Controls.tsx           # Filter controls
+│   │   ├── NodeDetails.tsx        # Contract details panel
+│   │   └── DataToggle.tsx         # Mock vs Live API toggle
+│   ├── services/
+│   │   ├── usaspending.ts         # USAspending API client
+│   │   ├── graphBuilder.ts        # Graph transformation logic
+│   │   ├── filters.ts             # Filter & query utilities
+│   │   └── mockData.ts            # Sample AFRC contract data
+│   ├── types/
+│   │   └── index.ts               # TypeScript interfaces
+│   ├── App.tsx                    # Main app component
+│   ├── main.tsx                   # Entry point
+│   └── index.css                  # Styling
+├── scripts/
+│   ├── fetch-contracts.ts         # Data fetching script
+│   └── transform-to-graph.ts      # Data transformation script
+├── data/
+│   ├── raw/                       # Raw API responses
+│   └── processed/                 # Graph JSON files
+├── index.html                     # HTML template
+├── package.json                   # Dependencies
+├── tsconfig.json                  # TypeScript config
+├── vite.config.ts                 # Vite config
+├── .env.example                   # Environment variables template
+└── README.md                      # This file
+```
+
+## Configuration
+
+Create a `.env.local` file in the project root:
+
+```env
+VITE_USASPENDING_API_BASE=https://api.usaspending.gov/api/v2
+VITE_FEDERAL_ACCOUNT=057-3010
+VITE_FISCAL_YEARS=2023,2024,2025
+VITE_USE_MOCK_DATA=true
+```
+
+## Data Categories
+
+### Node Types
+- **Contractor** (Blue): Vendor company or prime contractor
+- **NAICS Industry** (Color-coded): Industry classification (red=engineering, teal=IT, etc.)
+- **Fiscal Year** (Gray): Funding period
+
+### Edge Types
+- **AWARDED_TO**: Contractor receives contract award
+- **CLASSIFIED_AS**: Contract classified by industry type
+- **FUNDED_BY**: Contract funded by specific fiscal year
+
+## API Integration
+
+This project uses the USAspending API:
+
+- **Endpoint**: `POST /api/v2/search/spending_by_award/`
+- **Filters contracts by**:
+  - Federal account: 057-3010 (Aircraft Procurement, Air Force)
+  - Award type: Contracts (A, B, C, D)
+  - Fiscal year range: 2023-2025
+
+### Sample API Query
+
+```json
+{
+  "filters": {
+    "award_type_codes": ["A", "B", "C", "D"],
+    "federal_account": "057-3010",
+    "fy": [2024, 2025]
+  },
+  "page": 1,
+  "limit": 100
+}
+```
+
+## Mock Data
+
+The app includes sample AFRC contract data for instant prototyping:
+- 50+ mock contracts
+- 20+ contractors
+- Multiple industries (NAICS codes)
+- Realistic spending amounts
+
+Toggle between mock and live data using the UI switch.
+
+## Next Steps
+
+- [x] Core graph visualization
+- [x] Mock data support
+- [x] Real API integration
+- [x] Filter controls
+- [ ] Deploy to StackBlitz
+- [ ] Deploy to Vercel
+- [ ] Export/report generation
+- [ ] Timeline animation (fiscal year by year)
+- [ ] Spending trend analysis
+- [ ] Subcontractor relationships
+- [ ] Advanced search/bookmarks
+
+## Contributing
+
+Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+MIT
 
 ## Resources
 
-- **GitHub Project:** The source code and collaborative development efforts for Sigma.js are hosted on [GitHub](https://github.com/jacomyal/sigma.js).
-- **Website:** The official website, [sigmajs.org](https://sigmajs.org), kindly designed by [Robin de Mourat](https://github.com/robindemourat/) from the [Sciences-Po médialab](https://medialab.sciencespo.fr/en/) team, showcases the library's capabilities.
-- **Documentation:** A detailed documentation, built with [Docusaurus](https://docusaurus.io/), is available at [sigmajs.org/docs](https://sigmajs.org/docs). It provides extensive guides and API references for users.
-- **Storybook:** Interactive examples can be found at [sigmajs.org/storybook](https://sigmajs.org/storybook).
-- **Demo:** A comprehensive demo, available at [sigmajs.org/demo](https://sigmajs.org/demo), features a full-featured React-based web application utilizing Sigma.js.
+- [Sigma.js Documentation](https://www.sigmajs.org/docs)
+- [USAspending API Docs](https://api.usaspending.gov/docs/using-the-api)
+- [Graphology Documentation](https://graphology.js.org/)
+- [React Sigma Documentation](https://sim51.github.io/react-sigma/)
 
-## How to contribute
+## Questions?
 
-You can contribute by submitting [issues tickets](http://github.com/jacomyal/sigma.js/issues) and proposing [pull requests](http://github.com/jacomyal/sigma.js/pulls). Make sure that tests and linting pass before submitting any pull request.
-
-You can also browse the related documentation [here](https://github.com/jacomyal/sigma.js/tree/main/CONTRIBUTING.md).
-
-## How to start a new package
-
-Run `npm run createPackage` from the project root. It will:
-
-- Ask you the new package name
-- Copy the `packages/template` folder
-- Update the new package `package.json` entries (name, description, exports)
-- Update various other files (buildable packages list in `tsconfig.json`, Preconstruct compatible packages list in `package.json`...)
+Open an issue on GitHub or contact the maintainer!

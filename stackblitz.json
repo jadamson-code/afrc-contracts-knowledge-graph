@@ -1,0 +1,1 @@
+{\n  \"installDependencies\": true,\n  \"startCommand\": \"npm run dev\",\n  \"env\": {\n    \"VITE_USE_MOCK_DATA\": \"true\",\n    \"VITE_USASPENDING_API_BASE\": \"https://api.usaspending.gov/api/v2\",\n    \"VITE_FEDERAL_ACCOUNT\": \"057-3010\"\n  }\n}\n
